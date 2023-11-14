@@ -80,6 +80,7 @@ Commands:
 Options:
   -v, --verbose               (build, compile) Print the value of each bare term, and the
                               proofs that "The rest follows." found.
+  --no-image                  Check Sandbox OCaml without building an image
   --fill                      (build, compile) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
   --check-fresh               (build) Say, from metadata alone, whether FILE is as its last
@@ -382,7 +383,8 @@ let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
      the MirageOS project is being set up is, as it takes a while *)
   if verbose then print_string output
   else
-    List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
+    List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l ||
+          starts_with ~prefix:"Mirage: checked" l then print_endline l)
       (lines output);
   (* rocq c's files are of no use to a program once it is checked: they
      are deleted, also when checking failed partway. The rest (a MirageOS
@@ -850,7 +852,8 @@ let run ~events ~supervise file args image_args =
   pass_signals ();
   let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
   let code, output = compile (file :: "-o" :: vo :: args) in
-  List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
+  List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l ||
+          starts_with ~prefix:"Mirage: checked" l then print_endline l)
     (lines output);
   if code <> 0 then finish code;
   match mirage_command output with
@@ -1229,6 +1232,9 @@ let () =
   | ("build" | "compile" as command) :: rest ->
     (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in
+    let no_image = List.mem "--no-image" rest in
+    if no_image then Unix.putenv "SOMA_MIRAGE_NO_IMAGE" "1";
+    let rest = List.filter ((<>) "--no-image") rest in
     let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
     let fill = List.exists is_fill rest in

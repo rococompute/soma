@@ -19,7 +19,7 @@
    else [~/.cache/soma/mirage] ([plain/], [net/]), so that
    [mirage configure] and fetching the dependencies ([make depends]) only
    happen once. The MirageOS tools come
-   from the opam switch [$SOMA_MIRAGE_SWITCH], [hvf] by default (a
+   from the opam switch [$SOMA_MIRAGE_SWITCH] (a
    switch with the hvf-mac repository, see solo5-mac). The image runs in
    [$SOMA_MIRAGE_MEM] MB of memory, 256 by default (the command to run it
    says so). Setting [SOMA_MIRAGE_BUILD=0] skips the image. *)
@@ -634,6 +634,97 @@ let foreign_calls () =
     calls;
   calls
 
+let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent accidental reliance on
+   the representation of promises, network flows, addresses or buffers. These
+   are never linked or run in an image. *)
+module Lwt : sig
+  type 'a t
+  val return : 'a -> 'a t
+  val return_unit : unit t
+  val async : (unit -> unit t) -> unit
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
+  type 'a u
+  val wait : unit -> 'a t * 'a u
+  val pick : 'a t list -> 'a t
+  module Infix : sig
+    val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+    val ( >|= ) : 'a t -> ('a -> 'b) -> 'b t
+  end
+end
+module Duration : sig val of_sec : int -> int64 end
+module Mirage_sleep : sig val ns : int64 -> unit Lwt.t end
+module Ptime : sig
+  type t
+  val to_date_time : t -> (int * int * int) * ((int * int * int) * int)
+end
+module Mirage_ptime : sig val now : unit -> Ptime.t end
+module Mirage_crypto_rng : sig val generate : int -> string end
+module Solo5_os : sig
+  module Memory : sig
+    type stat = { heap_words : int; live_words : int; free_words : int }
+    val stat : unit -> stat
+  end
+end
+module Cmdliner : sig
+  module Arg : sig
+    type 'a t
+    type 'a conv
+    type info
+    val info : doc:string -> string list -> info
+    val string : string conv
+    val opt_all : 'a conv -> 'a list -> info -> 'a list t
+    val flag : info -> bool t
+    val value : 'a t -> 'a t
+    val ( & ) : ('a -> 'b) -> 'a -> 'b
+  end
+end
+module Mirage_runtime : sig
+  val register_arg : 'a Cmdliner.Arg.t -> unit -> 'a
+end
+module Cstruct : sig type t val to_string : t -> string val of_string : string -> t end
+module Ipaddr : sig type t val of_string : string -> (t, [ `Msg of string ]) result end
+module Tcpip : sig
+  module Stack : sig
+    module type V4V6 = sig
+      type t
+      module TCP : sig
+        type t
+        type flow
+        type error = [ `Refused | `Timeout ]
+        type write_error = [ `Closed ]
+        val listen : t -> port:int -> (flow -> unit Lwt.t) -> unit
+        val read : flow -> ([ `Data of Cstruct.t | `Eof ], error) result Lwt.t
+        val write : flow -> Cstruct.t -> (unit, write_error) result Lwt.t
+        val close : flow -> unit Lwt.t
+        val create_connection : t -> Ipaddr.t * int -> (flow, error) result Lwt.t
+      end
+      val tcp : t -> TCP.t
+    end
+  end
+end
+|soma}
+
+(* Keep the contracts in a separate directory: real image builds must never
+   resolve one of these modules instead of a Mirage library. *)
+let check_project ~wasm dir =
+  let checks = Filename.concat dir "no-image" in
+  mkdir_p checks;
+  write_file (Filename.concat checks "standins.mli") standins_mli;
+  let sources = ["float64.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml";
+                 "gradual.ml"; "soma_rt.ml"; "unikernel.ml"] in
+  List.iter (fun name -> write_file (Filename.concat checks name)
+                (read_file (Filename.concat dir name))) sources;
+  let compiler = if wasm then "ocamlfind ocamlc -package wasm" else "ocamlc" in
+  let script = Printf.sprintf
+      "cd %s && ocamlc -c standins.mli && %s -open Standins -c %s"
+      (Filename.quote checks) compiler (String.concat " " sources) in
+  let log = Filename.concat checks "check.log" in
+  let cmd = Filename.quote_command "sh" ["-c"; script] ~stdout:log ~stderr:log in
+  if Sys.command cmd <> 0 then
+    error Pp.(str "OCaml check failed in " ++ str checks ++ str ":" ++ fnl () ++
+              str (read_file log));
+  Feedback.msg_notice Pp.(str "Mirage: checked " ++ str dir ++ str " (no image)")
+
 let build ~state ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then begin
     check_main ();
@@ -663,6 +754,9 @@ let build ~state ~vo_file =
       "prog.ml", prog;
       "prog.mli", read_file (Filename.concat staging "prog.mli");
     ];
+    let no_image = getenv_default "SOMA_MIRAGE_NO_IMAGE" "0" = "1" ||
+      getenv_default "SOMA_MIRAGE_SWITCH" "" = "" in
+    if no_image then check_project ~wasm dir else begin
     let configured = Sys.file_exists (Filename.concat dir "Makefile") in
     let setup = if configured && not config_changed then ""
       else "mirage configure -t hvt && make depends && " in
@@ -688,4 +782,5 @@ let build ~state ~vo_file =
     let run = if network then "solo5-vmnet -- " ^ hvt_cmd else hvt_cmd in
     Feedback.msg_notice Pp.(str "Mirage: built " ++ str hvt ++
                             str "; run it with: " ++ str run ++ str hvt)
+    end
   end

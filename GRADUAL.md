@@ -1247,6 +1247,14 @@ Extraction differs from the kernel in these ways:
 
 ## Sandbox: programs as unikernels
 
+Sandbox changes can be checked on Linux with `soma build --no-image FILE.soma`.
+With `SOMA_MIRAGE_SWITCH` unset or empty, builds also take this path. Soma
+extracts the program and generates the Mirage project in `SOMA_MIRAGE_DIR`
+(default `$XDG_CACHE_HOME/soma/mirage`), then checks its OCaml with abstract
+stand-in interfaces, including the network functor. No image is built or run.
+The contracts check types, not runtime behavior; image testing still needs
+`SOMA_MIRAGE_SWITCH` set to a switch with Mirage and solo5 installed.
+
 `theories/Soma/Sandbox.v` (not in the prelude) makes a program a
 MirageOS unikernel for Apple Silicon. Its `main : io unit` says what the
 unikernel does, as data; building an `io` does nothing, the image runs it.
@@ -1297,7 +1305,7 @@ program is built so, a `.soma` file; a Rocq `.v` file that requires
    gives it an address on the Mac's vmnet network (macOS 26 or later, no
    root). The others have no network device.
 4. The project is built for solo5's `hvt` target in the opam switch
-   `$SOMA_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
+   `$SOMA_MIRAGE_SWITCH` (for example `hvf`: a switch with the hvf-mac
    repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
    `solo5-vmnet`), and `rocq c` says how to run the image; `soma run`
    runs it.
@@ -1526,7 +1534,7 @@ with that Stdlib. The suite result below is commit `d011c4b1cf`
   builds and boots the `examples/example_files/mirage_*` images,
   `counter_server`, and `wasm_add`'s image, and checks `soma run`'s
   diagnosis of a run. It needs Soma built and the Mirage switch
-  (`$SOMA_MIRAGE_SWITCH`, `hvf` by default) with the Apple Silicon
+  (`$SOMA_MIRAGE_SWITCH`, for example `hvf`) with the Apple Silicon
   solo5 tools. The network cases run under `solo5-vmnet` (macOS 26 or
   later).
 

@@ -16,6 +16,7 @@ set -u
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 SOMA="${HERE}/_build/install/default/bin/soma"
 SWITCH="${SOMA_MIRAGE_SWITCH:-hvf}"
+export SOMA_MIRAGE_SWITCH="${SWITCH}"
 # the memory the images run in, as soma run gives them
 MEM="${SOMA_MIRAGE_MEM:-256}"
 NETWORK=1
