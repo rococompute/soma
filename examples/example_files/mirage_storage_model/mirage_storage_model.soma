@@ -1,0 +1,39 @@
+(** Exact storage semantics, without a block device. *)
+Require Import Sandbox.
+
+Example missing : Files.read "key" Files.empty = None := eq_refl.
+Example written : Files.read "key" (Files.write "key" "secret" Files.empty)
+  = Some "secret" := eq_refl.
+Example overwritten : Files.read "key"
+  (Files.write "key" "new" (Files.write "key" "old" Files.empty))
+  = Some "new" := eq_refl.
+Example appended : Files.read "log"
+  (Files.append "log" "third" (Files.append "log" "second"
+    (Files.write "log" "first" Files.empty)))
+  = Some "firstsecondthird" := eq_refl.
+Example append_missing : Files.read "log" (Files.append "log" "first" Files.empty)
+  = Some "first" := eq_refl.
+Example empty_exists : Files.read "key" (Files.write "key" "" Files.empty)
+  = Some "" := eq_refl.
+Example append_empty_missing : Files.read "key" (Files.append "key" "" Files.empty)
+  = Some "" := eq_refl.
+Definition separate := Files.append "log" "b"
+  (Files.write "key" "secret" (Files.write "log" "a" Files.empty)).
+Example independent_key : Files.read "key" separate = Some "secret" := eq_refl.
+Example independent_log : Files.read "log" separate = Some "ab" := eq_refl.
+Example still_missing : Files.read "state" separate = None := eq_refl.
+Example opaque_name : Files.read "../key"
+  (Files.write "key" "secret" Files.empty) = None := eq_refl.
+
+Example overwrite_empty : Files.read "key"
+  (Files.write "key" "" (Files.write "key" "old" Files.empty))
+  = Some "" := eq_refl.
+Example append_empty : Files.read "log"
+  (Files.append "log" "" (Files.write "log" "a" Files.empty))
+  = Some "a" := eq_refl.
+Example append_bytes : Files.read "log"
+  (Files.append "log" (byte 0 ++ newline)%str
+    (Files.write "log" "a" Files.empty))
+  = Some ("a" ++ byte 0 ++ newline)%str := eq_refl.
+
+main : io unit := print "storage model checked".

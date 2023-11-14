@@ -158,6 +158,74 @@ Example elapsed_ms_boundary : N.leb 1000 (elapsed_ms 42 1042) = true := eq_refl.
 Example elapsed_ms_large : elapsed_ms 4294967296 4294968296 = 1000%N := eq_refl.
 Example elapsed_ms_reversed : elapsed_ms 2 1 = 0%N := eq_refl.
 
+(** * Named-file storage model
+
+    A pure specification for a persistent storage interpreter. Names are
+    opaque strings, not host paths. [None] distinguishes a missing file
+    from an existing empty file. This model does not itself perform I/O. *)
+Module Files.
+
+Definition state : Type := list (string * string).
+Definition empty : state := nil.
+
+Fixpoint read (name : string) (files : state) : option string :=
+  match files with
+  | nil => None
+  | cons (key, contents) rest =>
+    if String.eqb name key then Some contents else read name rest
+  end.
+
+(** Replace the first matching entry, or create a new entry. Starting
+    with [empty], writes keep at most one entry for each name. *)
+Fixpoint write (name contents : string) (files : state) : state :=
+  match files with
+  | nil => cons (name, contents) nil
+  | cons (key, previous) rest =>
+    if String.eqb name key then cons (name, contents) rest
+    else cons (key, previous) (write name contents rest)
+  end.
+
+(** Appending to a missing file creates it, including an empty append. *)
+Definition append (name contents : string) (files : state) : state :=
+  write name
+    (match read name files with
+     | None => contents
+     | Some previous => String.append previous contents
+     end) files.
+
+Theorem read_write : forall files name contents,
+  read name (write name contents files) = Some contents.
+Proof.
+  induction files as [|[key previous] rest IH]; intros name contents;
+    cbn [read write].
+  - now rewrite String.eqb_refl.
+  - destruct (String.eqb name key) eqn:E; cbn [read].
+    + now rewrite String.eqb_refl.
+    + rewrite E. apply IH.
+Qed.
+
+Theorem read_write_other : forall files name other contents,
+  String.eqb other name = false ->
+  read other (write name contents files) = read other files.
+Proof.
+  induction files as [|[key previous] rest IH]; intros name other contents H;
+    cbn [read write].
+  - now rewrite H.
+  - destruct (String.eqb name key) eqn:E; cbn [read].
+    + apply String.eqb_eq in E. subst key. now rewrite H.
+    + destruct (String.eqb other key); [reflexivity|]. apply IH. exact H.
+Qed.
+
+Theorem read_append : forall files name contents,
+  read name (append name contents files) =
+    Some (match read name files with
+          | None => contents
+          | Some previous => String.append previous contents
+          end).
+Proof. intros. unfold append. apply read_write. Qed.
+
+End Files.
+
 (** * HTTP, for [serve] and [fetch] *)
 
 (** a line break in HTTP *)

@@ -108,7 +108,7 @@ no_image_one() {
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
-        mirage_frame_client mirage_frame_server mirage_supervised; do
+        mirage_frame_client mirage_frame_server mirage_supervised mirage_storage_model; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
