@@ -53,11 +53,24 @@ module Make (B : Mirage_block.S) = struct
     done;
     if !pos <> String.length body then fail "trailing bytes";
     fs
-  type bank = Empty | Bad | Valid of int64 * (string, string) Hashtbl.t
+  (* Torn: an invalid header that is a cut-short first header (generation
+     1): nonzero bytes only before its checksum ends, beginning with the
+     magic and generation 1 as far as they go. *)
+  type bank = Empty | Bad | Torn | Valid of int64 * (string, string) Hashtbl.t
+  let torn_first header =
+    let k = ref (String.length header) in
+    while !k > 0 && header.[!k-1] = '\000' do decr k done;
+    let k = !k in
+    let ok = ref (k < 56) in
+    for i = 0 to min k 8 - 1 do if header.[i] <> magic.[i] then ok := false done;
+    for i = 8 to 14 do if header.[i] <> '\000' then ok := false done;
+    if Char.code header.[15] > 1 then ok := false;
+    !ok
   let load disk sector bank index =
     read_sector disk sector (index*bank) >>= fun header ->
     if header = String.make sector '\000' then Lwt.return Empty
-    else if String.sub header 0 8 <> magic || Digest.string (String.sub header 0 40) <> String.sub header 40 16 then Lwt.return Bad
+    else if String.sub header 0 8 <> magic || Digest.string (String.sub header 0 40) <> String.sub header 40 16 then
+      Lwt.return (if torn_first header then Torn else Bad)
     else
       let generation = get64 header 8 and len64 = get64 header 16 in
       if generation <= 0L || len64 < 4L || len64 > Int64.of_int ((bank-1)*sector)
@@ -77,6 +90,9 @@ module Make (B : Mirage_block.S) = struct
     load disk sector bank 1 >|= fun second ->
     let generation, active, files = match first, second with
       | Empty, Empty -> 0L, 1, Hashtbl.create 17
+      (* the first commit goes to bank 0; cut short in its header, nothing
+         was ever committed, and the next commit rewrites bank 0 *)
+      | Torn, Empty -> 0L, 1, Hashtbl.create 17
       | Valid (a, fs), Valid (b, gs) -> if a >= b then a, 0, fs else b, 1, gs
       | Valid (a, fs), _ -> a, 0, fs
       | _, Valid (b, fs) -> b, 1, fs
