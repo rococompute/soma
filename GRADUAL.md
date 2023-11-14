@@ -1646,3 +1646,45 @@ that run are under Versions.
 - `test-suite/output/Gradual.v`: the elaborated terms (cast insertion)
 - `test-suite/misc/gradual_extraction.sh`: one program checked three ways. Each case's value holds as a syntactic normal form under `lazy`, `cbv`, `cbn`, `simpl` and `vm_compute`, and the extracted OCaml agrees with it, except for the documented differences, which are marked in `main.out`
 - `test-suite/coqchk/gradual_register.v`, `test-suite/misc/gradual_rocqchk.sh`: `rocqchk` installs the rules of gradual primitives registered in the module it checks, and validates `Corelib.Gradual.Gradual` itself
+
+### Persistent files in Sandbox
+
+`read_file name : io (option string)` reads a named file; `None` means
+missing and `Some ""` means an existing empty file. `write_file name data`
+replaces bytes and `append_file name data` appends in order, creating a
+missing name. Names are opaque keys, matching `Sandbox.Files`, with no host
+path interpretation. Device errors stop the image; they never become a
+missing-file result. Operations share a lock, so read/append/write handlers
+cannot interleave an append's read and write.
+
+A program using these operations gets a dedicated Solo5 block device named
+`storage`. Make a zeroed disk once, then reuse it across boots:
+
+```sh
+truncate -s 8M storage.img
+solo5-hvt --block:storage=storage.img -- mirage_storage.hvt
+solo5-hvt --block:storage=storage.img -- mirage_storage.hvt
+```
+
+The example prints `boot 1`, then `boot 2`; `dev/mirage-check.sh --storage-only`
+builds it and checks those boots. `--no-image` type-checks the same generated
+backend and interfaces without requiring Mirage or Solo5. The misc test
+`soma_aa_storage_runtime.sh` also executes an extracted Soma program against
+the generated backend using a sector-file adapter, then reopens the disk in
+another process. It tests overwrite, ordered append, missing/empty files,
+independent names and binary values, a failed commit, and capacity failure.
+
+The device is dedicated to this format, not a filesystem or a host directory.
+Two alternating snapshots have bounded, checksummed payloads; the new header
+is written after its payload, leaving the previous committed bank intact.
+Each bank uses at most 16 MiB; the usable data is the smaller of half the disk
+and 16 MiB, less the header and name/length metadata. Updates rewrite a full
+snapshot. Capacity exhaustion and read-only/write failures stop the operation
+without updating the in-memory file map. Recovery accepts a valid previous
+snapshot when the other bank is invalid; it refuses a disk with no valid
+snapshot and nonzero headers. Checksums detect corruption, not malicious edits.
+Durability follows the block driver's successful-write contract; this is not
+a proof about host power loss, disk caches, or adversarial storage.
+
+The generated backend uses the sector interface documented by
+[mirage-block](https://github.com/mirage/mirage-block/blob/main/src/mirage_block.mli).

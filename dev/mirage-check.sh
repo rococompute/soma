@@ -5,7 +5,7 @@
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
 # server unikernel is fetched from by another one.
 #
-# Usage: dev/mirage-check.sh [--no-network | --no-image]
+# Usage: dev/mirage-check.sh [--no-network | --no-image | --storage-only]
 #
 # Needs Soma built (_build/install/default). Image builds need the opam
 # switch $SOMA_MIRAGE_SWITCH (hvf by default) with the MirageOS tools for
@@ -24,10 +24,14 @@ export SOMA_MIRAGE_SWITCH="${SWITCH}"
 MEM="${SOMA_MIRAGE_MEM:-256}"
 NETWORK=1
 NO_IMAGE=0
+STORAGE_ONLY=0
 if [ "${1:-}" = "--no-image" ]; then
   NO_IMAGE=1
 elif [ "${1:-}" = "--no-network" ]; then
   NETWORK=0
+elif [ "${1:-}" = "--storage-only" ]; then
+  NETWORK=0
+  STORAGE_ONLY=1
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
@@ -108,7 +112,7 @@ no_image_one() {
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
-        mirage_frame_client mirage_frame_server mirage_supervised mirage_storage_model; do
+        mirage_frame_client mirage_frame_server mirage_supervised mirage_storage_model mirage_storage; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
@@ -127,6 +131,23 @@ if [ "${NO_IMAGE}" = 1 ]; then
         fail "no-image-illtyped"
     fi
 else
+# Boot twice with one dedicated zeroed disk: the second image must read
+# what the first committed. The disk argument belongs before solo5's --.
+if build mirage_storage; then
+    truncate -s 8M "${WORK}/storage.img"
+    for boot in 1 2; do
+        if timeout 60 opam exec --switch="${SWITCH}" -- solo5-hvt --mem=${MEM} \
+            --block:storage="${WORK}/storage.img" -- \
+            "${HERE}/examples/example_files/mirage_storage/mirage_storage.hvt" \
+            >"${WORK}/storage-${boot}.log" 2>&1 &&
+           grep -qx "boot ${boot}" "${WORK}/storage-${boot}.log"; then
+            pass "storage-${boot}"
+        else
+            fail "storage-${boot}"
+        fi
+    done
+fi
+if [ "${STORAGE_ONLY}" = 0 ]; then
 build mirage_minimal &&
     run mirage_minimal minimal 0 "^Hello from a unikernel!$" plain
 
@@ -378,6 +399,7 @@ if grep -q "restarting with 128 MB" "${WORK}/supervised.log" && grep -q "^built$
     pass supervised
 else
     fail supervised
+fi
 fi
 fi
 

@@ -130,7 +130,16 @@ Inductive io : Type -> Type :=
     the same bytes, in order: what one leaves, the other gets. *)
 | receive_frame (c : connection) (seconds : nat) : io framed
 (** close the connection; closing it again does nothing *)
-| close (c : connection) : io unit.
+| close (c : connection) : io unit
+(** Named files on the attached [storage] block device. Names are opaque
+    keys, not host paths. [None] means missing; [Some ""] means present
+    and empty. I/O errors stop the image rather than masquerading as missing.
+    Writes replace bytes; append creates missing names and preserves order.
+    These operations are serialized, and return after the device write.
+    Attach the same disk to retain files across image boots. *)
+| read_file (name : string) : io (option string)
+| write_file (name data : string) : io unit
+| append_file (name data : string) : io unit.
 
 Arguments ret {A} a.
 Arguments bind {A B} m k.

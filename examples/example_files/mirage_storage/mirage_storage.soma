@@ -1,0 +1,6 @@
+Require Import Sandbox.
+Definition main : io unit :=
+  old <- read_file "boots" ;;
+  let next := String.append (match old with Some s => s | None => "" end) "x" in
+  write_file "boots" next ;;
+  print (String.append "boot " (to_string (String.length next))).
