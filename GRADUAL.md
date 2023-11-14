@@ -1249,9 +1249,10 @@ Extraction differs from the kernel in these ways:
 
 Sandbox changes can be checked on Linux with `soma build --no-image FILE.soma`.
 With `SOMA_MIRAGE_SWITCH` unset or empty, builds also take this path. Soma
-extracts the program and generates the Mirage project in `SOMA_MIRAGE_DIR`
-(default `$XDG_CACHE_HOME/soma/mirage`), then checks its OCaml with abstract
-stand-in interfaces, including the network functor. No image is built or run.
+extracts the program and generates the Mirage project in `$SOMA_MIRAGE_DIR`
+(or `$XDG_CACHE_HOME/soma/mirage`, otherwise `~/.cache/soma/mirage`), then
+checks its OCaml with abstract stand-in interfaces, including the network
+functor. No image is built or run.
 The contracts check types, not runtime behavior; image testing still needs
 `SOMA_MIRAGE_SWITCH` set to a switch with Mirage and solo5 installed.
 

@@ -15,8 +15,10 @@ done
 for kind in plain net; do
     test -f "$SOMA_MIRAGE_DIR/$kind/config.ml"
     test -f "$SOMA_MIRAGE_DIR/$kind/prog.ml"
+    test -f "$SOMA_MIRAGE_DIR/$kind/no-image/prog.cmo"
     test -f "$SOMA_MIRAGE_DIR/$kind/no-image/soma_rt.cmo"
     test -f "$SOMA_MIRAGE_DIR/$kind/no-image/unikernel.cmo"
+    [ ! -e "$SOMA_MIRAGE_DIR/$kind/dist/soma.hvt" ]
 done
 unset SOMA_MIRAGE_SWITCH
 soma build -v mirage_minimal.soma > fallback.log 2>&1

@@ -22,7 +22,11 @@
    from the opam switch [$SOMA_MIRAGE_SWITCH] (a
    switch with the hvf-mac repository, see solo5-mac). The image runs in
    [$SOMA_MIRAGE_MEM] MB of memory, 256 by default (the command to run it
-   says so). Setting [SOMA_MIRAGE_BUILD=0] skips the image. *)
+   says so). Setting [SOMA_MIRAGE_BUILD=0] skips the image.
+   [soma build --no-image], and a build with [$SOMA_MIRAGE_SWITCH] unset
+   or empty, still extracts the project and type-checks [prog.ml] and
+   [soma_rt.ml] with plain OCaml against stand-in Mirage signatures
+   ([no-image/standins.mli]). That stops before the image. *)
 
 open Names
 
