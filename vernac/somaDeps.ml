@@ -171,6 +171,18 @@ let load_fetched (p : dependency_path) ~version ~commit =
 
 type entry = { e_path : string; e_version : version; e_commit : string option }
 
+(* A locked commit becomes a folder name (in [fetch] and [cache_of]) and
+   reaches git, so it is taken only as a full commit: exactly 40
+   hexadecimal digits, lowercase, as git writes them and [write_lock]
+   records them. A branch or tag name, an abbreviation, a leading [-],
+   or a [/] or [..] in it is refused here, before any of that. *)
+let is_commit s =
+  let rec hex i =
+    i = String.length s ||
+    (match s.[i] with '0'..'9' | 'a'..'f' -> hex (i + 1) | _ -> false)
+  in
+  String.length s = 40 && hex 0
+
 let read_lock root =
   let file = Filename.concat root lock_name in
   if not (Sys.file_exists file) then None else
@@ -198,7 +210,14 @@ let read_lock root =
         let version = match parse_version (required "version") with
           | Ok v -> v
           | Error why -> wrong 1 "%s" why in
-        { e_path = required "path"; e_version = version; e_commit = string "commit" }
+        let path = required "path" in
+        let commit = match string "commit" with
+          | None -> None
+          | Some c when is_commit c -> Some c
+          | Some c ->
+            wrong 1 "%s: commit %S is not a full commit: a commit in %s is exactly 40 hexadecimal digits (0-9, a-f)."
+              path c lock_name in
+        { e_path = path; e_version = version; e_commit = commit }
       | _ -> wrong 1 "resolved is an array of tables, [[resolved]].") tables)
 
 let write_lock root selected =
