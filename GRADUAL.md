@@ -302,9 +302,14 @@ digest alone is out of date and the `.definition` is compiled again rather
 than a `.vo` from before this, which named the `.ml` by an absolute path.
 A project with a dependency on a folder (`{ path = "../wip" }`) is not kept in
 the store, as that folder's files are not in the key.
+`soma build --no-module-cache` does not read or write the store (the
+project's own `.soma-cache` is still used). Deleting the store's directory
+clears it. An empty `XDG_CACHE_HOME` is the same as unset: the store is
+`~/.cache/soma`.
 `test-suite/misc/soma_module_cache.sh`,
-`test-suite/misc/soma_module_cache_checkout.sh` and
-`test-suite/misc/soma_module_cache_path_deps.sh` test it.
+`test-suite/misc/soma_module_cache_checkout.sh`,
+`test-suite/misc/soma_module_cache_path_deps.sh` and
+`test-suite/misc/soma_module_cache_rebuild.sh` test it.
 
 `examples/example_projects/cached_compilation` is an example;
 `test-suite/misc/soma_import.sh` tests it. Not yet handled: two builds of

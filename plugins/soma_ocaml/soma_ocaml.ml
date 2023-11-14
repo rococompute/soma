@@ -29,7 +29,7 @@ open Names
 open Pp
 
 type binding = {
-  key : string;             (* the module: FILE.ml, absolute, or a library's, Async *)
+  key : string;             (* FILE.ml relative to the project, absolute for a dependency, or a library name *)
   top : string;             (* its name in OCaml: Web, Async *)
   path : string;            (* the declaration's in it: vtext, Deferred.bind *)
   item : SomaForeign.ocaml_item;

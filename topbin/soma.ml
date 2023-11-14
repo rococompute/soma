@@ -81,6 +81,8 @@ Options:
   -v, --verbose               (build, compile) Print the value of each bare term, and the
                               proofs that "The rest follows." found.
   --no-image                  Check Sandbox OCaml without building an image
+  --no-module-cache           (build, compile) Do not read or write the shared module
+                              store. The project's .soma-cache is still used.
   --fill                      (build, compile) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
   --check-fresh               (build) Say, from metadata alone, whether FILE is as its last
@@ -275,7 +277,8 @@ let clean_review review =
    is published under its key; at the start of a build, an absent local
    .soma-cache is restored from the store when the same key is present. A
    restored .definition's .vo names its FILE.ml relative to the project, so
-   it is the .ml of the checkout being built (SomaImport.project_file). *)
+   it is the .ml of the checkout being built (SomaImport.project_file).
+   [soma build --no-module-cache] skips the store both ways. *)
 let shared_cache_dir () =
   match Sys.getenv_opt "SOMA_CACHE" with
   | Some d when d <> "" -> Some d
@@ -392,9 +395,9 @@ let publish_shared_cache file =
 (* [soma build FILE]; with [~review], [soma compile FILE]: the same, and
    then FILE reviewed as by [soma explore] (SOMA_REVIEW), which fails it
    when the review finds an issue or a violation *)
-let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
+let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file args =
   ignore (!cache_toolchain ());
-  restore_shared_cache file;
+  if share then restore_shared_cache file;
   let dir = output_dir file args in
   let before = modification_times dir in
   let start = Unix.gettimeofday () in
@@ -443,7 +446,7 @@ let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
               | _ -> peak) 0 (String.split_on_char '\n' reports) in
           Printf.printf "Total: %.3f s\t%d KiB peak heap memory\n%!"
             (Unix.gettimeofday () -. start) peak)) timing_file;
-  if code = 0 then publish_shared_cache file;
+  if code = 0 && share then publish_shared_cache file;
   if code <> 0 then exit code;
   if review then begin
     if review_lines <> [] then print_newline ();
@@ -1222,6 +1225,8 @@ let options_help command =
     else l
   in
   print_string (String.concat "\n" (List.map reword (lines output)));
+  if command = "build" || command = "compile" then
+    print_endline "  --no-module-cache      Do not read or write the shared module store";
   if command = "build" then print_endline "  --timings              Print module times, total time and peak heap memory";
   exit code
 
@@ -1269,6 +1274,8 @@ let () =
     let no_image = List.mem "--no-image" rest in
     if no_image then Unix.putenv "SOMA_MIRAGE_NO_IMAGE" "1";
     let rest = List.filter ((<>) "--no-image") rest in
+    let no_module_cache = List.mem "--no-module-cache" rest in
+    let rest = List.filter ((<>) "--no-module-cache") rest in
     let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
     let fill = List.exists is_fill rest in
@@ -1303,7 +1310,7 @@ let () =
         let dir = output_dir (program_of file) args in
         let before_build = if record then modification_times dir else [] in
         let before = if record then forget_freshness config else None in
-        build ~review:(command = "compile") ~timings ~verbose ~fill (program_of file) args;
+        build ~review:(command = "compile") ~timings ~share:(not no_module_cache) ~verbose ~fill (program_of file) args;
         if record then
           record_freshness config before ~kept:(created ~before:before_build ~source:(program_of file) dir)
     end
