@@ -17,6 +17,9 @@
     axioms (classical logic and functional extensionality);
     [Print Assumptions sqrt2_irrational] lists them. *)
 
+From Stdlib Require Import QArith Reals Qreals Lra.
+Close Scope Q_scope.
+
 (** A real number is irrational when no rational equals it. [Q2R] turns a
     rational into a real. *)
 irrational (x : R) := ~ exists q : Q, Q2R q = x.

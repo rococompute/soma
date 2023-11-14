@@ -777,11 +777,12 @@ loaded right after Rocq's Prelude. It exports, from `theories/Soma`:
 - Stdlib's `Arith` (`nat` comparisons such as `=?` and `<?`, `mod`),
   `List` (`map`, `seq`, `filter`, `fold_left`, ..., and `++` and `::` on
   lists) and `Lia` (the `lia` and `nia` tactics).
-- Stdlib's `ZArith`, `QArith`, `Reals`, `Qreals` and `Lra`: integers `Z`,
-  rationals `Q`, reals `R` with `sqrt`, `Q2R` from rationals to reals, and
-  the `lra` tactic. `QArith` opens `Q_scope`, which the prelude closes again,
-  so `3` is still a `nat`; rationals are written `(1 # 2)%Q` and reals
-  `(sqrt 2)%R`. Loading `Reals` takes hello world from 0.12 to 0.15 s.
+- Stdlib's `ZArith`: integers `Z`. Rationals `Q`, reals `R` with `sqrt`,
+  `Q2R` from rationals to reals, and the `lra` tactic (`QArith`, `Reals`,
+  `Qreals`, `Lra`) are opt-in, not in the prelude: write
+  `From Stdlib Require Import QArith Reals Qreals Lra.` to use them.
+  `QArith` opens `Q_scope`, so rationals are written `(1 # 2)%Q` and reals
+  `(sqrt 2)%R`.
 
 It also sets `Automatic Generalization` (`vernac/comDefinition.ml`): a type
 that a `Definition` leaves unknown becomes a maximal implicit type parameter,
