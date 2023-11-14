@@ -73,6 +73,17 @@ val generated_output : bool ref
 (** The cache of the project being built, ROOT/.soma-cache *)
 val project_cache : unit -> string
 
+(** [project_file f]: how a compiled library records [f], a file of the
+    project being compiled (FILE.ml beside its FILE.definition): relative to
+    the project's root, or absolute when it is a dependency's or outside
+    the project. *)
+val project_file : string -> string
+
+(** [resolve_project_file f]: the file that [f], as [project_file] gave it,
+    is in the project being built: a relative [f] is under that project's
+    root, so a .vo compiled in another checkout names this one's file. *)
+val resolve_project_file : string -> string
+
 (** [folder_rules file]: the rules of the folders of the project from its
     root to [file]'s (ROOT/ROOT.lang, X/X.lang, ...), outermost first,
     which apply to every Soma file under them, compiled into the cache when

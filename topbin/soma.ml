@@ -267,18 +267,25 @@ let clean_review review =
   | last :: _ -> String.trim last = "No issue, and no violation."
   | [] -> false
 
-(* Shared compiled-artifact store: $SOMA_CACHE (default ~/.cache/soma),
-   keyed by a hash of the project sources that determine compilation.
-   After a successful build the checkout's .soma-cache is published
-   under its key; at the start of a build, an absent local .soma-cache
-   is restored from the store when the same key is present. *)
+(* Shared compiled-artifact store: $SOMA_CACHE, or else $XDG_CACHE_HOME/soma
+   (~/.cache/soma without it), keyed by a hash of the project sources that
+   determine compilation (every .soma, .proof, .lang, .definition, .wasm,
+   .ml and .lean of the project by its path and bytes, soma.toml, soma.lock,
+   and the toolchain). After a successful build the checkout's .soma-cache
+   is published under its key; at the start of a build, an absent local
+   .soma-cache is restored from the store when the same key is present. A
+   restored .definition's .vo names its FILE.ml relative to the project, so
+   it is the .ml of the checkout being built (SomaImport.project_file). *)
 let shared_cache_dir () =
   match Sys.getenv_opt "SOMA_CACHE" with
   | Some d when d <> "" -> Some d
   | _ ->
-    (match Sys.getenv_opt "HOME" with
-     | Some h when h <> "" -> Some (Filename.concat (Filename.concat h ".cache") "soma")
-     | _ -> None)
+    match Sys.getenv_opt "XDG_CACHE_HOME" with
+    | Some x when x <> "" -> Some (Filename.concat x "soma")
+    | _ ->
+      (match Sys.getenv_opt "HOME" with
+       | Some h when h <> "" -> Some (Filename.concat (Filename.concat h ".cache") "soma")
+       | _ -> None)
 
 let rec mkdir_p d =
   if d <> "" && d <> "." && not (Sys.file_exists d) then begin

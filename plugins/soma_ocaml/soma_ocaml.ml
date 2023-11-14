@@ -254,6 +254,9 @@ let bind_module ~key ~ml_file ~top ~definition =
 (* [OCaml Bind "FILE.ml"]: FILE.definition declares FILE.ml *)
 let bind file =
   let base = Filename.basename file in
+  (* a project's FILE.ml is kept relative to its root, and found in the
+     checkout being built (vernac/somaImport.ml) *)
+  let file = SomaImport.project_file file in
   bind_module ~key:file ~ml_file:(Some file) ~top:(module_name file)
     ~definition:(Filename.remove_extension base ^ ".definition")
 
@@ -270,6 +273,7 @@ let ocaml_modules () =
   CString.Map.fold (fun key (ml_file, top, libraries) acc ->
       let items = Cmap_env.fold (fun c b acc ->
           if String.equal b.key key then (c, b.path, b.item) :: acc else acc) !bindings [] in
+      let ml_file = Option.map SomaImport.resolve_project_file ml_file in
       { SomaForeign.ml_file; top; libraries; items = List.rev items } :: acc)
     !modules []
 

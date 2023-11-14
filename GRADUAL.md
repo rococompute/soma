@@ -287,6 +287,18 @@ import fails with `Cannot import X.Y: X/Y.soma does not compile (its
 errors are above).`, after its errors. A file that imports itself, through
 others, is `Import cycle: a -> b -> a.`
 
+`soma build` also keeps a store of compiled projects, shared by the
+checkouts of a machine: `$SOMA_CACHE`, or else `$XDG_CACHE_HOME/soma`
+(`~/.cache/soma` without it), with a `.soma-cache` under a key of the
+project's sources: the path and bytes of each `.soma`, `.proof`, `.lang`,
+`.definition`, `.wasm`, `.ml` and `.lean` file, `soma.toml`, `soma.lock`, and
+Soma itself. A checkout without a `.soma-cache` starts from the one of the
+same key. A `.definition`'s `.vo` names the `FILE.ml` beside it by its path
+in the project, so a program built from a `.vo` that another checkout
+compiled uses its own checkout's `FILE.ml`, never the other's (a
+dependency's `.ml` is named by its absolute path, in its own source).
+`test-suite/misc/soma_module_cache.sh` tests it.
+
 `examples/example_projects/cached_compilation` is an example;
 `test-suite/misc/soma_import.sh` tests it. Not yet handled: two builds of
 one project at the same time, and `soma run --supervise` of a program

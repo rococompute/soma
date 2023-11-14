@@ -360,6 +360,36 @@ let project_cache () =
       | Some f -> Filename.dirname (absolute f)
       | None -> Sys.getcwd ()))
 
+(* The root of the project being built, as [project_cache] finds it *)
+let built_root () =
+  match env_value build_var, env_root () with
+  | Some r, _ -> CUnix.canonical_path_name r
+  | None, Some r -> r
+  | None, None -> root_of_dir (match !source_file with
+      | Some f -> Filename.dirname (absolute f)
+      | None -> Sys.getcwd ())
+
+(* A file of this project (FILE.ml beside a FILE.definition), as a compiled
+   library records it: relative to the project's root, so that a .vo shared
+   between two checkouts of one project (topbin/soma.ml's store) names the
+   file of the checkout being built, and not that of the one it was compiled
+   in. A dependency's file stays absolute: its sources are its own. *)
+let project_file file =
+  let file = absolute file in
+  if env_value prefix_var <> None then file else
+  let canonical =
+    try Filename.concat (CUnix.canonical_path_name (Filename.dirname file)) (Filename.basename file)
+    with Sys_error _ | Unix.Unix_error _ -> file in
+  let root = match env_root () with
+    | Some r -> r
+    | None -> (try root_of_dir (Filename.dirname canonical) with e when CErrors.noncritical e -> "") in
+  if root <> "" && CString.is_prefix (root ^ "/") canonical
+  then String.sub canonical (String.length root + 1) (String.length canonical - String.length root - 1)
+  else file
+
+let resolve_project_file file =
+  if Filename.is_relative file then Filename.concat (built_root ()) file else file
+
 (* What the Rocq libraries of the build's files need in the load path, for
    what imports them: logical name, folder, one a line *)
 let load_paths_file () = Filename.concat (project_cache ()) "load-paths"

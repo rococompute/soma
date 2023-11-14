@@ -10,8 +10,12 @@ let rec mkdir d =
     try Unix.mkdir d 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
   end
 
+(* $XDG_CACHE_HOME/soma-receipts, or ~/.cache/soma-receipts *)
+let receipts () = match Sys.getenv_opt "XDG_CACHE_HOME" with
+  | Some x when x <> "" -> Filename.concat x "soma-receipts"
+  | _ -> Filename.concat (Sys.getenv "HOME") ".cache/soma-receipts"
+
 let receipt file =
-  let home = Sys.getenv "HOME" in
   (* Bind the object and its stamp together: separate receipts would allow
      a checkout to mix the stamp of one compilation with another object. *)
   let contents =
@@ -21,7 +25,7 @@ let receipt file =
       Digest.file (Filename.chop_suffix file ".stamp" ^ ".vo") ^ Digest.file file
     else Digest.file file in
   let key = Digest.to_hex (Digest.string (identity () ^ contents)) in
-  Filename.concat (Filename.concat home ".cache/soma-receipts") key
+  Filename.concat (receipts ()) key
 
 let tracked file =
   let null = Unix.openfile "/dev/null" [Unix.O_WRONLY] 0 in
