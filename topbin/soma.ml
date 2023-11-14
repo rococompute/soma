@@ -151,12 +151,9 @@ let modification_times dir =
         with Unix.Unix_error _ -> None)
   with Sys_error _ -> []
 
-(* The files of [dir] that are new since [before], or written since
-   [start], but [source]. Modification times may only count seconds, so a
-   file rewritten in the second it was last written is caught by [start],
-   rounded down. *)
-let created ~before ~start ~source dir =
-  let start = Float.of_int (truncate start) in
+(* The files of [dir] that are new since [before], or whose modification
+   time changed since [before], but [source] *)
+let created ~before ~source dir =
   modification_times dir
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
@@ -167,7 +164,9 @@ let created ~before ~start ~source dir =
       not (Sys.is_directory (Filename.concat dir name)) &&
       (* sources are not outputs, even when edited just before *)
       not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"; ".definition"; ".wasm"]) &&
-      (time >= start || not (List.mem_assoc name before)))
+      (match List.assoc_opt name before with
+       | Some old -> time <> old
+       | None -> true))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare
 
@@ -288,7 +287,7 @@ let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
   let compiled f = List.exists (Filename.check_suffix f) [".vo"; ".vos"; ".vok"; ".glob"; ".aux"] in
   List.iter (fun f ->
       if compiled f then Sys.remove f else print_endline f)
-    (created ~before ~start ~source:file dir);
+    (created ~before ~source:file dir);
   if proofs <> [] then begin
     if fill then
       Printf.printf "%s: %s written in, in place of \"The rest follows.\"\n%!"
