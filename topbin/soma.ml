@@ -256,10 +256,87 @@ let clean_review review =
   | last :: _ -> String.trim last = "No issue, and no violation."
   | [] -> false
 
+(* Shared compiled-artifact store: $SOMA_CACHE (default ~/.cache/soma),
+   keyed by a hash of the project sources that determine compilation.
+   After a successful build the checkout's .soma-cache is published
+   under its key; at the start of a build, an absent local .soma-cache
+   is restored from the store when the same key is present. *)
+let shared_cache_dir () =
+  match Sys.getenv_opt "SOMA_CACHE" with
+  | Some d when d <> "" -> Some d
+  | _ ->
+    (match Sys.getenv_opt "HOME" with
+     | Some h when h <> "" -> Some (Filename.concat (Filename.concat h ".cache") "soma")
+     | _ -> None)
+
+let rec mkdir_p d =
+  if d <> "" && d <> "." && not (Sys.file_exists d) then begin
+    mkdir_p (Filename.dirname d);
+    try Unix.mkdir d 0o755 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+  end
+
+let copy_file src dst =
+  In_channel.with_open_bin src (fun ic ->
+      Out_channel.with_open_bin dst (fun oc ->
+          Out_channel.output_string oc (In_channel.input_all ic)))
+
+let rec copy_tree src dst =
+  mkdir_p dst;
+  Array.iter (fun name ->
+      let s = Filename.concat src name and d = Filename.concat dst name in
+      if Sys.is_directory s then copy_tree s d else copy_file s d)
+    (Sys.readdir src)
+
+let is_directory_opt p = try Sys.is_directory p with Sys_error _ -> false
+
+let project_cache_key file =
+  let abs_file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
+  let start_dir = Filename.dirname abs_file in
+  let rec find_root dir =
+    if Sys.file_exists (Filename.concat dir "soma.toml") then dir
+    else let up = Filename.dirname dir in if up = dir then start_dir else find_root up in
+  let root = find_root start_dir in
+  let source name =
+    name = "soma.lock" ||
+    List.exists (Filename.check_suffix name)
+      [".soma"; ".proof"; ".lang"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
+  let rec walk rel dir acc =
+    Array.fold_left (fun acc name ->
+        if List.mem name [".soma-cache"; ".git"; "_build"] then acc
+        else
+          let full = Filename.concat dir name in
+          let r = if rel = "" then name else rel ^ "/" ^ name in
+          if is_directory_opt full then walk r full acc
+          else if source name then (r, full) :: acc else acc)
+      acc (try Sys.readdir dir with Sys_error _ -> [||]) in
+  let files = List.sort compare (walk "" root []) in
+  let key = Digest.to_hex (Digest.string (String.concat "\n"
+      (List.map (fun (rel, full) -> rel ^ " " ^ Digest.to_hex (Digest.file full)) files))) in
+  root, Filename.concat root ".soma-cache", key
+
+let restore_shared_cache file =
+  match shared_cache_dir () with
+  | None -> ()
+  | Some store ->
+    let _, cache_dir, key = project_cache_key file in
+    let stored = Filename.concat store key in
+    if not (Sys.file_exists cache_dir) && is_directory_opt stored then
+      (try copy_tree stored cache_dir with Sys_error _ | Unix.Unix_error _ -> ())
+
+let publish_shared_cache file =
+  match shared_cache_dir () with
+  | None -> ()
+  | Some store ->
+    let _, cache_dir, key = project_cache_key file in
+    let stored = Filename.concat store key in
+    if is_directory_opt cache_dir && not (Sys.file_exists stored) then
+      (try mkdir_p store; copy_tree cache_dir stored with Sys_error _ | Unix.Unix_error _ -> ())
+
 (* [soma build FILE]; with [~review], [soma compile FILE]: the same, and
    then FILE reviewed as by [soma explore] (SOMA_REVIEW), which fails it
    when the review finds an issue or a violation *)
 let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
+  restore_shared_cache file;
   let dir = output_dir file args in
   let before = modification_times dir in
   let start = Unix.gettimeofday () in
@@ -307,6 +384,7 @@ let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
               | _ -> peak) 0 (String.split_on_char '\n' reports) in
           Printf.printf "Total: %.3f s\t%d KiB peak heap memory\n%!"
             (Unix.gettimeofday () -. start) peak)) timing_file;
+  if code = 0 then publish_shared_cache file;
   if code <> 0 then exit code;
   if review then begin
     if review_lines <> [] then print_newline ();
