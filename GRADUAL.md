@@ -1253,6 +1253,12 @@ extracts the program and generates the Mirage project in `$SOMA_MIRAGE_DIR`
 (or `$XDG_CACHE_HOME/soma/mirage`, otherwise `~/.cache/soma/mirage`), then
 checks its OCaml with abstract stand-in interfaces, including the network
 functor. No image is built or run.
+Each stand-in is a subset of its library's real interface, with the same
+labels and optional arguments; `toplevel/somaMirage.ml` (`standins_mli`)
+names the library and file it comes from, and
+`test-suite/misc/soma_no_image_signatures.sh` checks code the real ones
+accept and refuse. What it cannot check is linking (a missing package in
+`config.ml`, a C stub) and what the image does when it runs.
 The contracts check types, not runtime behavior; image testing still needs
 `SOMA_MIRAGE_SWITCH` set to a switch with Mirage and solo5 installed.
 

@@ -746,7 +746,28 @@ let foreign_calls () =
 
 let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent accidental reliance on
    the representation of promises, network flows, addresses or buffers. These
-   are never linked or run in an image. *)
+   are never linked or run in an image.
+
+   Each module is a subset of the library's real interface: only the values
+   the generated code uses, with the same types, labels and optional
+   arguments (an optional argument may be left out, as a full application
+   of the real function may omit it, but none is made required). Where they
+   come from:
+   - Lwt: lwt 5, src/core/lwt.mli
+   - Duration: duration 0.2, src/duration.mli
+   - Mirage_sleep: mirage-sleep 4.0, src/mirage_sleep.mli
+   - Ptime: ptime 1.1, src/ptime.mli (date, time, tz_offset_s, to_date_time)
+   - Mirage_ptime: mirage-ptime 5.0, src/mirage_ptime.mli
+   - Mirage_crypto_rng: mirage-crypto-rng 1.0, rng/mirage_crypto_rng.mli
+     (generate : ?g:g -> int -> string)
+   - Solo5_os.Memory: mirage-solo5 0.10, lib/memory.mli
+   - Cmdliner: cmdliner 1.3, src/cmdliner.mli (Arg.info, Arg.opt_all, ...)
+   - Mirage_runtime: mirage-runtime 4.5, lib/mirage_runtime.mli
+   - Cstruct: cstruct 6, lib/cstruct.mli
+   - Ipaddr: ipaddr 5, lib/ipaddr.mli
+   - Tcpip.Stack.V4V6 and its TCP: tcpip 8, src/core/stack.ml and
+     src/core/tcp.ml (Tcp.S), whose flow functions are Mirage_flow.S's
+     (mirage-flow 4, src/mirage_flow.mli) *)
 module Lwt : sig
   type 'a t
   val return : 'a -> 'a t
@@ -765,13 +786,19 @@ module Duration : sig val of_sec : int -> int64 end
 module Mirage_sleep : sig val ns : int64 -> unit Lwt.t end
 module Ptime : sig
   type t
-  val to_date_time : t -> (int * int * int) * ((int * int * int) * int)
+  type tz_offset_s = int
+  type date = int * int * int
+  type time = (int * int * int) * tz_offset_s
+  val to_date_time : ?tz_offset_s:tz_offset_s -> t -> date * time
 end
 module Mirage_ptime : sig val now : unit -> Ptime.t end
-module Mirage_crypto_rng : sig val generate : int -> string end
+module Mirage_crypto_rng : sig
+  type g
+  val generate : ?g:g -> int -> string
+end
 module Solo5_os : sig
   module Memory : sig
-    type stat = { heap_words : int; live_words : int; free_words : int }
+    type stat = { heap_words : int; live_words : int; stack_words : int; free_words : int }
     val stat : unit -> stat
   end
 end
@@ -781,9 +808,9 @@ module Cmdliner : sig
     type 'a t
     type 'a conv
     type info
-    val info : doc:string -> string list -> info
+    val info : ?docs:string -> ?docv:string -> ?doc:string -> string list -> info
     val string : string conv
-    val opt_all : 'a conv -> 'a list -> info -> 'a list t
+    val opt_all : ?vopt:'a -> 'a conv -> 'a list -> info -> 'a list t
     val flag : info -> bool t
     val value : 'a t -> 'a Term.t
     val ( & ) : ('a -> 'b) -> 'a -> 'b
@@ -792,8 +819,12 @@ end
 module Mirage_runtime : sig
   val register_arg : 'a Cmdliner.Term.t -> unit -> 'a
 end
-module Cstruct : sig type t val to_string : t -> string val of_string : string -> t end
-module Ipaddr : sig type t val of_string : string -> (t, [ `Msg of string ]) result end
+module Cstruct : sig
+  type t
+  val to_string : ?off:int -> ?len:int -> t -> string
+  val of_string : ?allocator:(int -> t) -> ?off:int -> ?len:int -> string -> t
+end
+module Ipaddr : sig type t val of_string : string -> (t, [> `Msg of string ]) result end
 module Tcpip : sig
   module Stack : sig
     module type V4V6 = sig
@@ -801,7 +832,9 @@ module Tcpip : sig
       module TCP : sig
         type t
         type flow
-        type error = [ `Refused | `Timeout ]
+        (* tcpip's Tcp.S: type error = private [> Tcp.error ], with
+           Tcp.error = [ `Timeout | `Refused ] (src/core/tcp.ml) *)
+        type error = private [> `Refused | `Timeout ]
         (* mirage-protocols 7.0.0, src/mirage_protocols.ml:
            Tcp.write_error = [ Tcp.error | Mirage_flow.write_error ], and
            TCP.write_error = private [> Tcp.write_error ]. Tcp.error is
