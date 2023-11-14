@@ -1312,16 +1312,38 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `connect address port` | `io connected` | opens a connection that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` |
 | `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
+| `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
 | `close c` | `io unit` | closes the connection; again does nothing |
 
-The links (`listen`, `connect`, `send`, `receive_line`, `close`) are
-line-oriented: one connection per peer, kept open, a line at a time.
-Length-prefixed frames are not there yet. A connection is a number the
-image knows it by (`Connection id`); after `Closed`, a program reconnects
-with `connect`. `examples/example_files/mirage_link_server` and
-`mirage_link_client` exchange lines on one connection (`dev/mirage-check.sh`'s
-`link-*` cases), and `test-suite/misc/soma_links.sh` checks them through
-`--no-image`.
+The links (`listen`, `connect`, `send`, `receive_line`, `receive_frame`,
+`close`) keep one connection per peer open, and carry lines or frames,
+a frame holding any bytes, line breaks included. A connection is a number
+the image knows it by (`Connection id`); after `Closed` or `FrameClosed`,
+a program reconnects with `connect`. So a program can tell a peer that
+never answered (`ConnectRefused`, `ConnectTimedOut`), one that went quiet
+(`FrameTimedOut`) and one that hung up (`Closed`, `FrameClosed`, `SendClosed`).
+
+The image keeps, for each connection, what it has received past the last
+line or frame it returned, so a receive returns exactly one message
+however TCP cut the bytes; lines and frames are taken from the same
+bytes, in order. A receive that times out leaves the read it started for
+the next receive, so nothing is read twice or lost. Taking the first
+message of what was received is pure and in `Sandbox.v`: `take_line`,
+`take_frame`, `split_lines`, `split_frames` and `receive_chunks` (chunks
+fed one after another), with `Example`s on fixed chunks (a message split
+across chunks, several in one chunk, a partial one kept, an empty line, a
+length prefix that arrives alone) and theorems that what is kept never
+holds a whole message (`split_lines_kept`, `split_frames_kept`). The
+image's `Soma_rt.take_line` and `Soma_rt.take_frame` do the same on
+OCaml strings.
+
+`examples/example_files/mirage_link_server` and `mirage_link_client`
+exchange lines on one connection (`dev/mirage-check.sh`'s `link-*` cases),
+and `test-suite/misc/soma_links.sh` checks them through `--no-image`.
+`mirage_frame_server` and `mirage_frame_client` exchange frames, an
+empty one and one of two lines among them (`frame-*` cases), and
+`test-suite/misc/soma_frames.sh` checks them through `--no-image`, with
+programs that misuse a receive's or a connect's result.
 
 `http_response body`, `http_get path`, `http_path request` and `crlf` build
 and read HTTP. `++` appends strings wherever a `string` is expected (see

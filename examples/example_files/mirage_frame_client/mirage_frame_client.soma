@@ -1,0 +1,69 @@
+(** A unikernel that opens one connection to the address it is given (port
+    7001, where mirage_frame_server listens), exchanges a few
+    length-prefixed frames on it (one empty, one of two lines), and notices
+    when the server closes it. It exits 0 when all went as expected, 1 when
+    the connection failed or did not go as expected, 2 without an address
+    or with one that is not an IP address:
+
+        soma run examples/example_files/mirage_frame_client/mirage_frame_client.soma -- --arg=192.168.105.46
+*)
+Require Import Sandbox.
+
+(** a message of two lines, in one frame *)
+two_lines : string := "first line" ++ newline ++ "second line".
+
+(** the next frame from the server, if it is [expected]: [true] when it
+    is, [false] when it is another, or none came *)
+expect (c : connection) (expected : string) : io bool :=
+  r <- receive_frame c 10 ;;
+  match r with
+  | Frame data =>
+    print ("server: " ++ data) ;;
+    ret (String.eqb data expected)
+  | FrameClosed => print "the server closed the connection" ;; ret false
+  | FrameTimedOut => print "no frame from the server within 10 seconds" ;; ret false
+  | FrameTooLarge => print "the server sent a frame too large" ;; ret false
+  end.
+
+(** send [data] as a frame, and check the reply *)
+ask (c : connection) (data : string) (expected : string) : io bool :=
+  s <- send_frame c data ;;
+  match s with
+  | Sent => expect c expected
+  | SendClosed => print "the connection is closed: could not send" ;; ret false
+  end.
+
+(** after "bye", the server closes: the next receive is [FrameClosed] *)
+hears_close (c : connection) : io bool :=
+  r <- receive_frame c 10 ;;
+  match r with
+  | FrameClosed => print "the server closed the connection" ;; ret true
+  | _ => print "the connection stayed open after bye" ;; ret false
+  end.
+
+talk (c : connection) : io unit :=
+  greeted <- expect c "hello from the frame server" ;;
+  one <- ask c "one" "echo: one" ;;
+  empty <- ask c "" "echo: " ;;
+  lines <- ask c two_lines ("echo: " ++ two_lines) ;;
+  bye <- ask c "bye" "bye" ;;
+  closed <- hears_close c ;;
+  close c ;;
+  (if andb (andb greeted (andb one empty)) (andb lines (andb bye closed))
+   then print "the frames went as expected"
+   else print "the frames did not go as expected" ;; exit 1).
+
+main : io unit :=
+  a <- args ;;
+  match a with
+  | [address] =>
+    print ("connecting to " ++ address ++ ":7001") ;;
+    link <- connect address 7001 ;;
+    match link with
+    | Connected c => talk c
+    | ConnectRefused => print "the connection was refused: nothing listens there" ;; exit 1
+    | ConnectTimedOut => print "nothing answered within 10 seconds" ;; exit 1
+    | ConnectBadAddress => print (address ++ " is not an IP address") ;; exit 2
+    end
+  | _ => print "usage: --arg=ADDRESS" ;; exit 2
+  end.

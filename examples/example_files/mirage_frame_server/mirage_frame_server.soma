@@ -1,0 +1,40 @@
+(** A unikernel that keeps connections open and talks over them in
+    length-prefixed frames: four bytes of length, then the message, which
+    may hold anything, line breaks included. It listens on port 7001,
+    greets each connection, echoes each frame it gets, and on "bye" says
+    "bye" and closes; when the other side closes first, or says nothing for
+    30 seconds, it says so and closes. It runs under solo5-vmnet and prints
+    its address:
+
+        soma run examples/example_files/mirage_frame_server/mirage_frame_server.soma
+
+    examples/example_files/mirage_frame_client/mirage_frame_client.soma
+    talks to it. *)
+Require Import Sandbox.
+
+(** the frames of one connection, [fuel] of them at most *)
+Fixpoint echo (fuel : nat) (c : connection) : io unit :=
+  match fuel with
+  | O => print "too many frames on one connection"
+  | S more =>
+    r <- receive_frame c 30 ;;
+    match r with
+    | FrameClosed => print "the client closed the connection"
+    | FrameTimedOut => print "no frame for 30 seconds, closing"
+    | FrameTooLarge => print "a frame too large, closed"
+    | Frame data =>
+      print ("got frame: " ++ data) ;;
+      (if String.eqb data "bye"
+       then send_frame c "bye" ;; print "said bye, closing"
+       else send_frame c ("echo: " ++ data) ;; echo more c)
+    end
+  end.
+
+greet (c : connection) : io unit :=
+  print "a client connected" ;;
+  send_frame c "hello from the frame server" ;;
+  echo 100 c.
+
+main : io unit :=
+  print "listening for frames on port 7001" ;;
+  listen 7001 greet.

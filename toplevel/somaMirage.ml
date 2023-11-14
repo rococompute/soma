@@ -216,6 +216,32 @@ type link = Link of int | Link_refused | Link_timed_out | Link_bad_address
 type connected_value = Connected of Obj.t | ConnectRefused | ConnectTimedOut | ConnectBadAddress
 type received_value = Line of char list | Closed
 type sent_value = Sent | SendClosed
+(* What [receive_frame] gets (Sandbox.framed), and its representation *)
+type frame = Got_frame of string | Frame_closed | Frame_timed_out | Frame_too_large
+type framed_value = Frame of char list | FrameClosed | FrameTimedOut | FrameTooLarge
+
+(* Framing, as Sandbox's take_line and take_frame: the first message of
+   what a connection has received, and the rest, which is kept for the
+   next receive. No network: these are pure. *)
+(* Sandbox.max_frame *)
+let max_frame = 1048576
+
+let take_line s =
+  match String.index_opt s '\n' with
+  | None -> None
+  | Some i ->
+    let n = if i > 0 && s.[i - 1] = '\r' then i - 1 else i in
+    Some (String.sub s 0 n, String.sub s (i + 1) (String.length s - i - 1))
+
+let take_frame s =
+  let len = String.length s in
+  if len < 4 then `Need_more
+  else
+    let n = (Char.code s.[0] lsl 24) lor (Char.code s.[1] lsl 16)
+            lor (Char.code s.[2] lsl 8) lor Char.code s.[3] in
+    if n > max_frame then `Oversized
+    else if len - 4 < n then `Need_more
+    else `Whole (String.sub s 4 n, String.sub s (4 + n) (len - 4 - n))
 
 (* What the network provides; without a network stack, [serve], [fetch],
    [listen] and [connect] are not reached (a program that uses them gets
@@ -227,6 +253,8 @@ type net = {
   connect : string -> int -> link Lwt.t;
   send : int -> string -> bool Lwt.t;
   receive_line : int -> string option Lwt.t;
+  (* the connection, and the seconds to wait at most (0: no limit) *)
+  receive_frame : int -> int -> frame Lwt.t;
   close : int -> unit Lwt.t;
 }
 
@@ -235,6 +263,7 @@ let no_network =
   { serve = (fun _ _ -> fail ()); fetch = (fun _ _ _ -> fail ());
     listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ());
     send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
+    receive_frame = (fun _ _ -> fail ());
     close = (fun _ -> fail ()) }
 
 (* a connection's number, and the connection of a number *)
@@ -327,6 +356,13 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       >|= fun line -> Obj.magic (match line with
           | Some l -> Line (chars_of_string l)
           | None -> Closed)
+  | Prog.Receive_frame (c, seconds) ->
+      net.receive_frame (link_id c) (int_of_nat (check seconds))
+      >|= fun f -> Obj.magic (match f with
+          | Got_frame data -> Frame (chars_of_string data)
+          | Frame_closed -> FrameClosed
+          | Frame_timed_out -> FrameTimedOut
+          | Frame_too_large -> FrameTooLarge)
   | Prog.Close c -> net.close (link_id c) >|= Obj.magic
 
 (* Runs [main]; [serving] is whether the unikernel goes on once [main] has
@@ -389,6 +425,14 @@ let unikernel_ml ~network =
   if network then {soma|open Lwt.Infix
 
 module Main (S : Tcpip.Stack.V4V6) = struct
+  (* an open link: its flow, what it has received past the last line or
+     frame taken, and the read under way *)
+  type link = {
+    flow : S.TCP.flow;
+    pending : Buffer.t;
+    mutable reading : bool Lwt.t option;
+  }
+
   let start s =
     let servers = ref 0 in
     (* a connection's first data is the request; the reply is written back
@@ -439,17 +483,34 @@ module Main (S : Tcpip.Stack.V4V6) = struct
               read ()
     in
     (* links: the open connections by number, each with what it has
-       received past the last line taken *)
+       received past the last line or frame taken, and the read under way,
+       if any: a receive that times out leaves it, and the next receive
+       waits for it, so that no data is read twice or lost *)
     let links = Hashtbl.create 7 and last_link = ref 0 in
     let register flow =
       incr last_link;
-      Hashtbl.replace links !last_link (flow, Buffer.create 256);
+      Hashtbl.replace links !last_link
+        { flow; pending = Buffer.create 256; reading = None };
       !last_link
     in
     let close id =
       match Hashtbl.find_opt links id with
       | None -> Lwt.return_unit
-      | Some (flow, _) -> Hashtbl.remove links id; S.TCP.close flow
+      | Some l -> Hashtbl.remove links id; S.TCP.close l.flow
+    in
+    (* the next chunk, added to what is pending: [true], or [false] when
+       the connection has ended *)
+    let next_chunk l =
+      let p = match l.reading with
+        | Some p -> p
+        | None ->
+            let p = S.TCP.read l.flow >|= function
+              | Ok (`Data b) -> Buffer.add_string l.pending (Cstruct.to_string b); true
+              | _ -> false in
+            l.reading <- Some p; p in
+      p >|= fun alive ->
+      (match l.reading with Some q when q == p -> l.reading <- None | _ -> ());
+      alive
     in
     let listen port handler =
       incr servers;
@@ -474,34 +535,53 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     let send id data =
       match Hashtbl.find_opt links id with
       | None -> Lwt.return false
-      | Some (flow, _) ->
-          S.TCP.write flow (Cstruct.of_string data) >>= function
+      | Some l ->
+          S.TCP.write l.flow (Cstruct.of_string data) >>= function
           | Ok () -> Lwt.return true
           | Error _ -> close id >|= fun () -> false
     in
+    let keep l rest = Buffer.clear l.pending; Buffer.add_string l.pending rest in
     (* the next line: from what was received already, or else read until a
        line break; the end of the connection first is [None] *)
     let receive_line id =
       match Hashtbl.find_opt links id with
       | None -> Lwt.return None
-      | Some (flow, pending) ->
+      | Some l ->
           let rec take () =
-            let s = Buffer.contents pending in
-            match String.index_opt s '\n' with
-            | Some i ->
-                Buffer.clear pending;
-                Buffer.add_string pending (String.sub s (i + 1) (String.length s - i - 1));
-                let n = if i > 0 && s.[i - 1] = '\r' then i - 1 else i in
-                Lwt.return (Some (String.sub s 0 n))
+            match Soma_rt.take_line (Buffer.contents l.pending) with
+            | Some (line, rest) -> keep l rest; Lwt.return (Some line)
             | None ->
-                S.TCP.read flow >>= function
-                | Ok (`Data b) -> Buffer.add_string pending (Cstruct.to_string b); take ()
-                | _ -> Buffer.clear pending; close id >|= fun () -> None
+                next_chunk l >>= fun alive ->
+                if alive then take ()
+                else (Buffer.clear l.pending; close id >|= fun () -> None)
+          in
+          take ()
+    in
+    (* the next frame, waiting [seconds] at most (0: as long as it takes);
+       what arrived of a frame when the time is up stays pending *)
+    let receive_frame id seconds =
+      match Hashtbl.find_opt links id with
+      | None -> Lwt.return Soma_rt.Frame_closed
+      | Some l ->
+          let deadline =
+            if seconds <= 0 then fst (Lwt.wait ())
+            else Mirage_sleep.ns (Duration.of_sec seconds) >|= fun () -> `Time_up in
+          let rec take () =
+            match Soma_rt.take_frame (Buffer.contents l.pending) with
+            | `Whole (data, rest) -> keep l rest; Lwt.return (Soma_rt.Got_frame data)
+            | `Oversized ->
+                Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_too_large
+            | `Need_more ->
+                Lwt.choose [ (next_chunk l >|= fun alive -> `Chunk alive); deadline ]
+                >>= function
+                | `Chunk true -> take ()
+                | `Chunk false -> Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_closed
+                | `Time_up -> Lwt.return Soma_rt.Frame_timed_out
           in
           take ()
     in
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
-      { serve; fetch; listen; connect; send; receive_line; close }
+      { serve; fetch; listen; connect; send; receive_line; receive_frame; close }
 end
 |soma}
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
@@ -778,6 +858,7 @@ module Lwt : sig
   type 'a u
   val wait : unit -> 'a t * 'a u
   val pick : 'a t list -> 'a t
+  val choose : 'a t list -> 'a t
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
     val ( >|= ) : 'a t -> ('a -> 'b) -> 'b t

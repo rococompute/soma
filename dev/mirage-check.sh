@@ -37,6 +37,7 @@ stop_server() {
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server/mirage_minimal_web_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_projects/counter_server/main.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -106,7 +107,8 @@ no_image_one() {
 
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_fetch mirage_http_server \
-        mirage_minimal_web_server mirage_link_client mirage_link_server mirage_supervised; do
+        mirage_minimal_web_server mirage_link_client mirage_link_server \
+        mirage_frame_client mirage_frame_server mirage_supervised; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
@@ -234,6 +236,49 @@ if [ "${NETWORK}" = 1 ]; then
         # nothing listens on the link port of the stopped server
         run mirage_link_client link-refused 1 "the connection was refused|nothing answered within 10 seconds" \
             net "--arg=${ip4:-192.168.105.1}"
+    fi
+    # length-prefixed frames: the frame client connects to the frame
+    # server, they exchange frames on one connection (an empty one, and one
+    # of two lines), and the client notices when the server closes it after
+    # "bye"
+    if build mirage_frame_server && build mirage_frame_client; then
+        run mirage_frame_client frame-usage 2 "usage: --arg=ADDRESS" net
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
+            "${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt" >"${WORK}/frame.log" 2>&1 &
+        frame_server=$!
+        ip5=""
+        for _ in $(seq 1 60); do
+            ip5="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/frame.log" |
+                head -1 | awk '{print $4}')"
+            grep -q "listening for frames on port 7001" "${WORK}/frame.log" && [ -n "${ip5}" ] && break
+            sleep 0.25
+        done
+        if [ -z "${ip5}" ]; then
+            cp "${WORK}/frame.log" "${WORK}/frame-server.log"
+            fail frame-server
+        else
+            run mirage_frame_client frame-exchange 0 "the frames went as expected" net "--arg=${ip5}"
+            if grep -q "^server: hello from the frame server$" "${WORK}/frame-exchange.log" &&
+               grep -q "^server: echo: one$" "${WORK}/frame-exchange.log" &&
+               grep -q "^server: echo: first line$" "${WORK}/frame-exchange.log" &&
+               grep -q "^second line$" "${WORK}/frame-exchange.log" &&
+               grep -q "^server: bye$" "${WORK}/frame-exchange.log" &&
+               grep -q "^the server closed the connection$" "${WORK}/frame-exchange.log"; then
+                pass frame-messages
+            else
+                cp "${WORK}/frame-exchange.log" "${WORK}/frame-messages.log"
+                fail frame-messages
+            fi
+            # the client has exited, so the server has its frames
+            if grep -q "^got frame: one$" "${WORK}/frame.log" && grep -q "^got frame: bye$" "${WORK}/frame.log"; then
+                pass frame-server
+            else
+                cp "${WORK}/frame.log" "${WORK}/frame-server.log"
+                fail frame-server
+            fi
+        fi
+        pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
+        wait "${frame_server}" 2>/dev/null
     fi
     # a project as an image: the counter of examples/example_projects/
     # counter_server, asked from the Mac with curl. It starts at the count

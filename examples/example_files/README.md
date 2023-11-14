@@ -77,6 +77,9 @@ in `macros.proof` and `type_functions.proof`.
     policy does.
   - `mirage_fetch/`: fetches a page from the server, with `args`,
     `fetch` and exit codes.
+  - `mirage_frame_server/` and `mirage_frame_client/`: two images that
+    keep one connection open and exchange length-prefixed frames on it
+    (`listen`, `connect`, `send_frame`, `receive_frame`, `close`).
 
   `dev/mirage-check.sh` builds and runs them all.
 
