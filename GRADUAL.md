@@ -1496,7 +1496,9 @@ Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
 `Soma.Sandbox`.
 
 Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
-and key-value stores, and state shared between `serve` handlers.
+other than the one `storage` device behind `read_file`, `write_file` and
+`append_file` (see "Persistent files in Sandbox" below), and state shared between `serve`
+handlers.
 
 ## JSX: components and apps
 
