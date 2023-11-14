@@ -1,6 +1,38 @@
 Require Import Sandbox.
+(* Each boot checks the preceding boot's exact bytes before changing them. *)
+Definition expect_file (name : string) (want : option string) : io unit :=
+  got <- read_file name ;;
+  if match got, want with
+     | None, None => true
+     | Some a, Some b => String.eqb a b
+     | _, _ => false end
+  then ret tt
+  else (print (String.append "storage mismatch: " name) ;; exit 1).
 Definition main : io unit :=
   old <- read_file "boots" ;;
+  expect_file "missing" None ;;
+  (match old with
+   | None => expect_file "payload" None ;; expect_file "other" None ;;
+             expect_file "empty" None ;; expect_file "created" None
+   | Some _ => expect_file "payload" (Some "replacement-one-two") ;;
+               expect_file "other" (Some "independent") ;;
+               expect_file "empty" (Some "") ;;
+               expect_file "created" (Some "tail")
+   end) ;;
+  write_file "payload" "old bytes that must disappear" ;;
+  expect_file "payload" (Some "old bytes that must disappear") ;;
+  write_file "payload" "replacement" ;;
+  append_file "payload" "-one" ;; append_file "payload" "-two" ;;
+  expect_file "payload" (Some "replacement-one-two") ;;
+  write_file "other" "independent" ;;
+  write_file "empty" "not empty yet" ;; write_file "empty" "" ;;
+  (* On the first boot this append creates the name. *)
+  (match old with None => append_file "created" "tail" | Some _ => ret tt end) ;;
+  expect_file "created" (Some "tail") ;;
+  expect_file "empty" (Some "") ;; expect_file "other" (Some "independent") ;;
+  expect_file "payload" (Some "replacement-one-two") ;;
+  expect_file "missing" None ;;
+  print "storage checks passed" ;;
   let next := String.append (match old with Some s => s | None => "" end) "x" in
   write_file "boots" next ;;
   print (String.append "boot " (to_string (String.length next))).

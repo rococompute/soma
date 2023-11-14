@@ -131,16 +131,25 @@ if [ "${NO_IMAGE}" = 1 ]; then
         fail "no-image-illtyped"
     fi
 else
-# Boot twice with one dedicated zeroed disk: the second image must read
-# what the first committed. The disk argument belongs before solo5's --.
+# Boot three times with one dedicated zeroed disk: each image checks exact
+# file contents from its predecessor, including replacement and ordered appends.
+# The disk argument belongs before solo5's --. Finally check a fresh disk.
 if build mirage_storage; then
     truncate -s 8M "${WORK}/storage.img"
-    for boot in 1 2; do
+    for boot in 1 2 3 fresh; do
+        expected_boot="${boot}"
+        if [ "${boot}" = fresh ]; then
+            # A different disk starts empty even after the image has booted.
+            rm "${WORK}/storage.img"
+            truncate -s 8M "${WORK}/storage.img"
+            expected_boot=1
+        fi
         if timeout 60 opam exec --switch="${SWITCH}" -- solo5-hvt --mem=${MEM} \
             --block:storage="${WORK}/storage.img" -- \
             "${HERE}/examples/example_files/mirage_storage/mirage_storage.hvt" \
             >"${WORK}/storage-${boot}.log" 2>&1 &&
-           grep -qx "boot ${boot}" "${WORK}/storage-${boot}.log"; then
+           grep -qx "boot ${expected_boot}" "${WORK}/storage-${boot}.log" &&
+           grep -qx "storage checks passed" "${WORK}/storage-${boot}.log"; then
             pass "storage-${boot}"
         else
             fail "storage-${boot}"
