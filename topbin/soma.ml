@@ -124,7 +124,10 @@ let exit_code = function
   | Unix.WEXITED n -> n
   | Unix.WSIGNALED _ | Unix.WSTOPPED _ -> 1
 
+let cache_toolchain = ref (fun () -> "")
+
 let compile args =
+  ignore (!cache_toolchain ());
   let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
   let argv = Array.of_list (prog :: "--kind=compile" :: args) in
   let out_r, out_w = Unix.pipe ~cloexec:true () in
@@ -291,7 +294,8 @@ let rec copy_tree src dst =
   mkdir_p dst;
   Array.iter (fun name ->
       let s = Filename.concat src name and d = Filename.concat dst name in
-      if Sys.is_directory s then copy_tree s d else copy_file s d)
+      if (Unix.lstat s).Unix.st_kind = Unix.S_DIR then copy_tree s d
+      else if SomaCache.trusted s then copy_file s d)
     (Sys.readdir src)
 
 let is_directory_opt p = try Sys.is_directory p with Sys_error _ -> false
@@ -318,7 +322,7 @@ let project_cache_key file =
       acc (try Sys.readdir dir with Sys_error _ -> [||]) in
   let files = List.sort compare (walk "" root []) in
   let key = Digest.to_hex (Digest.string (String.concat "\n"
-      (List.map (fun (rel, full) -> rel ^ " " ^ Digest.to_hex (Digest.file full)) files))) in
+      (!cache_toolchain () :: List.map (fun (rel, full) -> rel ^ " " ^ Digest.to_hex (Digest.file full)) files))) in
   root, Filename.concat root ".soma-cache", key
 
 let restore_shared_cache file =
@@ -337,12 +341,27 @@ let publish_shared_cache file =
     let _, cache_dir, key = project_cache_key file in
     let stored = Filename.concat store key in
     if is_directory_opt cache_dir && not (Sys.file_exists stored) then
-      (try mkdir_p store; copy_tree cache_dir stored with Sys_error _ | Unix.Unix_error _ -> ())
+      (try
+         mkdir_p store;
+         let tmp = Filename.temp_file ~temp_dir:store ".publish-" "" in
+         Sys.remove tmp;
+         let rec publish src dst =
+           mkdir_p dst;
+           Array.iter (fun name ->
+               let s = Filename.concat src name and d = Filename.concat dst name in
+               match (Unix.lstat s).Unix.st_kind with
+               | Unix.S_DIR -> publish s d
+               | Unix.S_REG when SomaCache.trusted s -> copy_file s d
+               | _ -> ()) (Sys.readdir src) in
+         publish cache_dir tmp;
+         (try Sys.rename tmp stored with Unix.Unix_error (Unix.EEXIST, _, _) -> ())
+       with Sys_error _ | Unix.Unix_error _ -> ())
 
 (* [soma build FILE]; with [~review], [soma compile FILE]: the same, and
    then FILE reviewed as by [soma explore] (SOMA_REVIEW), which fails it
    when the review finds an issue or a violation *)
 let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
+  ignore (!cache_toolchain ());
   restore_shared_cache file;
   let dir = output_dir file args in
   let before = modification_times dir in
@@ -1000,6 +1019,13 @@ let fresh_toolchain () =
   tree "coqlib" (Boot.Env.Path.to_string (Boot.Env.coqlib env)) @
   tree "runtimelib" (Boot.Env.Path.to_string (Boot.Env.runtimelib env))
 
+let () =
+  let identity = lazy (Digest.to_hex (Digest.string (String.concat "\n" (fresh_toolchain ())))) in
+  cache_toolchain := (fun () ->
+    let id = Lazy.force identity in
+    Unix.putenv "SOMA_CACHE_ID" id;
+    id)
+
 type fresh_config = { verbose : bool; fill : bool; timings : bool; file : string; args : string list }
 
 (* What a build of [c] reads of its project, and how it was asked for; with
@@ -1073,12 +1099,14 @@ let record_freshness c before ~kept =
       let tmp = record ^ ".tmp" in
       Out_channel.with_open_bin tmp (fun oc ->
           List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs @ interfaces));
-      Sys.rename tmp record
+      Sys.rename tmp record;
+      SomaCache.record record
     with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> ()
 
 (* [Ok ()] when unchanged, or why not *)
 let freshness_verdict c =
     try
+      ignore (!cache_toolchain ());
       let canonical, root = fresh_project c.file in
       let record = freshness_record (Filename.concat root ".soma-cache") canonical in
       let recorded =
@@ -1087,6 +1115,7 @@ let freshness_verdict c =
       (match recorded with
        | first :: _ when first = freshness_format -> ()
        | _ -> uncertain "the record of the last build is of another format");
+      if not (SomaCache.trusted record) then uncertain "no record of a successful build";
       (* Interface digests do not participate in freshness or import stamps. *)
       let is_output l = starts_with ~prefix:"output " l in
       let recorded_inputs = List.filter (fun l -> not (is_output l || starts_with ~prefix:"interface " l)) recorded in
@@ -1110,6 +1139,12 @@ let freshness_verdict c =
             if not (Sys.file_exists path) then uncertain "compiled output %s is missing" r;
             if fresh_digest path <> d then uncertain "compiled output %s changed" r
           | _ -> uncertain "the record of the last build is unreadable") recorded_outputs;
+      List.iter (fun l -> match String.split_on_char ' ' l with
+          | ["output"; r; _] ->
+            let path = Filename.concat cache (Scanf.unescaped r) in
+            if List.exists (Filename.check_suffix path) [".vo"; ".stamp"] &&
+               not (SomaCache.trusted path) then uncertain "compiled output %s has no provenance" r
+          | _ -> ()) recorded_outputs;
       Ok ()
     with
     | Uncertain reason -> Error reason

@@ -352,10 +352,12 @@ let load_paths_file () = Filename.concat (project_cache ()) "load-paths"
 let record_load_path logical dir =
   let file = load_paths_file () in
   let line = logical ^ " " ^ dir in
+  if not (SomaCache.trusted file) then (try Sys.remove file with Sys_error _ -> ());
   if not (List.mem line (SomaOpam.read_lines file)) then begin
     mkdir_p (Filename.dirname file);
     Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o644 file (fun oc ->
-        output_string oc (line ^ "\n"))
+        output_string oc (line ^ "\n"));
+    SomaCache.record file
   end
 
 let add_load_path unix_path coq_path =
@@ -375,7 +377,7 @@ let add_cache_to_loadpath ?loc p =
         let dir = String.sub l (i + 1) (String.length l - i - 1) in
         if Sys.file_exists dir then
           add_load_path dir (Libnames.dirpath_of_string (String.sub l 0 i))
-      | None -> ()) (SomaOpam.read_lines (load_paths_file ()))
+      | None -> ()) (if SomaCache.trusted (load_paths_file ()) then SomaOpam.read_lines (load_paths_file ()) else [])
 
 let compile ?loc p path src =
   let vo = vo_of p path in
@@ -442,7 +444,7 @@ let rec ensure ?loc p path src =
       CErrors.user_err ?loc Pp.(str "Import cycle: " ++
                                 str (String.concat " -> " (stack @ [id])) ++ str ".");
     let vo = vo_of p path in
-    let fresh = Sys.file_exists vo && match read_stamp (stamp_of p path) with
+    let fresh = SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
       | None -> false
       | Some (hash, imports, libraries) ->
         hash = source_hash src &&
@@ -578,7 +580,9 @@ let write_stamp () =
         | _ -> None) (Library.loaded_libraries ()) in
     let lines = stamp_format :: ("source " ^ source_hash src) ::
                 List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @ libraries in
-    Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"))
+    Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"));
+    SomaCache.record stamp;
+    SomaCache.record (Filename.chop_suffix stamp ".stamp" ^ ".vo")
   | _ -> ()
 
 (* Observational metadata only: the import stamps above keep their existing
