@@ -13,7 +13,8 @@
    [main : io unit] is extracted to OCaml into a MirageOS project, which is
    built for solo5's hvt target into [prog.hvt], next to [prog.vo].
 
-   A program that uses [serve] or [fetch] gets a network stack, and runs
+   A program that uses [serve], [fetch], [listen] or [connect] gets a
+   network stack, and runs
    under [solo5-vmnet]; the others do not need a network device. Each kind
    has its own project, kept between builds in [$SOMA_MIRAGE_DIR] or
    else [~/.cache/soma/mirage] ([plain/], [net/]), so that
@@ -207,16 +208,37 @@ let report ?(during = "main") e =
 type fetched = Got of string | Net_refused | Net_timed_out | Net_bad_address
 type fetched_value = Reply of char list | Refused | TimedOut | BadAddress
 
-(* What the network provides; without a network stack, [serve] and [fetch]
-   are not reached (a program that uses them gets one) *)
+(* Links (Sandbox.connection, connected, received, sent): the image knows
+   a connection by its number. Extracted, [connected], [received] and
+   [sent] have the representations of the [_value] types. *)
+type link = Link of int | Link_refused | Link_timed_out | Link_bad_address
+type connected_value = Connected of Obj.t | ConnectRefused | ConnectTimedOut | ConnectBadAddress
+type received_value = Line of char list | Closed
+type sent_value = Sent | SendClosed
+
+(* What the network provides; without a network stack, [serve], [fetch],
+   [listen] and [connect] are not reached (a program that uses them gets
+   one) *)
 type net = {
   serve : int -> (string -> string Lwt.t) -> unit;
   fetch : string -> int -> string -> fetched Lwt.t;
+  listen : int -> (int -> unit Lwt.t) -> unit;
+  connect : string -> int -> link Lwt.t;
+  send : int -> string -> bool Lwt.t;
+  receive_line : int -> string option Lwt.t;
+  close : int -> unit Lwt.t;
 }
 
 let no_network =
   let fail () = failwith "this unikernel has no network" in
-  { serve = (fun _ _ -> fail ()); fetch = (fun _ _ _ -> fail ()) }
+  { serve = (fun _ _ -> fail ()); fetch = (fun _ _ _ -> fail ());
+    listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ());
+    send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
+    close = (fun _ -> fail ()) }
+
+(* a connection's number, and the connection of a number *)
+let link_id (c : Prog.connection) = int_of_nat (check c)
+let connection_of (id : int) : Prog.connection = nat_of_int id
 
 (* --arg=..., any number of times, in order *)
 let args =
@@ -286,6 +308,25 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Net_refused -> Refused
           | Net_timed_out -> TimedOut
           | Net_bad_address -> BadAddress)
+  | Prog.Listen (port, handler) ->
+      net.listen (int_of_nat (check port)) (fun id -> run net (handler (connection_of id)));
+      Lwt.return (Obj.magic ())
+  | Prog.Connect (address, port) ->
+      net.connect (string_of_chars (check address)) (int_of_nat (check port))
+      >|= fun link -> Obj.magic (match link with
+          | Link id -> Connected (Obj.repr (connection_of id))
+          | Link_refused -> ConnectRefused
+          | Link_timed_out -> ConnectTimedOut
+          | Link_bad_address -> ConnectBadAddress)
+  | Prog.Send (c, data) ->
+      net.send (link_id c) (string_of_chars (check data))
+      >|= fun ok -> Obj.magic (if ok then Sent else SendClosed)
+  | Prog.Receive_line c ->
+      net.receive_line (link_id c)
+      >|= fun line -> Obj.magic (match line with
+          | Some l -> Line (chars_of_string l)
+          | None -> Closed)
+  | Prog.Close c -> net.close (link_id c) >|= Obj.magic
 
 (* Runs [main]; [serving] is whether the unikernel goes on once [main] has
    ended. *)
@@ -370,7 +411,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     in
     (* TCP retries a connection for minutes when nothing answers: give up
        after 10 seconds *)
-    let connect ip port =
+    let dial ip port =
       Lwt.pick [
         (S.TCP.create_connection (S.tcp s) (ip, port) >|= function
           | Ok flow -> `Flow flow
@@ -383,7 +424,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
       match Ipaddr.of_string address with
       | Error _ -> Lwt.return Soma_rt.Net_bad_address
       | Ok ip ->
-          connect ip port >>= function
+          dial ip port >>= function
           | `Refused -> Lwt.return Soma_rt.Net_refused
           | `Timeout -> Lwt.return Soma_rt.Net_timed_out
           | `Flow flow ->
@@ -396,7 +437,70 @@ module Main (S : Tcpip.Stack.V4V6) = struct
               in
               read ()
     in
-    Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0) { serve; fetch }
+    (* links: the open connections by number, each with what it has
+       received past the last line taken *)
+    let links = Hashtbl.create 7 and last_link = ref 0 in
+    let register flow =
+      incr last_link;
+      Hashtbl.replace links !last_link (flow, Buffer.create 256);
+      !last_link
+    in
+    let close id =
+      match Hashtbl.find_opt links id with
+      | None -> Lwt.return_unit
+      | Some (flow, _) -> Hashtbl.remove links id; S.TCP.close flow
+    in
+    let listen port handler =
+      incr servers;
+      Soma_rt.event "listening" ["port", Soma_rt.I port];
+      S.TCP.listen (S.tcp s) ~port (fun flow ->
+          incr Soma_rt.open_connections;
+          incr Soma_rt.served;
+          let id = register flow in
+          Lwt.catch (fun () -> handler id)
+            (fun e -> Soma_rt.report ~during:"request" e; Lwt.return_unit)
+          >>= fun () -> close id >|= fun () -> decr Soma_rt.open_connections)
+    in
+    let connect address port =
+      match Ipaddr.of_string address with
+      | Error _ -> Lwt.return Soma_rt.Link_bad_address
+      | Ok ip ->
+          dial ip port >|= function
+          | `Refused -> Soma_rt.Link_refused
+          | `Timeout -> Soma_rt.Link_timed_out
+          | `Flow flow -> Soma_rt.Link (register flow)
+    in
+    let send id data =
+      match Hashtbl.find_opt links id with
+      | None -> Lwt.return false
+      | Some (flow, _) ->
+          S.TCP.write flow (Cstruct.of_string data) >|= function
+          | Ok () -> true
+          | Error _ -> false
+    in
+    (* the next line: from what was received already, or else read until a
+       line break; the end of the connection first is [None] *)
+    let receive_line id =
+      match Hashtbl.find_opt links id with
+      | None -> Lwt.return None
+      | Some (flow, pending) ->
+          let rec take () =
+            let s = Buffer.contents pending in
+            match String.index_opt s '\n' with
+            | Some i ->
+                Buffer.clear pending;
+                Buffer.add_string pending (String.sub s (i + 1) (String.length s - i - 1));
+                let n = if i > 0 && s.[i - 1] = '\r' then i - 1 else i in
+                Lwt.return (Some (String.sub s 0 n))
+            | None ->
+                S.TCP.read flow >>= function
+                | Ok (`Data b) -> Buffer.add_string pending (Cstruct.to_string b); take ()
+                | _ -> Buffer.clear pending; Lwt.return None
+          in
+          take ()
+    in
+    Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
+      { serve; fetch; listen; connect; send; receive_line; close }
 end
 |soma}
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
@@ -562,11 +666,13 @@ let contains s sub =
   let rec at i = i + n <= String.length s && (String.sub s i n = sub || at (i + 1)) in
   at 0
 
-(* Whether the extracted program uses [serve] or [fetch]: a constructor
-   applied, as opposed to its declaration in [type 'x io] *)
+(* Whether the extracted program uses [serve], [fetch], [listen] or
+   [connect]: a constructor applied, as opposed to its declaration in
+   [type 'x io]. ([send], [receive_line] and [close] need a connection,
+   which only [listen] and [connect] give.) *)
 let uses_network prog =
-  contains prog "Serve (" || contains prog "Fetch (" ||
-  contains prog "Serve(" || contains prog "Fetch("
+  List.exists (fun c -> contains prog (c ^ " (") || contains prog (c ^ "("))
+    ["Serve"; "Fetch"; "Listen"; "Connect"]
 
 (* Extracts [main] into [dir]/prog.ml, by running the extraction commands
    at the end of the program, after its .vo has been saved. *)

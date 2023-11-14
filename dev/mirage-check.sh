@@ -28,6 +28,7 @@ stop_server() {
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_http_server/mirage_http_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server/mirage_minimal_web_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_projects/counter_server/main.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -145,6 +146,53 @@ if [ "${NETWORK}" = 1 ]; then
         # not an IP address: the fetcher says so, and exits 2
         run mirage_fetch fetch-bad-address 2 "not-an-address is not an IP address" \
             net "--arg=not-an-address"
+    fi
+    # links that stay open: the link client connects to the link server,
+    # they exchange lines on one connection, and the client notices when the
+    # server closes it after "bye"; once the server is stopped, connecting is
+    # refused (or times out)
+    if build mirage_link_server && build mirage_link_client; then
+        run mirage_link_client link-usage 2 "usage: --arg=ADDRESS" net
+        run mirage_link_client link-bad-address 2 "not-an-address is not an IP address" \
+            net "--arg=not-an-address"
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
+            "${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt" >"${WORK}/link.log" 2>&1 &
+        link_server=$!
+        ip4=""
+        for _ in $(seq 1 60); do
+            ip4="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/link.log" |
+                head -1 | awk '{print $4}')"
+            grep -q "listening for links on port 7000" "${WORK}/link.log" && [ -n "${ip4}" ] && break
+            sleep 0.25
+        done
+        if [ -z "${ip4}" ]; then
+            cp "${WORK}/link.log" "${WORK}/link-server.log"
+            fail link-server
+        else
+            run mirage_link_client link-exchange 0 "the link went as expected" net "--arg=${ip4}"
+            if grep -q "^server: hello from the link server$" "${WORK}/link-exchange.log" &&
+               grep -q "^server: echo: one$" "${WORK}/link-exchange.log" &&
+               grep -q "^server: echo: two$" "${WORK}/link-exchange.log" &&
+               grep -q "^server: bye$" "${WORK}/link-exchange.log" &&
+               grep -q "^the server closed the connection$" "${WORK}/link-exchange.log"; then
+                pass link-lines
+            else
+                cp "${WORK}/link-exchange.log" "${WORK}/link-lines.log"
+                fail link-lines
+            fi
+            # the client has exited, so the server has its lines
+            if grep -q "^got one$" "${WORK}/link.log" && grep -q "^got bye$" "${WORK}/link.log"; then
+                pass link-server
+            else
+                cp "${WORK}/link.log" "${WORK}/link-server.log"
+                fail link-server
+            fi
+        fi
+        pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt"
+        wait "${link_server}" 2>/dev/null
+        # nothing listens on the link port of the stopped server
+        run mirage_link_client link-refused 1 "the connection was refused|nothing answered within 10 seconds" \
+            net "--arg=${ip4:-192.168.105.1}"
     fi
     # a project as an image: the counter of examples/example_projects/
     # counter_server, asked from the Mac with curl. It starts at the count

@@ -1,0 +1,53 @@
+(** A unikernel that opens one connection to the address it is given (port
+    7000, where mirage_link_server listens), exchanges a few lines on it,
+    and notices when the server closes it. It exits 0 when all went as
+    expected, 1 when the connection failed or did not go as expected, 2
+    without an address or with one that is not an IP address:
+
+        soma run examples/example_files/mirage_link_client/mirage_link_client.soma -- --arg=192.168.105.46
+*)
+Require Import Sandbox.
+
+(** print the next line from the server, or that it closed the
+    connection: [true] for a line, [false] when it closed *)
+hear (c : connection) : io bool :=
+  r <- receive_line c ;;
+  match r with
+  | Line l => print ("server: " ++ l) ;; ret true
+  | Closed => print "the server closed the connection" ;; ret false
+  end.
+
+(** send [line] and print the reply *)
+ask (c : connection) (line : string) : io bool :=
+  s <- send_line c line ;;
+  match s with
+  | Sent => hear c
+  | SendClosed => print "the connection is closed: could not send" ;; ret false
+  end.
+
+talk (c : connection) : io unit :=
+  greeted <- hear c ;;
+  one <- ask c "one" ;;
+  two <- ask c "two" ;;
+  bye <- ask c "bye" ;;
+  (* after "bye" the server closes: the next line is Closed *)
+  still_open <- hear c ;;
+  close c ;;
+  (if andb (andb greeted (andb one two)) (andb bye (negb still_open))
+   then print "the link went as expected"
+   else print "the link did not go as expected" ;; exit 1).
+
+main : io unit :=
+  a <- args ;;
+  match a with
+  | [address] =>
+    print ("connecting to " ++ address ++ ":7000") ;;
+    link <- connect address 7000 ;;
+    match link with
+    | Connected c => talk c
+    | ConnectRefused => print "the connection was refused: nothing listens there" ;; exit 1
+    | ConnectTimedOut => print "nothing answered within 10 seconds" ;; exit 1
+    | ConnectBadAddress => print (address ++ " is not an IP address") ;; exit 2
+    end
+  | _ => print "usage: --arg=ADDRESS" ;; exit 2
+  end.

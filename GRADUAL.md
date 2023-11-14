@@ -1273,6 +1273,20 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |
 | `fetch address port request` | `io fetched` | connects to the IP address, sends `request`, returns what comes back before the other side closes (`Reply body`), or why there is nothing: `Refused` (nothing listens there), `TimedOut` (nothing answered within 10 seconds), `BadAddress` (not an IP address) |
+| `listen port handler` | `io unit` | accepts TCP connections on `port`, each given to `handler : connection -> io unit`, which talks over it as long as it likes; the connection is closed when the handler ends. Returns at once; the image keeps listening after `main` ends. |
+| `connect address port` | `io connected` | opens a connection that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` |
+| `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
+| `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
+| `close c` | `io unit` | closes the connection; again does nothing |
+
+The links (`listen`, `connect`, `send`, `receive_line`, `close`) are
+line-oriented: one connection per peer, kept open, a line at a time.
+Length-prefixed frames are not there yet. A connection is a number the
+image knows it by (`Connection id`); after `Closed`, a program reconnects
+with `connect`. `examples/example_files/mirage_link_server` and
+`mirage_link_client` exchange lines on one connection (`dev/mirage-check.sh`'s
+`link-*` cases), and `test-suite/misc/soma_links.sh` checks them through
+`--no-image`.
 
 `http_response body`, `http_get path`, `http_path request` and `crlf` build
 and read HTTP. `++` appends strings wherever a `string` is expected (see
@@ -1301,7 +1315,7 @@ program is built so, a `.soma` file; a Rocq `.v` file that requires
    program has no casts. A `raise` or `unk` that the image reaches is
    reported and the image exits with 1; in a `serve` handler, it ends that
    connection only.
-3. A program that uses `serve` or `fetch` gets a network stack
+3. A program that uses `serve`, `fetch`, `listen` or `connect` gets a network stack
    (`generic_stackv4v6`, DHCP); the image runs under `solo5-vmnet`, which
    gives it an address on the Mac's vmnet network (macOS 26 or later, no
    root). The others have no network device.
@@ -1346,6 +1360,7 @@ line after `soma-event ` on its console, for whoever runs it to read:
 | --- | --- |
 | `start` | `memory_kb`, `network` |
 | `serving` | `port` |
+| `listening` | `port` (of `listen`) |
 | `failure` | `during` (`main`, or `request`: the server goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
 | `memory_pressure` | `live_kb`, `memory_kb`: live memory passed 80% |
 | `alive` | `requests`, `live_kb`, every 10 seconds |

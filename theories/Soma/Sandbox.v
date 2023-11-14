@@ -17,10 +17,12 @@
     section of GRADUAL.md).
 
     [io A] describes what the unikernel does, as data: printing, sleeping,
-    looping, reading the clock, serving and fetching over TCP, in order,
-    ending with a result of type [A]. Building an [io] does nothing; the
-    image runs [main]. A program that uses [serve] or [fetch] gets a
-    network stack and runs under [solo5-vmnet]. *)
+    looping, reading the clock, serving and fetching over TCP, and links
+    that stay open ([listen], [connect], [send], [receive_line], [close]:
+    lines over one TCP connection), in order, ending with a result of type
+    [A]. Building an [io] does nothing; the image runs [main]. A program
+    that uses [serve], [fetch], [listen] or [connect] gets a network stack
+    and runs under [solo5-vmnet]. *)
 
 From Stdlib Require Strings.String Strings.Ascii.
 From Corelib Require Extraction.
@@ -34,6 +36,31 @@ Inductive fetched : Type :=
 | Refused                 (* nothing listens at that address and port *)
 | TimedOut                (* nothing answered within 10 seconds *)
 | BadAddress.             (* the address is not an IP address *)
+
+(** * Links: TCP connections that stay open, line by line *)
+
+(** a connection open at the unikernel, as [listen] or [connect] give it;
+    the image knows it by its number *)
+Inductive connection : Type := Connection (id : nat).
+
+(** What [connect] gets: a connection, or why there is none *)
+Inductive connected : Type :=
+| Connected (c : connection)  (* the other side accepted *)
+| ConnectRefused              (* nothing listens at that address and port *)
+| ConnectTimedOut             (* nothing answered within 10 seconds *)
+| ConnectBadAddress.          (* the address is not an IP address *)
+
+(** What [receive_line] gets: the next line, without its line break, or
+    [Closed] when the connection ended first (a line the other side did
+    not finish is dropped) *)
+Inductive received : Type :=
+| Line (line : string)
+| Closed.
+
+(** What [send] did: [Sent], or [SendClosed] when the connection is closed *)
+Inductive sent : Type :=
+| Sent
+| SendClosed.
 
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
@@ -63,7 +90,23 @@ Inductive io : Type -> Type :=
     it closes ([Reply]), or why there is nothing: the connection was
     [Refused], nothing answered within 10 seconds ([TimedOut]), or the
     address is not an IP address ([BadAddress]) *)
-| fetch (address : string) (port : nat) (request : string) : io fetched.
+| fetch (address : string) (port : nat) (request : string) : io fetched
+(** accept TCP connections on [port], each with [handler], which reads and
+    writes it as long as it likes; the connection is closed when [handler]
+    ends. [listen] returns at once; the unikernel keeps listening after
+    [main] ends. *)
+| listen (port : nat) (handler : connection -> io unit) : io unit
+(** open a connection to [address] (an IP address) on [port]; it stays
+    open until [close], or until the other side closes it *)
+| connect (address : string) (port : nat) : io connected
+(** write [data] on the connection, as it is ([send_line] adds the line
+    break) *)
+| send (c : connection) (data : string) : io sent
+(** the next line the other side sends, up to its line break ["\n"] (a
+    ["\r"] before it is dropped too) *)
+| receive_line (c : connection) : io received
+(** close the connection; closing it again does nothing *)
+| close (c : connection) : io unit.
 
 Arguments ret {A} a.
 Arguments bind {A B} m k.
@@ -88,6 +131,14 @@ Open Scope io_scope.
 (** a line break in HTTP *)
 Definition crlf : string :=
   String.String (Ascii.ascii_of_nat 13) (String.String (Ascii.ascii_of_nat 10) String.EmptyString).
+
+(** a line break, ["\n"] *)
+Definition newline : string :=
+  String.String (Ascii.ascii_of_nat 10) String.EmptyString.
+
+(** send [line] and a line break on [c] *)
+Definition send_line (c : connection) (line : string) : io sent :=
+  send c (line ++ newline)%str.
 
 (** an HTTP response with status [200 OK] and [body] as plain text *)
 Definition http_response (body : string) : string :=

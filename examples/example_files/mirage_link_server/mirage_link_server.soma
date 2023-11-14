@@ -1,0 +1,37 @@
+(** A unikernel that keeps connections open and talks over them line by
+    line. [listen port handler] runs [handler] on each connection accepted
+    on [port], for as long as it likes; the connection is closed when the
+    handler ends. This one greets the other side, echoes each line it gets,
+    and on "bye" says "bye" and closes; when the other side closes first,
+    it says so. It runs under solo5-vmnet and prints its address:
+
+        soma run examples/example_files/mirage_link_server/mirage_link_server.soma
+
+    examples/example_files/mirage_link_client/mirage_link_client.soma talks
+    to it. *)
+Require Import Sandbox.
+
+(** the lines of one connection, [fuel] of them at most *)
+Fixpoint echo (fuel : nat) (c : connection) : io unit :=
+  match fuel with
+  | O => print "too many lines on one connection"
+  | S more =>
+    r <- receive_line c ;;
+    match r with
+    | Closed => print "the client closed the connection"
+    | Line l =>
+      print ("got " ++ l) ;;
+      (if String.eqb l "bye"
+       then send_line c "bye" ;; print "said bye, closing"
+       else send_line c ("echo: " ++ l) ;; echo more c)
+    end
+  end.
+
+greet (c : connection) : io unit :=
+  print "a client connected" ;;
+  send_line c "hello from the link server" ;;
+  echo 100 c.
+
+main : io unit :=
+  print "listening for links on port 7000" ;;
+  listen 7000 greet.
