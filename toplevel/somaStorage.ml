@@ -4,7 +4,7 @@
 let source = {soma|open Lwt.Infix
 
 module Make (B : Mirage_block.S) = struct
-  type t = { disk : B.t; sector : int; bank : int; lock : Lwt_mutex.t;
+  type t = { disk : B.t; sector : int; bank : int; writable : bool; lock : Lwt_mutex.t;
              mutable generation : int64; mutable active : int;
              mutable files : (string, string) Hashtbl.t }
   let magic = "SOMAKV01"
@@ -97,7 +97,8 @@ module Make (B : Mirage_block.S) = struct
       | Valid (a, fs), _ -> a, 0, fs
       | _, Valid (b, fs) -> b, 1, fs
       | _ -> fail "no valid snapshot; refusing to overwrite disk"
-    in {disk; sector; bank; lock=Lwt_mutex.create (); generation; active; files}
+    in {disk; sector; bank; writable=info.Mirage_block.read_write;
+        lock=Lwt_mutex.create (); generation; active; files}
   let encode fs capacity =
     let entries = List.sort compare (Hashtbl.fold (fun k v xs -> (k,v)::xs) fs []) in
     let size = List.fold_left (fun n (k,v) ->
@@ -111,6 +112,7 @@ module Make (B : Mirage_block.S) = struct
     List.iter (fun (k,v) -> put k; put v) entries;
     Bytes.to_string out
   let commit t fs =
+    if not t.writable then fail "device is read-only";
     if t.generation = Int64.max_int then fail "generation exhausted";
     let payload = encode fs ((t.bank-1)*t.sector) in
     let index = 1-t.active and generation = Int64.succ t.generation in
