@@ -271,8 +271,32 @@ let latest ~switch ~log package =
 
 type source = Opam of string option | Local of string
 
+(* A package and a version each become one directory name under the cache
+   and, for an opam library, one argument of [opam]. Only a single safe
+   path component is accepted: [../] would leave the cache, and a leading
+   [-] would be an option to opam. *)
+let safe_component s =
+  let n = String.length s in
+  if n = 0 || s = "." || s = ".." || s.[0] = '-' then false
+  else
+    let rec loop i =
+      if i = n then true
+      else
+        match s.[i] with
+        | 'a'..'z' | 'A'..'Z' | '0'..'9' | '.' | '_' | '+' | '~' | '-' -> loop (i + 1)
+        | _ -> false
+    in
+    loop 0
+
+let require_component kind s =
+  if not (safe_component s) then
+    error (str kind ++ str " " ++ qstring s ++ str " is not one safe path component.")
+
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
+  (* before a cache directory is created or removed, and before opam *)
+  require_component "package" package;
+  (match source with Opam (Some version) -> require_component "version" version | Opam None | Local _ -> ());
   let root = cache () in
   SomaOpam.mkdir_p root;
   let key = soma_key () in
@@ -289,7 +313,13 @@ let ensure ~package source =
       let log = Filename.concat root "opam.log" in
       let switch = SomaOpam.ensure_switch ~who:"Rocq" ~log in
       ensure_repository ~switch ~log;
-      let version = match version with Some v -> v | None -> latest ~switch ~log package in
+      let version = match version with
+        | Some v -> v
+        | None ->
+          let v = latest ~switch ~log package in
+          require_component "version" v;
+          v
+      in
       Filename.concat root (package ^ "." ^ version ^ "-" ^ key),
       (fun src ->
          Printf.eprintf "Rocq: fetching %s %s (opam source)\n%!" package version;
