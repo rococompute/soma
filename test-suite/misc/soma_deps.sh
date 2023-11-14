@@ -321,14 +321,19 @@ refused_write() {
   says "Cannot import $1.f"
   writes_nothing
   [ -z "$(ls "$XDG_CACHE_HOME"/soma/src/github.com/owner/"$1"@1.0.0-*/ | grep -v -e soma.toml -e f.soma)" ]
-  # Extraction on its own must use a target inside its project.
+  # Explicit output targets on their own must stay inside their project.
   if [ "$1" = w_extraction ]; then
     printf 'From Corelib Require Extraction.\nDefinition d := 1.\nExtraction "e.ml" d.\n' > "$TMP/work/github.com/owner/$1/f.soma"
+  fi
+  if [ "$1" = w_redirect ] || [ "$1" = w_time ]; then
+    printf 'Definition d := 1.\nTime Redirect "r" Check d.\n' > "$TMP/work/github.com/owner/$1/f.soma"
   fi
   # the same file, built on its own, runs it
   (cd "$TMP/work/github.com/owner/$1" && soma build f.soma > own.log 2>&1) || { cat "$TMP/work/github.com/owner/$1/own.log"; exit 1; }
   if [ "$1" = w_extraction ]; then
     [ -s "$TMP/work/github.com/owner/$1/e.ml" ]
+  elif [ "$1" = w_redirect ] || [ "$1" = w_time ]; then
+    [ -s "$TMP/work/github.com/owner/$1/r.out" ]
   else
     [ -n "$(ls -A "$OUT")" ] || { echo "$2 wrote nothing on its own"; exit 1; }
   fi
@@ -409,9 +414,9 @@ top '"owner/w_fine" = "1.0.0"'; printf 'Import w_fine.f.\nd.\n' > main.soma
 ok; says "= 1"
 # this project's own files, imported or not, run them: only its dependencies do not
 top
-printf 'Redirect "%s/own" Check 1.\n' "$OUT" > own.soma
-printf 'Import own.\nRedirect "%s/main" Check 2.\n1.\n' "$OUT" > main.soma
-ok; [ -e "$OUT/own.out" ] && [ -e "$OUT/main.out" ]
+printf 'Redirect "own" Check 1.\n' > own.soma
+printf 'Import own.\nRedirect "main" Check 2.\n1.\n' > main.soma
+ok; [ -s own.out ] && [ -s main.out ]
 
 # * Explicit Extraction targets stay in the project being built.
 rm -rf "$OUT"; mkdir -p "$OUT"
@@ -430,6 +435,33 @@ done
 printf 'From Corelib Require Extraction.\nDefinition d := 1.\nExtraction "sub/result.ml" d.\n' > sub/extract.soma
 ok sub/extract.soma
 [ -s sub/result.ml ] && [ -s sub/result.mli ]
+
+# * Explicit Redirect targets also stay in the project being built.
+for target in "$OUT/absolute" '../written/escape' 'sub/../../written/escape'; do
+  printf 'Redirect "%s" Check 1.\n' "$target" > main.soma
+  if soma build main.soma > out.log 2>&1; then
+    echo "accepted Redirect target: $target"; exit 1
+  fi
+  says 'Redirect target'
+  says "$target"
+  writes_nothing
+done
+# Check the actual .out file and existing ancestors for symlink escapes.
+ln -s "$OUT" sub/outside
+ln -s "$OUT/symlink.out" sub/symlink.out
+for target in sub/outside/escape sub/symlink; do
+  printf 'Redirect "%s" Check 1.\n' "$target" > main.soma
+  if soma build main.soma > out.log 2>&1; then
+    echo "accepted Redirect target: $target"; exit 1
+  fi
+  says 'Redirect target'
+  says "$target"
+  writes_nothing
+done
+printf 'Time Redirect "sub/result" Check 1.\n' > sub/redirect.soma
+ok sub/redirect.soma
+[ -s sub/result.out ]
+says 'nat' sub/result.out
 
 # * A moved tag: soma.lock keeps its commit, and soma get says so
 project github.com/owner/moves moves 1.0.0; echo 'm : nat := 1.' > work/github.com/owner/moves/m.soma

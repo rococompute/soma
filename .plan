@@ -8,5 +8,5 @@
 + S-2: refuse a `Rocq Library` package or version that isn't one safe path component, so "../" can't escape Soma's cache and a leading "-" can't reach opam (SECURITY-REVIEW.md S-2; plugins/soma_rocq/soma_rocq.ml ensure; a test in test-suite)
 + S-3: refuse a soma.lock whose commit isn't 40 hexadecimal digits, before anything is removed or fetched (SECURITY-REVIEW.md S-3; vernac/somaDeps.ml read_lock)
 + S-1: don't trust a .soma-cache this build didn't write: refuse git-tracked cache files, key the shared cache by the Soma build too, publish only what this build wrote (SECURITY-REVIEW.md S-1; vernac/somaImport.ml ensure, topbin/soma.ml)
-S-5: confine `Extraction "FILE"` and `Redirect` output to the project being built, refusing absolute paths and ../ (SECURITY-REVIEW.md S-5; plugins/extraction/extract_env.ml, vernac/synterp.ml)
++ S-5: confine `Extraction "FILE"` and `Redirect` output to the project being built, refusing absolute paths and ../ (SECURITY-REVIEW.md S-5; plugins/extraction/extract_env.ml, vernac/synterp.ml)
 Declare ML Module: refuse it however it's spaced or commented, deciding on the parsed command, not a text search (SECURITY-REVIEW.md "Known limits"; plugins/soma_rocq/soma_rocq.ml)

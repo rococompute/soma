@@ -378,6 +378,56 @@ let with_synterp_state =
   in
   { VernacControl.with_local_state }
 
+(* Explicit Redirect names use the same project root and canonicalization
+   as explicit Extraction targets. *)
+let project_redirect_target target =
+  let env name = match Sys.getenv_opt name with
+    | Some s when s <> "" -> Some s
+    | _ -> None in
+  let root = match env "SOMA_BUILD_ROOT", env "SOMA_PROJECT_ROOT" with
+    | Some r, _ | None, Some r -> Some r
+    | None, None ->
+      let loc = Loc.get_current_command_loc () in
+      let source = match loc with
+        | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> file
+        | _ -> Option.default (Filename.concat (Sys.getcwd ()) "_") !(SomaImport.source_file) in
+      let dir = Unix.realpath (Filename.dirname source) in
+      (match SomaProject.find_root dir with
+       | Some root -> Some root
+       | None when SomaImport.applies ?loc () -> Some dir
+       | None -> None) in
+  match root with
+  | None -> target
+  | Some root ->
+    let refuse () = user_err Pp.(str "Redirect target " ++ quote (str target) ++
+      str " must be relative and stay inside the project being built.") in
+    if not (Filename.is_relative target) then refuse ();
+    let rec canonical path =
+      try Unix.realpath path with
+      | Unix.Unix_error (Unix.ENOENT, _, _) ->
+        (match Unix.lstat path with
+         | { Unix.st_kind = Unix.S_LNK; _ } -> refuse ()
+         | _ -> ()
+         | exception Unix.Unix_error (Unix.ENOENT, _, _) -> ());
+        let parent = Filename.dirname path in
+        if parent = path then refuse ();
+        let parent = canonical parent in
+        match Filename.basename path with
+        | "." -> parent
+        | ".." -> Filename.dirname parent
+        | name -> Filename.concat parent name in
+    let root = Unix.realpath root in
+    let inside path =
+      let path = try canonical path with Unix.Unix_error _ -> refuse () in
+      let prefix = Filename.concat root "" in
+      if not (CString.is_sub prefix path 0) then refuse ();
+      path in
+    let path = inside (Filename.concat root target) in
+    (* Redirect appends .out before opening the file. Check that actual
+       output too, including an existing symlink. *)
+    ignore (inside (path ^ ".out"));
+    path
+
 (* Soma: the commands that write where their argument says, in a compilation
    of a dependency (vernac/somaImport.ml). The Extraction commands that write
    are the plugin's, which asks the same. *)
@@ -524,6 +574,10 @@ and synterp_load ~intern verbosely fname =
 and synterp_control ~intern CAst.{ loc; v = cmd } =
   Loc.set_current_command_loc loc;
   refuse_writes_in_dependency cmd;
+  let cmd = { cmd with control = List.map (fun c ->
+      CAst.map (function
+          | ControlRedirect target -> ControlRedirect (project_redirect_target target)
+          | other -> other) c) cmd.control } in
   let fn expr =
     with_generic_atts ~check:true cmd.attrs (fun ~atts ->
         synterp ~intern ?loc ~atts cmd.expr)
