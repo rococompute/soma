@@ -802,7 +802,14 @@ module Tcpip : sig
         type t
         type flow
         type error = [ `Refused | `Timeout ]
-        type write_error = [ `Closed ]
+        (* mirage-protocols 7.0.0, src/mirage_protocols.ml:
+           Tcp.write_error = [ Tcp.error | Mirage_flow.write_error ], and
+           TCP.write_error = private [> Tcp.write_error ]. Tcp.error is
+           [ `Refused | `Timeout ]; Mirage_flow.write_error is [ `Closed ].
+           https://ocaml.org/p/mirage-protocols/7.0.0/src/mirage-protocols/mirage_protocols.ml.html
+           Keep the private open row: implementations can add errors, and
+           callers cannot invent additional constructors of this private row. *)
+        type write_error = private [> `Refused | `Timeout | `Closed ]
         val listen : t -> port:int -> (flow -> unit Lwt.t) -> unit
         val read : flow -> ([ `Data of Cstruct.t | `Eof ], error) result Lwt.t
         val write : flow -> Cstruct.t -> (unit, write_error) result Lwt.t
