@@ -481,3 +481,212 @@ Theorem split_frames_kept : forall limit buffer,
 Proof.
   intros limit buffer. unfold split_frames. apply frames_in_kept. lia.
 Qed.
+
+(** How the bytes were cut into chunks changes nothing *)
+
+(** the chunks, one after another *)
+Fixpoint concat_chunks (chunks : list string) : string :=
+  match chunks with
+  | nil => String.EmptyString
+  | cons chunk more => String.append chunk (concat_chunks more)
+  end.
+
+Lemma append_assoc_str : forall a b c : string,
+  String.append (String.append a b) c = String.append a (String.append b c).
+Proof.
+  induction a as [|x a IH]; intros b c; cbn [String.append].
+  - reflexivity.
+  - rewrite IH. reflexivity.
+Qed.
+
+Lemma append_empty_str : forall a : string, String.append a String.EmptyString = a.
+Proof.
+  induction a as [|x a IH]; cbn [String.append].
+  - reflexivity.
+  - rewrite IH. reflexivity.
+Qed.
+
+Lemma split_at_app : forall n s t taken after,
+  split_at n s = Some (taken, after) ->
+  split_at n (String.append s t) = Some (taken, String.append after t).
+Proof.
+  induction n as [|n IH]; intros s t taken after H.
+  - cbn [split_at] in H |- *. injection H as <- <-. reflexivity.
+  - destruct s as [|c rest]; cbn [String.append split_at] in H |- *.
+    + discriminate H.
+    + destruct (split_at n rest) as [[x y]|] eqn:E; [|discriminate H].
+      injection H as <- <-. rewrite (IH rest t x y E). reflexivity.
+Qed.
+
+Lemma take_raw_line_app : forall s t line after,
+  take_raw_line s = Some (line, after) ->
+  take_raw_line (String.append s t) = Some (line, String.append after t).
+Proof.
+  induction s as [|c rest IH]; intros t line after H; cbn [String.append take_raw_line] in H |- *.
+  - discriminate H.
+  - destruct (Ascii.eqb c _).
+    + injection H as <- <-. reflexivity.
+    + destruct (take_raw_line rest) as [[l a]|] eqn:E; [|discriminate H].
+      injection H as <- <-. rewrite (IH t l a eq_refl). reflexivity.
+Qed.
+
+Lemma take_line_app : forall s t line after,
+  take_line s = Some (line, after) ->
+  take_line (String.append s t) = Some (line, String.append after t).
+Proof.
+  intros s t line after H. unfold take_line in H |- *.
+  destruct (take_raw_line s) as [[l a]|] eqn:E; [|discriminate H].
+  injection H as <- <-. rewrite (take_raw_line_app s t l a E). reflexivity.
+Qed.
+
+Lemma take_frame_app : forall limit s t data after,
+  take_frame limit s = Whole data after ->
+  take_frame limit (String.append s t) = Whole data (String.append after t).
+Proof.
+  intros limit s t data after H. unfold take_frame in H.
+  destruct s as [|a [|b [|c [|d rest]]]]; cbv beta iota zeta in H; try discriminate H.
+  cbn [String.append]. unfold take_frame. cbv beta iota zeta.
+  destruct (N.ltb limit (frame_length a b c d)); [discriminate H|].
+  destruct (split_at (N.to_nat (frame_length a b c d)) rest) as [[x y]|] eqn:E;
+    [|discriminate H].
+  injection H as <- <-. rewrite (split_at_app _ _ t x y E). reflexivity.
+Qed.
+
+Lemma lines_in_fuel : forall f g s, String.length s < f -> String.length s < g ->
+  lines_in f s = lines_in g s.
+Proof.
+  induction f as [|f IH]; intros g s Hf Hg; [lia|].
+  destruct g as [|g]; [lia|]. cbn [lines_in].
+  destruct (take_line s) as [[l r]|] eqn:E; [|reflexivity].
+  apply take_line_shorter in E. rewrite (IH g r) by lia. reflexivity.
+Qed.
+
+Lemma split_lines_step : forall s line rest, take_line s = Some (line, rest) ->
+  split_lines s = (cons line (fst (split_lines rest)), snd (split_lines rest)).
+Proof.
+  intros s line rest E. pose proof (take_line_shorter _ _ _ E) as L.
+  unfold split_lines at 1. cbn [lines_in]. rewrite E. cbv beta iota zeta.
+  rewrite (lines_in_fuel (String.length s) (S (String.length rest)) rest) by lia.
+  reflexivity.
+Qed.
+
+Lemma split_lines_stop : forall s, take_line s = None -> split_lines s = (nil, s).
+Proof.
+  intros s E. unfold split_lines. cbn [lines_in]. rewrite E. reflexivity.
+Qed.
+
+(** the lines of [s] then [t]: those of [s], then those of what [s] left
+    followed by [t] *)
+Lemma split_lines_app : forall s t,
+  split_lines (String.append s t)
+  = (app (fst (split_lines s)) (fst (split_lines (String.append (snd (split_lines s)) t))),
+     snd (split_lines (String.append (snd (split_lines s)) t))).
+Proof.
+  assert (forall n s t, String.length s < n ->
+    split_lines (String.append s t)
+    = (app (fst (split_lines s)) (fst (split_lines (String.append (snd (split_lines s)) t))),
+       snd (split_lines (String.append (snd (split_lines s)) t)))) as G.
+  { induction n as [|n IH]; intros s t Hs; [lia|].
+    destruct (take_line s) as [[l r]|] eqn:E.
+    - rewrite (split_lines_step _ _ _ (take_line_app s t l r E)).
+      rewrite (split_lines_step _ _ _ E). cbn [fst snd app].
+      apply take_line_shorter in E. rewrite (IH r t) by lia. reflexivity.
+    - rewrite (split_lines_stop s E). cbn [fst snd app].
+      destruct (split_lines (String.append s t)). reflexivity. }
+  intros s t. apply (G (S (String.length s))). lia.
+Qed.
+
+Lemma receive_lines_kept : forall chunks kept, take_line kept = None ->
+  receive_chunks split_lines kept chunks = split_lines (String.append kept (concat_chunks chunks)).
+Proof.
+  induction chunks as [|chunk more IH]; intros kept K;
+    cbn [receive_chunks concat_chunks].
+  - rewrite append_empty_str. rewrite (split_lines_stop kept K). reflexivity.
+  - rewrite <- append_assoc_str. rewrite (split_lines_app (String.append kept chunk)).
+    rewrite (IH _ (split_lines_kept _)). reflexivity.
+Qed.
+
+(** the lines received do not depend on how the bytes were cut into
+    chunks: they are the lines of all the bytes, and so is what is kept *)
+Theorem receive_lines_chunking : forall chunks,
+  receive_chunks split_lines String.EmptyString chunks = split_lines (concat_chunks chunks).
+Proof.
+  intros chunks. apply (receive_lines_kept chunks String.EmptyString). reflexivity.
+Qed.
+
+Lemma frames_in_fuel : forall f g limit s, String.length s < f -> String.length s < g ->
+  frames_in f limit s = frames_in g limit s.
+Proof.
+  induction f as [|f IH]; intros g limit s Hf Hg; [lia|].
+  destruct g as [|g]; [lia|]. cbn [frames_in].
+  destruct (take_frame limit s) as [|data r|] eqn:E; try reflexivity.
+  apply take_frame_shorter in E. rewrite (IH g limit r) by lia. reflexivity.
+Qed.
+
+Lemma split_frames_step : forall limit s data rest, take_frame limit s = Whole data rest ->
+  split_frames limit s
+  = (cons data (fst (split_frames limit rest)), snd (split_frames limit rest)).
+Proof.
+  intros limit s data rest E. pose proof (take_frame_shorter _ _ _ _ E) as L.
+  unfold split_frames at 1. cbn [frames_in]. rewrite E. cbv beta iota zeta.
+  rewrite (frames_in_fuel (String.length s) (S (String.length rest)) limit rest) by lia.
+  reflexivity.
+Qed.
+
+Lemma split_frames_stop : forall limit s,
+  match take_frame limit s with Whole _ _ => False | _ => True end ->
+  split_frames limit s = (nil, s).
+Proof.
+  intros limit s. unfold split_frames. cbn [frames_in].
+  destruct (take_frame limit s); intros H; [reflexivity|contradiction|reflexivity].
+Qed.
+
+(** the frames of [s] then [t]: those of [s], then those of what [s] left
+    followed by [t] *)
+Lemma split_frames_app : forall limit s t,
+  split_frames limit (String.append s t)
+  = (app (fst (split_frames limit s))
+         (fst (split_frames limit (String.append (snd (split_frames limit s)) t))),
+     snd (split_frames limit (String.append (snd (split_frames limit s)) t))).
+Proof.
+  intros limit.
+  assert (forall n s t, String.length s < n ->
+    split_frames limit (String.append s t)
+    = (app (fst (split_frames limit s))
+           (fst (split_frames limit (String.append (snd (split_frames limit s)) t))),
+       snd (split_frames limit (String.append (snd (split_frames limit s)) t)))) as G.
+  { induction n as [|n IH]; intros s t Hs; [lia|].
+    destruct (take_frame limit s) as [|d r|] eqn:E.
+    - assert (Hstop : split_frames limit s = (nil, s))
+        by (apply split_frames_stop; rewrite E; exact I).
+      rewrite Hstop. cbn [fst snd app]. destruct (split_frames limit (String.append s t)). reflexivity.
+    - rewrite (split_frames_step _ _ _ _ (take_frame_app limit s t d r E)).
+      rewrite (split_frames_step _ _ _ _ E). cbn [fst snd app].
+      apply take_frame_shorter in E. rewrite (IH r t) by lia. reflexivity.
+    - assert (Hstop : split_frames limit s = (nil, s))
+        by (apply split_frames_stop; rewrite E; exact I).
+      rewrite Hstop. cbn [fst snd app]. destruct (split_frames limit (String.append s t)). reflexivity. }
+  intros s t. apply (G (S (String.length s))). lia.
+Qed.
+
+Lemma receive_frames_kept : forall limit chunks kept,
+  match take_frame limit kept with Whole _ _ => False | _ => True end ->
+  receive_chunks (split_frames limit) kept chunks
+  = split_frames limit (String.append kept (concat_chunks chunks)).
+Proof.
+  intros limit.
+  induction chunks as [|chunk more IH]; intros kept K;
+    cbn [receive_chunks concat_chunks].
+  - rewrite append_empty_str. rewrite (split_frames_stop limit kept K). reflexivity.
+  - rewrite <- append_assoc_str. rewrite (split_frames_app limit (String.append kept chunk)).
+    rewrite (IH _ (split_frames_kept _ _)). reflexivity.
+Qed.
+
+(** the frames received do not depend on how the bytes were cut into
+    chunks: they are the frames of all the bytes, and so is what is kept *)
+Theorem receive_frames_chunking : forall limit chunks,
+  receive_chunks (split_frames limit) String.EmptyString chunks
+  = split_frames limit (concat_chunks chunks).
+Proof.
+  intros limit chunks. apply (receive_frames_kept limit chunks String.EmptyString). exact I.
+Qed.

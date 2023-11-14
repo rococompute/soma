@@ -1333,7 +1333,10 @@ message of what was received is pure and in `Sandbox.v`: `take_line`,
 fed one after another), with `Example`s on fixed chunks (a message split
 across chunks, several in one chunk, a partial one kept, an empty line, a
 length prefix that arrives alone) and theorems that what is kept never
-holds a whole message (`split_lines_kept`, `split_frames_kept`). The
+holds a whole message (`split_lines_kept`, `split_frames_kept`), and that
+the messages and what is kept do not depend on how the bytes were cut
+into chunks: they are those of all the bytes at once
+(`receive_lines_chunking`, `receive_frames_chunking`). The
 image's `Soma_rt.take_line` and `Soma_rt.take_frame` do the same on
 OCaml strings.
 
