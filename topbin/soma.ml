@@ -895,6 +895,21 @@ let run ~events ~supervise file args image_args =
     (* the image's tools come from the same opam switch as its build *)
     let switch = match Sys.getenv_opt "SOMA_MIRAGE_SWITCH" with
       | Some s when s <> "" -> s | _ -> "hvf" in
+    (* a program that keeps files (Sandbox's read_file, write_file,
+       append_file) gets the disk its build names, storage.img in the
+       current directory: created zeroed (8 MiB) the first time, and kept,
+       so the next run reads what this one wrote *)
+    let block = "--block:storage=" in
+    List.iter (fun a ->
+        if starts_with ~prefix:block a then begin
+          let disk = String.sub a (String.length block) (String.length a - String.length block) in
+          if not (Sys.file_exists disk) then begin
+            let fd = Unix.openfile disk [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_EXCL] 0o600 in
+            Unix.LargeFile.ftruncate fd (Int64.of_int (8 * 1024 * 1024));
+            Unix.close fd;
+            Printf.eprintf "soma run: created %s, an empty 8 MiB disk for the program's files.\n%!" disk
+          end
+        end) command;
     let argv = "opam" :: "exec" :: ("--switch=" ^ switch) :: "--" :: command @ image_args in
     (* Ctrl-C stops the image, which then exits; soma waits for it to
        remove the temporary directory. opam exec runs the image in its

@@ -1666,6 +1666,11 @@ solo5-hvt --block:storage=storage.img -- mirage_storage.hvt
 solo5-hvt --block:storage=storage.img -- mirage_storage.hvt
 ```
 
+`soma run mirage_storage.soma` does the same with `storage.img` in the
+current directory: it creates the zeroed 8 MiB disk the first time and keeps
+it, so running it again in the same directory prints the next boot
+(`soma_storage_run_disk.sh` checks this with stand-ins for opam and solo5).
+
 The example prints `boot 1`, then `boot 2`; `dev/mirage-check.sh --storage-only`
 builds it and checks those boots. `--no-image` type-checks the same generated
 backend and interfaces without requiring Mirage or Solo5. The misc test
