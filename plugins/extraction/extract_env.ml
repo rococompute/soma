@@ -740,10 +740,63 @@ let full_extr opaque_access f (refs,mps) =
   let () = warns table in
   print_structure_to_file table (mono_filename f) false struc
 
+(* Explicit output names in Soma builds are relative to the source project's
+   root, independently of Cd and Extraction Output Directory. Resolve existing
+   ancestors (and output symlinks) even when the output does not exist yet. *)
+let project_extraction_target target =
+  let env name = match Sys.getenv_opt name with
+    | Some s when s <> "" -> Some s
+    | _ -> None in
+  let root = match env "SOMA_BUILD_ROOT", env "SOMA_PROJECT_ROOT" with
+    | Some r, _ | None, Some r -> Some r
+    | None, None ->
+      let loc = Loc.get_current_command_loc () in
+      let source = match loc with
+        | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> file
+        | _ -> Option.default (Filename.concat (Sys.getcwd ()) "_") !(SomaImport.source_file) in
+      let dir = Unix.realpath (Filename.dirname source) in
+      (match SomaProject.find_root dir with
+       | Some root -> Some root
+       | None when SomaImport.applies ?loc () -> Some dir
+       | None -> None) in
+  match root with
+  | None -> target
+  | Some root ->
+    let refuse () = user_err Pp.(str "Extraction target " ++ quote (str target) ++
+      str " must be relative and stay inside the project being built.") in
+    if not (Filename.is_relative target) then refuse ();
+    let rec canonical path =
+      try Unix.realpath path with
+      | Unix.Unix_error (Unix.ENOENT, _, _) ->
+        (match Unix.lstat path with
+         | { Unix.st_kind = Unix.S_LNK; _ } -> refuse ()
+         | _ -> ()
+         | exception Unix.Unix_error (Unix.ENOENT, _, _) -> ());
+        let parent = Filename.dirname path in
+        if parent = path then refuse ();
+        let parent = canonical parent in
+        match Filename.basename path with
+        | "." -> parent
+        | ".." -> Filename.dirname parent
+        | name -> Filename.concat parent name in
+    let root = Unix.realpath root in
+    let inside path =
+      let path = try canonical path with Unix.Unix_error _ -> refuse () in
+      let prefix = Filename.concat root "" in
+      if not (CString.is_sub prefix path 0) then refuse ();
+      path in
+    let path = inside (Filename.concat root target) in
+    (* mono_filename adds language suffixes; check the actual files too before
+       opening either one, including an existing signature symlink. *)
+    let impl, intf, _ = mono_filename (Some path) in
+    List.iter (fun f -> ignore (inside f)) (List.filter_map (fun x -> x) [impl; intf]);
+    path
+
 (* Soma: a dependency is checked, not run: what writes a file is refused in
    its compilation (vernac/somaImport.ml). Printing is not. *)
 let full_extraction ~opaque_access f lr =
   if Option.has_some f then SomaImport.refuse_in_dependency "Extraction";
+  let f = Option.map project_extraction_target f in
   full_extr opaque_access f (locate_refs lr)
 
 (*s Separate extraction is similar to recursive extraction, with the output
@@ -855,7 +908,8 @@ let extract_and_compile ~opaque_access l =
   if lang () != Ocaml then
     CErrors.user_err (Pp.str "This command only works with OCaml extraction");
   let f = Filename.temp_file "testextraction" ".ml" in
-  let () = full_extraction ~opaque_access (Some f) l in
+  (* The temporary name is trusted; the dependency refusal above still applies. *)
+  let () = full_extr opaque_access (Some f) (locate_refs l) in
   let () = compile f in
   let () = remove f; remove (f^"i") in
   let base = Filename.chop_suffix f ".ml" in

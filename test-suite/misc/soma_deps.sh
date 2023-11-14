@@ -321,9 +321,17 @@ refused_write() {
   says "Cannot import $1.f"
   writes_nothing
   [ -z "$(ls "$XDG_CACHE_HOME"/soma/src/github.com/owner/"$1"@1.0.0-*/ | grep -v -e soma.toml -e f.soma)" ]
+  # Extraction on its own must use a target inside its project.
+  if [ "$1" = w_extraction ]; then
+    printf 'From Corelib Require Extraction.\nDefinition d := 1.\nExtraction "e.ml" d.\n' > "$TMP/work/github.com/owner/$1/f.soma"
+  fi
   # the same file, built on its own, runs it
   (cd "$TMP/work/github.com/owner/$1" && soma build f.soma > own.log 2>&1) || { cat "$TMP/work/github.com/owner/$1/own.log"; exit 1; }
-  [ -n "$(ls -A "$OUT")" ] || { echo "$2 wrote nothing on its own"; exit 1; }
+  if [ "$1" = w_extraction ]; then
+    [ -s "$TMP/work/github.com/owner/$1/e.ml" ]
+  else
+    [ -n "$(ls -A "$OUT")" ] || { echo "$2 wrote nothing on its own"; exit 1; }
+  fi
   rm -rf "$OUT"; mkdir -p "$OUT"
 }
 refused_write w_redirect "Redirect \"$OUT/r\" Check d." 'Redirect writes a file'
@@ -404,6 +412,24 @@ top
 printf 'Redirect "%s/own" Check 1.\n' "$OUT" > own.soma
 printf 'Import own.\nRedirect "%s/main" Check 2.\n1.\n' "$OUT" > main.soma
 ok; [ -e "$OUT/own.out" ] && [ -e "$OUT/main.out" ]
+
+# * Explicit Extraction targets stay in the project being built.
+rm -rf "$OUT"; mkdir -p "$OUT"
+top
+mkdir sub
+for target in "$OUT/absolute.ml" '../written/escape.ml' 'sub/../../written/escape.ml'; do
+  printf 'From Corelib Require Extraction.\nDefinition d := 1.\nExtraction "%s" d.\n' "$target" > main.soma
+  if soma build main.soma > out.log 2>&1; then
+    echo "accepted Extraction target: $target"; exit 1
+  fi
+  says 'Extraction target'
+  says "$target"
+  writes_nothing
+done
+# Even from a subfolder, the relative target is rooted at the project.
+printf 'From Corelib Require Extraction.\nDefinition d := 1.\nExtraction "sub/result.ml" d.\n' > sub/extract.soma
+ok sub/extract.soma
+[ -s sub/result.ml ] && [ -s sub/result.mli ]
 
 # * A moved tag: soma.lock keeps its commit, and soma get says so
 project github.com/owner/moves moves 1.0.0; echo 'm : nat := 1.' > work/github.com/owner/moves/m.soma
