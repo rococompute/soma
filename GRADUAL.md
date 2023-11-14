@@ -296,10 +296,14 @@ Soma itself. A checkout without a `.soma-cache` starts from the one of the
 same key. A `.definition`'s `.vo` names the `FILE.ml` beside it by its path
 in the project, so a program built from a `.vo` that another checkout
 compiled uses its own checkout's `FILE.ml`, never the other's (a
-dependency's `.ml` is named by its absolute path, in its own source). A
-project with a dependency on a folder (`{ path = "../wip" }`) is not kept in
+dependency's `.ml` is named by its absolute path, in its own source).
+The stamp's digest of that `.ml` is marked, so a stamp that recorded the
+digest alone is out of date and the `.definition` is compiled again rather
+than a `.vo` from before this, which named the `.ml` by an absolute path.
+A project with a dependency on a folder (`{ path = "../wip" }`) is not kept in
 the store, as that folder's files are not in the key.
-`test-suite/misc/soma_module_cache.sh` and
+`test-suite/misc/soma_module_cache.sh`,
+`test-suite/misc/soma_module_cache_checkout.sh` and
 `test-suite/misc/soma_module_cache_path_deps.sh` test it.
 
 `examples/example_projects/cached_compilation` is an example;

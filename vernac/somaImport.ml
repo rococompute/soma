@@ -267,8 +267,18 @@ let locate ?loc p path =
 let source_hash src =
   let base = Filename.remove_extension src in
   let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
-  (* and FILE.wasm, FILE.ml or FILE.lean, which FILE.definition declares *)
-  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"; base ^ ".ml"; base ^ ".lean"])))
+  (* FILE.wasm, FILE.ml or FILE.lean, which FILE.definition declares.
+     A present FILE.ml is marked "rel:": a stamp from before the module
+     cache named that .ml by an absolute path, and its digest did not.
+     The mark makes that stamp out of date, so the .definition is compiled
+     again and the .vo names the .ml by its path in this project. A missing
+     file stays "-", which is what a stamp of a .soma file records. *)
+  let ml = base ^ ".ml" in
+  let ml_digest =
+    if Sys.file_exists ml then "rel:" ^ Digest.to_hex (Digest.file ml) else "-" in
+  Digest.to_hex (Digest.string (String.concat " "
+    [one src; one (base ^ ".proof"); one (base ^ ".lang"); one (base ^ ".wasm");
+     ml_digest; one (base ^ ".lean")]))
 
 let digest f = Digest.to_hex (Digest.file f)
 
