@@ -98,6 +98,26 @@ let rec waitpid_non_intr pid =
   try snd (Unix.waitpid [] pid)
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_non_intr pid
 
+(* Report a compile process killed or stopped by a signal, naming the
+   file it was compiling: the common signals by name (from OCaml's Sys
+   constants), any other by its number. *)
+let report_compile_signal file status =
+  let signal_name n =
+    if n = Sys.sigkill then "SIGKILL"
+    else if n = Sys.sigterm then "SIGTERM"
+    else if n = Sys.sigsegv then "SIGSEGV"
+    else if n = Sys.sigabrt then "SIGABRT"
+    else if n = Sys.sigint then "SIGINT"
+    else string_of_int n in
+  match status with
+  | Unix.WSIGNALED n ->
+    Printf.eprintf "%s: compilation was killed by signal %s%s\n%!"
+      file (signal_name n) (if n = Sys.sigkill then " (out of memory?)" else "")
+  | Unix.WSTOPPED n ->
+    Printf.eprintf "%s: compilation was stopped by signal %s\n%!"
+      file (signal_name n)
+  | Unix.WEXITED _ -> ()
+
 (** [run_command com] launches command [com] (via /bin/sh),
     and returns the contents of stdout and stderr. If given, [~hook]
     is called on each elements read on stdout or stderr. *)

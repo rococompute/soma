@@ -223,6 +223,16 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       ()
 
 let compile opts stm_opts copts injections ~f_in ~f_out =
+  (* test-only hook: SOMA_TEST_KILL_COMPILE=<module name> makes this
+     module's compile send itself SIGKILL right after it starts, as
+     the OOM killer would (test-suite/misc/soma_killed_compile.sh) *)
+  (match Sys.getenv_opt "SOMA_TEST_KILL_COMPILE" with
+   | Some pat when pat <> "" ->
+     let base = Filename.basename f_in in
+     let stem = Filename.remove_extension base in
+     if pat = stem || pat = base || pat ^ ".soma" = base then
+       (try Unix.kill (Unix.getpid ()) Sys.sigkill with Unix.Unix_error _ -> ())
+   | _ -> ());
   ignore(CoqworkmgrApi.get 1);
   let timing = match Sys.getenv_opt "SOMA_BUILD_TIMINGS" with
     | Some path when path <> "" -> Some (path, System.get_time ())

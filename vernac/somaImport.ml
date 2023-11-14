@@ -414,13 +414,23 @@ let compile ?loc p path src =
   Unix.close null;
   let rec wait () = try snd (Unix.waitpid [] pid)
     with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
+  let import_name = String.map (function '/' -> '.' | c -> c) (qualified p path) in
+  let file = qualified p path ^ Filename.extension src in
   match wait () with
   | Unix.WEXITED 0 ->
     (* the folder's listing, if read before, does not have the new file *)
     System.forget_dir p.cache_dir
-  | _ ->
-    CErrors.user_err ?loc Pp.(str "Cannot import " ++ str (String.map (function '/' -> '.' | c -> c) (qualified p path)) ++
-                              str ": " ++ str (qualified p path ^ Filename.extension src) ++
+  | Unix.WSIGNALED _ as status ->
+    CUnix.report_compile_signal file status;
+    CErrors.user_err ?loc Pp.(str "Cannot import " ++ str import_name ++
+                              str ": " ++ str file ++ str " was killed while compiling (see the line above).")
+  | Unix.WSTOPPED _ as status ->
+    CUnix.report_compile_signal file status;
+    CErrors.user_err ?loc Pp.(str "Cannot import " ++ str import_name ++
+                              str ": " ++ str file ++ str " was stopped while compiling (see the line above).")
+  | Unix.WEXITED _ ->
+    CErrors.user_err ?loc Pp.(str "Cannot import " ++ str import_name ++
+                              str ": " ++ str file ++
                               str " does not compile (its errors are above).")
 
 (* [path] (whose source is [src]) compiled and up to date in the cache *)

@@ -73,6 +73,10 @@ val sys_command : string -> string list -> Unix.process_status
 
 val waitpid_non_intr : int -> Unix.process_status
 
+(** Print a line naming [file] and the signal that killed or stopped
+    a compile process with this status, if it was killed or stopped. *)
+val report_compile_signal : string -> Unix.process_status -> unit
+
 (** Check if two file names refer to the same (existing) file *)
 val same_file : string -> string -> bool
 

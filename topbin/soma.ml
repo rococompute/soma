@@ -130,8 +130,12 @@ let compile args =
   Unix.close out_w;
   let output = In_channel.input_all (Unix.in_channel_of_descr out_r) in
   Unix.close out_r;
-  let code = exit_code (wait pid) in
+  let status = wait pid in
+  let code = exit_code status in
   child := None;
+  (match List.find_opt (fun a -> a = "" || a.[0] <> '-') args with
+   | Some file -> CUnix.report_compile_signal file status
+   | None -> CUnix.report_compile_signal "compilation" status);
   code, output
 
 (* The output directory: that of [-o FILE.vo], or else the source's *)
