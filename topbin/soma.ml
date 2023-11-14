@@ -260,14 +260,18 @@ let clean_review review =
 (* [soma build FILE]; with [~review], [soma compile FILE]: the same, and
    then FILE reviewed as by [soma explore] (SOMA_REVIEW), which fails it
    when the review finds an issue or a violation *)
-let build ?(review=false) ~verbose ~fill file args =
+let build ?(review=false) ?(timings=false) ~verbose ~fill file args =
   let dir = output_dir file args in
   let before = modification_times dir in
   let start = Unix.gettimeofday () in
   if review then Unix.putenv "SOMA_REVIEW" "1";
   (* what the review says, the build does not say again *)
   let args = if review then "-w" :: "-gradual-may-fail" :: args else args in
-  let code, output = compile (file :: args) in
+  let timing_file = if timings then Some (Filename.temp_file "soma-timings" ".log") else None in
+  Option.iter (Unix.putenv "SOMA_BUILD_TIMINGS") timing_file;
+  let code, output = Fun.protect
+      ~finally:(fun () -> Option.iter (fun _ -> Unix.putenv "SOMA_BUILD_TIMINGS" "") timing_file)
+      (fun () -> compile (file :: args)) in
   let program_output, review_lines = split_review output in
   let output = String.concat "" (List.map (fun l -> l ^ "\n") program_output) in
   let proofs = found_proofs output in
@@ -294,6 +298,16 @@ let build ?(review=false) ~verbose ~fill file args =
         proof_file (plural (List.length proofs) "proof")
         (if List.length proofs = 1 then "it" else "them") (if List.length proofs = 1 then "it" else "them")
   end;
+  Option.iter (fun path ->
+      Fun.protect ~finally:(fun () -> Sys.remove path) (fun () ->
+          let reports = In_channel.with_open_bin path In_channel.input_all in
+          print_string reports;
+          let peak = List.fold_left (fun peak line ->
+              match String.split_on_char '\t' line with
+              | [_; _; memory] -> max peak (int_of_string (List.hd (String.split_on_char ' ' memory)))
+              | _ -> peak) 0 (String.split_on_char '\n' reports) in
+          Printf.printf "Total: %.3f s\t%d KiB peak heap memory\n%!"
+            (Unix.gettimeofday () -. start) peak)) timing_file;
   if code <> 0 then exit code;
   if review then begin
     if review_lines <> [] then print_newline ();
@@ -826,6 +840,7 @@ let options_help command =
     else l
   in
   print_string (String.concat "\n" (List.map reword (lines output)));
+  if command = "build" then print_endline "  --timings              Print module times, total time and peak heap memory";
   exit code
 
 (* Rocq's read-eval-print loop, with FILE's definitions loaded first *)
@@ -872,12 +887,15 @@ let () =
     let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
     let fill = List.exists is_fill rest in
+    let timings = command = "build" && List.mem "--timings" rest in
+    let rest = if timings then List.filter ((<>) "--timings") rest else rest in
+    let rest = if timings && rest = [] then ["main.soma"] else rest in
     begin match List.filter (fun a -> not (is_verbose a || is_fill a)) rest with
       | [] -> usage_error "soma %s: no file given" command
       | file :: args ->
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
-        build ~review:(command = "compile") ~verbose ~fill (program_of file) args
+        build ~review:(command = "compile") ~timings ~verbose ~fill (program_of file) args
     end
   | "extract" :: rest ->
     begin match rest with

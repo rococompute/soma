@@ -29,6 +29,18 @@ soma run models/calc.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q "= 12" out.log
 [ -f .soma-cache/util.vo ]
 
+# Timings include imported modules and the entry point, with the total last.
+rm -rf .soma-cache
+soma build --timings > timings.log 2>&1 || { cat timings.log; exit 1; }
+for module in util.soma models/calc.soma main.soma; do
+  grep -E "${module}:.*[0-9]+\.[0-9]+ s.*[0-9]+ KiB peak heap memory" timings.log
+done
+tail -1 timings.log | grep -E '^Total: [0-9]+\.[0-9]+ s.*[0-9]+ KiB peak heap memory$'
+soma build main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+if grep -E 'peak heap memory|^Total:' out.log; then exit 1; fi
+soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q '= 20' out.log
+
 # soma build checks soma.toml: [error] [what soma.toml says]
 refused() {
   if soma run main.soma > out.log 2>&1; then echo "soma.toml was taken: $2"; cat soma.toml; exit 1; fi

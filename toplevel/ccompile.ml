@@ -224,7 +224,18 @@ let compile opts stm_options injections copts ~f_in ~f_out =
 
 let compile opts stm_opts copts injections ~f_in ~f_out =
   ignore(CoqworkmgrApi.get 1);
+  let timing = match Sys.getenv_opt "SOMA_BUILD_TIMINGS" with
+    | Some path when path <> "" -> Some (path, System.get_time ())
+    | _ -> None in
   compile opts stm_opts injections copts ~f_in ~f_out;
+  Option.iter (fun (path, start) ->
+      let seconds = System.time_difference start (System.get_time ()) in
+      (* Like CObj.heap_size_kb, include the minor heap; use the major
+         heap's high-water mark rather than its size after compilation. *)
+      let peak_kb = ((Gc.quick_stat ()).Gc.top_heap_words + (Gc.get ()).Gc.minor_heap_size)
+          / (8192 / Sys.word_size) in
+      Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o600 path (fun oc ->
+          Printf.fprintf oc "%s:\t%.3f s\t%d KiB peak heap memory\n" f_in seconds peak_kb)) timing;
   CoqworkmgrApi.giveback 1
 
 let compile_file opts stm_opts copts injections f_in =
