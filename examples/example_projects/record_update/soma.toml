@@ -1,0 +1,4 @@
+[project]
+name = "record_update"
+version = "0.1.0"
+description = "Updating records while copying unnamed fields"

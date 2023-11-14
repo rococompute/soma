@@ -1,0 +1,18 @@
+Import output.
+
+Record account := {
+  owner : string;
+  balance : nat;
+  active : bool
+}.
+
+original : account := {| owner := "Ada"; balance := 10; active := true |}.
+updated := {| original with balance := 25 |}.
+updated_twice := {| updated with owner := "Grace"; balance := 30 |}.
+
+show_account (r : account) : string :=
+  owner r ++ " " ++ to_string (balance r) ++ " " ++ to_string (active r).
+
+(* Expected output:
+   Ada 25 true | Grace 30 true *)
+main := output.write_line (show_account updated ++ " | " ++ show_account updated_twice).

@@ -186,6 +186,40 @@ example `.proof` files are written in sentences, `sqrt2_irrational.proof`
 induction) and `reason_counter.proof` (cases and induction) among them;
 the tactics they replace are in their history.
 
+### Record updates
+
+Soma inherits Rocq's record update syntax, `{| r with f := v |}`.
+For example:
+
+```coq
+Record account := {
+  owner : string;
+  balance : nat;
+  active : bool
+}.
+
+original : account := {| owner := "Ada"; balance := 10; active := true |}.
+updated := {| original with balance := 25 |}.
+updated_twice := {| updated with owner := "Grace"; balance := 30 |}.
+```
+
+Separate multiple field updates with semicolons. Fields not named are
+copied unchanged: `updated` has owner `"Ada"`, balance `25`, and active
+`true`; `updated_twice` has owner `"Grace"`, balance `30`, and active `true`.
+Each update constructs a new record, leaving the original unchanged.
+
+This replaces a helper that copies every field explicitly, such as:
+
+```coq
+with_balance (r : account) (v : nat) : account :=
+  {| owner := owner r; balance := v; active := active r |}.
+```
+
+Use `{| r with balance := v |}` in place of `with_balance r v`.
+`examples/example_projects/record_update/main.soma` prints the fields after
+both updates, without a full-copy helper. Run `soma build main.soma` in that
+project, then `./main.exe`; it prints `Ada 25 true | Grace 30 true`.
+
 ### Macros: `.lang` files
 
 Macros are defined in `.lang` files, with `Macro name args := body.`: a
