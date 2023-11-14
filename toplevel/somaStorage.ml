@@ -130,7 +130,14 @@ module Make (B : Mirage_block.S) = struct
     put64 header 8 generation; put64 header 16 (Int64.of_int (String.length payload));
     Bytes.blit_string (Digest.string payload) 0 header 24 16;
     Bytes.blit_string (Digest.string (Bytes.sub_string header 0 40)) 0 header 40 16;
-    write_sector t.disk (index*t.bank) (Bytes.to_string header) >|= fun () ->
+    write_sector t.disk (index*t.bank) (Bytes.to_string header) >>= fun () ->
+    (* A first-header prefix can be recovered as an uncommitted empty store.
+       Acknowledge generation 1 only after recording a byte beyond that
+       prefix. A torn receipt rewrite still leaves a complete valid header. *)
+    (if generation = 1L then begin
+       Bytes.set header 56 '\001';
+       write_sector t.disk (index*t.bank) (Bytes.to_string header)
+     end else Lwt.return_unit) >|= fun () ->
     t.files <- fs; t.active <- index; t.generation <- generation
   let read t name = Lwt_mutex.with_lock t.lock (fun () -> Lwt.return (Hashtbl.find_opt t.files name))
   let update t name data append = Lwt_mutex.with_lock t.lock (fun () ->

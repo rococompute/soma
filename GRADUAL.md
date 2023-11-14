@@ -1695,3 +1695,12 @@ a proof about host power loss, disk caches, or adversarial storage.
 
 The generated backend uses the sector interface documented by
 [mirage-block](https://github.com/mirage/mirage-block/blob/main/src/mirage_block.mli).
+
+The first snapshot writes its complete header, then rewrites that header with
+an acknowledgement marker in padding byte 56 before reporting success. This
+keeps a damaged acknowledged first header from looking like an interrupted
+first-header prefix and reopening as empty. If the marker rewrite fails, the
+in-memory map stays unchanged; reopening may recover the complete snapshot.
+Older valid headers with zero padding remain readable, but cannot gain this
+protection retroactively. `soma_aa0_storage_first_receipt.sh` covers checksum
+damage and every sector-prefix interruption of the marker rewrite.
