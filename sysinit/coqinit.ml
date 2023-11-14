@@ -10,18 +10,14 @@
 
 (** GC tweaking *)
 
-(** Rocq is a heavy user of persistent data structures and symbolic ASTs, so the
-    minor heap is heavily solicited. Unfortunately, the default size is far too
-    small, so we enlarge it a lot (128 times larger).
-
-    To better handle huge memory consumers, we also augment the default major
-    heap increment and the GC pressure coefficient.
+(** Keep OCaml's default minor heap size; callers can tune it with
+    OCAMLRUNPARAM. To better handle huge memory consumers, we augment the
+    GC pressure coefficient.
 *)
 
 let set_gc_policy () =
   Gc.set { (Gc.get ()) with
-           Gc.minor_heap_size = 32*1024*1024 (* 32Mwords x 8 bytes/word = 256Mb *)
-         ; Gc.space_overhead = 120
+           Gc.space_overhead = 120
          }
 
 let set_gc_best_fit () =
