@@ -36,4 +36,7 @@ Example append_bytes : Files.read "log"
     (Files.write "log" "a" Files.empty))
   = Some ("a" ++ byte 0 ++ newline)%str := eq_refl.
 
+(* the general laws, for any state *)
+Definition laws := (Files.write_write, Files.read_append_other, Files.read_append_append).
+
 main : io unit := print "storage model checked".

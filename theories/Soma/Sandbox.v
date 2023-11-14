@@ -233,6 +233,45 @@ Theorem read_append : forall files name contents,
           end).
 Proof. intros. unfold append. apply read_write. Qed.
 
+(** a write replaces what an earlier write to the same name left: the
+    state is as if the earlier write had not happened *)
+Theorem write_write : forall files name first second,
+  write name second (write name first files) = write name second files.
+Proof.
+  induction files as [|[key previous] rest IH]; intros name first second;
+    cbn [write].
+  - now rewrite String.eqb_refl.
+  - destruct (String.eqb name key) eqn:E; cbn [write].
+    + now rewrite String.eqb_refl.
+    + rewrite E. now rewrite IH.
+Qed.
+
+(** appending to one name leaves every other name as it was *)
+Theorem read_append_other : forall files name other contents,
+  String.eqb other name = false ->
+  read other (append name contents files) = read other files.
+Proof. intros. unfold append. now apply read_write_other. Qed.
+
+Lemma append_assoc : forall a b c : string,
+  String.append (String.append a b) c = String.append a (String.append b c).
+Proof.
+  induction a as [|x a IH]; intros b c; cbn [String.append]; [reflexivity|].
+  now rewrite IH.
+Qed.
+
+(** two appends keep their order, after what was there *)
+Theorem read_append_append : forall files name first second,
+  read name (append name second (append name first files)) =
+    Some (match read name files with
+          | None => String.append first second
+          | Some previous => String.append previous (String.append first second)
+          end).
+Proof.
+  intros files name first second.
+  rewrite read_append, read_append.
+  destruct (read name files); [now rewrite append_assoc|reflexivity].
+Qed.
+
 End Files.
 
 (** * HTTP, for [serve] and [fetch] *)
