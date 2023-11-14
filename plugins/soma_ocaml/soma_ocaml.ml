@@ -120,7 +120,7 @@ let type_variable used na =
 
 let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t)
 
-(* The OCaml type of a declared type: [string], [bool], [unit], [list],
+(* The OCaml type of a declared type: [string], [bool], [nat], [unit], [list],
    [option], products, [float], functions, types of OCaml modules that a
    .definition declares, and type variables ([forall A, ...]), which
    extraction erases as arguments *)
@@ -156,6 +156,9 @@ let rec ocaml_type env sigma vars t =
     else if is "core.bool.type" then "bool"
     else if is "core.unit.type" then "unit"
     else if is "num.float.type" then "float"
+    (* nat as extraction has it, O | S of nat: Soma_nat.nat, which
+       toplevel/somaOcaml.ml generates *)
+    else if is "num.nat.type" then "Soma_nat.nat"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
     else if is "core.option.type" then arg (List.hd args) ^ " option"
     else if is "core.prod.type" then
@@ -241,7 +244,7 @@ let bind_module ~key ~ml_file ~top ~definition =
         with Not_ocaml why ->
           CErrors.user_err (hov 0 (str name ++ str " : " ++ Printer.pr_econstr_env env sigma t ++
                                    str " is not given to OCaml:" ++ spc () ++ why ++ str "." ++ spc () ++
-                                   str "An OCaml value's type is made of string, bool, unit, list, option," ++ spc () ++
+                                   str "An OCaml value's type is made of string, bool, nat, unit, list, option," ++ spc () ++
                                    str "products, float, functions, types that " ++ str definition ++ spc () ++
                                    str "declares (name : Type.), and type variables (forall A, ...).")) in
       Lib.add_leaf (in_binding (c, { key; top; path; item = SomaForeign.OCamlValue (ty, labels ~definition env sigma t) })))

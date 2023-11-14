@@ -74,9 +74,9 @@ if soma build prog.soma > out.log 2>&1; then echo "a proof computed through OCam
 rm prog.proof
 
 # a type that OCaml does not have
-echo 'count : nat -> unit.' >> greet.definition
-if soma build prog.soma > out.log 2>&1; then echo "nat was given to OCaml"; exit 1; fi
-grep -q 'count : (nat -> unit) is not given to OCaml: nat is no type of OCaml.' out.log
+echo 'count : N -> unit.' >> greet.definition
+if soma build prog.soma > out.log 2>&1; then echo "N was given to OCaml"; exit 1; fi
+grep -q 'count : (N -> unit) is not given to OCaml: N is no type of OCaml.' out.log
 sed -i.bak '$d' greet.definition
 
 echo 'any : Any -> unit.' >> greet.definition
@@ -146,3 +146,26 @@ soma extract prog.soma > out.log 2>&1 || { cat out.log; exit 1; }
 mkdir mine && touch mine/notes
 if soma extract prog.soma -o mine > out.log 2>&1; then echo "soma extract wrote over a directory it did not make"; exit 1; fi
 grep -q 'is not empty, and soma extract did not make it' out.log
+cd ..
+
+# nat, given to OCaml and given back as extraction has it (O | S of nat),
+# Soma_nat.nat to the module, without converting
+mkdir nat && cd nat
+cat > successor.ml <<'EOT'
+let succ (n : Soma_nat.nat) : Soma_nat.nat = Soma_nat.S n
+EOT
+cat > successor.definition <<'EOT'
+succ : nat -> nat.
+EOT
+cat > prog.soma <<'EOT'
+Import successor.
+main : string := to_string (succ 0) ++ " " ++ to_string (succ 41).
+EOT
+soma explore prog.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q "successor.ml's Successor.succ : Soma_nat.nat -> Soma_nat.nat" out.log
+soma extract prog.soma > out.log 2>&1 || { cat out.log; exit 1; }
+[ -f prog-ocaml/soma_nat.ml ] || { echo "soma extract wrote no soma_nat.ml"; exit 1; }
+if command -v dune > /dev/null; then
+  (cd prog-ocaml && dune build --profile release 2> ../dune.log) || { cat dune.log; exit 1; }
+  [ "$(prog-ocaml/_build/default/soma_main.exe)" = "1 42" ]
+fi

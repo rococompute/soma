@@ -116,6 +116,15 @@ let bindings_ml modules =
                     definition path (binding_name m path) poly ty body))
         m.items) modules)
 
+(* soma_nat.ml: nat as extraction makes it in prog.ml, which a module of
+   the project cannot name (prog.ml uses it): a declared type's nat is
+   this one, of the same constructors, so of the same values *)
+let soma_nat_ml =
+  header ^ "(* Soma's nat, as extracted: 0 is O, and n + 1 is S n. *)\n\
+            type nat = O | S of nat\n"
+
+let mentions_nat ty = CString.string_contains ~where:ty ~what:"Soma_nat.nat"
+
 (* * The switch *)
 
 (* lwt.unix is a library of the opam package lwt *)
@@ -236,6 +245,15 @@ let extract ~state ~modules dir =
       List.map (fun (c, path, item) ->
           let soma = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef c)) in
           match item with
+          | SomaForeign.OCamlValue (ty, labels) when mentions_nat ty ->
+            (* Soma_nat.nat is prog.ml's nat by its values, not its name:
+               soma_bindings.ml checks the value at Soma_nat.nat, and
+               here it is taken at prog.ml's nat, without converting.
+               A function is applied, so that it stays polymorphic. *)
+            let args = String.concat "" (List.mapi (fun i _ -> Printf.sprintf " a%d" i) labels) in
+            let value = Printf.sprintf "Obj.magic Soma_bindings.%s%s" (binding_name m path) args in
+            Printf.sprintf "Extract Constant %s => \"(%s)\".\n" soma
+              (if args = "" then value else "fun" ^ args ^ " -> " ^ value)
           | SomaForeign.OCamlValue _ ->
             Printf.sprintf "Extract Constant %s => \"Soma_bindings.%s\".\n" soma (binding_name m path)
           | SomaForeign.OCamlType n ->
@@ -312,7 +330,7 @@ let checked_modules () =
   List.iter (fun n ->
       if List.length (List.filter (String.equal n) names) > 1 then
         error Pp.(str "the program uses two OCaml modules named " ++ str n ++ str ".");
-      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Float64"] then
+      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Float64"] then
         error Pp.(str "an OCaml module cannot be named " ++ str n ++ str ", the name of one Soma makes."))
     names;
   modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
@@ -328,6 +346,7 @@ let write_project ~state ~modules ~libraries ~js ~directives dir =
   file "dune" (dune_file ~js libraries);
   file "soma_main.ml" (entry_ml ());
   file "float64.ml" SomaMirage.float64_ml;
+  file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
   List.iter (fun (m : SomaForeign.ocaml_module) ->
       Option.iter (fun ml ->
@@ -357,6 +376,7 @@ prog.ml, prog.mli    the program: soma_main () computes main
 soma_bindings.ml     each value that a .definition declares, at its declared type
 soma_main.ml         runs main, and prints it if it is a string
 float64.ml           Soma's floats, as OCaml's
+soma_nat.ml          Soma's nat, as extracted (O | S of nat)
 dune, dune-project   how dune builds it
 %s.opam%s   the opam packages it needs
 ```

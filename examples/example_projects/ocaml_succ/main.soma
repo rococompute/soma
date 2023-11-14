@@ -1,0 +1,3 @@
+Import succ.
+
+main : string := to_string (succ 0) ++ " " ++ to_string (succ 41).

@@ -1,0 +1,4 @@
+[project]
+name = "ocaml_succ"
+version = "0.1.0"
+description = "A nat given to an OCaml function and given back, as extraction has it"

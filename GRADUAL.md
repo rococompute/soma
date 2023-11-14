@@ -665,8 +665,8 @@ submodules: `Module Deferred. map : ... End Deferred.` declares
 `Async.Deferred.map`. `name : Type.` (or `Type -> Type`, ...) declares one
 of its types, and `name : type.` one of its values. The plugin turns each
 value's declared type into an OCaml type when the definition is compiled:
-`string`, `bool`, `unit`, `list`, `option`, products, `float`, functions,
-the declared types, and type variables (`forall A`, erased by
+`string`, `bool`, `unit`, `list`, `option`, products, `float`, `nat`,
+functions, the declared types, and type variables (`forall A`, erased by
 extraction). Anything else is refused there, `Any` among them. An OCaml
 value carries no type at run time that a cast could check, so it has one
 static type, unlike a WebAssembly module's numbers. A named argument,
@@ -705,8 +705,11 @@ yet.
 `examples/example_projects/async_tasks` calls Async, and
 `examples/example_projects/bonsai_counter` is a counter of JSX run by
 Bonsai in the browser, with no OCaml code of their own.
-`dev/ocaml-check.sh` builds and runs both. Not yet: numbers (`nat`, `N`,
-`Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
+`dev/ocaml-check.sh` builds and runs both. A `nat` is given to OCaml as
+extraction has it, `O | S of nat`, which is `Soma_nat.nat` to the
+project's modules (a generated `soma_nat.ml`, of the same constructors), and
+not converted: `examples/example_projects/ocaml_succ` declares `succ : nat
+-> nat`. Not yet: the other numbers (`N`, `Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
 the state's type as a module of the `Model` signature, so the counter's
 state is a `Bonsai.Var`); labeled arguments of a function given to OCaml;
 values named by a keyword of Soma's (`return`).
