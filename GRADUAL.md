@@ -1267,7 +1267,12 @@ With `SOMA_MIRAGE_SWITCH` unset or empty, builds also take this path. Soma
 extracts the program and generates the Mirage project in `$SOMA_MIRAGE_DIR`
 (or `$XDG_CACHE_HOME/soma/mirage`, otherwise `~/.cache/soma/mirage`), then
 checks its OCaml with abstract stand-in interfaces, including the network
-functor. No image is built or run.
+functor. The generated `config.ml` is parsed with that compiler
+(`ocamlc -stop-after parsing`): it is Mirage's configuration DSL, and the
+stand-ins do not include the `Mirage` module. No image is built or run.
+`dev/mirage-check.sh --no-image` runs this on the Sandbox examples and on a
+program that misuses an `io` result, with no solo5 and no Mirage switch.
+With the switch set and without `--no-image`, the image build is unchanged.
 Each stand-in is a subset of its library's real interface, with the same
 labels and optional arguments; `toplevel/somaMirage.ml` (`standins_mli`)
 names the library and file it comes from, and
@@ -1440,6 +1445,7 @@ soma run examples/example_files/mirage_fetch/mirage_fetch.soma -- --arg=<that IP
 `dev/mirage-check.sh` builds the examples (`examples/example_files/mirage_*/`), boots
 each image and checks its console and exit code, the network cases with one
 unikernel serving and another fetching from it.
+`dev/mirage-check.sh --no-image` stops after the check above and does not boot.
 
 Soma's installed libraries can be required by their short name, as
 Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
@@ -1573,7 +1579,8 @@ with that Stdlib. The suite result below is commit `d011c4b1cf`
   diagnosis of a run. It needs Soma built and the Mirage switch
   (`$SOMA_MIRAGE_SWITCH`, for example `hvf`) with the Apple Silicon
   solo5 tools. The network cases run under `solo5-vmnet` (macOS 26 or
-  later).
+  later). `dev/mirage-check.sh --no-image` only type-checks those programs.
+  `test-suite/misc/soma_no_image*.sh` does the same with no Mirage switch.
 
 ## Tests
 

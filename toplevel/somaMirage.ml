@@ -25,9 +25,10 @@
    [$SOMA_MIRAGE_MEM] MB of memory, 256 by default (the command to run it
    says so). Setting [SOMA_MIRAGE_BUILD=0] skips the image.
    [soma build --no-image], and a build with [$SOMA_MIRAGE_SWITCH] unset
-   or empty, still extracts the project and type-checks [prog.ml] and
-   [soma_rt.ml] with plain OCaml against stand-in Mirage signatures
-   ([no-image/standins.mli]). That stops before the image. *)
+   or empty, still extracts the project, parses [config.ml], and
+   type-checks [prog.ml] and [soma_rt.ml] with plain OCaml against
+   stand-in Mirage signatures ([no-image/standins.mli]). That stops
+   before the image. *)
 
 open Names
 
@@ -861,13 +862,20 @@ let check_project ~wasm dir =
   let checks = Filename.concat dir "no-image" in
   mkdir_p checks;
   write_file (Filename.concat checks "standins.mli") standins_mli;
+  (* [config.ml] is Mirage's functor DSL ([open Mirage]). The stand-ins do
+     not cover that module, so it is parsed rather than typed: a generated
+     file that is not OCaml fails here, on the same compiler, with no
+     Mirage switch. The copy is what is parsed, so the compiler does not
+     write next to the project's [config.ml]. *)
+  write_file (Filename.concat checks "config.ml")
+    (read_file (Filename.concat dir "config.ml"));
   let sources = ["float64.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml";
                  "gradual.ml"; "soma_rt.ml"; "unikernel.ml"] in
   List.iter (fun name -> write_file (Filename.concat checks name)
                 (read_file (Filename.concat dir name))) sources;
   let compiler = if wasm then "ocamlfind ocamlc -package wasm" else "ocamlc" in
   let script = Printf.sprintf
-      "cd %s && ocamlc -c standins.mli && %s -open Standins -c %s"
+      "cd %s && ocamlc -stop-after parsing -c config.ml && ocamlc -c standins.mli && %s -open Standins -c %s"
       (Filename.quote checks) compiler (String.concat " " sources) in
   let log = Filename.concat checks "check.log" in
   let cmd = Filename.quote_command "sh" ["-c"; script] ~stdout:log ~stderr:log in

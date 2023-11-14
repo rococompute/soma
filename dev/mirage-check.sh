@@ -5,11 +5,14 @@
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
 # server unikernel is fetched from by another one.
 #
-# Usage: dev/mirage-check.sh [--no-network]
+# Usage: dev/mirage-check.sh [--no-network | --no-image]
 #
-# Needs Soma built (_build/install/default) and the opam switch
-# $SOMA_MIRAGE_SWITCH (hvf by default) with the MirageOS tools for
-# Apple Silicon (solo5-mac). Exits non-zero if a case fails.
+# Needs Soma built (_build/install/default). Image builds need the opam
+# switch $SOMA_MIRAGE_SWITCH (hvf by default) with the MirageOS tools for
+# Apple Silicon (solo5-mac). --no-image does not boot and needs neither
+# solo5 nor that switch: it runs soma build --no-image on each Sandbox
+# example and on one program that misuses an io result. Exits non-zero
+# if a case fails.
 #
 set -u
 
@@ -20,7 +23,12 @@ export SOMA_MIRAGE_SWITCH="${SWITCH}"
 # the memory the images run in, as soma run gives them
 MEM="${SOMA_MIRAGE_MEM:-256}"
 NETWORK=1
-[ "${1:-}" = "--no-network" ] && NETWORK=0
+NO_IMAGE=0
+if [ "${1:-}" = "--no-image" ]; then
+  NO_IMAGE=1
+elif [ "${1:-}" = "--no-network" ]; then
+  NETWORK=0
+fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
 # the server runs under opam exec and solo5-vmnet: stop solo5-hvt itself
@@ -84,6 +92,39 @@ run() {
     fi
 }
 
+# soma build --no-image NAME's file. No image, no switch: the log says so.
+no_image_one() {
+    name="$1"
+    file="$2"
+    if "${SOMA}" build --no-image "${file}" >"${WORK}/${name}.log" 2>&1 &&
+       grep -q '(no image)' "${WORK}/${name}.log"; then
+        pass "${name}"
+    else
+        fail "${name}"
+    fi
+}
+
+if [ "${NO_IMAGE}" = 1 ]; then
+    for example in mirage_minimal mirage_hello mirage_clock mirage_fetch mirage_http_server \
+        mirage_minimal_web_server mirage_link_client mirage_link_server mirage_supervised; do
+        no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
+    done
+    no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
+    no_image_one "no-image-wasm" "${HERE}/examples/example_projects/wasm_add/image.soma"
+    # print expects a string; fetch returns fetched
+    printf '%s\n' 'Require Import Sandbox.' \
+        'main : io unit := r <- fetch "127.0.0.1" 9 (http_get "/") ;; print r.' \
+        > "${WORK}/illtyped.soma"
+    if "${SOMA}" build --no-image "${WORK}/illtyped.soma" >"${WORK}/no-image-illtyped.log" 2>&1; then
+        echo "FAIL no-image-illtyped"
+        echo "    expected a type error" >>"${WORK}/no-image-illtyped.log"
+        FAIL=$((FAIL + 1))
+    elif grep -q 'Error' "${WORK}/no-image-illtyped.log"; then
+        pass "no-image-illtyped"
+    else
+        fail "no-image-illtyped"
+    fi
+else
 build mirage_minimal &&
     run mirage_minimal minimal 0 "^Hello from a unikernel!$" plain
 
@@ -289,6 +330,7 @@ if grep -q "restarting with 128 MB" "${WORK}/supervised.log" && grep -q "^built$
     pass supervised
 else
     fail supervised
+fi
 fi
 
 rm -f "${HERE}"/examples/example_files/mirage_*/mirage_*.vo "${HERE}"/examples/example_files/mirage_*/mirage_*.glob \
