@@ -1071,9 +1071,8 @@ let record_freshness c before ~kept =
       Sys.rename tmp record
     with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> ()
 
-(* "unchanged", or why not *)
-let check_freshness c =
-  let verdict =
+(* [Ok ()] when unchanged, or why not *)
+let freshness_verdict c =
     try
       let canonical, root = fresh_project c.file in
       let record = freshness_record (Filename.concat root ".soma-cache") canonical in
@@ -1111,8 +1110,10 @@ let check_freshness c =
     | Sys_error e -> Error e
     | Unix.Unix_error (e, _, _) -> Error (Unix.error_message e)
     | Scanf.Scan_failure _ | Failure _ | End_of_file -> Error "the record of the last build is unreadable"
-  in
-  match verdict with
+
+(* "unchanged", or why not *)
+let check_freshness c =
+  match freshness_verdict c with
   | Ok () -> Printf.printf "%s: unchanged\n%!" c.file; exit 0
   | Error reason -> Printf.printf "%s: stale: %s\n%!" c.file reason; exit 1
 
@@ -1204,6 +1205,20 @@ let () =
         if check_fresh then check_freshness config;
         (* the record of a successful soma build, for --check-fresh *)
         let record = command = "build" in
+        (* a build that would find FILE as its last successful build left
+           it has nothing to do: it ends here, before rocq c loads a library
+           or the prelude. With -v, the values of bare terms are to be
+           printed again, which only the build does. *)
+        if record && not verbose then begin
+          let start = Unix.gettimeofday () in
+          match (try freshness_verdict config with _ -> Error "") with
+          | Ok () ->
+            if timings then
+              Printf.printf "Total: %.3f s\t%d KiB peak heap memory\n%!"
+                (Unix.gettimeofday () -. start) 0;
+            exit 0
+          | Error _ -> ()
+        end;
         let dir = output_dir (program_of file) args in
         let before_build = if record then modification_times dir else [] in
         let before = if record then forget_freshness config else None in
