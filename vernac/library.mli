@@ -65,6 +65,9 @@ val save_library_to :
     [require_library_syntax_from_dirpath] *)
 val save_library : DirPath.t -> library_t
 
+(** Digest of the exported kernel interface, excluding build metadata. *)
+val compiled_interface_digest : string -> string
+
 (** {6 Interrogate the status of libraries } *)
 
   (** - Tell if a library is loaded *)

@@ -239,6 +239,9 @@ val current_dirpath : safe_environment -> DirPath.t
 
 type compiled_library
 
+(** Digest of the exported kernel interface, without dependency file digests. *)
+val interface_digest : compiled_library -> string
+
 val dirpath_of_library : compiled_library -> DirPath.t
 val module_of_library : compiled_library -> Mod_declarations.module_body
 val recompile_vm_library : Environ.env -> compiled_library -> Vmlibrary.t * compiled_library

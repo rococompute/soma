@@ -908,7 +908,8 @@ let run ~events ~supervise file args image_args =
    options, the environment that soma, rocq and opam read), digests of soma,
    its worker and the libraries installed with them, digests of every file of
    the project (which have its import graph), and then digests of every file
-   of the cache, what was compiled, with its stamps. The check computes the
+   of the cache, what was compiled, with its stamps. Per-module interface
+   digests are also recorded, for observation only. The check computes the
    same but the last part, which it compares file by file. A record is
    written only when what it can say is certain: no dependency outside the
    project (soma.lock, .soma-cache/.deps, Rocq libraries that a dependency
@@ -1038,7 +1039,7 @@ let freshness_record cache canonical =
 let fresh_outputs cache =
   if not (is_directory_opt cache) then uncertain "%s does not exist" cache;
   List.map (fun (r, d) -> Printf.sprintf "output %s %s" (String.escaped r) d)
-    (fresh_tree ~skip:[".freshness"] ~prefix:"." cache)
+    (fresh_tree ~skip:[".freshness"; ".interfaces"] ~prefix:"." cache)
 
 (* Before a build: its record is no longer that of the last successful
    build. What the project is, to compare with after it. *)
@@ -1062,12 +1063,16 @@ let record_freshness c before ~kept =
       if during <> before_lines then uncertain "the project changed during the build";
       let _, _, inputs = fresh_inputs ~toolchain:true c in
       let outputs = fresh_outputs cache in
+      let dir = Filename.concat cache ".interfaces" in
+      let interfaces = if not (is_directory_opt dir) then [] else
+        List.map (fun name -> String.trim (In_channel.with_open_bin
+            (Filename.concat dir name) In_channel.input_all)) (fresh_readdir dir) in
       let canonical, _ = fresh_project c.file in
       let record = freshness_record cache canonical in
       mkdir_p (Filename.dirname record);
       let tmp = record ^ ".tmp" in
       Out_channel.with_open_bin tmp (fun oc ->
-          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs));
+          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs @ interfaces));
       Sys.rename tmp record
     with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> ()
 
@@ -1082,8 +1087,9 @@ let freshness_verdict c =
       (match recorded with
        | first :: _ when first = freshness_format -> ()
        | _ -> uncertain "the record of the last build is of another format");
+      (* Interface digests do not participate in freshness or import stamps. *)
       let is_output l = starts_with ~prefix:"output " l in
-      let recorded_inputs = List.filter (fun l -> not (is_output l)) recorded in
+      let recorded_inputs = List.filter (fun l -> not (is_output l || starts_with ~prefix:"interface " l)) recorded in
       let recorded_outputs = List.filter is_output recorded in
       let _, cache, inputs = fresh_inputs ~toolchain:true c in
       if inputs <> recorded_inputs then begin

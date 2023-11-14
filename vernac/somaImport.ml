@@ -580,3 +580,17 @@ let write_stamp () =
                 List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @ libraries in
     Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"))
   | _ -> ()
+
+(* Observational metadata only: the import stamps above keep their existing
+   digests and continue to make exactly the same recompilation decisions. *)
+let record_interface ~source ~dirpath ~vo_file =
+  if is_soma_file source then begin
+    let dir = Filename.concat (project_cache ()) ".interfaces" in
+    mkdir_p dir;
+    let name = DirPath.to_string dirpath in
+    let file = Filename.concat dir name in
+    let digest = Library.compiled_interface_digest vo_file in
+    Out_channel.with_open_bin (file ^ ".tmp") (fun oc ->
+        output_string oc ("interface " ^ name ^ " " ^ digest ^ "\n"));
+    Sys.rename (file ^ ".tmp") file
+  end

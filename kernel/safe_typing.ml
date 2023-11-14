@@ -182,6 +182,12 @@ type compiled_library = {
   comp_retro : Retroknowledge.action list;
 }
 
+(* Dependency file digests describe a build, rather than this interface. *)
+let interface_digest lib =
+  Digest.to_hex (Digest.string ("soma-interface 1\n" ^ Marshal.to_string
+    (lib.comp_name, lib.comp_mod, lib.comp_univs, lib.comp_sorts,
+     lib.comp_flags, lib.comp_retro) [Marshal.No_sharing]))
+
 type reimport = compiled_library * Vmlibrary.on_disk * vodigest
 
 type required_lib = {

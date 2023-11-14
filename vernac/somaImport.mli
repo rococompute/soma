@@ -64,3 +64,6 @@ val project_cache : unit -> string
     which apply to every Soma file under them, compiled into the cache when
     they are not up to date; the libraries for [file] to import. *)
 val folder_rules : string -> string list
+
+(** Record the compiled interface after a successful compilation. *)
+val record_interface : source:string -> dirpath:Names.DirPath.t -> vo_file:string -> unit

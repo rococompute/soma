@@ -518,6 +518,14 @@ let save_library_struct ~output_native_objects dir =
     error_recursively_dependent_library dir;
   sd, md, vmlib, ast
 
+(* The exported kernel interface, without the summary (dependency file
+   digests and build information), source locations or opaque proof table. *)
+let compiled_interface_digest file =
+  let ch = ObjFile.open_in ~file in
+  Fun.protect ~finally:(fun () -> ObjFile.close_in ch) (fun () ->
+      let lib, _ = ObjFile.marshal_in_segment ch ~segment:library_seg in
+      Safe_typing.interface_digest lib.md_compiled)
+
 let save_library dir : library_t =
   let sd, md, vmlib, _ast = save_library_struct ~output_native_objects:false dir in
   (* Digest for .vo files is on the md part, for now we also play it
