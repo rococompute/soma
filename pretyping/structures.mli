@@ -18,6 +18,7 @@ type projection = {
   proj_name : Names.Name.t;            (** field name *)
   proj_true : bool;                    (** false = projection for a defined field (letin) *)
   proj_canonical : bool;               (** false = not to be used for CS inference *)
+  proj_setter : Names.Constant.t option;
   proj_body : Names.Constant.t option; (** the projection function *)
 }
 

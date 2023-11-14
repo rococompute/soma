@@ -43,6 +43,7 @@ type projection = {
   proj_name : Names.Name.t;
   proj_true : bool;
   proj_canonical : bool;
+  proj_setter : Names.Constant.t option;
   proj_body : Names.Constant.t option;
 }
 
@@ -70,10 +71,11 @@ let register ({ name; projections; nparams } as s) =
     projections !projection_table
 
 let subst subst ({ name; projections; nparams } as s) =
-  let subst_projection subst ({ proj_body } as p) =
+  let subst_projection subst ({ proj_body; proj_setter } as p) =
+    let proj_setter = Option.Smart.map (subst_constant subst) proj_setter in
     let proj_body = Option.Smart.map (subst_constant subst) proj_body in
-    if proj_body == p.proj_body then p else
-    { p with proj_body } in
+    if proj_body == p.proj_body && proj_setter == p.proj_setter then p else
+    { p with proj_body; proj_setter } in
   let projections = List.Smart.map (subst_projection subst) projections in
   let name = Mod_subst.subst_ind subst name in
   if projections == s.projections &&

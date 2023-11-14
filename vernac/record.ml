@@ -701,6 +701,7 @@ let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs r
    { Structure.proj_name = fi
    ; proj_true = is_local_assum decl
    ; proj_canonical = flags.Data.pf_canonical
+   ; proj_setter = None
    ; proj_body = sp_proj } :: kinds
   , subst)
 
@@ -745,6 +746,81 @@ let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
       (elim_cstrs_map, List.length fields,0,[],[]) flags (List.rev fieldlocs) (List.rev fields) (List.rev fieldimpls)
   in
     List.rev canonical_projections
+
+(* Updates of independent fields are shared constants, rather than copies of
+   the constructor and all its projections at every use site. Dependent
+   telescopes retain the constructor elaboration below. *)
+let declare_setters ind projections =
+  let env = Global.env () in
+  let mib, mip = Global.lookup_inductive ind in
+  let raw_fields, _ = mip.mind_nf_lc.(0) in
+  let raw_fields = List.firstn mip.mind_consnrealdecls.(0) raw_fields in
+  let independent =
+    List.for_all_i (fun i d ->
+        is_local_assum d && Vars.noccur_between 1 i (get_type d))
+      0 (List.rev raw_fields)
+    && List.for_all (fun p -> Option.has_some p.Structure.proj_body) projections
+  in
+  if not independent then projections else
+  List.mapi (fun index projection ->
+      let fid = Nameops.Name.get_id projection.Structure.proj_name in
+      let sigma, ir = Evd.fresh_global env (Evd.from_env env) (GlobRef.IndRef ind) in
+      let _, u = destInd (EConstr.to_constr sigma ir) in
+      let params = Inductive.inductive_paramdecls (mib, u) in
+      let fields = instantiate_possibly_recursive_type (fst ind) u
+          (Declareops.mind_ntypes mib) params (Vars.subst_instance_context u raw_fields) in
+      let field = List.nth (List.rev fields) index in
+      let ty = Vars.lift (-index) (get_type field) in
+      let rp = applist (mkIndU (ind,u), Context.Rel.instance_list mkRel 0 params) in
+      let v = make_annot (Name (Id.of_string "value")) (get_relevance field) in
+      let r = make_annot (Name (Id.of_string "record")) (Inductive.relevance_of_ind_body mip u) in
+      let ctx = LocalAssum (r, lift 1 rp) :: LocalAssum (v,ty) :: params in
+      let args = Context.Rel.instance_list mkRel 2 params in
+      let project p = applist (mkConstU (Option.get p.Structure.proj_body,u), args @ [mkRel 1]) in
+      let values = List.mapi (fun j p -> if index = j then mkRel 2 else project p) projections in
+      let body = it_mkLambda_or_LetIn
+          (applist (mkConstructU ((ind,1),u), args @ values)) ctx in
+      let poly = PolyFlags.of_univ_poly (Declareops.inductive_is_polymorphic mib) in
+      let define name sigma body =
+        let body = EConstr.of_constr body in
+        let sigma, typ = Typing.type_of (Global.env ()) sigma body in
+        Declare.declare_definition ~info:(Declare.Info.make ~poly ())
+          ~cinfo:(Declare.CInfo.make ~name ~typ:(Some typ) ())
+          ~opaque:false ~body sigma
+      in
+      let setter_id = Id.of_string ("set_" ^ Id.to_string fid) in
+      let setter = match define setter_id sigma body with GlobRef.ConstRef c -> c | _ -> assert false in
+      let implicit_params = List.rev (List.filter_map (fun d ->
+          if is_local_assum d then Some (CAst.make (Some (get_name d, true))) else None) params) in
+      Impargs.declare_manual_implicits false (GlobRef.ConstRef setter)
+        (implicit_params @ [CAst.make None; CAst.make None]);
+      (* Instantiate equality afresh: core equality is normally polymorphic,
+         independently of the record's own universe context. During bootstrap
+         it has not been registered yet, so only setters are generated. *)
+      let () = match Rocqlib.lib_ref_opt "core.eq.type", Rocqlib.lib_ref_opt "core.eq.refl" with
+        | Some eq, Some refl ->
+          List.iteri (fun j p ->
+              let env = Global.env () in
+              let sigma, eq = Evd.fresh_global env sigma eq in
+              let sigma, refl = Evd.fresh_global env sigma refl in
+              let sigma, setter_term = Evd.fresh_global env sigma (GlobRef.ConstRef setter) in
+              let eq = EConstr.to_constr sigma eq in
+              let refl = EConstr.to_constr sigma refl in
+              let rhs = List.nth values j in
+              let updated = applist (EConstr.to_constr sigma setter_term, args @ [mkRel 2; mkRel 1]) in
+              let lhs = applist (mkConstU (Option.get p.Structure.proj_body,u), args @ [updated]) in
+              let sigma, typ = Typing.type_of (Environ.push_rel_context ctx env) sigma (EConstr.of_constr rhs) in
+              let typ = EConstr.to_constr sigma typ in
+              let sort = Retyping.get_sort_of (Environ.push_rel_context ctx env) sigma (EConstr.of_constr typ) in
+              if not (EConstr.ESorts.is_sprop sigma sort) then begin
+              let statement = it_mkProd_or_LetIn (applist (eq,[typ;lhs;rhs])) ctx in
+              let proof = it_mkLambda_or_LetIn (applist (refl,[typ;rhs])) ctx in
+              let sigma = Typing.check env sigma (EConstr.of_constr proof) (EConstr.of_constr statement) in
+              let name = Id.of_string (Id.to_string (Nameops.Name.get_id p.Structure.proj_name) ^ "_" ^ Id.to_string setter_id) in
+              ignore (define name sigma (mkCast (proof, DEFAULTcast, statement))) end) projections
+        | _ -> ()
+      in
+      { projection with Structure.proj_setter = Some setter }) projections
 
 open Typeclasses
 
@@ -924,6 +1000,7 @@ let declare_structure (decl:Record_decl.t) ~schemes =
     let cstr = (rsp, 1) in
     let kind = decl.projections_kind in
     let projections = declare_projections rsp ~kind ~inhabitant_id proj_flags ~fieldlocs implfs in
+    let projections = declare_setters rsp projections in
     let build = GlobRef.ConstructRef cstr in
     let () = match is_coercion with
       | NoCoercion -> ()

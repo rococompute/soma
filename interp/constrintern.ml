@@ -2682,7 +2682,22 @@ let record self genv env lvar ?loc (def,fs) =
     | Some (n, constrname, args) ->
       let hd = DAst.make @@ GRef (constrname,None) in
       let pars = List.make n (CAst.make ?loc @@ CHole (None)) in
-      apply_args self genv env lvar loc hd (List.rev_append pars args)
+      let setters = List.map (fun (qid, value) ->
+          let ref, structure = intern_field_ref qid in
+          let projection = List.find_opt (fun p ->
+              match p.Structure.proj_body, ref with
+              | Some c, GlobRef.ConstRef c' -> Environ.QConstant.equal genv c c'
+              | _ -> false) structure.Structure.projections in
+          Option.bind projection (fun p -> Option.map (fun setter -> setter, value) p.Structure.proj_setter)) fs in
+      match def with
+      | Some base when List.for_all Option.has_some setters ->
+        List.fold_left (fun base entry ->
+            let setter, value = Option.get entry in
+            let hd = DAst.make ?loc @@ GRef (GlobRef.ConstRef setter,None) in
+            let holes = List.make n (DAst.make ?loc @@ GHole (GInternalHole)) in
+            smart_gapp hd loc (holes @ [intern_no_implicit self genv env lvar value; base]))
+          (intern_no_implicit self genv env lvar base) setters
+      | _ -> apply_args self genv env lvar loc hd (List.rev_append pars args)
   end
 
 let cases self genv env lvar ?loc (sty, rtnpo, tms, eqns) =
