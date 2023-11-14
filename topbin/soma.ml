@@ -1029,7 +1029,10 @@ let () =
     Unix.putenv "SOMA_CACHE_ID" id;
     id)
 
-type fresh_config = { verbose : bool; fill : bool; timings : bool; file : string; args : string list }
+(* --no-image is consumed before compiler arguments are formed, and its
+   environment override is absent from initial_env. Keep it in the record
+   so an image build and a check cannot reuse each other's freshness. *)
+type fresh_config = { verbose : bool; fill : bool; timings : bool; no_image : bool; file : string; args : string list }
 
 (* What a build of [c] reads of its project, and how it was asked for; with
    [~toolchain], of soma's installation too *)
@@ -1055,7 +1058,7 @@ let fresh_inputs ~toolchain c =
       "canonical " ^ String.escaped canonical;
       "root " ^ String.escaped root;
       "cwd " ^ String.escaped cwd;
-      Printf.sprintf "flags verbose=%b timings=%b" c.verbose c.timings ] @
+      Printf.sprintf "flags verbose=%b timings=%b no_image=%b" c.verbose c.timings c.no_image ] @
     List.map (fun a -> "arg " ^ String.escaped a) c.args @
     List.map (fun e -> "env " ^ String.escaped e) (List.sort compare (List.filter env_matters initial_env)) in
   let sources = List.map (fun (r, d) -> Printf.sprintf "source %s %s" (String.escaped r) d)
@@ -1246,7 +1249,7 @@ let () =
     begin match List.filter (fun a -> not (is_verbose a || is_fill a)) rest with
       | [] -> usage_error "soma %s: no file given" command
       | file :: args ->
-        let config = { verbose; fill; timings; file = program_of file; args } in
+        let config = { verbose; fill; timings; no_image; file = program_of file; args } in
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         if check_fresh then check_freshness config;
