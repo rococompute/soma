@@ -190,12 +190,13 @@ let wait pid =
 
 (* [args] run in [dir] (what they write there, lia's cache, stays with the
    library), their output in [out] *)
-let run_to ~dir ~out args =
+let run_to ?(env = []) ~dir ~out args =
   let fd = Unix.openfile out [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o644 in
   let here = Sys.getcwd () in
   Sys.chdir dir;
+  let env = Array.append (clean_env ()) (Array.of_list env) in
   let pid = Fun.protect ~finally:(fun () -> Sys.chdir here)
-      (fun () -> Unix.create_process_env (List.hd args) (Array.of_list args) (clean_env ()) Unix.stdin fd fd) in
+      (fun () -> Unix.create_process_env (List.hd args) (Array.of_list args) env Unix.stdin fd fd) in
   Unix.close fd;
   wait pid
 
@@ -206,11 +207,6 @@ let load_args ts =
 let compile ~name ~log ts =
   let files = List.concat_map sources ts in
   if files = [] then error (str name ++ str " has no Rocq file in its theories.");
-  List.iter (fun f ->
-      if contains (read_file f) "Declare ML Module" then
-        error (str name ++ str " loads an OCaml plugin (" ++ str (Filename.basename f) ++ str "),"
-               ++ spc () ++ str "which Soma cannot load yet: a plugin is built against the Rocq it extends."))
-    files;
   let order = Filename.concat (Filename.dirname log) "order" in
   let dir = Filename.dirname log in
   if not (run_to ~dir ~out:order ([rocq_binary (); "dep"; "-sort"] @ load_args ts @ files)) then
@@ -227,7 +223,11 @@ let compile ~name ~log ts =
       (* a Rocq library is Rocq: compiled as Rocq does, without Soma's
          prelude, whose names ([R], the reals) and gradual typing it does
          not expect *)
-      if not (run_to ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
+      (* a plugin would have to be built against Soma: the compilation
+         refuses the parsed [Declare ML Module] (SomaImport), before it
+         loads anything, however it is spaced or commented *)
+      let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
+      if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
                str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
     order

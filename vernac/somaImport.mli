@@ -44,6 +44,14 @@ val prefix_var : string
     other compilation, nothing. *)
 val refuse_in_dependency : ?does:string -> string -> unit
 
+(** The variable a compilation of a Rocq library (plugins/soma_rocq) is by,
+    which is set to the library's name *)
+val rocq_library_var : string
+
+(** An error, for a [Declare ML Module] in a compilation of a Rocq
+    library; in any other compilation, nothing. *)
+val refuse_ml_module_in_rocq_library : unit -> unit
+
 (** Written at the end of a compilation that [prepare] started: its stamp,
     the hash of its source and the digests of what it imported *)
 val write_stamp : unit -> unit

@@ -55,10 +55,27 @@ printf 'Definition two := 2.\nDefinition three := 3.\n' > mylib/theories/A.v
 soma build prog/main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q 'Rocq: compiling' out.log
 
-# a library that loads an OCaml plugin is refused
-printf 'Declare ML Module "some.plugin".\n' > mylib/theories/C.v
-if soma build prog/main.soma > out.log 2>&1; then echo "a plugin was loaded"; exit 1; fi
-grep -q 'loads an OCaml plugin (C.v)' out.log
+# a library that loads an OCaml plugin is refused, on the parsed command:
+# however it is spaced or commented (SECURITY-REVIEW.md "Known limits")
+plugin_refused() {
+  printf '%b' "$2" > mylib/theories/C.v
+  if soma build prog/main.soma > out.log 2>&1; then echo "a plugin was loaded ($1)"; cat out.log; exit 1; fi
+  grep -q 'loads an OCaml plugin (C.v)' out.log || { echo "missing error ($1)"; cat out.log; exit 1; }
+}
+plugin_refused 'ordinary' 'Declare ML Module "some.plugin".\n'
+plugin_refused 'spaces' 'Declare  ML   Module "some.plugin".\n'
+plugin_refused 'newlines and tabs' 'Declare\n\tML\nModule\n"some.plugin".\n'
+plugin_refused 'comments' 'Declare (* x *) ML (* y\n*) Module "some.plugin".\n'
+plugin_refused 'locality' 'Local Declare ML Module "some.plugin".\n'
+
+# the words in a comment or a string are no command: the library compiles
+cat > mylib/theories/C.v <<'EOT'
+(* Declare ML Module "some.plugin". *)
+Comments "Declare ML Module" "some.plugin".
+Definition five := 5.
+EOT
+soma build prog/main.soma > out.log 2>&1 || { echo "a comment or string was refused"; cat out.log; exit 1; }
+grep -q 'Rocq: compiling mylib-local-.*mylib/C.v' out.log
 rm mylib/theories/C.v
 
 # a source without theories

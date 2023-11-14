@@ -45,6 +45,7 @@ let source_var = "SOMA_IMPORT_SOURCE"
 let cache_var = "SOMA_PROJECT_CACHE"
 let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
+let rocq_library_var = "SOMA_ROCQ_LIBRARY"
 
 let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".proof"; ".lang"; ".definition"]
 
@@ -156,6 +157,19 @@ let refuse_in_dependency ?(does = "writes a file") command =
         str "A dependency is checked, not run." ++ spc () ++
         str command ++ str " works when that project is built on its own.")
   end
+
+(* A Rocq library (plugins/soma_rocq) is compiled with [rocq_library_var]
+   set to its name. Whatever the spacing or comments, the parsed command
+   is what is refused, before any plugin is loaded. *)
+let refuse_ml_module_in_rocq_library () =
+  match env_value rocq_library_var with
+  | None -> ()
+  | Some name ->
+    let loc = Loc.get_current_command_loc () in
+    let file = match file_of_loc loc with Some f -> Filename.basename f | None -> "?" in
+    CErrors.user_err ?loc Pp.(
+        str ("Rocq Library: " ^ name ^ " loads an OCaml plugin (" ^ file ^ "),") ++ spc () ++
+        str "which Soma cannot load yet: a plugin is built against the Rocq it extends.")
 
 (* [X.Y] as a path in the project: X/Y *)
 let path_of_qualid qid =

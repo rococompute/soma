@@ -330,6 +330,7 @@ let expand filename =
   Envars.expand_path_macros ~warn:(fun x -> Feedback.msg_warning (str x)) filename
 
 let synterp_declare_ml_module ~local l =
+  SomaImport.refuse_ml_module_in_rocq_library ();
   let local = Option.default false local in
   Mltop.declare_ml_modules local l
 
