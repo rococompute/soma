@@ -666,6 +666,7 @@ module Solo5_os : sig
   end
 end
 module Cmdliner : sig
+  module Term : sig type 'a t end
   module Arg : sig
     type 'a t
     type 'a conv
@@ -674,12 +675,12 @@ module Cmdliner : sig
     val string : string conv
     val opt_all : 'a conv -> 'a list -> info -> 'a list t
     val flag : info -> bool t
-    val value : 'a t -> 'a t
+    val value : 'a t -> 'a Term.t
     val ( & ) : ('a -> 'b) -> 'a -> 'b
   end
 end
 module Mirage_runtime : sig
-  val register_arg : 'a Cmdliner.Arg.t -> unit -> 'a
+  val register_arg : 'a Cmdliner.Term.t -> unit -> 'a
 end
 module Cstruct : sig type t val to_string : t -> string val of_string : string -> t end
 module Ipaddr : sig type t val of_string : string -> (t, [ `Msg of string ]) result end
