@@ -474,9 +474,9 @@ module Main (S : Tcpip.Stack.V4V6) = struct
       match Hashtbl.find_opt links id with
       | None -> Lwt.return false
       | Some (flow, _) ->
-          S.TCP.write flow (Cstruct.of_string data) >|= function
-          | Ok () -> true
-          | Error _ -> false
+          S.TCP.write flow (Cstruct.of_string data) >>= function
+          | Ok () -> Lwt.return true
+          | Error _ -> close id >|= fun () -> false
     in
     (* the next line: from what was received already, or else read until a
        line break; the end of the connection first is [None] *)
@@ -495,7 +495,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             | None ->
                 S.TCP.read flow >>= function
                 | Ok (`Data b) -> Buffer.add_string pending (Cstruct.to_string b); take ()
-                | _ -> Buffer.clear pending; Lwt.return None
+                | _ -> Buffer.clear pending; close id >|= fun () -> None
           in
           take ()
     in
