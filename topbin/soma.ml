@@ -333,20 +333,44 @@ let project_cache_key file =
       (!cache_toolchain () :: List.map (fun (rel, full) -> rel ^ " " ^ Digest.to_hex (Digest.file full)) files))) in
   root, Filename.concat root ".soma-cache", key
 
-let restore_shared_cache file =
+(* A dependency on a folder ({ path = "../wip" }) is compiled from sources
+   outside the project, which the key does not cover, and its .vo names its
+   FILE.ml by its absolute path: such a project is not shared through the
+   store. Any line of soma.toml that sets a [path] counts (a false one only
+   keeps the project out of the store). *)
+let has_path_dependency root =
+  let toml = Filename.concat root "soma.toml" in
+  let squeeze l = String.concat "" (String.split_on_char ' ' (String.concat "" (String.split_on_char '\t' l))) in
+  let sets_path l =
+    let l = squeeze l in
+    let rec at i =
+      i + 5 <= String.length l &&
+      ((String.sub l i 5 = "path=" &&
+        (i = 0 || not (match l.[i - 1] with 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '-' -> true | _ -> false)))
+       || at (i + 1)) in
+    at 0 in
+  try List.exists sets_path (String.split_on_char '\n' (In_channel.with_open_bin toml In_channel.input_all))
+  with Sys_error _ -> false
+
+let shared_store_for file =
   match shared_cache_dir () with
-  | None -> ()
+  | None -> None
   | Some store ->
-    let _, cache_dir, key = project_cache_key file in
+    let (root, _, _) as k = project_cache_key file in
+    if has_path_dependency root then None else Some (store, k)
+
+let restore_shared_cache file =
+  match shared_store_for file with
+  | None -> ()
+  | Some (store, (_, cache_dir, key)) ->
     let stored = Filename.concat store key in
     if not (Sys.file_exists cache_dir) && is_directory_opt stored then
       (try copy_tree stored cache_dir with Sys_error _ | Unix.Unix_error _ -> ())
 
 let publish_shared_cache file =
-  match shared_cache_dir () with
+  match shared_store_for file with
   | None -> ()
-  | Some store ->
-    let _, cache_dir, key = project_cache_key file in
+  | Some (store, (_, cache_dir, key)) ->
     let stored = Filename.concat store key in
     if is_directory_opt cache_dir && not (Sys.file_exists stored) then
       (try
