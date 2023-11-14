@@ -1288,6 +1288,14 @@ names the library and file it comes from, and
 `test-suite/misc/soma_no_image_signatures.sh` checks code the real ones
 accept and refuse. What it cannot check is linking (a missing package in
 `config.ml`, a C stub) and what the image does when it runs.
+`elapsed_ms start finish : N` subtracts two monotonic readings (saturating
+at zero if reversed). Milliseconds use binary `N`, including at the runtime
+boundary, so timestamps do not allocate unary naturals. The example
+`examples/example_files/mirage_milliseconds/mirage_milliseconds.soma` measures
+a 1000 ms sleep; `dev/mirage-check.sh` builds and boots it alongside the
+existing images. `test-suite/misc/soma_milliseconds.sh` checks extraction
+and rejects a reading used as a `nat`, without sleeping.
+
 The contracts check types, not runtime behavior; image testing still needs
 `SOMA_MIRAGE_SWITCH` set to a switch with Mirage and solo5 installed.
 
@@ -1301,6 +1309,8 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `a ;; b`, `x <- a ;; b` | | `a`, then `b` (`bind`, in `io_scope`) |
 | `print s` | `io unit` | a console line |
 | `sleep n` | `io unit` | waits `n` seconds (`Mirage_sleep`) |
+| `monotonic_ms` | `io N` | monotonic milliseconds since an arbitrary origin (`Mirage_mtime`), unaffected by wall-clock adjustments |
+| `sleep_ms n` | `io unit` | waits `n : N` milliseconds (`Mirage_sleep`); large durations are split to avoid nanosecond overflow |
 | `forever body` | `io A` | `body` again and again |
 | `now` | `io (nat * nat * nat)` | the UTC time of day, `(hour, minute, second)` |
 | `random n` | `io nat` | a random number below `n` (`Mirage_crypto_rng`) |

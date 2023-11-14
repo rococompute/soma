@@ -81,6 +81,11 @@ Inductive io : Type -> Type :=
 (** a line on the console *)
 | print (s : string) : io unit
 | sleep (seconds : nat) : io unit
+(** monotonic milliseconds since an arbitrary origin, unaffected by UTC
+    adjustments. Binary [N], never a unary timestamp. *)
+| monotonic_ms : io N
+(** wait at least [milliseconds] milliseconds (binary [N]) *)
+| sleep_ms (milliseconds : N) : io unit
 (** [body], again and again; it never ends, so its type is any [io A] *)
 | forever {A : Type} (body : io unit) : io A
 (** the time of day, UTC: [(hour, minute, second)] *)
@@ -144,6 +149,14 @@ Notation "m ;; rest" := (bind m (fun _ => rest))
   (at level 61, right associativity) : io_scope.
 
 Open Scope io_scope.
+
+(** Elapsed milliseconds; saturates at zero for reversed arguments. *)
+Definition elapsed_ms (start finish : N) : N := (finish - start)%N.
+
+Example elapsed_ms_zero : elapsed_ms 0 0 = 0%N := eq_refl.
+Example elapsed_ms_boundary : N.leb 1000 (elapsed_ms 42 1042) = true := eq_refl.
+Example elapsed_ms_large : elapsed_ms 4294967296 4294968296 = 1000%N := eq_refl.
+Example elapsed_ms_reversed : elapsed_ms 2 1 = 0%N := eq_refl.
 
 (** * HTTP, for [serve] and [fetch] *)
 

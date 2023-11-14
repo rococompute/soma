@@ -112,7 +112,7 @@ let config_ml ~network ~wasm =
 
 let main =
   main "Unikernel.Main" (stackv4v6 @-> job)
-    ~packages:[ package "duration"; package "ptime"; package "mirage-crypto-rng"|soma} ^ wasm_package ^ {soma| ]
+    ~packages:[ package "duration"; package "mirage-mtime"; package "ptime"; package "mirage-crypto-rng"|soma} ^ wasm_package ^ {soma| ]
 
 let stack = generic_stackv4v6 default_network
 let () = register "soma" [ main $ stack ]
@@ -121,7 +121,7 @@ let () = register "soma" [ main $ stack ]
 
 let main =
   main "Unikernel" job
-    ~packages:[ package "duration"; package "ptime"; package "mirage-crypto-rng"|soma} ^ wasm_package ^ {soma| ]
+    ~packages:[ package "duration"; package "mirage-mtime"; package "ptime"; package "mirage-crypto-rng"|soma} ^ wasm_package ^ {soma| ]
 
 let () = register "soma" [ main ]
 |soma}
@@ -301,6 +301,46 @@ let random bound =
     let bytes = Mirage_crypto_rng.generate 8 in
     (Int64.to_int (String.get_int64_le bytes 0) land max_int) mod bound
 
+(* Binary numbers crossing the runtime boundary, without unary nats. *)
+let rec positive_of_int64 n =
+  if n = 1L then Prog.XH
+  else
+    let half = positive_of_int64 (Int64.shift_right_logical n 1) in
+    if Int64.logand n 1L = 0L then Prog.XO half else Prog.XI half
+
+let n_of_int64 n = if n = 0L then Prog.N0 else Prog.Npos (positive_of_int64 n)
+
+let milliseconds_of_ns ns = Int64.unsigned_div ns 1_000_000L
+
+(* Only convert a duration when multiplying by 1,000,000 fits in int64.
+   Larger binary durations are split in half, slept twice, with one extra
+   millisecond for an odd value. No duration is truncated or wrapped. *)
+let rec small_positive_ms p =
+  match check p with
+  | Prog.XH -> Some 1L
+  | Prog.XO q | Prog.XI q ->
+      match small_positive_ms q with
+      | Some n when n <= 4_611_686_018_426L ->
+          Some (Int64.add (Int64.mul 2L n)
+                  (match p with Prog.XI _ -> 1L | _ -> 0L))
+      | _ -> None
+
+let rec sleep_positive_ms p =
+  match small_positive_ms p with
+  | Some ms -> Mirage_sleep.ns (Int64.mul ms 1_000_000L)
+  | None ->
+      match check p with
+      | Prog.XO q -> sleep_positive_ms q >>= fun () -> sleep_positive_ms q
+      | Prog.XI q ->
+          sleep_positive_ms q >>= fun () -> sleep_positive_ms q >>= fun () ->
+          Mirage_sleep.ns 1_000_000L
+      | Prog.XH -> assert false
+
+let sleep_milliseconds n =
+  match check n with
+  | Prog.N0 -> Mirage_sleep.ns 0L
+  | Prog.Npos p -> sleep_positive_ms p
+
 (* The extracted [io] is an OCaml variant whose indices are erased: the
    value an action returns is built with [Obj.repr], at the type the
    program gives the action. [option] and pairs have OCaml's
@@ -315,6 +355,9 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       Lwt.return (Obj.magic ())
   | Prog.Sleep n ->
       Mirage_sleep.ns (Duration.of_sec (int_of_nat (check n))) >|= Obj.magic
+  | Prog.Monotonic_ms ->
+      Lwt.return (Obj.magic (n_of_int64 (milliseconds_of_ns (Mirage_mtime.elapsed_ns ()))))
+  | Prog.Sleep_ms n -> sleep_milliseconds n >|= Obj.magic
   | Prog.Forever body ->
       let rec loop () = run net body >>= loop in
       loop ()
@@ -837,6 +880,8 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
    - Lwt: lwt 5, src/core/lwt.mli
    - Duration: duration 0.2, src/duration.mli
    - Mirage_sleep: mirage-sleep 4.0, src/mirage_sleep.mli
+   - Mirage_mtime: mirage-mtime 5, src/mirage_mtime.mli (elapsed_ns)
+     https://mirage.github.io/mirage-mtime/mirage-mtime/Mirage_mtime/index.html
    - Ptime: ptime 1.1, src/ptime.mli (date, time, tz_offset_s, to_date_time)
    - Mirage_ptime: mirage-ptime 5.0, src/mirage_ptime.mli
    - Mirage_crypto_rng: mirage-crypto-rng 1.0, rng/mirage_crypto_rng.mli
@@ -866,6 +911,7 @@ module Lwt : sig
 end
 module Duration : sig val of_sec : int -> int64 end
 module Mirage_sleep : sig val ns : int64 -> unit Lwt.t end
+module Mirage_mtime : sig val elapsed_ns : unit -> int64 end
 module Ptime : sig
   type t
   type tz_offset_s = int

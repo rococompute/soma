@@ -1,0 +1,10 @@
+(** Measure a 1000 ms sleep with a monotonic clock. *)
+Require Import Sandbox.
+
+main : io unit :=
+  start <- monotonic_ms ;;
+  sleep_ms 1000%N ;;
+  finish <- monotonic_ms ;;
+  if N.leb 1000 (elapsed_ms start finish) then
+    print "elapsed at least 1000 ms"
+  else (print "sleep ended early" ;; exit 1).

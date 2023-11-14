@@ -106,7 +106,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
         mirage_frame_client mirage_frame_server mirage_supervised; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
@@ -133,6 +133,9 @@ build mirage_minimal &&
 build mirage_hello &&
     run mirage_hello hello 0 "lift off" plain &&
     grep -q "Hello, \[1,2,3\]" "${WORK}/hello.log"
+
+build mirage_milliseconds &&
+    run mirage_milliseconds milliseconds 0 "^elapsed at least 1000 ms$" plain
 
 # runs until it is stopped, printing the time every second
 build mirage_clock &&
