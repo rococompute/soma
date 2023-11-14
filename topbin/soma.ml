@@ -82,6 +82,9 @@ Options:
                               proofs that "The rest follows." found.
   --fill                      (build, compile) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
+  --check-fresh               (build) Say, from metadata alone, whether FILE is as its last
+                              successful build left it ("unchanged", exit 0) or not
+                              ("stale: REASON", exit 1). Builds nothing.
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image, or the executable.
   -o DIR                      (extract) Write the OCaml project into DIR (FILE-ocaml next
                               to FILE by default).
@@ -894,6 +897,225 @@ let run ~events ~supervise file args image_args =
     in
     finish (if failed then 1 else 0)
 
+(* Freshness: [soma build --check-fresh FILE [OPTIONS]] says whether
+   [soma build FILE [OPTIONS]] would find FILE as its last successful build
+   left it, from metadata alone, without loading a library or the prelude:
+   "FILE: unchanged" (exit 0) or "FILE: stale: REASON" (exit 1).
+
+   Each successful [soma build] writes a record into the project's cache,
+   .soma-cache/.freshness/ (a folder with a . is no library of the cache):
+   the build's configuration (the file, the folder it was built from, its
+   options, the environment that soma, rocq and opam read), digests of soma,
+   its worker and the libraries installed with them, digests of every file of
+   the project (which have its import graph), and then digests of every file
+   of the cache, what was compiled, with its stamps. The check computes the
+   same but the last part, which it compares file by file. A record is
+   written only when what it can say is certain: no dependency outside the
+   project (soma.lock, .soma-cache/.deps, Rocq libraries that a dependency
+   named), no option that names files elsewhere or writes into FILE.proof, no
+   kept output (an image, an executable, a page, built with tools outside
+   soma), and the project not changed while it was built. Anything missing,
+   unreadable or unexpected is stale. *)
+
+exception Uncertain of string
+
+let uncertain fmt = Printf.ksprintf (fun s -> raise (Uncertain s)) fmt
+
+(* the environment soma was started with, before [init] adds to it *)
+let initial_env = Array.to_list (Unix.environment ())
+
+let freshness_format = "soma-freshness 1"
+
+let fresh_error path e = uncertain "cannot read %s: %s" path (Unix.error_message e)
+
+let fresh_digest path =
+  try Digest.to_hex (Digest.file path)
+  with Sys_error e -> uncertain "cannot read %s" e
+
+let fresh_readdir dir =
+  match Sys.readdir dir with
+  | names -> let names = Array.to_list names in List.sort compare names
+  | exception Sys_error e -> uncertain "cannot list %s" e
+
+(* Every file under [dir], [prefix/relative path, digest], following
+   symbolic links (an installation's files are), but those named [skip] *)
+let fresh_tree ?(skip = []) ~prefix dir =
+  let rec walk depth dir rel acc =
+    if depth > 64 then uncertain "%s is too deep, or a cycle of links" dir;
+    List.fold_left (fun acc name ->
+        if List.mem name skip then acc else
+        let full = Filename.concat dir name in
+        let r = rel ^ "/" ^ name in
+        match (Unix.stat full).Unix.st_kind with
+        | exception Unix.Unix_error (e, _, _) -> fresh_error full e
+        | Unix.S_DIR -> walk (depth + 1) full r acc
+        | Unix.S_REG -> (r, fresh_digest full) :: acc
+        | _ -> uncertain "%s is not a regular file" full)
+      acc (fresh_readdir dir) in
+  List.sort compare (walk 0 dir prefix [])
+
+let env_matters entry =
+  let name = match String.index_opt entry '=' with
+    | Some i -> String.sub entry 0 i | None -> entry in
+  List.mem name ["PATH"; "HOME"; "LD_LIBRARY_PATH"; "DYLD_LIBRARY_PATH"] ||
+  List.exists (fun prefix -> starts_with ~prefix name)
+    ["SOMA_"; "ROCQ"; "COQ"; "OCAML"; "CAML_"; "OPAM"; "DUNE_"; "XDG_"]
+
+let initial_getenv name =
+  List.find_map (fun entry ->
+      if starts_with ~prefix:(name ^ "=") entry then
+        Some (String.sub entry (String.length name + 1) (String.length entry - String.length name - 1))
+      else None) initial_env
+
+(* The project of [file]: its canonical path, and its root, the folder of
+   the nearest soma.toml above it (vernac/somaProject.ml), or else its own *)
+let fresh_project file =
+  let canonical = try Unix.realpath file with Unix.Unix_error (e, _, _) -> fresh_error file e in
+  let start = Filename.dirname canonical in
+  let rec find dir =
+    if Sys.file_exists (Filename.concat dir "soma.toml") then dir
+    else let up = Filename.dirname dir in if up = dir then start else find up in
+  canonical, find start
+
+(* soma, its worker, and the libraries and plugins they load *)
+let fresh_toolchain () =
+  let env = match Boot.Env.initialized () with
+    | Some (Boot.Env.Env env) -> env
+    | Some Boot.Env.Boot | None -> uncertain "the location of Rocq's libraries is unknown" in
+  let worker_dir =
+    try Findlib.package_directory "soma-runtime"
+    with Findlib.No_such_package _ | Not_found -> uncertain "the package soma-runtime is not found" in
+  let exe = if Sys.(os_type = "Win32" || os_type = "Cygwin") then ".exe" else "" in
+  let worker = Filename.concat worker_dir ("rocqworker" ^ exe) in
+  let soma_env = Filename.concat (Filename.dirname Sys.executable_name) "coq_environment.txt" in
+  let tool name path = Printf.sprintf "tool %s %s %s" name (String.escaped path) (fresh_digest path) in
+  let tree label dir =
+    List.map (fun (r, d) -> Printf.sprintf "library %s %s" (String.escaped r) d)
+      (fresh_tree ~prefix:label dir) in
+  [ tool "soma" Sys.executable_name; tool "worker" worker ] @
+  (if Sys.file_exists soma_env then [ tool "environment" soma_env ] else []) @
+  [ "coqlib " ^ String.escaped (Boot.Env.Path.to_string (Boot.Env.coqlib env));
+    "runtimelib " ^ String.escaped (Boot.Env.Path.to_string (Boot.Env.runtimelib env)) ] @
+  tree "coqlib" (Boot.Env.Path.to_string (Boot.Env.coqlib env)) @
+  tree "runtimelib" (Boot.Env.Path.to_string (Boot.Env.runtimelib env))
+
+type fresh_config = { verbose : bool; fill : bool; timings : bool; file : string; args : string list }
+
+(* What a build of [c] reads of its project, and how it was asked for; with
+   [~toolchain], of soma's installation too *)
+let fresh_inputs ~toolchain c =
+  let canonical, root = fresh_project c.file in
+  let cache = Filename.concat root ".soma-cache" in
+  if c.fill then uncertain "--fill writes into the program's .proof";
+  let rec allowed = function
+    | [] -> ()
+    | "-w" :: _ :: rest -> allowed rest
+    | a :: _ -> uncertain "the option %s may name files outside the project" a in
+  allowed c.args;
+  List.iter (fun v -> match initial_getenv v with
+      | Some s when s <> "" -> uncertain "%s is set" v
+      | _ -> ()) ["SOMA_PROJECT_ROOT"; "SOMA_PROJECT_CACHE"; "SOMA_BUILD_ROOT"; "ROCQPATH"; "COQPATH"];
+  List.iter (fun f -> if Sys.file_exists f then
+                uncertain "%s: the project has dependencies outside its folder" f)
+    [Filename.concat root "soma.lock"; Filename.concat cache ".deps"; Filename.concat cache "load-paths"];
+  let cwd = try Sys.getcwd () with Sys_error e -> uncertain "cannot read the current folder: %s" e in
+  let config =
+    [ freshness_format;
+      "file " ^ String.escaped c.file;
+      "canonical " ^ String.escaped canonical;
+      "root " ^ String.escaped root;
+      "cwd " ^ String.escaped cwd;
+      Printf.sprintf "flags verbose=%b timings=%b" c.verbose c.timings ] @
+    List.map (fun a -> "arg " ^ String.escaped a) c.args @
+    List.map (fun e -> "env " ^ String.escaped e) (List.sort compare (List.filter env_matters initial_env)) in
+  let sources = List.map (fun (r, d) -> Printf.sprintf "source %s %s" (String.escaped r) d)
+      (fresh_tree ~skip:[".soma-cache"; ".git"] ~prefix:"." root) in
+  root, cache, config @ (if toolchain then fresh_toolchain () else []) @ sources
+
+let freshness_record cache canonical =
+  Filename.concat (Filename.concat cache ".freshness") (Digest.to_hex (Digest.string canonical))
+
+let fresh_outputs cache =
+  if not (is_directory_opt cache) then uncertain "%s does not exist" cache;
+  List.map (fun (r, d) -> Printf.sprintf "output %s %s" (String.escaped r) d)
+    (fresh_tree ~skip:[".freshness"] ~prefix:"." cache)
+
+(* Before a build: its record is no longer that of the last successful
+   build. What the project is, to compare with after it. *)
+let forget_freshness c =
+  try
+    let canonical, root = fresh_project c.file in
+    let record = freshness_record (Filename.concat root ".soma-cache") canonical in
+    (try Sys.remove record with Sys_error _ -> ());
+    if Sys.file_exists record then None else Some (fresh_inputs ~toolchain:false c)
+  with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> None
+
+(* After a successful build [c]: its record, when it is certain. [before] is
+   what [forget_freshness] saw, and [kept] the outputs the build kept. *)
+let record_freshness c before ~kept =
+  match before with
+  | None -> ()
+  | Some (_, _, before_lines) ->
+    try
+      if kept <> [] then uncertain "the build kept outputs";
+      let _, cache, during = fresh_inputs ~toolchain:false c in
+      if during <> before_lines then uncertain "the project changed during the build";
+      let _, _, inputs = fresh_inputs ~toolchain:true c in
+      let outputs = fresh_outputs cache in
+      let canonical, _ = fresh_project c.file in
+      let record = freshness_record cache canonical in
+      mkdir_p (Filename.dirname record);
+      let tmp = record ^ ".tmp" in
+      Out_channel.with_open_bin tmp (fun oc ->
+          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs));
+      Sys.rename tmp record
+    with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> ()
+
+(* "unchanged", or why not *)
+let check_freshness c =
+  let verdict =
+    try
+      let canonical, root = fresh_project c.file in
+      let record = freshness_record (Filename.concat root ".soma-cache") canonical in
+      let recorded =
+        try List.filter (( <> ) "") (lines (In_channel.with_open_bin record In_channel.input_all))
+        with Sys_error _ -> uncertain "no record of a successful build" in
+      (match recorded with
+       | first :: _ when first = freshness_format -> ()
+       | _ -> uncertain "the record of the last build is of another format");
+      let is_output l = starts_with ~prefix:"output " l in
+      let recorded_inputs = List.filter (fun l -> not (is_output l)) recorded in
+      let recorded_outputs = List.filter is_output recorded in
+      let _, cache, inputs = fresh_inputs ~toolchain:true c in
+      if inputs <> recorded_inputs then begin
+        let kind l = match String.index_opt l ' ' with Some i -> String.sub l 0 i | None -> l in
+        let name l = match String.split_on_char ' ' l with _ :: n :: _ -> n | _ -> l in
+        let changed = List.filter (fun l -> not (List.mem l recorded_inputs)) inputs
+                      @ List.filter (fun l -> not (List.mem l inputs)) recorded_inputs in
+        match changed with
+        | l :: _ when List.mem (kind l) ["source"; "library"; "tool"] ->
+          uncertain "%s %s changed" (kind l) (name l)
+        | _ -> uncertain "the build configuration changed"
+      end;
+      if recorded_outputs = [] then uncertain "no compiled output recorded";
+      List.iter (fun l ->
+          match String.split_on_char ' ' l with
+          | ["output"; r; d] ->
+            let path = Filename.concat cache (Scanf.unescaped r) in
+            if not (Sys.file_exists path) then uncertain "compiled output %s is missing" r;
+            if fresh_digest path <> d then uncertain "compiled output %s changed" r
+          | _ -> uncertain "the record of the last build is unreadable") recorded_outputs;
+      Ok ()
+    with
+    | Uncertain reason -> Error reason
+    | Sys_error e -> Error e
+    | Unix.Unix_error (e, _, _) -> Error (Unix.error_message e)
+    | Scanf.Scan_failure _ | Failure _ | End_of_file -> Error "the record of the last build is unreadable"
+  in
+  match verdict with
+  | Ok () -> Printf.printf "%s: unchanged\n%!" c.file; exit 0
+  | Error reason -> Printf.printf "%s: stale: %s\n%!" c.file reason; exit 1
+
 let is_help a = a = "-h" || a = "-help" || a = "--help"
 
 (* the arguments of soma, not those after -- for a MirageOS image *)
@@ -968,15 +1190,26 @@ let () =
     let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
     let fill = List.exists is_fill rest in
+    let check_fresh = command = "build" && List.mem "--check-fresh" rest in
+    let rest = if check_fresh then List.filter ((<>) "--check-fresh") rest else rest in
     let timings = command = "build" && List.mem "--timings" rest in
     let rest = if timings then List.filter ((<>) "--timings") rest else rest in
     let rest = if timings && rest = [] then ["main.soma"] else rest in
     begin match List.filter (fun a -> not (is_verbose a || is_fill a)) rest with
       | [] -> usage_error "soma %s: no file given" command
       | file :: args ->
+        let config = { verbose; fill; timings; file = program_of file; args } in
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
-        build ~review:(command = "compile") ~timings ~verbose ~fill (program_of file) args
+        if check_fresh then check_freshness config;
+        (* the record of a successful soma build, for --check-fresh *)
+        let record = command = "build" in
+        let dir = output_dir (program_of file) args in
+        let before_build = if record then modification_times dir else [] in
+        let before = if record then forget_freshness config else None in
+        build ~review:(command = "compile") ~timings ~verbose ~fill (program_of file) args;
+        if record then
+          record_freshness config before ~kept:(created ~before:before_build ~source:(program_of file) dir)
     end
   | "extract" :: rest ->
     begin match rest with
