@@ -78,6 +78,9 @@ type head =
   | HErr (** [err X], the erroneous type *)
   | HOther (** neutral, or a head we do not know how to cast *)
 
+(** [is_unknown_type env c]: [c], in weak head normal form, is [?]. *)
+val is_unknown_type : Environ.env -> constr -> bool
+
 (** [prim_type env c] tells whether [c] is a registered primitive type. *)
 val prim_type : Environ.env -> Constant.t -> prim option
 

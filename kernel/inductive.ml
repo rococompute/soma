@@ -1867,10 +1867,21 @@ let check_fix_pre_sorts ?evars env ((nvect, _), (names, _, bodies as recdef) as 
    the possibly new constraints (see e.g. [esearch_guard] (Pretyping)). We expose this
    function to be used for this purpose, while check_fix performs the normal check,
    failing when elimination constraints are not satisfied. *)
-  let minds, rdef = inductive_of_mutfix ?evars env fix in
+  let flags = Environ.typing_flags env in
+  match inductive_of_mutfix ?evars env fix with
+  | exception (Type_errors.TypeError (_, Type_errors.IllFormedRecBody
+                 (Type_errors.FixGuardError (RecursionNotOnInductiveType ty), _, _, _, _)))
+    when not flags.check_guarded && not flags.enable_VM && not flags.enable_native_compiler
+         && Gradual.is_unknown_type env (whd_all ?evars env ty) ->
+    (* Gradual typing gives up termination: without guard checking, a
+       fixpoint may recurse on an argument of type [?], which unfolds on the
+       values of [?] (see vernac/declare.ml). It is not compiled for the VM
+       or natively, which need the inductive type of that argument. Any
+       other non-inductive recursive argument is still an error (#15621). *)
+    None
+  | minds, rdef ->
   let sorts_opt = sorts_of_mutfix env minds names in
   let inds = Array.map fst minds in
-  let flags = Environ.typing_flags env in
   let raise_err = raise_fix_guard_err_fn env recdef names in
   let () =
     if flags.check_guarded then

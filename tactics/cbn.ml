@@ -1058,6 +1058,15 @@ let rec whd_state_gen ?csts flags env sigma =
             when RedFlags.red_set flags RedFlags.fFIX ->
             let x' = clos_of_app_stack sigma x (Stack.append_app (Array.of_list args) Stack.empty) in
             reduce_and_refold_fix whrec env sigma cst_l subs f (s' @ Stack.append_app [|x'|] s'')
+          (* [cast A ? t], a value of [?]: a fixpoint whose recursive argument
+             has type [?] unfolds on it *)
+          | Gradual.GCast, [_; b; _], [], Stack.Fix (subs, f, s', cst_l) :: s''
+            when RedFlags.red_set flags RedFlags.fFIX
+              && Gradual.is_unknown_type env
+                   (EConstr.to_constr ~abort_on_undefined_evars:false sigma (whd b)) ->
+            Gradual.step Gradual.GCast;
+            let x' = clos_of_app_stack sigma x (Stack.append_app (Array.of_list args) Stack.empty) in
+            reduce_and_refold_fix whrec env sigma cst_l subs f (s' @ Stack.append_app [|x'|] s'')
           | _ -> fold ()
         end
     | _, Const (c,u as const) ->

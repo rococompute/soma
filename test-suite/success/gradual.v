@@ -61,6 +61,34 @@ Definition if_dyn (b : Dyn) : nat := if b then 1 else 0.
 Goal if_dyn (cast bool Dyn false) = 0. Proof. reflexivity. Qed.
 Goal if_dyn (cast nat Dyn 3) = raise. Proof. reflexivity. Qed.
 
+(** * Recursion through [Dyn]
+
+    GCIC^G gives up termination: a fixpoint that recurses through [Dyn] has
+    no structural guard, and is accepted without checking one (with a
+    warning). It unfolds on the values of [Dyn], and these unfoldings count
+    towards Gradual Steps. *)
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint fact_dyn (n : Dyn) : nat := match n with O => 1 | S k => n * fact_dyn k end.
+Goal fact_dyn 5 = 120. Proof. reflexivity. Qed.
+Goal fact_dyn true = raise. Proof. reflexivity. Qed.
+Goal True.
+  assert (fact_dyn 4 = 24) by (cbv; reflexivity).
+  assert (fact_dyn 4 = 24) by (cbn; reflexivity).
+  assert (fact_dyn 4 = 24) by (simpl; reflexivity).
+  exact I.
+Qed.
+(* a constructor argument made [Dyn]: [eval a] is not structural *)
+Inductive dexpr := DNum (n : nat) | DPlus (a : Dyn) (b : dexpr).
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint deval (e : dexpr) : nat := match e with DNum n => n | DPlus a b => deval a + deval b end.
+Goal deval (DPlus (DPlus (DNum 1) (DNum 2)) (DNum 3)) = 6. Proof. reflexivity. Qed.
+(* a loop through [Dyn] stops at the step budget *)
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint loop_dyn (n : Dyn) : nat := loop_dyn n.
+Fail Eval lazy in loop_dyn 0.
+(* without gradual primitives, the guard is still checked *)
+Fail Fixpoint not_structural (n : nat) : nat := not_structural n.
+
 (** * Graduality: a term accepted at a type is accepted at less precise ones
 
     Each group gives one term at decreasingly precise types. *)

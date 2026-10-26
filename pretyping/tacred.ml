@@ -742,12 +742,16 @@ let make_hnf_reds env =
    it fails if no redex is around *)
 
 (* [?_I] and [err_I] are canonical forms of inductive types (GCIC^G) *)
+(* [?_I], [err_I], and injections [cast A ? t], the values of [?] *)
 let is_gradual_canonical env sigma (hd, args) = match EConstr.kind sigma hd, args with
   | Const (cst, _), [_] ->
     begin match Gradual.kind_of env cst with
       | Some (Gradual.GUnknown | Gradual.GErr) -> true
       | Some Gradual.GCast | None -> false
     end
+  | Const (cst, _), [_; b; _] ->
+    Option.equal (==) (Gradual.kind_of env cst) (Some Gradual.GCast)
+    && Gradual.is_unknown_type env (EConstr.to_constr ~abort_on_undefined_evars:false sigma (whd_all env sigma b))
   | _ -> false
 
 let rec red_elim_const infos env sigma ref u largs =
@@ -937,6 +941,7 @@ and reduce_fix infos env sigma f fix stack =
       let stack' = List.assign stack recargnum (applist recarg') in
       Reduced (contract_fix env sigma f fix, stack')
     | _ when is_gradual_canonical env sigma recarg' ->
+      Gradual.step Gradual.GCast;
       let stack' = List.assign stack recargnum (applist recarg') in
       Reduced (contract_fix env sigma f fix, stack')
     | _ -> NotReducible

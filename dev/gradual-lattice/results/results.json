@@ -117,9 +117,18 @@
   "file": "arith.v",
   "kind": "single",
   "mutant": "fact: binder whole (line 7) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => 1 | S k => cast Dyn nat n * fact (cast nat Dyn k) end\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -146,9 +155,18 @@
   "file": "arith.v",
   "kind": "definition",
   "mutant": "fact: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -156,9 +174,18 @@
   "file": "arith.v",
   "kind": "single",
   "mutant": "fib: binder whole (line 10) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => 0 | 1 => 1 | S (S j as k) => fib (cast nat Dyn k) + fib (cast nat Dyn ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -185,9 +212,18 @@
   "file": "arith.v",
   "kind": "definition",
   "mutant": "fib: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 0 | 1 => cast nat Dyn 1 | S (S j as k) => cast nat Dyn (c",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -214,9 +250,18 @@
   "file": "arith.v",
   "kind": "single",
   "mutant": "pow: binder whole (line 16) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -243,9 +288,18 @@
   "file": "arith.v",
   "kind": "definition",
   "mutant": "pow: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -500,9 +554,18 @@
   "file": "arith.v",
   "kind": "file",
   "mutant": "all 21 annotations of the file -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -524,9 +587,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 5) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to \"cast Dyn expr a\" instead of \"b\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval (cast Dyn exp",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -534,9 +601,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 5) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of \"a\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval (cas",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -544,9 +615,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 6) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to \"cast Dyn expr a\" instead of \"b\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -554,9 +629,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 6) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of \"a\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -564,9 +643,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 7) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : Dyn t : expr f : expr Recursive call to eval has principal argument equal to \"cast Dyn expr c\" instead of one of the following variables: \"t\" \"f\". Recursive definition is: \"fun e : expr => match e with ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -574,9 +657,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 7) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : Dyn f : expr Recursive call to eval has principal argument equal to \"cast Dyn expr t\" instead of one of the following variables: \"c\" \"f\". Recursive definition is: \"fun e : expr => match e with ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -584,9 +671,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "expr: binder whole (line 7) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : expr f : Dyn n : nat Recursive call to eval has principal argument equal to \"cast Dyn expr f\" instead of one of the following variables: \"c\" \"t\". Recursive definition is: \"fun e : expr => match",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -594,9 +685,13 @@
   "file": "expr.v",
   "kind": "definition",
   "mutant": "expr: all 8 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of a subterm of \"e\". Recursive definition is: \"fun e : expr => match e with | Num n => cast Dyn nat n | Plus ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -604,9 +699,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "eval: binder whole (line 9) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => eval (cast expr Dyn a) + eval (cast expr Dyn b)",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -628,9 +727,13 @@
   "file": "expr.v",
   "kind": "definition",
   "mutant": "eval: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => cast nat Dyn n | Plus a b => cast nat Dyn (cast Dyn nat (eval (",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -638,9 +741,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "size: binder whole (line 17) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of size is ill-formed. In environment size : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num _ => 1 | Plus a b | Times a b => 1 + size (cast expr Dyn a) + size (",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -662,9 +769,13 @@
   "file": "expr.v",
   "kind": "definition",
   "mutant": "size: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of size is ill-formed. In environment size : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num _ => cast nat Dyn 1 | Plus a b | Times a b => cast nat Dyn (1 + cast",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -672,9 +783,13 @@
   "file": "expr.v",
   "kind": "single",
   "mutant": "simplify: binder whole (line 24) expr -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> expr Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => Num n | Plus (Num (S _) as a) b | Plus (Plus _ _ as a)",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -696,9 +811,13 @@
   "file": "expr.v",
   "kind": "definition",
   "mutant": "simplify: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => cast expr Dyn (Num n) | Plus (Num (S _) as a) b | Plus ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -720,9 +839,13 @@
   "file": "expr.v",
   "kind": "file",
   "mutant": "all 15 annotations of the file -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => cast nat Dyn (cast Dyn nat (eval a) + cast Dyn ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1015,9 +1138,18 @@
   "file": "higher.v",
   "kind": "single",
   "mutant": "iter: binder whole (line 7) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1120,9 +1252,18 @@
   "file": "higher.v",
   "kind": "definition",
   "mutant": "iter: all 4 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1909,9 +2050,18 @@
   "file": "higher.v",
   "kind": "file",
   "mutant": "all 28 annotations of the file -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1938,9 +2088,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "map: binder whole (line 3) list A -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2015,9 +2174,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "filter: binder whole (line 6) list A -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2073,9 +2241,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "fold: binder whole (line 12) list A -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2131,9 +2308,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "sum: binder whole (line 15) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => 0 | (x :: r)%list => cast Dyn nat x + sum (cast (list Dyn) Dy",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2179,9 +2365,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "sum: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (cast Dyn nat ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2189,9 +2384,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "rev_acc: binder whole (line 18) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2294,9 +2498,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "rev_acc: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2418,9 +2631,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "mem: binder whole (line 23) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2466,9 +2688,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "mem: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2495,9 +2726,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "insert: binder whole (line 26) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2562,9 +2802,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "insert: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2572,9 +2821,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "sort: binder whole (line 32) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => nil | (x :: r)%list => insert (cast Dyn nat x) (sort (",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2639,9 +2897,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "sort: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2649,9 +2916,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "range: binder whole (line 35) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of range is ill-formed. In environment range : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => nil | S k => (range (cast nat Dyn k) ++ k :: nil)%list end\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2697,9 +2973,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "range: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Recursive definition of range is ill-formed. In environment range : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast (list Dyn) Dyn nil | S k => cast (list Dyn) Dyn (cast Dyn (li",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3226,9 +3511,14 @@
   "file": "vectors.v",
   "kind": "definition",
   "mutant": "vrep: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot guess decreasing argument of fix.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },

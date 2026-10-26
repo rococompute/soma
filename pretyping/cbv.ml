@@ -215,12 +215,22 @@ let gradual_kind env c = match kind c with
   | Const (cst, _) -> Gradual.kind_of env cst
   | _ -> None
 
-let is_gradual_canonical env = function
+(* Canonical forms of gradual CIC that a fixpoint unfolds on: [?_I] and
+   [err_I], and the values of [?], injections [cast A ? t] (a fixpoint may
+   recurse on an argument of type [?] once its guard is not checked). *)
+let rec is_gradual_canonical env = function
   | STACK (_, VAL (_, c), APP ([_], TOP)) ->
     begin match gradual_kind env c with
       | Some (Gradual.GUnknown | Gradual.GErr) -> true
       | Some Gradual.GCast | None -> false
     end
+  | STACK (_, VAL (_, c), APP ([_; b; _], TOP)) ->
+    Option.equal (==) (gradual_kind env c) (Some Gradual.GCast) && is_unknown_value env b
+  | _ -> false
+
+and is_unknown_value env = function
+  | STACK (_, VAL (_, c), APP ([_], TOP)) ->
+    Option.equal (==) (gradual_kind env c) (Some Gradual.GUnknown)
   | _ -> false
 
 let fixp_reducible env flgs ((reci,i),_) stk =
@@ -234,7 +244,9 @@ let fixp_reducible env flgs ((reci,i),_) stk =
           | CONSTRUCT _ -> true
           | SYMBOL { unfoldfix=true; stk; _ } ->
               fixp_reducible_symb_stk stk
-          | v when is_gradual_canonical env v -> true
+          | v when is_gradual_canonical env v ->
+            (* unfolding a fixpoint on it is a gradual step *)
+            Gradual.step Gradual.GCast; true
           | _ -> false
           else check (n - 1) appl
         in

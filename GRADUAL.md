@@ -172,7 +172,43 @@ last resort, after unification and ordinary coercions have failed:
   `vcons 1 (vcons true vnil) : vec Dyn unk` the parameter is set to `Dyn`
   although `S ?n` and `unk` do not unify;
 - a term `f : Dyn` in function position becomes `cast Dyn (Dyn -> Dyn) f`;
-- a term `T : Dyn` in type position becomes `cast Dyn Type T`.
+- a term `T : Dyn` in type position becomes `cast Dyn Type T`;
+- in a cast between `Dyn` and an inductive type, arguments that nothing
+  determines are `?`: `snd p` with `p : Dyn` casts `p` to `Dyn * bool`;
+- the condition of an `if` of type `Dyn` is cast to `bool`.
+
+### Recursion through `Dyn`
+
+Rocq accepts a `Fixpoint` only if its recursion is structural, checked by
+the guard condition. GCIC^G gives up termination, and recursion through
+`Dyn` has no structure to check: an argument of type `Dyn` (`fact (n : Dyn)`),
+or a constructor argument made `Dyn` (`Plus (a : Dyn) …`, then `eval a`).
+Under Gradual Typing, a block of fixpoints that uses the gradual primitives
+and fails the guard is therefore accepted without checking it, with a
+`gradual-unguarded-fixpoint` warning:
+
+```coq
+Fixpoint fact (n : Dyn) : nat := match n with O => 1 | S k => n * fact k end.
+(* Warning: fact: not structurally recursive; it recurses through gradual
+   types, so its guard is not checked (gradual typing gives up termination). *)
+Eval lazy in fact 5.      (* = 120 *)
+Print Assumptions fact.   (* fact is assumed to be guarded. *)
+```
+
+- The recursive argument is the first possible one of type `Dyn`, or the
+  first possible one. A fixpoint unfolds on `?`, `err` and the values of
+  `Dyn` (injections `cast A Dyn t`), in every reduction machine.
+- These unfoldings count towards `Gradual Steps`, so a loop through `Dyn`
+  stops with the step error.
+- Fixpoints without gradual primitives are checked as usual.
+- The kernel accepts a fixpoint whose recursive argument has type `Dyn`
+  only without guard checking and without VM and native compilation
+  (`kernel/inductive.ml`). The declaration sets both, and gradual terms
+  never run on the VM (`vm_compute` falls back to `cbv`). Any other
+  non-inductive recursive argument is still rejected (bug 15621).
+
+`dev/gradual-lattice/` measures these rules on typed programs whose
+annotations are made less precise: see its README.
 
 ## Extraction to OCaml
 

@@ -1055,12 +1055,70 @@ let declare_possibly_mutual_parameters ~info ~cinfo ?(mono_uctx_extra=UState.emp
       (i+1, (name, Constr.mkConstU (cst,inst))::subst, (cst, univs)::csts)
   ) (0, [], []) cinfo typs)
 
+let warn_gradual_unguarded =
+  CWarnings.create ~name:"gradual-unguarded-fixpoint" ~category:CWarnings.CoreCategories.vernacular
+    (fun names ->
+       Pp.(prlist_with_sep pr_comma Name.print names ++ str ":" ++ spc () ++
+           str "not structurally recursive; it recurses through gradual types, so" ++ spc () ++
+           str "its guard is not checked (gradual typing gives up termination)."))
+
+(* GCIC^G gives up termination, and a fixpoint whose recursion goes through
+   [?] (an argument of type [?], a constructor argument made [?]) has no
+   structural guard. Under Gradual Typing, a block of fixpoints that uses the
+   gradual primitives and fails the guard is accepted without checking it:
+   the recursive argument is the first possible one of type [?], or the
+   first possible one. A fixpoint unfolds on [?], [err] and the values of
+   [?], and these unfoldings count towards Gradual Steps. Returns the
+   indexes, or [None] if this does not apply. *)
+let gradual_unguarded_indexes env possible_guard (names, types, bodies) =
+  let rec uses c = match Constr.kind c with
+    | Constr.Const (c, _) -> Option.has_some (Gradual.kind_of env c)
+    | _ -> Constr.fold (fun b c -> b || uses c) false c
+  in
+  let open Pretyping in
+  if not (GradualTyping.enabled env) || possible_guard.possibly_cofix
+     || not (Array.exists uses bodies || Array.exists uses types) then None
+  else
+    let choose i candidates =
+      let rec domain k t = match Constr.kind t with
+        | Constr.Prod (_, a, b) -> if Int.equal k 0 then Some a else domain (k - 1) b
+        | _ -> None
+      in
+      let is_dyn k = match domain k types.(i) with
+        | Some a -> Gradual.is_unknown_type env a
+        | None -> false
+      in
+      match List.find_opt is_dyn candidates, candidates with
+      | Some k, _ -> Some k
+      | None, k :: _ -> Some k
+      | None, [] -> None
+    in
+    let indexes = List.mapi choose possible_guard.possible_fix_indices in
+    if List.for_all Option.has_some indexes then Some (Array.of_list (List.map Option.get indexes))
+    else None
+
 let make_recursive_bodies ?sigma env ~typing_flags ~possible_guard ~rec_declaration =
   let env = Environ.update_typing_flags ?typing_flags env in
   (* We need sigma to check for elimination constraints. In most cases it's None, except for
      [declare_mutual_definitions] where we get it from UState. *)
   let sigma = Option.default (Evd.from_env env) sigma in
-  let res = Pretyping.search_guard env sigma possible_guard rec_declaration in
+  let res, typing_flags =
+    try Pretyping.search_guard env sigma possible_guard rec_declaration, typing_flags
+    with e when CErrors.noncritical e ->
+      let e = Exninfo.capture e in
+      match gradual_unguarded_indexes env possible_guard rec_declaration with
+      | Some indexes ->
+        let (names, _, _) = rec_declaration in
+        warn_gradual_unguarded (Array.to_list (Array.map (fun n -> n.Context.binder_name) names));
+        (* nor compiled for the VM or natively: their fixpoints may recurse
+           on an argument of type [?], and gradual terms are not run there
+           (vm_compute and native_compute fall back to cbv) *)
+        Some (sigma, indexes),
+        Some { (Environ.typing_flags env) with
+               Declarations.check_guarded = false;
+               enable_VM = false; enable_native_compiler = false }
+      | None -> Exninfo.iraise e
+  in
   let sigma, indexes = match res with
     | None -> sigma, None
     | Some (sigma, indexes) -> sigma, Some indexes
@@ -1068,7 +1126,8 @@ let make_recursive_bodies ?sigma env ~typing_flags ~possible_guard ~rec_declarat
   let mkbody i = match indexes with
   | Some indexes -> Constr.mkFix ((indexes,i), rec_declaration)
   | None -> Constr.mkCoFix (i, rec_declaration) in
-  List.map_i (fun i typ -> (mkbody i, typ)) 0 (Array.to_list (pi2 rec_declaration)), sigma, indexes
+  List.map_i (fun i typ -> (mkbody i, typ)) 0 (Array.to_list (pi2 rec_declaration)), sigma, indexes,
+  typing_flags
 
 let prepare_recursive_declaration cinfo fixtypes fixrs fixdefs =
   let fixnames = List.map (fun CInfo.{name} -> name) cinfo in
@@ -1089,7 +1148,8 @@ let declare_mutual_definitions ~info ~cinfo ~opaque ~eff ~uctx ~bodies ~possible
   let possible_guard, fixrelevances = possible_guard in
   let fixtypes = List.map (fun CInfo.{typ} -> typ) cinfo in
   let rec_declaration = prepare_recursive_declaration cinfo fixtypes fixrelevances bodies in
-  let bodies_types, sigma, indexes = make_recursive_bodies ~sigma:(Evd.from_ustate uctx) env ~typing_flags ~rec_declaration ~possible_guard in
+  let bodies_types, sigma, indexes, typing_flags = make_recursive_bodies ~sigma:(Evd.from_ustate uctx) env ~typing_flags ~rec_declaration ~possible_guard in
+  let info = { info with Info.typing_flags } in
   let uctx = Evd.ustate sigma in
   let entries = List.map (fun (body, typ) -> (body, Some typ)) bodies_types in
   let entries_for_using = List.map (fun (body, typ) -> (body, Some typ)) bodies_types in
@@ -2149,7 +2209,7 @@ let prepare_proof ?(warn_incomplete=true) { proof; pinfo; sideff } =
       let fixrelevances = List.map (EConstr.ERelevance.kind evd) fixrelevances in
       let rec_declaration = prepare_recursive_declaration pinfo.cinfo fixtypes fixrelevances fixbodies in
       let typing_flags = pinfo.info.typing_flags in
-      let proofs, sigma, _ = (make_recursive_bodies ~sigma:evd env ~typing_flags ~possible_guard ~rec_declaration) in
+      let proofs, sigma, _, _ = (make_recursive_bodies ~sigma:evd env ~typing_flags ~possible_guard ~rec_declaration) in
       proofs, evd
   in
   let proofs = List.map (fun (body, typ) -> (body, Some typ)) proofs in

@@ -2251,7 +2251,24 @@ and knr_gradual info tab ~pat_state m k stk =
     let a = whnf args.(0) in
     let b = whnf args.(1) in
     let t = args.(2) in
-    let stuck () = knr_ret info tab ~pat_state (m, Zapp [|a; b; t|] :: s) in
+    let stuck () =
+      (* [cast A ? t] is a value of [?]: a fixpoint whose recursive argument
+         has type [?] (its guard was not checked) unfolds on it *)
+      let injection = match readback b with
+        | Some cb -> Gradual.is_unknown_type env cb
+        | None -> false
+      in
+      let v = { mark = Cstr; term = FApp (m, [|a; b; t|]) } in
+      let (_, h, rstk, stk') = strip_update_shift_app_red v s in
+      let no_app = not (List.exists (fun z -> match [@ocaml.warning "-4"] z with Zapp _ -> true | _ -> false) rstk) in
+      match [@ocaml.warning "-4"] stk' with
+      | Zfix (fx, par) :: s' when injection && no_app && red_set info.i_flags fFIX ->
+        let stk'' = par @ append_stack [|h|] s' in
+        let (fxe, fxbd) = contract_fix_vect fx.term in
+        progress ();
+        knit info tab ~pat_state fxe fxbd stk''
+      | _ -> knr_ret info tab ~pat_state (m, Zapp [|a; b; t|] :: s)
+    in
     begin match readback a, readback b, readback t with
     | Some ca, Some cb, Some ct ->
       let t_whnf = lazy (Option.default ct (readback (whnf t))) in

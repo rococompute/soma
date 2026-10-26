@@ -4,76 +4,34 @@
 
 | Static: mutant | count |
 |---|---|
-| compiled | 152 |
-| rejected | 56 |
+| compiled | 193 |
+| rejected | 15 |
 | out_of_steps | 0 |
 | timeout | 0 |
 
 | Dynamic: observation of a compiled mutant | count |
 |---|---|
-| same | 1071 |
+| same | 1320 |
 | less_precise | 0 |
 | raise | 0 |
 | different | 0 |
 
 | Mutants by kind | compiled | rejected | out of steps | timeout |
 |---|---|---|---|---|
-| single | 132 | 29 | 0 | 0 |
-| definition | 19 | 22 | 0 | 0 |
-| file | 1 | 5 | 0 | 0 |
+| single | 155 | 6 | 0 | 0 |
+| definition | 34 | 7 | 0 | 0 |
+| file | 4 | 2 | 0 | 0 |
 
 | Why mutants are rejected | count |
 |---|---|
-| structural recursion on a Dyn argument | 33 |
 | type parameter left undetermined by a cast from Dyn | 13 |
-| recursive call on a cast (a constructor field made Dyn) | 8 |
 | dependent match on a cast to an indexed family (index or return type not inferred) | 2 |
 
 ## Mutants that do not compile
 
-- `arith.v` fact: binder whole (line 7) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => 1 | S k => cast Dyn nat n * fact (cast nat Dyn k) end".
-- `arith.v` fact: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat 
-- `arith.v` fib: binder whole (line 10) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => 0 | 1 => 1 | S (S j as k) => fib (cast nat Dyn k) + fib (cast nat Dyn 
-- `arith.v` fib: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 0 | 1 => cast nat Dyn 1 | S (S j as k) => cast nat Dyn (c
-- `arith.v` pow: binder whole (line 16) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `arith.v` pow: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `arith.v` all 21 annotations of the file -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat 
-- `expr.v` expr: binder whole (line 5) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to "cast Dyn expr a" instead of "b". Recursive definition is: "fun e : expr => match e with | Num n => n | Plus a b => eval (cast Dyn exp
-- `expr.v` expr: binder whole (line 5) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to "cast Dyn expr b" instead of "a". Recursive definition is: "fun e : expr => match e with | Num n => n | Plus a b => eval a + eval (cas
-- `expr.v` expr: binder whole (line 6) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to "cast Dyn expr a" instead of "b". Recursive definition is: "fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | 
-- `expr.v` expr: binder whole (line 6) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to "cast Dyn expr b" instead of "a". Recursive definition is: "fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | 
-- `expr.v` expr: binder whole (line 7) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : Dyn t : expr f : expr Recursive call to eval has principal argument equal to "cast Dyn expr c" instead of one of the following variables: "t" "f". Recursive definition is: "fun e : expr => match e with 
-- `expr.v` expr: binder whole (line 7) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : Dyn f : expr Recursive call to eval has principal argument equal to "cast Dyn expr t" instead of one of the following variables: "c" "f". Recursive definition is: "fun e : expr => match e with 
-- `expr.v` expr: binder whole (line 7) expr -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : expr f : Dyn n : nat Recursive call to eval has principal argument equal to "cast Dyn expr f" instead of one of the following variables: "c" "t". Recursive definition is: "fun e : expr => match
-- `expr.v` expr: all 8 annotations -> Dyn: **rejected** (recursive call on a cast (a constructor field made Dyn)) — Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : Dyn Recursive call to eval has principal argument equal to "cast Dyn expr b" instead of a subterm of "e". Recursive definition is: "fun e : expr => match e with | Num n => cast Dyn nat n | Plus 
-- `expr.v` eval: binder whole (line 9) expr -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => eval (cast expr Dyn a) + eval (cast expr Dyn b)
-- `expr.v` eval: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => cast nat Dyn n | Plus a b => cast nat Dyn (cast Dyn nat (eval (
-- `expr.v` size: binder whole (line 17) expr -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of size is ill-formed. In environment size : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num _ => 1 | Plus a b | Times a b => 1 + size (cast expr Dyn a) + size (
-- `expr.v` size: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of size is ill-formed. In environment size : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num _ => cast nat Dyn 1 | Plus a b | Times a b => cast nat Dyn (1 + cast
-- `expr.v` simplify: binder whole (line 24) expr -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> expr Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => Num n | Plus (Num (S _) as a) b | Plus (Plus _ _ as a)
-- `expr.v` simplify: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => cast expr Dyn (Num n) | Plus (Num (S _) as a) b | Plus 
-- `expr.v` all 15 annotations of the file -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => cast nat Dyn (cast Dyn nat (eval a) + cast Dyn 
-- `higher.v` iter: binder whole (line 7) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `higher.v` iter: all 4 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `higher.v` all 28 annotations of the file -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` map: binder whole (line 3) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` map: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of map whose type is "Type" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn
-- `lists.v` filter: binder whole (line 6) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` filter: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of filter whose type is "Type" in environment: filter : Type -> Dyn -> Dyn -> Dyn A : Type p : Dyn l : Dyn x : Dyn r : list Dyn
-- `lists.v` fold: binder whole (line 12) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` fold: all 4 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of fold whose type is "Type" in environment: fold : Type -> Type -> Dyn -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn z : Dyn x : Dyn r : list Dyn
-- `lists.v` sum: binder whole (line 15) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => 0 | (x :: r)%list => cast Dyn nat x + sum (cast (list Dyn) Dy
-- `lists.v` sum: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (cast Dyn nat 
-- `lists.v` rev_acc: binder whole (line 18) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` rev_acc: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` mem: binder whole (line 23) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` mem: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` insert: binder whole (line 26) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` insert: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` sort: binder whole (line 32) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => nil | (x :: r)%list => insert (cast Dyn nat x) (sort (
-- `lists.v` sort: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) 
-- `lists.v` range: binder whole (line 35) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of range is ill-formed. In environment range : Dyn -> list nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => nil | S k => (range (cast nat Dyn k) ++ k :: nil)%list end".
-- `lists.v` range: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of range is ill-formed. In environment range : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => cast (list Dyn) Dyn nil | S k => cast (list Dyn) Dyn (cast Dyn (li
 - `lists.v` all 29 annotations of the file -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of map whose type is "Type" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn
 - `vectors.v` vhead: binder whole (line 8) vec A (S n) -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (vhead (cast (vec nat 3) Dyn v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".
 - `vectors.v` vhead: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (cast Dyn nat (vhead (cast (vec nat 3) Dyn v3))) More precisely: - ?A: Cannot infer the implicit parameter A of vhead whose type is "Type". - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".
@@ -82,7 +40,6 @@
 - `vectors.v` vsum: binder whole (line 15) vec nat n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vsum whose type is "nat" in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` vsum: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vsum whose type is "nat" in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` vrep: binder whole (line 18) nat -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: In environment vrep : forall n : Dyn, nat -> vec nat (cast Dyn nat n) n : Dyn x : nat The term "vnil" has type "vec nat 0" while it is expected to have type "vec nat (cast Dyn nat ?u@{n1:=0})". No cast was inserted: the types are not consistent, "0" and "cast Dyn nat ?u@{n1:=0}" differ.
-- `vectors.v` vrep: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `vectors.v` to_list: binder whole (line 21) vec A n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of to_list whose type is "nat" in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` to_list: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of to_list whose type is "Type" in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` v3: return whole (line 24) vec nat 3 -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (vhead (cast Dyn (vec nat (S ?n)) v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".

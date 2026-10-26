@@ -857,8 +857,17 @@ let gradual_step ~whd env sigma k head stack =
       let a = whd a and b = whd b in
       let t_whnf = lazy (to_c (whd t)) in
       let whnf c = to_c (whd (EConstr.of_constr c)) in
-      Gradual.reduce_cast env ~whnf (to_c a) (to_c b) (to_c t) t_whnf
-      |> Option.map (fun r -> (EConstr.of_constr r, rest_extra))
+      begin match Gradual.reduce_cast env ~whnf (to_c a) (to_c b) (to_c t) t_whnf with
+        | Some r -> Some (EConstr.of_constr r, rest_extra)
+        | None ->
+          (* [cast A ? t] is a value of [?]: a fixpoint whose recursive
+             argument has type [?] unfolds on it *)
+          match extra, rest with
+          | [], Stack.Fix (f, s') :: s'' when Gradual.is_unknown_type env (to_c b) ->
+            let v = mkApp (head, [|a; b; t|]) in
+            Some (reduce_and_refold_fix env sigma f (s' @ Stack.append_app [|v|] s''))
+          | _ -> None
+      end
     | _ -> None
     in
     (* only steps that make progress count towards the budget *)
