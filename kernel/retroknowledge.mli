@@ -30,10 +30,17 @@ type retroknowledge = {
                     (* PNormal, NNormal, PSubn, NSubn,
                        PZero, NZero, PInf, NInf,
                        NaN *)
+    retro_gradual_unknown : Constant.t option; (* ?_A : forall A, A *)
+    retro_gradual_err : Constant.t option;     (* err_A : forall A, A *)
+    retro_gradual_cast : Constant.t option;    (* <B <= A> t : forall A B, A -> B *)
 }
 
 val empty : retroknowledge
 
+(** The three primitives of the gradual cast calculus. *)
+type gradual_prim = GUnknown | GErr | GCast
+
 type action =
   | Register_ind : 'a CPrimitives.prim_ind * inductive -> action
   | Register_type : 'a CPrimitives.prim_type * Constant.t -> action
+  | Register_gradual : gradual_prim * Constant.t -> action

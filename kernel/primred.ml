@@ -8,6 +8,7 @@ open CErrors
 type _ action_kind =
   | IncompatTypes : _ prim_type -> Constant.t action_kind
   | IncompatInd : _ prim_ind -> inductive action_kind
+  | IncompatGradual : gradual_prim -> Constant.t action_kind
 
 type exn += IncompatibleDeclarations : 'a action_kind * 'a * 'a -> exn
 
@@ -18,6 +19,10 @@ let check_same_types typ c1 c2 =
 let check_same_inds ind i1 i2 =
   if not (Ind.UserOrd.equal i1 i2)
   then raise (IncompatibleDeclarations (IncompatInd ind, i1, i2))
+
+let check_same_gradual prim c1 c2 =
+  if not (Constant.UserOrd.equal c1 c2)
+  then raise (IncompatibleDeclarations (IncompatGradual prim, c1, c2))
 
 let add_retroknowledge retro action =
   match action with
@@ -85,6 +90,17 @@ let add_retroknowledge retro action =
           | Some (((ind',_),_,_,_,_,_,_,_,_) as t) ->
             check_same_inds pit ind ind'; t in
         { retro with retro_f_class = Some r }
+    end
+
+  | Register_gradual(prim,c) ->
+    let check = function
+      | None -> Some c
+      | Some c' -> check_same_gradual prim c c'; Some c'
+    in
+    begin match prim with
+      | GUnknown -> { retro with retro_gradual_unknown = check retro.retro_gradual_unknown }
+      | GErr -> { retro with retro_gradual_err = check retro.retro_gradual_err }
+      | GCast -> { retro with retro_gradual_cast = check retro.retro_gradual_cast }
     end
 
 let add_retroknowledge env action =

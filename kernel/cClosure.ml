@@ -945,6 +945,28 @@ let get_native_args op c stk =
     | (Zprimitive _ | ZcaseT _ | Zproj _ | Zfix _) :: _ | [] -> assert false
   in strip_rec [] {mark = Red; term = FFlex(ConstKey c)} 0 kargs stk
 
+(* Get exactly [n] arguments of a gradual primitive (see Gradual), leaving
+   the rest of the stack, including the update mark of the whole
+   application, untouched. Assumes [stack_args_size stk >= n]. *)
+let get_gradual_args n head stk =
+  let rec strip_rec acc h n = function
+    | Zshift k :: s ->
+      strip_rec (List.map (lift_fconstr k) acc) (lift_fconstr k h) n s
+    | Zapp args :: s ->
+      let q = Array.length args in
+      if n <= q then
+        let mine = Array.to_list (Array.sub args 0 n) in
+        (Array.of_list (List.rev_append acc mine), append_stack (Array.sub args n (q - n)) s)
+      else
+        strip_rec (List.rev_append (Array.to_list args) acc)
+          {mark = h.mark; term = FApp (h, args)} (n - q) s
+    | Zupdate m :: s ->
+      let () = update m h.mark h.term in
+      strip_rec acc m n s
+    | (ZcaseT _ | Zproj _ | Zfix _ | Zprimitive _) :: _ | [] -> assert false
+  in
+  strip_rec [] head n stk
+
 let get_native_args1 op c stk =
   match get_native_args op c stk with
   | ((rargs, (kd,a):: nargs), stk) ->
@@ -1987,6 +2009,10 @@ end
 
 type 'a depth = 'a RedPattern.depth
 
+let gradual_kind info = function
+  | ConstKey (cst, _) -> Gradual.kind_of (info_env info) cst
+  | RelKey _ | VarKey _ -> None
+
 (* Computes a weak head normal form from the result of knh. *)
 let rec knr info tab ~pat_state m stk =
   match m.term with
@@ -1994,6 +2020,8 @@ let rec knr info tab ~pat_state m stk =
       (match get_args n tys f e stk with
           Inl e', s -> knit info tab ~pat_state e' f s
         | Inr lam, s -> knr_ret info tab ~pat_state (lam,s))
+  | FFlex fl when red_set info.i_flags fMATCH && Option.has_some (gradual_kind info fl) ->
+    knr_gradual info tab ~pat_state m (Option.get (gradual_kind info fl)) stk
   | FFlex fl when red_set info.i_flags fDELTA ->
       (match Table.lookup info tab fl with
         | Def (v, _) -> kni info tab ~pat_state v stk
@@ -2092,6 +2120,72 @@ and knr_ret : type a. _ -> _ -> pat_state: a depth -> ?failed: _ -> _ -> a =
       RedPattern.match_head knred info tab ~pat_state patt m stk
   | RedPattern.Nil b ->
       match b with No -> i | Yes -> if failed then None else Some i
+
+(* Reduction of the gradual primitives (GCIC^G, see Gradual). The type
+   arguments are put in weak head normal form with all reductions enabled,
+   independently of the current flags, as the rules inspect their heads. *)
+and knr_gradual info tab ~pat_state m k stk =
+  if stack_args_size stk < Gradual.arity k then knr_ret info tab ~pat_state (m, stk)
+  else
+  let env = info_env info in
+  let ginfo = { info with i_flags = all } in
+  let whnf f = fapp_stack (knred.red_kni ginfo tab ~pat_state:(RedPattern.Nil No) f []) in
+  (* Read-back fails on irrelevant terms in conversion mode. *)
+  let readback f = try Some (term_of_fconstr f) with Assert_failure _ -> None in
+  let args, s = get_gradual_args (Gradual.arity k) m stk in
+  match k with
+  | Gradual.GUnknown | Gradual.GErr ->
+    let a = whnf args.(0) in
+    let v = { mark = Cstr; term = FApp (m, [|a|]) } in
+    (* canonical or stuck: the machine returns a head and a stack *)
+    let stuck () = knr_ret info tab ~pat_state (m, Zapp [|a|] :: s) in
+    begin match [@ocaml.warning "-4"] a.term with
+    | FProd _ ->
+      (* ?_(forall x : A, B) ~> fun x : A => ?_B *)
+      begin match Option.bind (readback a) (Gradual.eta_unknown env k) with
+      | Some c -> kni info tab ~pat_state (inject c) s
+      | None -> stuck ()
+      end
+    | _ ->
+      let (depth, h, rstk, stk') = strip_update_shift_app_red v s in
+      if List.exists (fun z -> match [@ocaml.warning "-4"] z with Zapp _ -> true | _ -> false) rstk then
+        stuck ()
+      else begin match [@ocaml.warning "-4"] stk' with
+      | ZcaseT (ci, _, _, ((_, p), _), _, e) :: s' when red_set info.i_flags fMATCH ->
+        (* match ?_(I pars idx) return P with ... end ~> ?_(P idx ?_(I pars idx)) *)
+        let indices = Option.bind (readback a) (Gradual.inductive_indices env ci) in
+        begin match indices with
+        | None -> stuck ()
+        | Some indices ->
+          let indices = Array.map (fun c -> lift_fconstr depth (inject c)) indices in
+          let p = mk_clos (usubs_consv (Array.append indices [|h|]) e) p in
+          let hd = { mark = Red; term = m.term } in
+          kni info tab ~pat_state { mark = Red; term = FApp (hd, [|p|]) } s'
+        end
+      | Zfix (fx, par) :: s' when red_set info.i_flags fFIX ->
+        (* ?_I and err_I are canonical forms of I: unfold the fixpoint, the
+           match on the recursive argument will consume them *)
+        let stk'' = par @ append_stack [|h|] s' in
+        let (fxe, fxbd) = contract_fix_vect fx.term in
+        knit info tab ~pat_state fxe fxbd stk''
+      | _ -> stuck ()
+      end
+    end
+  | Gradual.GCast ->
+    let a = whnf args.(0) in
+    let b = whnf args.(1) in
+    let t = args.(2) in
+    let stuck () = knr_ret info tab ~pat_state (m, Zapp [|a; b; t|] :: s) in
+    begin match readback a, readback b, readback t with
+    | Some ca, Some cb, Some ct ->
+      let t_whnf = lazy (Option.default ct (readback (whnf t))) in
+      let whnf_c c = Option.default c (readback (whnf (inject c))) in
+      begin match Gradual.reduce_cast env ~whnf:whnf_c ca cb ct t_whnf with
+      | Some r -> kni info tab ~pat_state (inject r) s
+      | None -> stuck ()
+      end
+    | _ -> stuck ()
+    end
 
 (* Computes the weak head normal form of a term *)
 and kni info tab ~pat_state m stk =

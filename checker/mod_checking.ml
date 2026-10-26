@@ -387,6 +387,13 @@ let get_retroknowlege env retro =
       (imap, cmap, Mindmap_env.add ind (i, CPrimitives.PIE prm) extind)
     else
       (Mindmap_env.add ind (i, CPrimitives.PIE prm) imap, cmap, extind)
+  | Retroknowledge.Register_gradual (prm, cst) ->
+    (* The constant must be an axiom of the expected type. Registration
+       only changes reduction, which the checker shares with the kernel. *)
+    let () =
+      if Environ.mem_constant cst env then Gradual.check_registration env prm cst
+    in
+    (imap, cmap, extind)
   | Retroknowledge.Register_type (prm, cst) ->
     let () = assert (not (Cmap_env.mem cst cmap)) in
     let () = assert (not (Environ.mem_constant cst env)) in

@@ -242,6 +242,7 @@ let current_dirpath () =
 
 let register_inline c = globalize0 (Safe_typing.register_inline c)
 let register_inductive c r = globalize0 (Safe_typing.register_inductive c r)
+let register_gradual p c = globalize0 (Safe_typing.register_gradual p c)
 
 let set_strategy k l =
   globalize0 (Safe_typing.set_strategy k l)

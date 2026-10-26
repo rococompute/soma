@@ -400,6 +400,9 @@ let subst_retro_action subst action =
   | Register_type(prim,c) ->
     let c' = subst_constant subst c in
     if c == c' then action else Register_type(prim, c')
+  | Register_gradual(prim,c) ->
+    let c' = subst_constant subst c in
+    if c == c' then action else Register_gradual(prim, c')
 
 let rec map_kn f f' c =
   let func = map_kn f f' in

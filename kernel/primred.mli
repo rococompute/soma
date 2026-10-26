@@ -5,6 +5,7 @@ open Environ
 type _ action_kind =
   | IncompatTypes : _ CPrimitives.prim_type -> Constant.t action_kind
   | IncompatInd : _ CPrimitives.prim_ind -> inductive action_kind
+  | IncompatGradual : Retroknowledge.gradual_prim -> Constant.t action_kind
 
 type exn += IncompatibleDeclarations : 'a action_kind * 'a * 'a -> exn
 

@@ -2415,7 +2415,15 @@ let vernac_register ~atts qid r =
     end
   | RegisterCoqlib n ->
     let ns, id = Libnames.repr_qualid n in
-    if DirPath.equal (dirpath_of_string "kernel") ns then begin
+    if DirPath.equal (dirpath_of_string "kernel") ns
+    && Option.has_some (Gradual.prim_of_string (Id.to_string id)) then begin
+      unsupported_attributes atts;
+      let prim = Option.get (Gradual.prim_of_string (Id.to_string id)) in
+      match gr with
+      | GlobRef.ConstRef c -> Global.register_gradual prim c
+      | _ -> CErrors.user_err ?loc:qid.loc (Pp.str "Register in kernel: expecting a constant.")
+    end
+    else if DirPath.equal (dirpath_of_string "kernel") ns then begin
       unsupported_attributes atts;
       let CPrimitives.PIE pind = match Id.to_string id with
         | "ind_bool" -> CPrimitives.(PIE PIT_bool)

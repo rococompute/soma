@@ -1940,6 +1940,10 @@ let check_register_ind (type t) ind (r : t CPrimitives.prim_ind) (mb, ob as spec
     check_name 8 "NaN";
     check_type_cte 8
 
+let register_gradual prim c senv =
+  let () = Gradual.check_registration senv.env prim c in
+  add_retroknowledge (Retroknowledge.Register_gradual (prim, c)) senv
+
 let register_inductive ind prim senv =
   let spec = Inductive.lookup_mind_specif senv.env ind in
   let () = check_register_ind ind prim spec in
