@@ -100,9 +100,43 @@ Goal t_sort_bad tt = raise. Proof. reflexivity. Qed.
 Definition delta := fun x : Dyn => x x.
 Definition t_omega (_ : unit) : Dyn := delta (cast (Dyn -> Dyn) Dyn delta).
 
-(** casts at type variables are not supported yet *)
-Definition poly (A : Type) (x : A) : Dyn := x.
-Fail Extraction poly.
+(** type parameters: the ones casts need are passed at run time *)
+Definition to_dyn {A : Type} (x : A) : Dyn := x.
+Definition of_dyn {A : Type} (d : Dyn) : A := d.
+Definition roundtrip {A B : Type} (x : A) : B := of_dyn (to_dyn x).
+Fixpoint dyns {A : Type} (l : list A) : list Dyn :=
+  match l with nil => nil | cons x r => cons (to_dyn x) (dyns r) end.
+Definition dyns_local {A : Type} (l : list A) : list Dyn :=
+  (fix go (l : list A) := match l with nil => nil | cons x r => cons (x : Dyn) (go r) end) l.
+Fixpoint ev {A : Type} (l : list A) : list Dyn :=
+  match l with nil => nil | cons x r => cons (to_dyn x) (od r) end
+with od {A : Type} (l : list A) : list Dyn :=
+  match l with nil => nil | cons x r => cons (x : Dyn) (ev r) end.
+Definition poly_fun {A : Type} (f : A -> A) : Dyn := f.
+
+Definition t_poly (_ : unit) : nat := roundtrip 41.
+Definition t_poly_bad (_ : unit) : bool := roundtrip 41.
+Definition t_poly_list (_ : unit) : list nat := of_dyn (to_dyn (dyns (cons 1 (cons 2 nil)))).
+Definition t_poly_rec (_ : unit) : list nat := dyns (cons 1 (cons 2 nil)).
+Definition t_poly_rec_bad (_ : unit) : list bool := dyns (cons 1 (cons 2 nil)).
+Definition t_poly_local (_ : unit) : list bool := dyns_local (cons true nil).
+Definition t_poly_mutual (_ : unit) : list nat := ev (cons 1 (cons 2 (cons 3 nil))).
+Definition t_poly_fun (_ : unit) : nat := (of_dyn (poly_fun S) : nat -> nat) 1.
+Definition t_poly_fun_bad (_ : unit) : nat := (of_dyn (poly_fun negb) : nat -> nat) 1.
+Goal t_poly tt = 41. Proof. reflexivity. Qed.
+Goal t_poly_bad tt = raise. Proof. reflexivity. Qed.
+Goal t_poly_rec_bad tt = cons raise (cons raise nil). Proof. reflexivity. Qed.
+Goal t_poly_mutual tt = cons 1 (cons 2 (cons 3 nil)). Proof. reflexivity. Qed.
+Goal t_poly_fun tt = 2. Proof. reflexivity. Qed.
+
+(** not supported: a function needing type parameters at run time used
+    without them, and type abstractions that are not parameters of a
+    constant *)
+Definition apply_poly (f : forall A : Type, A -> Dyn) := f nat 3.
+Definition bad_first_class := apply_poly (@to_dyn).
+Fail Extraction bad_first_class.
+Definition bad_local := let g (A : Type) (x : A) : Dyn := x in g nat 1.
+Fail Extraction bad_local.
 
 Set Extraction Output Directory ".".
 Extract Inductive nat => "int" [ "0" "succ" ]
@@ -117,4 +151,6 @@ Extraction "gradual_prog.ml"
   t_ok t_bad t_app t_app_bad t_list t_list_bad t_pair t_pair_bad t_option
   t_fs t_record t_record_bad t_sig t_vec t_vec_bad t_dep t_dep_bad
   t_tree t_tree_bad t_rose t_unk t_unk_fun t_unk_dyn t_err t_err_fun
-  t_sort_bad t_omega vhead.
+  t_sort_bad t_omega vhead
+  t_poly t_poly_bad t_poly_list t_poly_rec t_poly_rec_bad t_poly_local
+  t_poly_mutual t_poly_fun t_poly_fun_bad.

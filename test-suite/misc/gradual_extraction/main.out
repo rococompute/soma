@@ -27,3 +27,12 @@ t_err: Cast_error (error at type Corelib.Init.Datatypes.nat)
 t_err_fun (cast) = <fun>
 t_err_fun (call): Cast_error (error at type Corelib.Init.Datatypes.nat)
 t_sort_bad: Cast_error (cannot cast from Type to Corelib.Init.Datatypes.nat)
+t_poly = 41
+t_poly_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_poly_list = [1; 2]
+t_poly_rec = [1; 2]
+t_poly_rec_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_poly_local = true
+t_poly_mutual = [1; 2; 3]
+t_poly_fun = 2
+t_poly_fun_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)

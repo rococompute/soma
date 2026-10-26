@@ -168,15 +168,33 @@ Extraction succ_dyn.
   therefore works with `Extract Inductive` (e.g. `nat => int`).
 - A failed cast, or reaching `raise`, raises `Gradual_rt.Cast_error`. The
   extracted `.mli` exports it.
+- **Type parameters** that casts need are passed at run time. A parameter
+  is needed when it occurs in the types of a cast, `unknown` or `err`, or in
+  an argument for a needed parameter of another function, including
+  recursive calls. The constant then takes the type's description as an
+  argument and its callers pass it:
+
+  ```coq
+  Definition to_dyn {A : Type} (x : A) : Dyn := x.
+  (* val to_dyn : __ -> 'a1 -> __
+     let to_dyn a x = Gradual_rt.cast_with ... a Gradual_rt.unknown_ty x *)
+  ```
+
+  Other type parameters are erased as usual, so code without casts is
+  extracted as before.
 - The test is `test-suite/misc/gradual_extraction.sh`. The MirageOS on
   Apple Silicon test matrix runs the same program as an `hvt` unikernel.
 
 Extraction differs from the kernel in these ways:
 
-- **Types must be closed** at each cast, apart from the parameters of
-  inductive types and value dependencies (`forall n, vec nat n` is fine).
-  A cast at a type variable, as in `fun (A : Type) (x : A) => (x : Dyn)`,
-  is rejected at extraction time. Supporting it needs type passing.
+- **Only the type parameters of constants are passed.** A cast at a type
+  variable bound elsewhere (a local `fun (A : Type) => …`, a type stored in
+  a constructor) is rejected at extraction time. So is a function that
+  needs type parameters at run time used without them, for example
+  `@to_dyn` passed to a function expecting `forall A, A -> Dyn`: the
+  callee would not pass the description.
+- **A failed cast raises at once**, also inside data: the kernel computes
+  `cons raise nil`, where the extracted code raises.
 - **`?_A` at an inductive type raises `Gradual_rt.Unknown_term`** when it is
   evaluated. Extracted code is call-by-value and has no value for it, so
   `2 + unk` raises, where the kernel computes `S (S unk)`. At function types

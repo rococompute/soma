@@ -42,5 +42,14 @@ let () =
   run "t_err" (fun () -> string_of_int (t_err ()));
   run "t_err_fun (cast)" (fun () -> let _ : int -> int = t_err_fun () in "<fun>");
   run "t_err_fun (call)" (fun () -> string_of_int (t_err_fun () 0));
-  run "t_sort_bad" (fun () -> string_of_int (t_sort_bad ()))
+  run "t_sort_bad" (fun () -> string_of_int (t_sort_bad ()));
+  run "t_poly" (fun () -> string_of_int (t_poly ()));
+  run "t_poly_bad" (fun () -> string_of_bool (t_poly_bad ()));
+  run "t_poly_list" (fun () -> ints (t_poly_list ()));
+  run "t_poly_rec" (fun () -> ints (t_poly_rec ()));
+  run "t_poly_rec_bad" (fun () -> String.concat "; " (List.map string_of_bool (t_poly_rec_bad ())));
+  run "t_poly_local" (fun () -> String.concat "; " (List.map string_of_bool (t_poly_local ())));
+  run "t_poly_mutual" (fun () -> ints (t_poly_mutual ()));
+  run "t_poly_fun" (fun () -> string_of_int (t_poly_fun ()));
+  run "t_poly_fun_bad" (fun () -> string_of_int (t_poly_fun_bad ()))
   (* t_omega loops *)

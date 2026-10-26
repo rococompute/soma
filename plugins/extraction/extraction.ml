@@ -667,6 +667,140 @@ let type_expunge_from_sign table env = type_expunge_from_sign (mlt_env table env
 
 (*s Extraction of the type of a constant. *)
 
+(*s Type parameters passed at run time, for gradual casts.
+
+   Casts need the runtime description of their types (see [extract_gradual]
+   below). When they mention a type parameter of a constant, the constant
+   takes that description as an argument instead of erasing it, and its
+   callers pass it. A parameter is needed when it occurs in the types of a
+   cast, [unknown] or [err], or in an argument given to a needed parameter
+   of another function. Other type parameters are erased as usual, so code
+   without casts is extracted as before. *)
+
+let gradual_params_cache = ref Cmap_env.empty
+
+(* De Bruijn levels: a binder introduced at depth [l] (the number of
+   binders above it) has level [l], and [Rel m] at depth [d] refers to
+   level [d - m]. *)
+
+(* [whd_all], when [t] is closed: the analysis does not track the types of
+   local variables. *)
+let gradual_whd env sg t =
+  if EConstr.Vars.closed0 sg t then whd_all env sg t else t
+
+(* The positions, in the product spine of [typ], of the parameters of [t]
+   needed at run time. [heads] maps the levels of local fixpoints to the
+   parameters they need; [lvl] is the depth of [t]. *)
+let rec gradual_needed_params env sg heads lvl t typ =
+  let rec spine env typ acc =
+    match EConstr.kind sg (gradual_whd env sg typ) with
+    | Prod (na, a, b) ->
+      let is_type = EConstr.isSort sg (gradual_whd env sg a) in
+      spine (EConstr.push_rel (LocalAssum (na, a)) env) b (is_type :: acc)
+    | _ -> List.rev acc
+  in
+  let params = spine env typ [] in
+  let k = List.length params in
+  if not (List.mem true params) then Int.Set.empty
+  else
+    (* eta-expand [t] to [k] lambdas, and take their body *)
+    let ctx, body = EConstr.decompose_lambda sg t in
+    let m = List.length ctx in
+    let body =
+      if m >= k then EConstr.it_mkLambda body (List.firstn (m - k) ctx)
+      else
+        EConstr.mkApp (EConstr.Vars.lift (k - m) body,
+                       Array.init (k - m) (fun i -> EConstr.mkRel (k - m - i)))
+    in
+    List.fold_left_i (fun j acc is_type ->
+        if is_type && gradual_needs_rel env sg heads (lvl + k) (k - j) body
+        then Int.Set.add j acc else acc) 0 Int.Set.empty params
+
+(* Does [Rel n] occur in [t], at depth [lvl], where its runtime description
+   is needed? *)
+and gradual_needs_rel env sg heads lvl n t =
+  let rec go heads d t =
+    let occurs a = not (EConstr.Vars.noccurn sg (n + d) a) in
+    match EConstr.kind sg t with
+    | App (f, args) ->
+      let needed = match EConstr.kind sg f with
+        | Const (c, _) ->
+          begin match Gradual.kind_of env c with
+            | Some k -> Int.Set.of_list (List.init (Gradual.arity k - 1) (fun i -> i))
+            | None -> gradual_const_params env c
+          end
+        | Rel m ->
+          begin match Int.Map.find_opt (lvl + d - m) heads with
+            | Some r -> !r
+            | None -> Int.Set.empty
+          end
+        | Fix ((_, i), recd) ->
+          let refs, _ = gradual_fix_params env sg heads (lvl + d) recd in
+          !(refs.(i))
+        | _ -> Int.Set.empty
+      in
+      let rec needed_arg i =
+        i < Array.length args
+        && ((Int.Set.mem i needed && occurs args.(i)) || needed_arg (i + 1))
+      in
+      needed_arg 0 || go heads d f || Array.exists (go heads d) args
+    | Fix (_, ((_, tys, bodies) as recd)) | CoFix (_, ((_, tys, bodies) as recd)) ->
+      let nb = Array.length bodies in
+      let _, heads' = gradual_fix_params env sg heads (lvl + d) recd in
+      Array.exists (go heads d) tys || Array.exists (go heads' (d + nb)) bodies
+    | _ -> EConstr.fold_with_binders sg succ (fun d acc t -> acc || go heads d t) d false t
+  in
+  go heads 0 t
+
+(* The parameters needed by the functions of a block of (co)fixpoints at
+   depth [lvl], computed by iteration, and [heads] extended with them. *)
+and gradual_fix_params env sg heads lvl (_, tys, bodies) =
+  let nb = Array.length bodies in
+  let refs = Array.map (fun _ -> ref Int.Set.empty) bodies in
+  let heads = Array.fold_left_i (fun i h r -> Int.Map.add (lvl + i) r h) heads refs in
+  let rec iterate () =
+    let changed = ref false in
+    Array.iteri (fun i b ->
+        let s = gradual_needed_params env sg heads (lvl + nb) b
+            (EConstr.Vars.lift nb tys.(i)) in
+        if not (Int.Set.equal s !(refs.(i))) then (refs.(i) := s; changed := true))
+      bodies;
+    if !changed then iterate ()
+  in
+  iterate ();
+  refs, heads
+
+and gradual_const_params env c =
+  match Cmap_env.find_opt c !gradual_params_cache with
+  | Some s -> s
+  | None ->
+    let cb = lookup_constant c env in
+    let s = match cb.const_body with
+      | Def b when Option.is_empty (Structures.PrimitiveProjections.find_opt c) ->
+        let sg = Evd.from_env env in
+        gradual_needed_params env sg Int.Map.empty 0
+          (EConstr.of_constr b) (EConstr.of_constr cb.const_type)
+      | _ -> Int.Set.empty
+    in
+    gradual_params_cache := Cmap_env.add c s !gradual_params_cache;
+    s
+
+let gradual_type_params env kn =
+  if Option.has_some (Gradual.get env Gradual.GCast) then gradual_const_params env kn
+  else Int.Set.empty
+
+(* The ML type of a constant keeps the needed type parameters. *)
+let gradual_keep_params table env kn mlt =
+  let needed = gradual_type_params env kn in
+  if Int.Set.is_empty needed then mlt
+  else
+    let rec keep j = function
+      | Tarr (Tdummy Ktype, t) when Int.Set.mem j needed -> Tarr (Tunknown, keep (j + 1) t)
+      | Tarr (a, t) -> Tarr (a, keep (j + 1) t)
+      | t -> t
+    in
+    keep 0 (expand table env mlt)
+
 let record_constant_type table env sg kn inst opt_typ =
   let cb = lookup_constant kn env in
   match lookup_cst_type (Common.State.get_table table) kn inst cb with
@@ -677,6 +811,7 @@ let record_constant_type table env sg kn inst opt_typ =
        | Some typ -> typ
      in
      let mlt = extract_type table env sg [] 1 typ [] in
+     let mlt = gradual_keep_params table env kn mlt in
      let schema = (type_maxvar mlt, mlt) in
      let () = add_cst_type (Common.State.get_table table) kn inst cb schema in
      schema
@@ -690,8 +825,10 @@ let record_constant_type table env sg kn inst opt_typ =
    (gradual_rt.ml) with runtime descriptions of [A] and [B]. For each
    inductive type in a description, we generate a function that rebuilds its
    constructors at another instance of the type, casting their arguments.
-   Types are only known at run time when they are closed, up to inductive
-   parameters and values: casts involving type variables are rejected. *)
+   Type variables have a runtime description when they are parameters of
+   inductive types (in these functions) or of the constant being extracted
+   (see [gradual_keep_params]); casts at other type variables are
+   rejected. *)
 
 let rt name = MLraw ("Gradual_rt." ^ name)
 let rt_app name args = MLapp (rt name, args)
@@ -723,6 +860,10 @@ let rt_push_ml ctx = { ctx with rt_depth = ctx.rt_depth + 1 }, ctx.rt_depth + 1
 let rt_push ctx decl b =
   { ctx with rt_env = EConstr.push_rel decl ctx.rt_env;
              rt_binders = (decl, b) :: ctx.rt_binders }
+
+let gradual_ctx env mle =
+  { rt_env = env; rt_outer = env; rt_mle = mle; rt_binders = [];
+    rt_depth = 0; rt_needed = ref [] }
 
 let gradual_error env sg msg t =
   CErrors.user_err
@@ -865,14 +1006,19 @@ and extract_app table env sg mle mlt mk_head args =
 
 (*s Auxiliary function used to extract arguments of constant or constructor. *)
 
-and make_mlargs table env sg e s args typs =
-  let rec f = function
+and make_mlargs ?(types=Int.Set.empty) table env sg e s args typs =
+  (* [types]: positions of type arguments passed at run time *)
+  let arg i t a =
+    if Int.Set.mem i types then MLmagic (gradual_reify table sg (gradual_ctx env e) a)
+    else extract_maybe_term table env sg e t a
+  in
+  let rec f i = function
     | [], [], _ -> []
-    | a::la, t::lt, [] -> extract_maybe_term table env sg e t a :: (f (la,lt,[]))
-    | a::la, t::lt, Keep::s -> extract_maybe_term table env sg e t a :: (f (la,lt,s))
-    | _::la, _::lt, _::s -> f (la,lt,s)
+    | a::la, t::lt, [] -> arg i t a :: (f (i+1) (la,lt,[]))
+    | a::la, t::lt, Keep::s -> arg i t a :: (f (i+1) (la,lt,s))
+    | _::la, _::lt, _::s -> f (i+1) (la,lt,s)
     | _ -> assert false
-  in f (args,typs,s)
+  in f 0 (args,typs,s)
 
 (*s Extraction of a constant applied to arguments. *)
 
@@ -905,8 +1051,15 @@ and extract_cst_app table env sg mle mlt (kn, u) args =
   let s = sign_no_final_keeps s_full in
   let ls = List.length s in
   let la = List.length args in
+  (* Type parameters passed at run time must be given: callers that do not
+     know [kn] would not pass them. *)
+  let types = gradual_type_params env kn in
+  if not (Int.Set.is_empty types) && la <= Int.Set.max_elt types then
+    gradual_error env sg
+      (Pp.str "a function taking type parameters at run time is not applied to them")
+      (applistc (EConstr.mkConstU (kn, u)) args);
   (* The ml arguments, already expunged from known logical ones *)
-  let mla = make_mlargs table env sg mle s args metas in
+  let mla = make_mlargs ~types table env sg mle s args metas in
   (* For strict languages, purely logical signatures lead to a dummy lam
      (except when [Kill Ktype] everywhere). So a [MLdummy] is left
      accordingly. *)
@@ -1086,8 +1239,7 @@ and extract_gradual table env sg mle mlt kind (kn, u) args =
     let c = applistc (EConstr.mkConstU (kn, u)) args in
     extract_term table env sg mle mlt (eta env (needed - la) c (type_of env sg c)) []
   else
-    let ctx = { rt_env = env; rt_outer = env; rt_mle = mle; rt_binders = [];
-                rt_depth = 0; rt_needed = ref [] } in
+    let ctx = gradual_ctx env mle in
     let with_args head rest =
       let rest = List.map (fun a -> extract_maybe_term table env sg mle (new_meta ()) a) rest in
       MLmagic (mlapp (MLmagic head) rest)
@@ -1134,8 +1286,17 @@ and gradual_reify table sg ctx t =
         | RtVal _ | RtNone | RtMissing ->
           gradual_error env sg (Pp.str "no runtime description for type") t
       end
-    | Rel _ ->
-      gradual_error env sg (Pp.str "type variables are not supported yet") t
+    | Rel n ->
+      (* A type parameter of the constant being extracted, kept at run time
+         (see [gradual_keep_params]); erased ones have a dummy ML type. *)
+      let n' = n - List.length ctx.rt_binders in
+      begin match Mlenv.get ctx.rt_mle n' with
+        | Tdummy _ ->
+          gradual_error env sg
+            (Pp.str "no runtime description for this type variable \
+                     (only type parameters of constants are supported)") t
+        | _ -> MLmagic (MLrel (n' + ctx.rt_depth))
+      end
     | _ ->
       let hd, args = EConstr.decompose_app sg t in
       match gradual_kind_of_term env sg t, EConstr.kind sg hd with
