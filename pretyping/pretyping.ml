@@ -1260,8 +1260,22 @@ struct
          that the given one contradicts ([@eq_refl _ unk : 0 = unk] sets the
          argument to [0]), the application is inferred instead, then cast:
          [unk = unk] to [0 = unk]. *)
-      try elaborate nargs_before_bidi
-      with Gradual_bidi_mismatch -> elaborate length
+      let bidi () =
+        try elaborate nargs_before_bidi
+        with Gradual_bidi_mismatch -> elaborate length
+      in
+      match tycon with
+      | Some ty when GradualTyping.is_unknown_type !!env sigma ty ->
+        (* Unifying with [Dyn] fixes nothing, and setting the parameters
+           to [Dyn] first would lose what the arguments determine: in
+           [f (of_list r) : Dyn], [of_list r] is a [tree V] cast to [Dyn],
+           not a [tree Dyn] with [r] cast, which would no longer be a
+           structural call. Only when the arguments disagree
+           ([cons 1 (cons true nil) : Dyn]) are the parameters [Dyn]. *)
+        begin try elaborate length
+        with e when CErrors.noncritical e -> bidi ()
+        end
+      | _ -> bidi ()
     else elaborate nargs_before_bidi
 
   let pretype_proj self ((f,us), args, c) =
