@@ -71,6 +71,28 @@ Proof. reflexivity. Qed.
 Goal cast Type nat bool = raise. Proof. reflexivity. Qed.
 Goal cast (nat -> nat) nat S = raise. Proof. reflexivity. Qed.
 
+(** * Sorts: consistent only when cumulative *)
+
+(** Without [?], elaboration is CIC: a type is not cast into [Prop] or into
+    a lower universe. *)
+Fail Definition bad_prop : Prop := nat.
+Universes i j.
+Constraint j < i.
+Constraint i < Corelib.Gradual.Gradual.gradual.
+Fail Definition down (T : Type@{i}) : Type@{j} := T.
+Definition up (T : Type@{j}) : Type@{i} := T.
+
+(** Codomains are cumulative, as in Rocq. *)
+Definition const_nat (_ : Dyn) : Set := nat.
+Definition cumul_codomain : nat -> Type := const_nat.
+Fail Definition bad_codomain : nat -> Set := (fun _ : nat => nat : Type).
+
+(** Casts between sorts follow the universe graph. *)
+Goal cast Type@{j} Type@{i} nat = nat. Proof. reflexivity. Qed.
+Goal cast Type@{i} Type@{j} nat = raise. Proof. reflexivity. Qed.
+Goal cast Prop Set True = True. Proof. reflexivity. Qed.
+Goal cast Set Prop nat = raise. Proof. reflexivity. Qed.
+
 (** * The unknown and error terms *)
 
 Goal (unk : nat -> bool) = fun _ => unk. Proof. reflexivity. Qed.

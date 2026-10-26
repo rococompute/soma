@@ -109,7 +109,7 @@ features. (The theory is deliberately inconsistent: `unk : False`.)
 | `cast Dyn B (cast A Dyn t)` | `cast A B t` |
 | `cast A Dyn (unknown _)` / `cast Dyn B (unknown _)` | `unknown B` (same for `err`) |
 | `cast (forall x:A1, B1) (forall x:A2, B2) f` | `fun x:A2 => cast B1[x'/x] B2 (f x')` where `x' := cast A2 A1 x` |
-| `cast (Sort s1) (Sort s2) T` | `T` if `s1 ≤ s2` by family (Prop ≤ Set ≤ Type), else `err` |
+| `cast (Sort s1) (Sort s2) T` | `T` if `s1 ≤ s2` in the universe graph, else `err` (stuck on universe variables the environment does not know) |
 | `cast (I p1) (I p2) (c p1 args)` | `c p2 (cast Tᵢ[p1] Tᵢ[p2] argsᵢ)` |
 | `cast (I p1 i1) (I p2 i2) (c …)` (indexed) | as above, if the indices the constructor produces are compatible with `i2` (`?` matches anything), else `err` |
 | `cast (I …) (I …) (unknown _)` | `unknown B` (same for `err`) |
@@ -212,9 +212,12 @@ Extraction differs from the kernel in these ways:
   `I ? … ?`). This fork injects the original head type directly. In GCIC^G
   this should be observationally equivalent, and it avoids universe
   arithmetic in the kernel.
-- **Universe levels are not checked by casts between sorts.** Only sort
-  families are compared, since the reduction machines do not have the
-  universe graph. Everything casted lives below the single global universe
+- **Sorts are consistent only when cumulative.** Without `?`, consistency
+  is conversion, or cumulativity where Rocq allows it (the result and
+  codomains), so `nat : Prop` and moving a type to a lower universe are
+  static errors. Casts between sorts compare levels in the universe graph.
+  The extracted runtime only compares Prop, Set and Type, since levels are
+  erased. Everything cast lives below the single global universe
   `Corelib.Gradual.Gradual.gradual`.
 - **SProp** is not supported, because the axioms quantify over `Type`.
 - **Indexed families** go beyond the paper, which only treats parameters.

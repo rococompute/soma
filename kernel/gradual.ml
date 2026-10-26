@@ -160,22 +160,14 @@ let eta_unknown env k a =
     Option.map (fun body -> mkLambda (na, dom, body)) (mk env k [|cod|])
   | _ -> None
 
-(* Casting between universes: Prop <= Set <= Type, and Type levels are not
-   compared (the reduction machines do not have the universe graph at hand,
-   and GCIC^G already gives up normalization). *)
-let sort_castable s1 s2 =
-  let rank = function
-    | Sorts.SProp -> None
-    | Sorts.Prop -> Some 0
-    | Sorts.Set -> Some 1
-    | Sorts.Type _ | Sorts.GSort _ | Sorts.VSort _ -> Some 2
-  in
-  match s1, s2 with
-  | Sorts.SProp, Sorts.SProp -> true
-  | _ ->
-    match rank s1, rank s2 with
-    | Some r1, Some r2 -> r1 <= r2
-    | _ -> false
+(* Casting between sorts: [Some true] when [s1 <= s2] in the universe graph
+   (as for cumulativity, so a cast never moves a type to a lower universe),
+   [Some false] when not, and [None] when a level is unknown to [env] (in
+   pretyping, universe variables live in the evar map): the cast is then
+   stuck. *)
+let sort_castable env s1 s2 =
+  try Some (UGraph.check_leq_sort Sorts.Quality.equal (Environ.universes env) s1 s2)
+  with e when CErrors.noncritical e -> None
 
 let template_instance mib u = match mib.mind_template with
   | None -> u
@@ -303,7 +295,11 @@ let reduce_cast env ~whnf a b t t_whnf =
     let body = mkApp (cast, [|b1'; b2; mkApp (Vars.lift 1 t, [|x'|])|]) in
     Some (mkLambda (na2, a2, body))
   | HSort s1, HSort s2 ->
-    if sort_castable s1 s2 then Some t else err ()
+    begin match sort_castable env s1 s2 with
+      | Some true -> Some t
+      | Some false -> err ()
+      | None -> None
+    end
   | HInd ((ind1, u1), args1), HInd ((ind2, u2), args2) ->
     if not (Ind.CanOrd.equal ind1 ind2) then err ()
     else

@@ -25,9 +25,10 @@ open Environ
 (** Is gradual elaboration enabled? *)
 val enabled : env -> bool
 
-(** [consistent env sigma a b]: [a] and [b] are equal up to the unknown
-    term. *)
-val consistent : env -> Evd.evar_map -> types -> types -> bool
+(** [consistent ~cumul env sigma a b]: [a] and [b] are equal up to the
+    unknown term, and up to cumulativity from [a] to [b] where Rocq allows
+    it when [cumul] (the default). *)
+val consistent : ?cumul:bool -> env -> Evd.evar_map -> types -> types -> bool
 
 (** [coerce_to_type env sigma v ~inferred ~expected] casts [v : inferred]
     to [expected] if the types are consistent. *)

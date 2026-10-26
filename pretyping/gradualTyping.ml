@@ -39,25 +39,29 @@ let is_unknown env sigma t = is_prim env sigma Gradual.GUnknown t
 
 (* Consistency is the congruence closure of conversion where [?_A] is related
    to everything. We approximate it structurally on weak head normal forms,
-   which is complete for types that are first-order up to conversion. *)
-let rec consistent env sigma a b =
-  Reductionops.is_conv env sigma a b ||
+   which is complete for types that are first-order up to conversion.
+   Without [?], it is conversion, or cumulativity where Rocq allows it
+   ([~cumul], the result and the codomains): sorts are consistent only when
+   they are cumulative, so [nat : Prop] and moving a type to a lower
+   universe stay static errors. *)
+let rec consistent ?(cumul=true) env sigma a b =
+  (if cumul then Reductionops.is_conv_leq env sigma a b
+   else Reductionops.is_conv env sigma a b) ||
   let a = Reductionops.whd_all env sigma a in
   let b = Reductionops.whd_all env sigma b in
   is_unknown env sigma a || is_unknown env sigma b ||
   match kind sigma a, kind sigma b with
   | Evar _, _ | _, Evar _ -> true
-  | Sort _, Sort _ -> true
   | Prod (na, a1, b1), Prod (_, a2, b2) ->
-    consistent env sigma a1 a2
-    && consistent (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2
+    consistent ~cumul:false env sigma a1 a2
+    && consistent ~cumul (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2
   | Lambda (na, a1, b1), Lambda (_, a2, b2) ->
-    consistent env sigma a1 a2
-    && consistent (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2
+    consistent ~cumul:false env sigma a1 a2
+    && consistent ~cumul:false (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2
   | App (f1, args1), App (f2, args2) ->
     Int.equal (Array.length args1) (Array.length args2)
-    && consistent env sigma f1 f2
-    && Array.for_all2 (consistent env sigma) args1 args2
+    && consistent ~cumul:false env sigma f1 f2
+    && Array.for_all2 (consistent ~cumul:false env sigma) args1 args2
   | _ -> false
 
 let cast env sigma ~inferred ~expected v =
