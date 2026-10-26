@@ -44,4 +44,5 @@ t_poly_fun_bad = exception Cast_error (cannot cast from Corelib.Init.Datatypes.n
 t_int = 3
 t_int_bad = raise
 t_int_float = exception Cast_error (cannot cast from int to float) (kernel: raise; documented: float is a primitive type, which cannot hold unk or raise: they raise at once)
+t_array = exception Cast_error (cast between (array Corelib.Init.Datatypes.nat) and (array Corelib.Init.Datatypes.bool) is not supported) (kernel: stuck cast; documented: the kernel leaves a cast between array types with different elements stuck; the runtime raises Cast_error)
 0 disagreements with the kernel

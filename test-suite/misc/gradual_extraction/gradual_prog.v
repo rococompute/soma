@@ -5,6 +5,7 @@
 From Corelib.Gradual Require Import Gradual.
 From Corelib Require Extraction.
 From Corelib Require Import PrimInt63 PrimFloat.
+From Corelib Require PrimArray.
 
 (* Both sides have the same normal form, up to universes and not only up
    to conversion, under each reduction machine: lazy (the kernel machine),
@@ -153,6 +154,15 @@ Definition t_int_float (_ : unit) : float := cast Dyn float (cast int Dyn 3%uint
 Goal t_int tt = 3%uint63. Proof. machines. Qed.
 Goal t_int_bad tt = raise. Proof. machines. Qed.
 Goal t_int_float tt = raise. Proof. machines. Qed.
+(* casts do not visit the elements of arrays: the kernel leaves a cast
+   between array types with different elements stuck *)
+Definition t_array (_ : unit) : PrimArray.array bool :=
+  cast Dyn (PrimArray.array bool) (cast (PrimArray.array nat) Dyn (PrimArray.make 1%uint63 0)).
+Goal True.
+Proof.
+  let t := eval lazy in (t_array tt) in match t with cast _ _ _ => idtac end.
+  exact I.
+Qed.
 
 (** Omega is well typed, and loops *)
 Definition delta := fun x : Dyn => x x.
@@ -209,11 +219,13 @@ Extract Inductive unit => "unit" [ "()" ].
 (* primitive integers, as OCaml integers (see uint63.ml) *)
 Extract Inlined Constant int => "Uint63.t".
 Extract Inlined Constant float => "float".
+Extract Constant PrimArray.array "'a" => "'a Stdlib.Array.t".
+Extract Inlined Constant PrimArray.make => "Array.make".
 
 Extraction "gradual_prog.ml"
   t_ok t_bad t_app t_app_bad t_list t_list_bad t_list_bad_length t_list_bad_head
   t_pair t_pair_bad t_option t_tree_bad_root t_unk_plus t_unk_elim t_elim_mapped
-  t_int t_int_bad t_int_float
+  t_int t_int_bad t_int_float t_array
   t_fs t_record t_record_bad t_sig t_vec t_vec_bad t_dep t_dep_bad
   t_tree t_tree_bad t_rose t_unk t_unk_fun t_unk_dyn t_err t_err_fun
   t_sort_bad t_omega vhead

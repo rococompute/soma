@@ -61,6 +61,7 @@ let option f v = data (function Some x -> "Some " ^ f x | None -> "None") v
 (* documented differences *)
 let mapped = "bool is mapped to OCaml's bool, which cannot hold unk or raise: they raise at once"
 let prim = "float is a primitive type, which cannot hold unk or raise: they raise at once"
+let array = "the kernel leaves a cast between array types with different elements stuck; the runtime raises Cast_error"
 let no_desc = "the type of the match (that of vhead mentions its type parameter) has no runtime description, so eliminating raise raises"
 
 let rec nth n l = match Gradual_rt.check l with
@@ -114,5 +115,6 @@ let () =
   run "t_int" (fun () -> string_of_int (t_int ())) "3";
   run "t_int_bad" (fun () -> nat (t_int_bad ())) "raise";
   run ~doc:prim "t_int_float" (fun () -> string_of_float (t_int_float ())) "raise";
+  run ~doc:array "t_array" (fun () -> ignore (t_array ()); "<array>") "stuck cast";
   (* t_omega loops *)
   Printf.printf "%d disagreements with the kernel\n" !disagreements
