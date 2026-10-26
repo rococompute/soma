@@ -134,15 +134,19 @@ Goal mem_dyn 2 (cons (1, true) (cons (2, false) nil)) = true. Proof. reflexivity
 Goal mem_dyn 3 (cons (1, true) (cons (2, false) nil)) = false. Proof. reflexivity. Qed.
 
 (** In a [match] with a return clause, the indices of a cast from [Dyn] are
-    not [?]: the return type may depend on them. *)
+    not [?]: the return type may depend on them. An index is the one
+    constructor, with [?] arguments, at which the return clause is
+    consistent with the expected type, if there is exactly one. *)
 Module DependentMatch.
   Inductive vec (A : Type) : nat -> Type :=
   | vnil : vec A 0
   | vcons : forall n, A -> vec A n -> vec A (S n).
   Arguments vnil {A}. Arguments vcons {A n}.
-  Fail Definition vhead_dyn {A : Type} (v : Dyn) : A :=
+  (* only [S] gives [A]: the scrutinee is a [vec Dyn (S unk)] *)
+  Definition vhead_dyn {A : Type} (v : Dyn) : A :=
     match v in vec _ m return match m with 0 => unit | S _ => A end with
     | vnil => tt | vcons x _ => x end.
+  Goal vhead_dyn (vcons 1 (vcons 2 (vcons 3 vnil)) : Dyn) = 1. Proof. reflexivity. Qed.
   (* without a return clause, they are *)
   #[warnings="-gradual-unguarded-fixpoint"]
   Fixpoint vsum_dyn (v : Dyn) : nat :=

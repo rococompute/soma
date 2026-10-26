@@ -208,6 +208,8 @@ let with_gradual_scrutinee f =
   gradual_scrutinee := false;
   Fun.protect ~finally:(fun () -> gradual_scrutinee := saved) f
 
+let is_gradual_scrutinee () = !gradual_scrutinee
+
 let set_gradual_scrutinee env sigma scrutinees =
   let from_unknown c = match kind sigma c with
     | App (f, [|a; _; _|]) when isConst sigma f ->

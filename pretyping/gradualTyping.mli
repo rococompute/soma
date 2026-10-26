@@ -55,6 +55,7 @@ val with_index_defaulting : bool -> (unit -> 'a) -> 'a
     of the same inductive family than expected, and are cast through [?]. *)
 val with_gradual_scrutinee : (unit -> 'a) -> 'a
 val set_gradual_scrutinee : env -> Evd.evar_map -> constr list -> unit
+val is_gradual_scrutinee : unit -> bool
 
 (** [unknown_at env sigma ty] is the unknown term [?_ty], when Gradual Typing
     is enabled and [ty] lives in the universe of gradual types. *)

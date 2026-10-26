@@ -4997,9 +4997,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vhead: binder whole (line 8) vec A (S n) -> Dyn",
-  "status": "rejected",
-  "error": "Error: In environment A : Type n : nat v : Dyn The term \"match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end\" has type \"match ?n with | 0 => unit | S _ => A end\" while it is expected to have type \"A\". No cast was i",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },

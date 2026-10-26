@@ -2799,6 +2799,72 @@ let compile_program_cases ?loc style (typing_function, sigma) tycon env
 (**************************************************************************)
 (* Main entry of the matching compilation                                 *)
 
+(* Gradual typing: in a match on a value of [?] with a return clause, an
+   index of a scrutinee that nothing determined is the one constructor, with
+   [?] arguments, at which the return clause is consistent with the expected
+   type. If none or several are, it is left alone: [vhead {A n} (v : ?) : A]
+   matching [v] at [vec ? ?n] with [return match m with 0 => unit | S _ => A]
+   takes [S ?], while at expected type [?] both constructors would do. *)
+let gradual_choose_indices env sigma tomatchs tycon pred =
+  match tycon with
+  | Some expected when GradualTyping.enabled env && GradualTyping.is_gradual_scrutinee () ->
+    let subst sigma =
+      List.fold_left (fun acc (tm, tmt) -> match tmt with
+          | IsInd (_, IndType (_, realargs), _) -> tm :: List.rev_append realargs acc
+          | NotInd (Some b, _) -> b :: acc
+          | NotInd (None, _) -> tm :: acc)
+        [] tomatchs
+    in
+    let candidates sigma evk =
+      let evi = Evd.find_undefined sigma evk in
+      let evenv = Evd.evar_filtered_env env evi in
+      match Inductiveops.find_rectype evenv sigma (Evd.evar_concl evi) with
+      | exception Not_found -> []
+      | IndType (indf, []) ->
+        let build cs =
+          let args = List.rev cs.cs_args in
+          let rec unknowns sigma acc = function
+            | [] -> Some (sigma, List.rev acc)
+            | LocalDef (_, b, _) :: rest -> unknowns sigma (substl acc b :: acc) rest
+            | LocalAssum (_, ty) :: rest ->
+              match GradualTyping.unknown_at evenv sigma (substl acc ty) with
+              | Some (sigma, u) -> unknowns sigma (u :: acc) rest
+              | None -> None
+          in
+          Option.map (fun (sigma, args) ->
+              sigma, mkApp (mkConstructU cs.cs_cstr,
+                            Array.of_list (cs.cs_params @ args)))
+            (unknowns sigma [] args)
+        in
+        Array.to_list (Array.map build (get_constructors evenv indf)) |> List.map_filter (fun x -> x)
+      | IndType (_, _) -> []
+    in
+    let fits sigma =
+      let p = substl (subst sigma) pred in
+      GradualTyping.consistent env sigma p expected
+    in
+    let choose sigma evk =
+      if Evd.is_defined sigma evk then sigma
+      else
+        let survivors = List.filter_map (fun (sigma, c) ->
+            let sigma = Evd.define evk c sigma in
+            if fits sigma then Some sigma else None)
+            (candidates sigma evk)
+        in
+        match survivors with
+        | [sigma] -> sigma
+        | _ -> sigma
+    in
+    let index_evars = List.fold_left (fun acc (_, tmt) -> match tmt with
+        | IsInd (_, IndType (_, realargs), _) ->
+          List.fold_left (fun acc a -> match EConstr.kind sigma a with
+              | Evar (evk, _) -> evk :: acc
+              | _ -> acc) acc realargs
+        | NotInd _ -> acc) [] tomatchs
+    in
+    List.fold_left choose sigma (List.rev index_evars)
+  | _ -> sigma
+
 let compile_cases ?loc ~program_mode style (typing_fun, sigma) tycon env (predopt, tomatchl, eqns) =
   (* Gradual typing: a scrutinee of type [?] is cast to the inductive type of
      the patterns, whose undetermined indices are [?] only when there is no
@@ -2823,6 +2889,11 @@ let compile_cases ?loc ~program_mode style (typing_fun, sigma) tycon env (predop
      build alternative possible predicates *)
   let arsign = extract_arity_signature !!env tomatchs tomatchl in
   let preds = prepare_predicate ?loc ~program_mode typing_fun predenv sigma tomatchs arsign tycon predopt in
+  let preds =
+    if Option.is_empty predopt then preds
+    else List.map (fun (sigma, nal, pred) ->
+        gradual_choose_indices !!predenv sigma tomatchs tycon pred, nal, pred) preds
+  in
 
   let compile_for_one_predicate (sigma,nal,pred) =
     (* We push the initial terms to match and push their alias to rhs' envs *)
