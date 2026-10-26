@@ -86,6 +86,14 @@ Goal deval (DPlus (DPlus (DNum 1) (DNum 2)) (DNum 3)) = 6. Proof. reflexivity. Q
 #[warnings="-gradual-unguarded-fixpoint"]
 Fixpoint loop_dyn (n : Dyn) : nat := loop_dyn n.
 Fail Eval lazy in loop_dyn 0.
+(* a type parameter comes first, but the recursion is on the list *)
+Inductive dtree (V : Type) := DLeaf | DNode (k : nat) (v : V) (t : dtree V).
+Arguments DLeaf {V}. Arguments DNode {V}.
+Definition dadd {V : Type} (k : nat) (v : V) (t : Dyn) : dtree V := DNode k v t.
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint dof_list {V : Type} (l : list (nat * V)) : dtree V :=
+  match l with nil => DLeaf | cons (k, v) r => dadd k v (dof_list r) end.
+Goal dof_list (cons (1, true) nil) = DNode 1 true DLeaf. Proof. reflexivity. Qed.
 (* without gradual primitives, the guard is still checked *)
 Fail Fixpoint not_structural (n : nat) : nat := not_structural n.
 

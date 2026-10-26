@@ -1067,7 +1067,7 @@ let warn_gradual_unguarded =
    structural guard. Under Gradual Typing, a block of fixpoints that uses the
    gradual primitives and fails the guard is accepted without checking it:
    the recursive argument is the first possible one of type [?], or the
-   first possible one. A fixpoint unfolds on [?], [err] and the values of
+   first possible one of an inductive type. A fixpoint unfolds on [?], [err] and the values of
    [?], and these unfoldings count towards Gradual Steps. Returns the
    indexes, or [None] if this does not apply. *)
 let gradual_unguarded_indexes env possible_guard (names, types, bodies) =
@@ -1080,18 +1080,26 @@ let gradual_unguarded_indexes env possible_guard (names, types, bodies) =
      || not (Array.exists uses bodies || Array.exists uses types) then None
   else
     let choose i candidates =
-      let rec domain k t = match Constr.kind t with
-        | Constr.Prod (_, a, b) -> if Int.equal k 0 then Some a else domain (k - 1) b
+      let rec domain env k t = match Constr.kind t with
+        | Constr.Prod (na, a, b) ->
+          if Int.equal k 0 then Some (env, a)
+          else domain (Environ.push_rel (Context.Rel.Declaration.LocalAssum (na, a)) env) (k - 1) b
         | _ -> None
       in
-      let is_dyn k = match domain k types.(i) with
-        | Some a -> Gradual.is_unknown_type env a
+      let is_dyn k = match domain env k types.(i) with
+        | Some (env, a) -> Gradual.is_unknown_type env a
         | None -> false
       in
-      match List.find_opt is_dyn candidates, candidates with
-      | Some k, _ -> Some k
-      | None, k :: _ -> Some k
-      | None, [] -> None
+      (* otherwise an argument of an inductive type, whose recursive calls
+         went through a cast: the kernel accepts nothing else *)
+      let is_ind k = match domain env k types.(i) with
+        | Some (env, a) ->
+          Constr.isInd (fst (Constr.decompose_app (Reduction.whd_all env a)))
+        | None -> false
+      in
+      match List.find_opt is_dyn candidates with
+      | Some k -> Some k
+      | None -> List.find_opt is_ind candidates
     in
     let indexes = List.mapi choose possible_guard.possible_fix_indices in
     if List.for_all Option.has_some indexes then Some (Array.of_list (List.map Option.get indexes))

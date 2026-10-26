@@ -850,6 +850,1626 @@
   "expected": {}
  },
  {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "empty: return whole (line 8) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find: binder whole (line 10) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find: binder whole (line 10) tree V -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (V : Type) (k : nat) (t : tree V) => match find k (cast (tree V) Dyn t) with | Some _ => true | None => false end) More precisely: - ?V: Cannot infer the implicit parameter V of find whose type is \"Type\" in environment: V : Type ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find: return whole (line 10) option V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "find: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "add: binder whole (line 19) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "add: binder whole (line 19) V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "add: binder whole (line 19) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "add: return whole (line 19) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "add: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: binder whole (line 28) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: binder whole (line 28) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: binder whole (line 28) V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: binder whole (line 28) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: return whole (line 29) nat * V * tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove_min: return inner nat (line 29) nat * V * tree V -> Dyn * V * tree V",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "remove_min: all 5 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "merge: binder whole (line 36) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "merge: binder whole (line 36) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "merge: return whole (line 36) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "merge: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove: binder whole (line 43) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove: binder whole (line 43) tree V -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (mem 3 (remove 3 (cast (tree bool) Dyn sample))) More precisely: - ?V: Cannot infer the implicit parameter V of mem whose type is \"Type\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "remove: return whole (line 43) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "remove: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 52) nat -> V -> A -> A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "fold: binder inner nat (line 52) nat -> V -> A -> A -> Dyn -> V -> A -> A",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 52) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 52) A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "fold: return whole (line 52) A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "fold: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements_acc: binder whole (line 58) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements_acc: binder whole (line 58) list (nat * V) -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements_acc: binder inner nat (line 58) list (nat * V) -> list (Dyn * V)",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements_acc: return whole (line 58) list (nat * V) -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements_acc: return inner nat (line 58) list (nat * V) -> list (Dyn * V)",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "elements_acc: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements: binder whole (line 64) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements: return whole (line 64) list (nat * V) -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "elements: return inner nat (line 64) list (nat * V) -> list (Dyn * V)",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "elements: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "size: binder whole (line 66) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "size: binder whole (line 67) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "size: binder whole (line 67) V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "size: binder whole (line 67) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "size: return whole (line 66) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "size: all 5 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "height: binder whole (line 69) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "height: return whole (line 69) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "height: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "map_values: binder whole (line 75) V -> W -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "map_values: binder whole (line 75) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "map_values: return whole (line 75) tree W -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "map_values: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "of_list: binder whole (line 81) list (nat * V) -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "of_list: binder inner nat (line 81) list (nat * V) -> list (Dyn * V)",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "of_list: return whole (line 81) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "of_list: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find_default: binder whole (line 87) V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find_default: binder whole (line 87) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find_default: binder whole (line 87) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "find_default: return whole (line 87) V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "find_default: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "mem: binder whole (line 90) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "mem: binder whole (line 90) tree V -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "mem: return whole (line 90) bool -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "mem: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: binder whole (line 93) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: binder inner nat (line 93) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: binder whole (line 93) tree nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: binder inner nat (line 93) tree nat -> tree Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: return whole (line 93) tree nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts_acc: return inner nat (line 93) tree nat -> tree Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "counts_acc: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts: binder whole (line 99) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts: binder inner nat (line 99) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts: return whole (line 99) tree nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "counts: return inner nat (line 99) tree nat -> tree Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "definition",
+  "mutant": "counts: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "sample: return whole (line 101) tree bool -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "single",
+  "mutant": "sample: return inner bool (line 101) tree bool -> tree Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "fmap.v",
+  "kind": "file",
+  "mutant": "all 53 annotations of the file -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
   "file": "higher.v",
   "kind": "single",
   "mutant": "compose: binder whole (line 3) nat -> nat -> Dyn",
