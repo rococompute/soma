@@ -348,7 +348,7 @@ Extraction differs from the kernel in these ways:
 
 The whole Rocq test suite (`make -C test-suite`) passes with these changes.
 That is the conservativity check: none of its files import `Gradual`, apart
-from the gradual tests below. The last full run was at `935f6f8aad`:
+from the gradual tests below. The last full run was at `d011c4b1cf`:
 2751 tests passed and 3 failed, on macOS. All three failures are
 environmental and also fail on the unmodified base:
 `coq-makefile/latex1` (LaTeX), `coq-makefile/timing-per-file` (GNU
