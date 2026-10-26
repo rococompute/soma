@@ -102,6 +102,21 @@ Proof. reflexivity. Qed.
 Goal cast Type nat bool = raise. Proof. reflexivity. Qed.
 Goal cast (nat -> nat) nat S = raise. Proof. reflexivity. Qed.
 
+(** * Conversion under binders
+
+    The kernel compares these types under the binder without adding it to
+    the environment: the rules must keep its variable apart from the
+    variables of the environment. *)
+Definition under_binder : forall m : nat, cast nat nat m = m := fun m => eq_refl.
+Definition under_binder_dyn : forall m : nat, cast Dyn nat (cast nat Dyn m) = m :=
+  fun m => eq_refl.
+Definition under_binder_list :
+  forall m : nat, cast (list Dyn) (list nat) (cons (cast nat Dyn m) nil) = cons m nil :=
+  fun m => eq_refl.
+Lemma under_binder_fun : forall (f : nat -> nat) (n : nat),
+  cast (Dyn -> Dyn) (nat -> nat) (cast (nat -> nat) (Dyn -> Dyn) f) n = f n.
+Proof. intros. reflexivity. Qed.
+
 (** * Sorts: consistent only when cumulative *)
 
 (** Without [?], elaboration is CIC: a type is not cast into [Prop] or into

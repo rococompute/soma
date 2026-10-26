@@ -948,6 +948,63 @@ let get_native_args op c stk =
 (* Get exactly [n] arguments of a gradual primitive (see Gradual), leaving
    the rest of the stack, including the update mark of the whole
    application, untouched. Assumes [stack_args_size stk >= n]. *)
+(* The gradual rules work on terms read back from the machine, and their
+   results are put back into it. [inject] reads free variables as variables
+   of the environment ([RelKey]), which is wrong under binders introduced by
+   the conversion algorithm itself, whose variables are [FRel]. [env_lift]
+   finds the number of such binders between the environment and the
+   current point from the arguments: it is the lift of their environment
+   variables, or of the substitution of their closures. When there are none,
+   every free variable is an [FRel]. *)
+let env_lift args =
+  let of_subs acc e = match Esubst.expand_rel 1_000_000 (fst e) with
+    | Util.Inr (n, Some p) -> Some (acc + n - p)
+    | Util.Inr (_, None) | Util.Inl _ -> None
+  in
+  let rec go acc v = match v.term with
+    | FFlex (RelKey _) -> Some acc
+    | FLIFT (k, v) -> go (acc + k) v
+    | FCLOS (_, e) | FLambda (_, _, _, e) | FFix (_, e) | FCoFix (_, e)
+    | FEvar (_, _, e, _) -> of_subs acc e
+    | FProd (_, a, _, e) -> begin match go acc a with None -> of_subs acc e | r -> r end
+    | FLetIn (_, a, b, _, e) ->
+      begin match go acc a, go acc b with
+        | (Some _ as r), _ | None, (Some _ as r) -> r
+        | None, None -> of_subs acc e
+      end
+    | FCaseT (_, _, _, _, c, _, e) | FCaseInvert (_, _, _, _, _, c, _, e) ->
+      begin match go acc c with None -> of_subs acc e | r -> r end
+    | FApp (h, args) -> first acc (h :: Array.to_list args)
+    | FConstruct (_, args) -> first acc (Array.to_list args)
+    | FProj (_, _, c) -> go acc c
+    | FArray (_, t, d) -> first acc (d :: Array.to_list (fst (Parray.to_array t)))
+    | FRel _ | FAtom _ | FFlex (ConstKey _ | VarKey _) | FInd _ | FInt _ | FFloat _
+    | FString _ | FIrrelevant | FLOCKED -> None
+  and first acc = function
+    | [] -> None
+    | v :: l -> match go acc v with None -> first acc l | r -> r
+  in
+  let rec first_arg = function
+    | [] -> None
+    | v :: l -> match go 0 v with None -> first_arg l | r -> r
+  in
+  first_arg args
+
+(* Put [c], read back from the machine at a point [lift] binders below the
+   environment, back into it (see [env_lift]). *)
+let reinject lift c =
+  let lift = match lift with
+    | Some n -> n
+    | None ->
+      (* no environment variables: all free variables are [FRel] *)
+      let rec max_rel d acc c = match [@ocaml.warning "-4"] kind c with
+        | Rel n -> if n > d then max acc (n - d) else acc
+        | _ -> Constr.fold_constr_with_binders succ max_rel d acc c
+      in
+      max_rel 0 0 c
+  in
+  mk_clos (subs_liftn lift (subs_id 0), UVars.Instance.empty) c
+
 let get_gradual_args n head stk =
   let rec strip_rec acc h n = function
     | Zshift k :: s ->
@@ -2135,6 +2192,8 @@ and knr_gradual info tab ~pat_state m k stk =
   (* Read-back fails on irrelevant terms in conversion mode. *)
   let readback f = try Some (term_of_fconstr f) with Assert_failure _ -> None in
   let args, s = get_gradual_args (Gradual.arity k) m stk in
+  let lift = env_lift (Array.to_list args) in
+  let inject c = reinject lift c in
   match k with
   | Gradual.GUnknown | Gradual.GErr ->
     let a = whnf args.(0) in
@@ -2198,7 +2257,8 @@ and knr_gradual info tab ~pat_state m k stk =
       let t_whnf = lazy (Option.default ct (readback (whnf t))) in
       let whnf_c c = Option.default c (readback (whnf (inject c))) in
       begin match Gradual.reduce_cast env ~whnf:whnf_c ca cb ct t_whnf with
-      | Some r -> progress (); kni info tab ~pat_state (inject r) s
+      | Some r ->
+        progress (); kni info tab ~pat_state (inject r) s
       | None -> stuck ()
       end
     | _ -> stuck ()
