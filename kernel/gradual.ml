@@ -30,6 +30,28 @@ let prim_of_string = function
 
 let arity = function GUnknown | GErr -> 1 | GCast -> 3
 
+(* A budget of gradual reduction steps. GCIC^G gives up normalization, so
+   reduction, and hence conversion, may not terminate; only steps headed by
+   a gradual primitive are counted, since the rest is CIC and terminates.
+   The budget is reset at the start of each command (vernac/vernacinterp.ml);
+   rocqchk runs without one. Only steps that make progress count. Once the
+   budget is spent, every further gradual step fails until the next reset. *)
+exception Out_of_steps of kind * int
+
+let step_limit_ref = ref (Some 100_000)
+let steps_left = ref max_int
+
+let reset_steps () =
+  steps_left := (match !step_limit_ref with Some n -> n | None -> max_int)
+
+let step_limit () = !step_limit_ref
+
+let set_step_limit l = step_limit_ref := l; reset_steps ()
+
+let step k = match !step_limit_ref with
+  | None -> ()
+  | Some n -> if !steps_left <= 0 then raise (Out_of_steps (k, n)) else decr steps_left
+
 let get env k =
   let r = Environ.retroknowledge env in
   match k with

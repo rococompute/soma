@@ -763,7 +763,7 @@ and cbv_gradual info c k args stk =
         (Reductionops.whd_all info.env info.sigma (EConstr.of_constr t))
     in
     let mine = List.map reify_value mine in
-    match k, mine with
+    let r = match k, mine with
     | (Gradual.GUnknown | Gradual.GErr), [a] ->
       let a = whnf a in
       begin match Gradual.eta_unknown info.env k a with
@@ -786,6 +786,10 @@ and cbv_gradual info c k args stk =
       Gradual.reduce_cast info.env ~whnf (whnf a) (whnf b) t (lazy (whnf t))
       |> Option.map (fun r -> (r, rest))
     | _ -> None
+    in
+    (* only steps that make progress count towards the budget *)
+    if Option.has_some r then Gradual.step k;
+    r
 
 and cbv_value_cache info ref =
   try KeyTable.find info.tab ref with

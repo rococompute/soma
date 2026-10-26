@@ -146,10 +146,27 @@ Qed.
 Definition delta := fun x : Dyn => x x.
 Definition omega : Dyn := delta delta.
 
-Fail Timeout 1 Eval lazy in omega.
-Fail Timeout 1 Eval cbv in omega.
+(* Reduction and conversion stop with an error after [Gradual Steps]
+   gradual steps (100000 by default) instead of hanging. *)
+Fail Eval lazy in omega.
+Fail Eval cbv in omega.
+Fail Eval cbn in omega.
 (* Type checking is undecidable: conversion may diverge. *)
-Fail Timeout 1 Check (eq_refl : omega = unk).
+Fail Check (eq_refl : omega = unk).
+Goal omega = unk. Proof. Fail reflexivity. Abort.
+
+(* The budget counts gradual steps only, per command. *)
+Goal 1 + 1 = 2. Proof. reflexivity. Qed.
+Goal succ_dyn 41 = 42. Proof. reflexivity. Qed.
+Set Gradual Steps 1.
+Fail Eval lazy in succ_dyn 41.
+Set Gradual Steps 100000.
+Eval lazy in succ_dyn 41.
+
+(* Without a limit, Omega loops. *)
+Unset Gradual Steps.
+Fail Timeout 1 Eval lazy in omega.
+Set Gradual Steps 100000.
 
 (** * The gradual axioms are visible *)
 Print Assumptions succ_dyn.

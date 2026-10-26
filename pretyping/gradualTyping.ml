@@ -18,6 +18,26 @@ let { Goptions.get = gradual_typing } =
     ~value:false
     ()
 
+let () =
+  Goptions.declare_option ~kind:Goptions.IntKind {
+    Goptions.optstage = Summary.Stage.Interp;
+    optdepr = None;
+    optkey = ["Gradual"; "Steps"];
+    optread = Gradual.step_limit;
+    optwrite = Gradual.set_step_limit;
+  }
+
+let () = CErrors.register_handler (function
+    | Gradual.Out_of_steps (k, n) ->
+      let name = match k with
+        | Gradual.GCast -> "cast" | Gradual.GUnknown -> "unknown" | Gradual.GErr -> "err"
+      in
+      Some Pp.(str "Gradual reduction exceeded " ++ int n ++ str " steps (while reducing " ++
+               str name ++ str ")." ++ fnl () ++
+               str "Normalization does not hold for gradual terms, so this may be a loop." ++ fnl () ++
+               str "Raise the limit with \"Set Gradual Steps <n>.\" or remove it with \"Unset Gradual Steps.\"")
+    | _ -> None)
+
 let enabled env =
   gradual_typing ()
   && Option.has_some (Gradual.get env Gradual.GCast)

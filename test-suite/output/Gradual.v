@@ -14,6 +14,8 @@ Definition delta := fun x : Dyn => x x.
 Print delta.
 Definition omega : Dyn := delta delta.
 Print omega.
+(* reduction stops after Gradual Steps steps *)
+Fail Eval lazy in omega.
 
 (* a type of unknown sort is cast to a universe *)
 Definition T (X : Dyn) : Type := X -> X.

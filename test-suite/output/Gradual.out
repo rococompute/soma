@@ -13,6 +13,11 @@ delta = fun x : Dyn => cast Dyn (Dyn -> Dyn) x x
 Arguments delta x
 omega = delta (cast (Dyn -> Dyn) Dyn delta)
      : Dyn
+File "./output/Gradual.v", line 18, characters 0-24:
+The command has indeed failed with message:
+Gradual reduction exceeded 100000 steps (while reducing cast).
+Normalization does not hold for gradual terms, so this may be a loop.
+Raise the limit with "Set Gradual Steps <n>." or remove it with "Unset Gradual Steps."
 T = fun X : Dyn => cast Dyn Type X -> cast Dyn Type X
      : Dyn -> Type
 
@@ -31,6 +36,6 @@ mixed_pair = (cast nat Dyn 1, cast bool Dyn true)
      : nat -> bool
      = S (S unk)
      : nat
-File "./output/Gradual.v", line 37, characters 29-33:
+File "./output/Gradual.v", line 39, characters 29-33:
 The command has indeed failed with message:
 The term "true" has type "bool" while it is expected to have type "nat".

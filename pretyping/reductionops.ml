@@ -831,7 +831,7 @@ let gradual_step ~whd env sigma k head stack =
     let mine, extra = List.chop n args in
     let rest_extra = Stack.append_app_list extra rest in
     let to_c c = EConstr.to_constr ~abort_on_undefined_evars:false sigma c in
-    match k, mine with
+    let r = match k, mine with
     | (Gradual.GUnknown | Gradual.GErr), [a] ->
       let a = whd a in
       begin match Gradual.eta_unknown env k (to_c a) with
@@ -860,6 +860,10 @@ let gradual_step ~whd env sigma k head stack =
       Gradual.reduce_cast env ~whnf (to_c a) (to_c b) (to_c t) t_whnf
       |> Option.map (fun r -> (EConstr.of_constr r, rest_extra))
     | _ -> None
+    in
+    (* only steps that make progress count towards the budget *)
+    if Option.has_some r then Gradual.step k;
+    r
 
 let rec whd_state_gen flags ?metas env sigma =
   let open Context.Named.Declaration in

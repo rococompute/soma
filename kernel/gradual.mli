@@ -36,6 +36,20 @@ val prim_of_string : string -> kind option
 (** Arity of a primitive: the number of arguments its head rules need. *)
 val arity : kind -> int
 
+(** {6 Step budget}
+
+    Reduction of gradual terms may not terminate. Each reduction step headed
+    by a gradual primitive calls [step], which raises [Out_of_steps (k, n)]
+    once [n] such steps have been made since the last [reset_steps]. [None]
+    means no limit. *)
+
+exception Out_of_steps of kind * int
+
+val step : kind -> unit
+val reset_steps : unit -> unit
+val step_limit : unit -> int option
+val set_step_limit : int option -> unit
+
 (** [kind_of env c] tells whether [c] is one of the registered gradual
     primitives. Cheap enough to be called on every constant. *)
 val kind_of : Environ.env -> Constant.t -> kind option

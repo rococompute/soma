@@ -2128,6 +2128,8 @@ and knr_gradual info tab ~pat_state m k stk =
   if stack_args_size stk < Gradual.arity k then knr_ret info tab ~pat_state (m, stk)
   else
   let env = info_env info in
+  (* only steps that make progress count towards the budget *)
+  let progress () = Gradual.step k in
   let ginfo = { info with i_flags = all } in
   let whnf f = fapp_stack (knred.red_kni ginfo tab ~pat_state:(RedPattern.Nil No) f []) in
   (* Read-back fails on irrelevant terms in conversion mode. *)
@@ -2143,7 +2145,7 @@ and knr_gradual info tab ~pat_state m k stk =
     | FProd _ ->
       (* ?_(forall x : A, B) ~> fun x : A => ?_B *)
       begin match Option.bind (readback a) (Gradual.eta_unknown env k) with
-      | Some c -> kni info tab ~pat_state (inject c) s
+      | Some c -> progress (); kni info tab ~pat_state (inject c) s
       | None -> stuck ()
       end
     | _ ->
@@ -2160,6 +2162,7 @@ and knr_gradual info tab ~pat_state m k stk =
           let indices = Array.map (fun c -> lift_fconstr depth (inject c)) indices in
           let p = mk_clos (usubs_consv (Array.append indices [|h|]) e) p in
           let hd = { mark = Red; term = m.term } in
+          progress ();
           kni info tab ~pat_state { mark = Red; term = FApp (hd, [|p|]) } s'
         end
       | Zproj (p, _) :: s' when red_set info.i_flags fMATCH ->
@@ -2172,6 +2175,7 @@ and knr_gradual info tab ~pat_state m k stk =
         | None -> stuck ()
         | Some ty ->
           let hd = { mark = Red; term = m.term } in
+          progress ();
           kni info tab ~pat_state { mark = Red; term = FApp (hd, [|inject ty|]) } s'
         end
       | Zfix (fx, par) :: s' when red_set info.i_flags fFIX ->
@@ -2179,6 +2183,7 @@ and knr_gradual info tab ~pat_state m k stk =
            match on the recursive argument will consume them *)
         let stk'' = par @ append_stack [|h|] s' in
         let (fxe, fxbd) = contract_fix_vect fx.term in
+        progress ();
         knit info tab ~pat_state fxe fxbd stk''
       | _ -> stuck ()
       end
@@ -2193,7 +2198,7 @@ and knr_gradual info tab ~pat_state m k stk =
       let t_whnf = lazy (Option.default ct (readback (whnf t))) in
       let whnf_c c = Option.default c (readback (whnf (inject c))) in
       begin match Gradual.reduce_cast env ~whnf:whnf_c ca cb ct t_whnf with
-      | Some r -> kni info tab ~pat_state (inject r) s
+      | Some r -> progress (); kni info tab ~pat_state (inject r) s
       | None -> stuck ()
       end
     | _ -> stuck ()

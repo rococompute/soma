@@ -24,11 +24,24 @@ From Corelib.Gradual Require Import Gradual.
 
 Definition delta := fun x : Dyn => x x.
 Definition omega : Dyn := delta delta.   (* well typed *)
-Eval lazy in omega.                      (* loops forever *)
+Eval lazy in omega.                      (* does not terminate *)
 ```
 
 Because conversion can run arbitrary computation, **type checking is
-undecidable**. `Check (eq_refl : omega = unk)` diverges.
+undecidable**. `Check (eq_refl : omega = unk)` does not terminate either.
+So that the prover still answers, reduction stops after `Gradual Steps`
+gradual reduction steps per command (100000 by default) with an error:
+
+```
+Gradual reduction exceeded 100000 steps (while reducing cast).
+Normalization does not hold for gradual terms, so this may be a loop.
+Raise the limit with "Set Gradual Steps <n>." or remove it with "Unset Gradual Steps."
+```
+
+Only steps headed by `cast`, `unknown` or `err` that make progress count.
+The rest is CIC reduction, which terminates, so ordinary terms are not
+affected. `rocqchk` runs without a limit: it rechecks what the kernel
+already accepted.
 
 ## Quick start
 
@@ -69,6 +82,7 @@ Fail Definition bad : nat := true.  (* still a static error: not consistent *)
 | `raise` | the error `err_A` at the expected type |
 | `cast A B t` | the cast `⟨B ⇐ A⟩ t` |
 | `Set/Unset Gradual Typing` | turns consistency-based elaboration on or off |
+| `Set Gradual Steps n` / `Unset Gradual Steps` | the budget of gradual reduction steps per command, or none |
 
 ## Architecture
 
