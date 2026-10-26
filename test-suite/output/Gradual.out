@@ -59,3 +59,12 @@ The term "T" has type "Type@{i}" while it is expected to have type
 "Type@{j}" (universe inconsistency: Cannot enforce i <= j because j < i).
 No cast was inserted: the types are not consistent, 
 "Type@{i}" and "Type@{j}" differ (sorts are consistent only when cumulative).
+large_list_dyn = cast (list Type) Dyn large_list
+     : Dyn
+box_dyn = cast Box Dyn box
+     : Dyn
+File "./output/Gradual.v", line 56, characters 33-36:
+The command has indeed failed with message:
+Cannot cast from "Type" to "Dyn": "Type@{Set+1}"
+lives above the universe of gradual types
+(Corelib.Gradual.Gradual.gradual), so no cast was inserted.

@@ -145,10 +145,46 @@ let rec unify_consistent ?(cumul=true) env sigma a b =
         fold sigma (Array.append [|f1|] args1) (Array.append [|f2|] args2)
       | _ -> if consistent ~cumul env sigma a b then Some sigma else None
 
+(* The universe of gradual types: casts are between types of
+   [Type@{gradual}] (see theories/Corelib/Gradual/Gradual.v). *)
+let gradual_sort env =
+  let c = Option.get (Gradual.get env Gradual.GCast) in
+  match Constr.kind (Environ.lookup_constant c env).Declarations.const_type with
+  | Constr.Prod (_, s, _) ->
+    begin match Constr.kind s with
+      | Constr.Sort s -> Some (ESorts.make s)
+      | _ -> None
+    end
+  | _ -> None
+
+exception Above_gradual of Environ.env * Evd.evar_map * types * types * types
+
+(* When a cast between consistent types cannot be built, say so if a type
+   lies above the universe of gradual types. *)
+let check_below_gradual env sigma ~inferred ~expected =
+  match gradual_sort env with
+  | None -> ()
+  | Some g ->
+    let above ty =
+      let s = Retyping.get_sort_of env sigma ty in
+      not (Evd.check_leq sigma s g) &&
+      match Evd.set_leq_sort sigma s g with
+      | _ -> false
+      | exception e when CErrors.noncritical e -> true
+    in
+    let culprit = if above inferred then Some inferred else if above expected then Some expected else None in
+    match culprit with
+    | None -> ()
+    | Some ty -> raise (Above_gradual (env, sigma, inferred, expected, ty))
+
 let coerce_to_type env sigma v ~inferred ~expected =
   if not (enabled env) then None
   else match unify_consistent env sigma inferred expected with
-    | Some sigma -> cast env sigma ~inferred ~expected v
+    | Some sigma ->
+      begin match cast env sigma ~inferred ~expected v with
+        | Some _ as r -> r
+        | None -> check_below_gradual env sigma ~inferred ~expected; None
+      end
     | None -> None
 
 (* In GCIC, [f : ?] used as a function is cast to the germ [? -> ?]. As in

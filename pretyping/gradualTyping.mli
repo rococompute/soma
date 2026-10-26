@@ -39,6 +39,11 @@ val consistent : ?cumul:bool -> env -> Evd.evar_map -> types -> types -> bool
 val inconsistency : ?cumul:bool -> env -> Evd.evar_map -> types -> types ->
   (env * types * types) option
 
+(** [Above_gradual (env, sigma, inferred, expected, ty)]: no cast from
+    [inferred] to [expected] could be built, because [ty] (one of them) lives
+    above the universe of gradual types. Raised by [coerce_to_type]. *)
+exception Above_gradual of env * Evd.evar_map * types * types * types
+
 (** [coerce_to_type env sigma v ~inferred ~expected] casts [v : inferred]
     to [expected] if the types are consistent. *)
 val coerce_to_type : env -> Evd.evar_map -> constr -> inferred:types -> expected:types ->

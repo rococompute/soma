@@ -235,7 +235,12 @@ Extraction differs from the kernel in these ways:
   static errors. Casts between sorts compare levels in the universe graph.
   The extracted runtime only compares Prop, Set and Type, since levels are
   erased. Everything cast lives below the single global universe
-  `Corelib.Gradual.Gradual.gradual`.
+  `Corelib.Gradual.Gradual.gradual`. A large type such as `list Type`, or
+  a universe-polymorphic record, can still be cast. When a cast would
+  need a type above `gradual`, elaboration says so instead of reporting
+  a plain type mismatch, e.g. for `Set : Dyn`:
+  `Cannot cast from "Type" to "Dyn": "Type@{Set+1}" lives above the universe
+  of gradual types (Corelib.Gradual.Gradual.gradual), so no cast was inserted.`
 - **SProp** is not supported, because the axioms quantify over `Type`.
 - **Indexed families** go beyond the paper, which only treats parameters.
   The behaviour is a first-order index check. The indices a rebuilt

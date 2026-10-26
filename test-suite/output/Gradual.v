@@ -44,3 +44,13 @@ Fail Definition bad_prop : Prop := nat.
 Universes i j.
 Constraint j < i.
 Fail Definition bad_univ (T : Type@{i}) : Type@{j} := T.
+
+(* the universe of gradual types: what can be cast, and what cannot *)
+Definition large_list : list Type := cons nat nil.
+Definition large_list_dyn : Dyn := large_list.
+Print large_list_dyn.
+#[universes(polymorphic)] Record Box@{u} := { contents : Type@{u} }.
+Definition box : Box := {| contents := nat |}.
+Definition box_dyn : Dyn := box.
+Print box_dyn.
+Fail Definition set_dyn : Dyn := Set.

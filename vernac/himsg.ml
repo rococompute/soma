@@ -476,6 +476,25 @@ let explain_actual_type env sigma j t reason =
   str "while it is expected to have type" ++ brk(1,1) ++ pt ++
   ppreason ++ str ".") ++ ppgradual
 
+let () = CErrors.register_handler (function
+    | GradualTyping.Above_gradual (env, sigma, inferred, expected, ty) ->
+      let env = make_all_name_different env sigma in
+      let pr_universes t =
+        let open PrintingFlags in
+        let flags = PrintingFlags.current () in
+        let flags = { flags with detype = { flags.detype with universes = true } } in
+        match safe_extern_constr ~flags env sigma t with
+        | None -> pr_leconstr_env env sigma t
+        | Some c -> quote (Ppconstr.pr_lconstr_expr ~flags:(Ppconstr.of_printing_flags flags) env sigma c)
+      in
+      Some (hov 0 (
+          str "Cannot cast from" ++ brk (1,1) ++ pr_leconstr_env env sigma inferred ++ spc () ++
+          str "to" ++ brk (1,1) ++ pr_leconstr_env env sigma expected ++ str ":" ++ spc () ++
+          pr_universes ty ++ spc () ++
+          str "lives above the universe of gradual types" ++ spc () ++
+          str "(Corelib.Gradual.Gradual.gradual), so no cast was inserted."))
+    | _ -> None)
+
 let explain_incorrect_primitive env sigma j exp =
   let env = make_all_name_different env sigma in
   let {uj_val=p;uj_type=t} = j in
