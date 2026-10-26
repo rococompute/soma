@@ -255,5 +255,5 @@ Extraction differs from the kernel in these ways:
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/output/Gradual.v`: the elaborated terms (cast insertion)
-- `test-suite/misc/gradual_extraction.sh`: extracted code, compiled and run, agrees with the kernel
+- `test-suite/misc/gradual_extraction.sh`: one program checked three ways. Each case's value holds as a syntactic normal form under `lazy`, `cbv`, `cbn`, `simpl` and `vm_compute`, and the extracted OCaml agrees with it, except for the documented differences, which are marked in `main.out`
 - `test-suite/coqchk/gradual_register.v`, `test-suite/misc/gradual_rocqchk.sh`: `rocqchk` installs the rules of gradual primitives registered in the module it checks, and validates `Corelib.Gradual.Gradual` itself

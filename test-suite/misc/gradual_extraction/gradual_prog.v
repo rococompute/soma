@@ -1,8 +1,26 @@
 (* Extraction of gradual Rocq: casts are checked at run time.
-   Each [t_*] below is also evaluated by the kernel (see the [Goal]s), and
-   main.ml checks that the extracted code agrees. *)
+   Each [t_*] below has a [Goal] giving its value, which every reduction
+   machine must compute ([machines]); main.ml checks that the extracted code
+   agrees, up to the differences documented in GRADUAL.md. *)
 From Corelib.Gradual Require Import Gradual.
 From Corelib Require Extraction.
+
+(* Both sides have the same normal form, up to universes and not only up
+   to conversion, under each reduction machine: lazy (the kernel machine),
+   cbv, cbn and simpl (after unfolding definitions, which they fold back
+   otherwise), and vm_compute (which falls back to cbv under Gradual
+   Typing). *)
+Ltac machines :=
+  match goal with |- ?a = ?b =>
+    let a1 := eval lazy in a in let b1 := eval lazy in b in constr_eq_nounivs a1 b1;
+    let a2 := eval cbv in a in let b2 := eval cbv in b in constr_eq_nounivs a2 b2;
+    let a3 := eval cbv delta in a in let a3 := eval cbn in a3 in
+    let b3 := eval cbv delta in b in let b3 := eval cbn in b3 in constr_eq_nounivs a3 b3;
+    let a4 := eval cbv delta in a in let a4 := eval simpl in a4 in
+    let b4 := eval cbv delta in b in let b4 := eval simpl in b4 in constr_eq_nounivs a4 b4;
+    let a5 := eval vm_compute in a in let b5 := eval vm_compute in b in constr_eq_nounivs a5 b5;
+    reflexivity
+  end.
 
 Definition succ_dyn (x : Dyn) : nat := x + 1.
 Definition apply3 (g : Dyn) : nat := g 3.
@@ -10,40 +28,48 @@ Definition apply3 (g : Dyn) : nat := g 3.
 (** base types *)
 Definition t_ok (_ : unit) := succ_dyn (cast nat Dyn 41).
 Definition t_bad (_ : unit) := succ_dyn (cast bool Dyn true).
-Goal t_ok tt = 42. Proof. reflexivity. Qed.
-Goal t_bad tt = raise. Proof. reflexivity. Qed.
+Goal t_ok tt = 42. Proof. machines. Qed.
+Goal t_bad tt = raise. Proof. machines. Qed.
 
 (** functions are wrapped *)
 Definition t_app (_ : unit) := apply3 (cast (nat -> nat) Dyn S).
 Definition t_app_bad (_ : unit) := apply3 (cast (bool -> bool) Dyn negb).
-Goal t_app tt = 4. Proof. reflexivity. Qed.
-Goal t_app_bad tt = raise. Proof. reflexivity. Qed.
+Goal t_app tt = 4. Proof. machines. Qed.
+Goal t_app_bad tt = raise. Proof. machines. Qed.
 
 (** parametrized inductive types: elementwise *)
 Definition t_list (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
 Definition t_list_bad (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn true nil).
-Goal t_list tt = cons 1 (cons 2 nil). Proof. reflexivity. Qed.
-Goal t_list_bad tt = cons 1 (cons raise nil). Proof. reflexivity. Qed.
+Goal t_list tt = cons 1 (cons 2 nil). Proof. machines. Qed.
+Goal t_list_bad tt = cons 1 (cons raise nil). Proof. machines. Qed.
 
 Definition pr : Dyn * Dyn := @pair Dyn Dyn 1 true.
 Definition t_pair (_ : unit) : nat * bool := pr.
 Definition t_pair_bad (_ : unit) : bool * nat := pr.
+Goal t_pair tt = (1, true). Proof. machines. Qed.
+Goal t_pair_bad tt = (raise, raise). Proof. machines. Qed.
 
 Definition t_option (_ : unit) : option bool := @Some Dyn false.
+Goal t_option tt = Some false. Proof. machines. Qed.
 
 (** casts of functions inside data are lazy *)
 Definition fs : list Dyn := @cons Dyn S (@cons Dyn negb nil).
 Definition t_fs (_ : unit) : list (nat -> nat) := fs.
+Goal match t_fs tt with cons f (cons g nil) => (f 1, g 1) | _ => (0, 0) end = (2, raise).
+Proof. machines. Qed.
 
 (** records *)
 Record point := mkPoint { px : nat; py : bool }.
 Definition pt : Dyn := cast point Dyn (mkPoint 1 true).
 Definition t_record (_ : unit) : nat := px pt.
 Definition t_record_bad (_ : unit) : nat := cast Dyn nat pt.
+Goal t_record tt = 1. Proof. machines. Qed.
+Goal t_record_bad tt = raise. Proof. machines. Qed.
 
 (** subset types: the proof is erased, the value is cast *)
 Definition pos : Dyn := cast {n : nat | 0 < n} Dyn (exist _ 1 (le_n 1)).
 Definition t_sig (_ : unit) : nat := proj1_sig (cast Dyn {n : nat | 0 < n} pos).
+Goal t_sig tt = 1. Proof. machines. Qed.
 
 (** indexed families *)
 Inductive vec (A : Type) : nat -> Type :=
@@ -58,7 +84,9 @@ Definition vhead {A n} (v : vec A (S n)) : A :=
 Definition v3 : vec nat unk := vcons 1 (vcons 2 (vcons 3 vnil)).
 Definition t_vec (_ : unit) := vhead (v3 : vec nat 3).
 Definition t_vec_bad (_ : unit) : vec nat 2 := v3.
-Goal vhead (t_vec_bad tt) = raise. Proof. reflexivity. Qed.
+Goal vhead (t_vec_bad tt) = raise. Proof. machines. Qed.
+Goal t_vec tt = 1. Proof. machines. Qed.
+Goal t_vec_bad tt = raise. Proof. machines. Qed.
 
 (** dependent functions: the codomain depends on the argument *)
 Fixpoint rep (n : nat) : vec nat n :=
@@ -66,8 +94,8 @@ Fixpoint rep (n : nat) : vec nat n :=
 Definition rep_dyn : Dyn := cast (forall n, vec nat n) Dyn rep.
 Definition t_dep (_ : unit) := vhead (cast Dyn (forall n, vec nat n) rep_dyn 3).
 Definition t_dep_bad (_ : unit) := vhead (cast Dyn (forall n, vec nat (S n)) rep_dyn 3).
-Goal t_dep tt = 2. Proof. reflexivity. Qed.
-Goal t_dep_bad tt = raise. Proof. reflexivity. Qed.
+Goal t_dep tt = 2. Proof. machines. Qed.
+Goal t_dep_bad tt = raise. Proof. machines. Qed.
 
 (** mutual and nested inductive types *)
 Inductive tree (A : Type) := node : A -> forest A -> tree A
@@ -77,12 +105,15 @@ Definition tr : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast nat Dyn 2) 
 Definition t_tree (_ : unit) : tree nat := tr.
 Definition tr_bad : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast bool Dyn true) fnil) fnil).
 Definition t_tree_bad (_ : unit) : tree nat := tr_bad.
+Goal t_tree tt = node 1 (fcons (node 2 fnil) fnil). Proof. machines. Qed.
+Goal t_tree_bad tt = node 1 (fcons (node raise fnil) fnil). Proof. machines. Qed.
 
 #[warnings="-register-all"]
 Inductive rose (A : Type) := rnode : A -> list (rose A) -> rose A.
 Arguments rnode {A}.
 Definition ro : rose Dyn := rnode (cast nat Dyn 1) (cons (rnode (cast nat Dyn 2) nil) nil).
 Definition t_rose (_ : unit) : rose nat := ro.
+Goal t_rose tt = rnode 1 (cons (rnode 2 nil) nil). Proof. machines. Qed.
 
 (** the unknown term and the error *)
 Definition t_unk (_ : unit) : nat := unk.
@@ -90,11 +121,15 @@ Definition t_unk_fun (_ : unit) : nat := (unk : nat -> nat) 3.
 Definition t_unk_dyn (_ : unit) : nat := succ_dyn unk.
 Definition t_err (_ : unit) : nat := raise.
 Definition t_err_fun (_ : unit) : nat -> nat := raise.
-Goal t_unk_dyn tt = unk. Proof. reflexivity. Qed.
+Goal t_unk_dyn tt = unk. Proof. machines. Qed.
+Goal t_unk tt = unk. Proof. machines. Qed.
+Goal t_unk_fun tt = unk. Proof. machines. Qed.
+Goal t_err tt = raise. Proof. machines. Qed.
+Goal t_err_fun tt = raise. Proof. machines. Qed.
 
 (** sorts *)
 Definition t_sort_bad (_ : unit) : nat := cast Type nat bool.
-Goal t_sort_bad tt = raise. Proof. reflexivity. Qed.
+Goal t_sort_bad tt = raise. Proof. machines. Qed.
 
 (** Omega is well typed, and loops *)
 Definition delta := fun x : Dyn => x x.
@@ -123,11 +158,15 @@ Definition t_poly_local (_ : unit) : list bool := dyns_local (cons true nil).
 Definition t_poly_mutual (_ : unit) : list nat := ev (cons 1 (cons 2 (cons 3 nil))).
 Definition t_poly_fun (_ : unit) : nat := (of_dyn (poly_fun S) : nat -> nat) 1.
 Definition t_poly_fun_bad (_ : unit) : nat := (of_dyn (poly_fun negb) : nat -> nat) 1.
-Goal t_poly tt = 41. Proof. reflexivity. Qed.
-Goal t_poly_bad tt = raise. Proof. reflexivity. Qed.
-Goal t_poly_rec_bad tt = cons raise (cons raise nil). Proof. reflexivity. Qed.
-Goal t_poly_mutual tt = cons 1 (cons 2 (cons 3 nil)). Proof. reflexivity. Qed.
-Goal t_poly_fun tt = 2. Proof. reflexivity. Qed.
+Goal t_poly tt = 41. Proof. machines. Qed.
+Goal t_poly_bad tt = raise. Proof. machines. Qed.
+Goal t_poly_list tt = cons 1 (cons 2 nil). Proof. machines. Qed.
+Goal t_poly_rec tt = cons 1 (cons 2 nil). Proof. machines. Qed.
+Goal t_poly_local tt = cons true nil. Proof. machines. Qed.
+Goal t_poly_fun_bad tt = raise. Proof. machines. Qed.
+Goal t_poly_rec_bad tt = cons raise (cons raise nil). Proof. machines. Qed.
+Goal t_poly_mutual tt = cons 1 (cons 2 (cons 3 nil)). Proof. machines. Qed.
+Goal t_poly_fun tt = 2. Proof. machines. Qed.
 
 (** not supported: a function needing type parameters at run time used
     without them, and type abstractions that are not parameters of a
