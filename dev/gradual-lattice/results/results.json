@@ -1,0 +1,3232 @@
+[
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "double: binder whole (line 3) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "double: return whole (line 3) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "double: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "square: binder whole (line 5) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "square: return whole (line 5) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "square: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "fact: binder whole (line 7) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => 1 | S k => cast Dyn nat n * fact (cast nat Dyn k) end\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "fact: return whole (line 7) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "fact: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "fib: binder whole (line 10) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => 0 | 1 => 1 | S (S j as k) => fib (cast nat Dyn k) + fib (cast nat Dyn ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "fib: return whole (line 10) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "fib: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of fib is ill-formed. In environment fib : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 0 | 1 => cast nat Dyn 1 | S (S j as k) => cast nat Dyn (c",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "pow: binder whole (line 16) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "pow: binder whole (line 16) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "pow: return whole (line 16) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "pow: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "is_zero: binder whole (line 19) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "is_zero: return whole (line 19) bool -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "is_zero: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "max3: binder whole (line 21) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "max3: binder whole (line 21) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "max3: binder whole (line 21) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "max3: return whole (line 21) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "max3: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "clamp: binder whole (line 23) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "clamp: binder whole (line 23) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "clamp: binder whole (line 23) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "single",
+  "mutant": "clamp: return whole (line 23) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "definition",
+  "mutant": "clamp: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_double": "same",
+   "obs_square": "same",
+   "obs_fact": "same",
+   "obs_fib": "same",
+   "obs_pow": "same",
+   "obs_is_zero": "same",
+   "obs_max3": "same",
+   "obs_clamp": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "arith.v",
+  "kind": "file",
+  "mutant": "all 21 annotations of the file -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of fact is ill-formed. In environment fact : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast nat Dyn 1 | S k => cast nat Dyn (cast Dyn nat n * cast Dyn nat ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 4) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 5) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to \"cast Dyn expr a\" instead of \"b\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval (cast Dyn exp",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 5) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of \"a\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval (cas",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 6) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : expr Recursive call to eval has principal argument equal to \"cast Dyn expr a\" instead of \"b\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 6) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : expr b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of \"a\". Recursive definition is: \"fun e : expr => match e with | Num n => n | Plus a b => eval a + eval b | ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 7) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : Dyn t : expr f : expr Recursive call to eval has principal argument equal to \"cast Dyn expr c\" instead of one of the following variables: \"t\" \"f\". Recursive definition is: \"fun e : expr => match e with ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 7) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : Dyn f : expr Recursive call to eval has principal argument equal to \"cast Dyn expr t\" instead of one of the following variables: \"c\" \"f\". Recursive definition is: \"fun e : expr => match e with ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "expr: binder whole (line 7) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr c : expr t : expr f : Dyn n : nat Recursive call to eval has principal argument equal to \"cast Dyn expr f\" instead of one of the following variables: \"c\" \"t\". Recursive definition is: \"fun e : expr => match",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "definition",
+  "mutant": "expr: all 8 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : expr -> nat e : expr a : Dyn b : Dyn Recursive call to eval has principal argument equal to \"cast Dyn expr b\" instead of a subterm of \"e\". Recursive definition is: \"fun e : expr => match e with | Num n => cast Dyn nat n | Plus ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "eval: binder whole (line 9) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => eval (cast expr Dyn a) + eval (cast expr Dyn b)",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "eval: return whole (line 9) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "definition",
+  "mutant": "eval: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => cast nat Dyn n | Plus a b => cast nat Dyn (cast Dyn nat (eval (",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "size: binder whole (line 17) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of size is ill-formed. In environment size : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num _ => 1 | Plus a b | Times a b => 1 + size (cast expr Dyn a) + size (",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "size: return whole (line 17) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "definition",
+  "mutant": "size: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of size is ill-formed. In environment size : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num _ => cast nat Dyn 1 | Plus a b | Times a b => cast nat Dyn (1 + cast",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "simplify: binder whole (line 24) expr -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> expr Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => Num n | Plus (Num (S _) as a) b | Plus (Plus _ _ as a)",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "simplify: return whole (line 24) expr -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "definition",
+  "mutant": "simplify: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of simplify is ill-formed. In environment simplify : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => cast expr Dyn (Num n) | Plus (Num (S _) as a) b | Plus ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "single",
+  "mutant": "sample: return whole (line 34) expr -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_eval": "same",
+   "obs_size": "same",
+   "obs_simplify_eval": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "expr.v",
+  "kind": "file",
+  "mutant": "all 15 annotations of the file -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => cast nat Dyn (cast Dyn nat (eval a) + cast Dyn ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder whole (line 3) nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder inner nat (line 3) nat -> nat -> Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder inner nat (line 3) nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder whole (line 3) nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder inner nat (line 3) nat -> nat -> Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder inner nat (line 3) nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: binder whole (line 3) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "compose: return whole (line 3) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "compose: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "twice: binder whole (line 5) nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "twice: binder inner nat (line 5) nat -> nat -> Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "twice: binder inner nat (line 5) nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "twice: binder whole (line 5) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "twice: return whole (line 5) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "twice: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: binder whole (line 7) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: binder whole (line 7) nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: binder inner nat (line 7) nat -> nat -> Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: binder inner nat (line 7) nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: binder whole (line 7) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "iter: return whole (line 7) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "iter: all 4 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: binder whole (line 10) nat * bool -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun p : Dyn => (snd (cast Dyn (?A * bool) p), fst (cast Dyn (nat * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is \"Type\" in environment: p : Dyn - ?B: Cannot infer the implicit parameter B o",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: binder inner nat (line 10) nat * bool -> Dyn * bool",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: binder inner bool (line 10) nat * bool -> nat * Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: return whole (line 10) bool * nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: return inner bool (line 10) bool * nat -> Dyn * nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "swap: return inner nat (line 10) bool * nat -> bool * Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "swap: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun p : Dyn => cast (Dyn * Dyn) Dyn (snd (cast Dyn (?A * Dyn) p), fst (cast Dyn (Dyn * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is \"Type\" in environment: p : Dyn - ?B: Cannot infer the im",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder whole (line 12) nat * nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder inner nat (line 12) nat * nat -> nat -> Dyn * nat -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder inner nat (line 12) nat * nat -> nat -> nat * Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder inner nat (line 12) nat * nat -> nat -> nat * nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder whole (line 12) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: binder whole (line 12) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "curry: return whole (line 12) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "curry: all 4 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder whole (line 14) nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder inner nat (line 14) nat -> nat -> nat -> Dyn -> nat -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder inner nat (line 14) nat -> nat -> nat -> nat -> Dyn -> nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder inner nat (line 14) nat -> nat -> nat -> nat -> nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder whole (line 14) nat * nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (f : nat -> nat -> nat) (p : Dyn) => f (fst (cast Dyn (nat * ?B) p)) (snd (cast Dyn (?A * nat) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is \"Type\" in environment: f : nat -> nat -> nat p :",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder inner nat (line 14) nat * nat -> Dyn * nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: binder inner nat (line 14) nat * nat -> nat * Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "uncurry: return whole (line 14) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "uncurry: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun f p : Dyn => cast Dyn (Dyn -> Dyn) (cast Dyn (Dyn -> Dyn) f (fst (cast Dyn (Dyn * ?B) p))) (snd (cast Dyn (?A * Dyn) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is \"Type\" in environment: f :",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "safe_pred: binder whole (line 16) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "safe_pred: return whole (line 16) option nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "safe_pred: return inner nat (line 16) option nat -> option Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "safe_pred: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "with_default: binder whole (line 18) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "with_default: binder whole (line 18) option nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "with_default: binder inner nat (line 18) option nat -> option Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "with_default: return whole (line 18) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "with_default: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: binder whole (line 21) option nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: binder inner nat (line 21) option nat -> option Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: binder whole (line 21) nat -> option nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: binder inner nat (line 21) nat -> option nat -> Dyn -> option nat",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: binder inner nat (line 21) nat -> option nat -> nat -> option Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: return whole (line 21) option nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "single",
+  "mutant": "bind: return inner nat (line 21) option nat -> option Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "definition",
+  "mutant": "bind: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "higher.v",
+  "kind": "file",
+  "mutant": "all 28 annotations of the file -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "map: binder whole (line 3) A -> B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "map: binder whole (line 3) list A -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "map: return whole (line 3) list B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "map: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter A of map whose type is \"Type\" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "filter: binder whole (line 6) A -> bool -> Dyn",
+  "status": "rejected",
+  "error": "Error: The term \"cast Dyn (Dyn -> Dyn) p (cast A Dyn x)\" has type \"Dyn\" which is not a (co-)inductive type.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "filter: binder inner bool (line 6) A -> bool -> A -> Dyn",
+  "status": "rejected",
+  "error": "Error: The term \"p x\" has type \"Dyn\" which is not a (co-)inductive type.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "filter: binder whole (line 6) list A -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "filter: return whole (line 6) list A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "filter: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: The term \"cast Dyn (Dyn -> Dyn) p x\" has type \"Dyn\" which is not a (co-)inductive type.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 12) A -> B -> B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 12) list A -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "fold: binder whole (line 12) B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "fold: return whole (line 12) B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "fold: all 4 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter A of fold whose type is \"Type\" in environment: fold : Type -> Type -> Dyn -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn z : Dyn x : Dyn r : list Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sum: binder whole (line 15) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => 0 | (x :: r)%list => x + sum (cast (list nat) Dyn r) end\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sum: binder inner nat (line 15) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sum: return whole (line 15) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "sum: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (x + cast Dyn ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: binder whole (line 18) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: binder inner nat (line 18) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: binder whole (line 18) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: binder inner nat (line 18) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: return whole (line 18) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev_acc: return inner nat (line 18) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "rev_acc: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev: binder whole (line 21) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev: binder inner nat (line 21) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev: return whole (line 21) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "rev: return inner nat (line 21) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "rev: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "mem: binder whole (line 23) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "mem: binder whole (line 23) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "mem: binder inner nat (line 23) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "mem: return whole (line 23) bool -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "mem: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "insert: binder whole (line 26) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "insert: binder whole (line 26) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "insert: binder inner nat (line 26) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "insert: return whole (line 26) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "insert: return inner nat (line 26) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "insert: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot guess decreasing argument of fix.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sort: binder whole (line 32) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => nil | (x :: r)%list => insert x (sort (cast (list nat)",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sort: binder inner nat (line 32) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sort: return whole (line 32) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "sort: return inner nat (line 32) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "sort: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "range: binder whole (line 35) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of range is ill-formed. In environment range : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => nil | S k => (range (cast nat Dyn k) ++ k :: nil)%list end\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "range: return whole (line 35) list nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (length (cast Dyn (list ?A) (range 6))) More precisely: - ?A: Cannot infer the implicit parameter A of length whose type is \"Type\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "range: return inner nat (line 35) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "range: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Recursive definition of range is ill-formed. In environment range : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun n : Dyn => match cast Dyn nat n with | 0 => cast (list Dyn) Dyn nil | S k => cast (list Dyn) Dyn (cast Dyn (li",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "evens: binder whole (line 38) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "evens: binder inner nat (line 38) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "evens: return whole (line 38) list nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "single",
+  "mutant": "evens: return inner nat (line 38) list nat -> list Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "definition",
+  "mutant": "evens: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "lists.v",
+  "kind": "file",
+  "mutant": "all 29 annotations of the file -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter A of map whose type is \"Type\" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "origin: return whole (line 5) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "shift: binder whole (line 7) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "shift: binder whole (line 7) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "shift: return whole (line 7) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "definition",
+  "mutant": "shift: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "manhattan: binder whole (line 9) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "manhattan: return whole (line 9) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "definition",
+  "mutant": "manhattan: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "same_x: binder whole (line 11) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "same_x: binder whole (line 11) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "same_x: return whole (line 11) bool -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "definition",
+  "mutant": "same_x: all 3 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "diag: binder whole (line 13) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "single",
+  "mutant": "diag: return whole (line 13) point -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "definition",
+  "mutant": "diag: all 2 annotations -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "records.v",
+  "kind": "file",
+  "mutant": "all 11 annotations of the file -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_shift": "same",
+   "obs_same": "same",
+   "obs_px": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vhead: binder whole (line 8) vec A (S n) -> Dyn",
+  "status": "rejected",
+  "error": "Error: In environment A : Type n : nat v : Dyn The term \"match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end\" has type \"match ?n with | 0 => unit | S _ => A end\" while it is expected to have type \"A\". No cast was inserted: the ",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vhead: return whole (line 8) A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "definition",
+  "mutant": "vhead: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vmap: binder whole (line 12) A -> B -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vmap: binder whole (line 12) vec A n -> Dyn",
+  "status": "rejected",
+  "error": "Error: In environment vmap : forall (A B : Type) (n : nat), (A -> B) -> Dyn -> vec B n A : Type B : Type n : nat f : A -> B v : Dyn The term \"vnil\" has type \"vec B 0\" while it is expected to have type \"vec B n\" (cannot unify \"0\" and \"n\"). No cast was inserted: the types are not consistent, \"0\" and \"",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vmap: return whole (line 12) vec B n -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vmap : forall (A B : Type) (n : nat), (A -> B) -> vec A n -> Dyn A : Type B : Type n : nat f : A -> B v : vec A n n0 : nat x : A r : vec A n0",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "definition",
+  "mutant": "vmap: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vsum: binder whole (line 15) vec nat n -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vsum: binder inner nat (line 15) vec nat n -> vec Dyn n",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vsum: return whole (line 15) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "definition",
+  "mutant": "vsum: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vrep: binder whole (line 18) nat -> Dyn",
+  "status": "rejected",
+  "error": "Error: In environment vrep : forall n : Dyn, nat -> vec nat (cast Dyn nat n) n : Dyn x : nat The term \"vnil\" has type \"vec nat 0\" while it is expected to have type \"vec nat (cast Dyn nat ?u@{n1:=0})\". No cast was inserted: the types are not consistent, \"0\" and \"cast Dyn nat ?u@{n1:=0}\" differ.",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vrep: binder whole (line 18) nat -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vrep: return whole (line 18) vec nat n -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vrep : nat -> nat -> Dyn n, x, k : nat",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "vrep: return inner nat (line 18) vec nat n -> vec Dyn n",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "definition",
+  "mutant": "vrep: all 3 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vrep : Dyn -> Dyn -> Dyn n : Dyn x : Dyn k : nat",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "to_list: binder whole (line 21) vec A n -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "to_list: return whole (line 21) list A -> Dyn",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "definition",
+  "mutant": "to_list: all 2 annotations -> Dyn",
+  "status": "rejected",
+  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "v3: return whole (line 24) vec nat 3 -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (vhead (cast Dyn (vec nat (S ?n)) v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "single",
+  "mutant": "v3: return inner nat (line 24) vec nat 3 -> vec Dyn 3",
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
+  "values": {},
+  "expected": {}
+ },
+ {
+  "file": "vectors.v",
+  "kind": "file",
+  "mutant": "all 13 annotations of the file -> Dyn",
+  "status": "rejected",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?",
+  "observations": {},
+  "values": {},
+  "expected": {}
+ }
+]
