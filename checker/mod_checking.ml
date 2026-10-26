@@ -25,9 +25,15 @@ let constants_of_opaques env opac =
   let csts = fold_constants add env Cset_env.empty in
   Cset_env.fold (fun c acc -> c :: acc) csts []
 
+(* A constant registered in the retroknowledge of the module being checked:
+   a primitive type, or a gradual primitive (see kernel/gradual.ml). *)
+type cst_retro =
+  | RetroType of CPrimitives.prim_type_ex
+  | RetroGradual of Gradual.kind
+
 type check_state = {
   st_opaques : opaques;
-  st_retro : (int * CPrimitives.prim_ind_ex) Mindmap_env.t * CPrimitives.prim_type_ex Cmap_env.t;
+  st_retro : (int * CPrimitives.prim_ind_ex) Mindmap_env.t * cst_retro Cmap_env.t;
 }
 
 let empty_state = {
@@ -120,9 +126,14 @@ let check_constant_declaration env opac kn cb opacify =
   let env = Environ.add_constant kn cb env in
   let env = match retro with
   | None -> env
-  | Some (CPrimitives.PTE prm) ->
+  | Some (RetroType (CPrimitives.PTE prm)) ->
     (* TODO: Some checking is performed by this function, but it looks too lightweight *)
     Primred.add_retroknowledge env (Retroknowledge.Register_type (prm, kn))
+  | Some (RetroGradual prm) ->
+    (* The constant must be an axiom of the expected type; its reduction
+       rules then hold for the rest of the module, as in the kernel. *)
+    let () = Gradual.check_registration env prm kn in
+    Primred.add_retroknowledge env (Retroknowledge.Register_gradual (prm, kn))
   in
   env, opac
 
@@ -392,16 +403,20 @@ let get_retroknowlege env retro =
     else
       (Mindmap_env.add ind (i, CPrimitives.PIE prm) imap, cmap, extind)
   | Retroknowledge.Register_gradual (prm, cst) ->
-    (* The constant must be an axiom of the expected type. Registration
-       only changes reduction, which the checker shares with the kernel. *)
-    let () =
-      if Environ.mem_constant cst env then Gradual.check_registration env prm cst
-    in
-    (imap, cmap, extind)
+    (* Like a primitive type, the rules are installed once the constant is
+       checked (in [check_constant_declaration]). A constant of another
+       library is already checked: its registration is checked here, and
+       installed when this module is imported. *)
+    if Environ.mem_constant cst env then
+      let () = Gradual.check_registration env prm cst in
+      (imap, cmap, extind)
+    else
+      let () = assert (not (Cmap_env.mem cst cmap)) in
+      (imap, Cmap_env.add cst (RetroGradual prm) cmap, extind)
   | Retroknowledge.Register_type (prm, cst) ->
     let () = assert (not (Cmap_env.mem cst cmap)) in
     let () = assert (not (Environ.mem_constant cst env)) in
-    (imap, Cmap_env.add cst (CPrimitives.PTE prm) cmap, extind)
+    (imap, Cmap_env.add cst (RetroType (CPrimitives.PTE prm)) cmap, extind)
   in
   let (imap, cmap, _) = List.fold_left fold (Mindmap_env.empty, Cmap_env.empty, Mindmap_env.empty) retro in
   (imap, cmap)

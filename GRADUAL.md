@@ -256,3 +256,4 @@ Extraction differs from the kernel in these ways:
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/output/Gradual.v`: the elaborated terms (cast insertion)
 - `test-suite/misc/gradual_extraction.sh`: extracted code, compiled and run, agrees with the kernel
+- `test-suite/coqchk/gradual_register.v`, `test-suite/misc/gradual_rocqchk.sh`: `rocqchk` installs the rules of gradual primitives registered in the module it checks, and validates `Corelib.Gradual.Gradual` itself
