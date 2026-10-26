@@ -47,6 +47,37 @@ Fail Definition some_wrong : option bool := @Some nat 0.
 (** [Dyn] alone does not choose the parameters of [cons]. *)
 Fail Definition mixed_dyn : Dyn := cons 1 (cons true nil).
 
+(** * Graduality: a term accepted at a type is accepted at less precise ones
+
+    Each group gives one term at decreasingly precise types. *)
+Module Graduality.
+  Definition l_nat : list nat := cons 1 (cons 2 nil).
+  Definition l_list : list Dyn := cons 1 (cons 2 nil).
+  Definition l_dyn : Dyn := cons 1 (cons 2 nil).
+
+  Definition c_nat : list nat := @cons nat 1 nil.
+  Definition c_dyn : list nat := @cons Dyn 1 nil.
+
+  Definition s_bool : option bool := @Some bool false.
+  Definition s_dyn : option bool := @Some Dyn false.
+
+  Definition b_nat : nat * nat := both 1 1.
+  Definition b_pair : Dyn * Dyn := both 1 1.
+  Definition b_dyn : Dyn := both 1 1.
+
+  (* annotated binders: the annotation is consistent with the domain *)
+  Definition f_nat : nat -> nat := fun x : nat => x.
+  Definition f_dom : Dyn -> nat := fun x : nat => x.
+  Definition f_fun : Dyn -> Dyn := fun x : nat => x.
+  Definition f_dyn : Dyn := fun x : nat => x.
+  Goal f_dom (cast nat Dyn 3) = 3. Proof. reflexivity. Qed.
+  Goal f_dom (cast bool Dyn true) = raise. Proof. reflexivity. Qed.
+
+  (* still static errors: inconsistent annotations *)
+  Fail Definition f_bad : nat -> nat := fun x : bool => x.
+  Fail Definition f_bad' : bool -> nat := fun x : nat => x.
+End Graduality.
+
 (** * Reduction of casts *)
 
 Goal succ_dyn 41 = 42. Proof. reflexivity. Qed.

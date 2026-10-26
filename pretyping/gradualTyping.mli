@@ -25,6 +25,9 @@ open Environ
 (** Is gradual elaboration enabled? *)
 val enabled : env -> bool
 
+(** Is this type, in weak head normal form, the unknown type [?]? *)
+val is_unknown_type : env -> Evd.evar_map -> types -> bool
+
 (** [consistent ~cumul env sigma a b]: [a] and [b] are equal up to the
     unknown term, and up to cumulativity from [a] to [b] where Rocq allows
     it when [cumul] (the default). *)

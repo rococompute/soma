@@ -1265,13 +1265,33 @@ struct
             sigma, Anonymous, None, None
         | _ ->
           if Reductionops.is_head_evar !!env sigma ty then sigma, Anonymous, None, None
+          else if GradualTyping.enabled !!env && GradualTyping.is_unknown_type !!env sigma ty then
+            (* GCIC: a function at type [?] is typed on its own, then cast *)
+            sigma, Anonymous, None, None
           else
             (* No chance of unifying with a product.
                NB: Funclass cannot be a source class so no coercions. *)
             error_not_product ?loc !!env sigma ty
     in
-    let dom_valcon = valcon_of_tycon dom in
-    let sigma, j = eval_type_pretyper self ~flags dom_valcon env sigma c1 in
+    let sigma, j, rng = match dom with
+      | Some dom when GradualTyping.enabled !!env ->
+        (* GCIC: the annotation of the binder only has to be consistent with
+           the expected domain, so [fun x : nat => x : Dyn -> nat] is a cast,
+           as [fun x : nat => x : nat -> nat] is accepted (graduality). When
+           they do not unify, the expected codomain is kept only if it does
+           not depend on the bound variable. *)
+        let sigma, j = eval_type_pretyper self ~flags empty_valcon env sigma c1 in
+        begin match Evarconv.unify_delay !!env sigma dom j.utj_val with
+          | sigma -> sigma, j, rng
+          | exception Evarconv.UnableToUnify _ ->
+            let rng = Option.filter (Vars.noccurn sigma 1) rng in
+            sigma, j, rng
+        end
+      | _ ->
+        let dom_valcon = valcon_of_tycon dom in
+        let sigma, j = eval_type_pretyper self ~flags dom_valcon env sigma c1 in
+        sigma, j, rng
+    in
     let name = {binder_name=name; binder_relevance=ESorts.relevance_of_sort j.utj_type} in
     let var = LocalAssum (name, j.utj_val) in
     let var',env' = push_rel sigma var env in
