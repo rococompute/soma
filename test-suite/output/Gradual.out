@@ -80,3 +80,8 @@ File "./output/Gradual.v", line 64, characters 68-72:
 Warning: by_cast: the proof uses gradual primitives its statement does not
 (cast), so it may not hold in Rocq (see Print Assumptions).
 [gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 72, characters 87-91:
+Warning: after_reset:
+the proof uses gradual primitives its statement does not (cast),
+so it may not hold in Rocq (see Print Assumptions).
+[gradual-proof,vernacular,default]

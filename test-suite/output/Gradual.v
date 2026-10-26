@@ -62,3 +62,11 @@ Lemma plain : forall n : nat, 0 + n = n. Proof. reflexivity. Qed.
 Lemma by_unknown : False. Proof. exact unk. Qed.
 Lemma by_error : forall n : nat, n = 0. Proof. intros; exact raise. Qed.
 Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
+
+(* after backtracking, a name may denote a different constant *)
+Set Warnings "-undo-batch-mode".
+Definition helper : nat := 0.
+Lemma before_reset : 0 = 0. Proof. exact (f_equal (fun _ : nat => 0) (eq_refl helper)). Qed.
+Reset helper.
+Definition helper : nat := cast bool nat true.
+Lemma after_reset : 0 = 0. Proof. exact (f_equal (fun _ : nat => 0) (eq_refl helper)). Qed.

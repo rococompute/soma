@@ -677,7 +677,9 @@ let type_expunge_from_sign table env = type_expunge_from_sign (mlt_env table env
    of another function. Other type parameters are erased as usual, so code
    without casts is extracted as before. *)
 
-let gradual_params_cache = ref Cmap_env.empty
+(* Part of the state: backtracking may give a name to a different
+   constant. *)
+let gradual_params_cache = Summary.ref ~name:"ExtrGradualParams" Cmap_env.empty
 
 (* De Bruijn levels: a binder introduced at depth [l] (the number of
    binders above it) has level [l], and [Rel m] at depth [d] refers to

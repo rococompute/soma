@@ -210,8 +210,10 @@ let coerce_to_sort env sigma t ~inferred =
 
 (* The gradual primitives a term depends on, through the types and the
    transparent bodies of the constants it mentions (opaque proofs are not
-   followed: each proof is checked when it is saved). *)
-let uses_cache = ref Names.Cmap_env.empty
+   followed: each proof is checked when it is saved). The cache is part of
+   the state, so that backtracking, which may give a name to a different
+   constant, also forgets what was computed for it. *)
+let uses_cache = Summary.ref ~name:"gradual-uses-cache" Names.Cmap_env.empty
 
 let rec uses env acc c = match Constr.kind c with
   | Constr.Const (cst, _) ->
