@@ -185,12 +185,28 @@ let check_below_gradual env sigma ~inferred ~expected =
    [match v with vnil => ... end] with [v : Dyn] the length of the vector.
    Type parameters become [Dyn] and indices [?_A]; explicit ones are
    already instantiated. *)
+(* Indices are defaulted too, except in a [match] with a return clause
+   (see [Cases.compile_cases]): its type may depend on the index, and a
+   value whose real index is known would be used at the type computed for
+   [?] ([vhead] on a [v : Dyn], whose result type is
+   [match ?_nat with 0 => unit | S _ => A end], that is [?], not [A]). *)
+let index_defaulting = ref true
+
+let with_index_defaulting b f =
+  let saved = !index_defaulting in
+  index_defaulting := b;
+  Fun.protect ~finally:(fun () -> index_defaulting := saved) f
+
 let default_args_to_unknown env sigma t =
   let t = Reductionops.whd_all env sigma t in
   match kind sigma t with
   | App (f, args) when isInd sigma f ->
-    Array.fold_left (fun sigma a ->
-        if isEvar sigma a then
+    let npar = match kind sigma f with
+      | Ind ((mind, _), _) -> (Environ.lookup_mind mind env).Declarations.mind_nparams
+      | _ -> 0
+    in
+    CArray.fold_left_i (fun i sigma a ->
+        if (i < npar || !index_defaulting) && isEvar sigma a then
           let ty = Reductionops.whd_all env sigma (Retyping.get_type_of env sigma a) in
           try
             let s, d = Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|] in
@@ -199,6 +215,12 @@ let default_args_to_unknown env sigma t =
         else sigma)
       sigma args
   | _ -> sigma
+
+let unknown_at env sigma ty =
+  if not (enabled env) then None
+  else
+    try Some (Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|])
+    with e when CErrors.noncritical e -> None
 
 let coerce_to_type env sigma v ~inferred ~expected =
   if not (enabled env) then None

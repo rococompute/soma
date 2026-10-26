@@ -1114,10 +1114,16 @@ struct
               with Not_found -> []
         else []
       in
-      let pretype_arg ?(trace=Coercion.empty_coercion_trace) env sigma (n, val_before_bidi, bidiargs, candargs) body arg na tycon =
+      let pretype_arg ?(trace=Coercion.empty_coercion_trace) ?(erased=false) env sigma (n, val_before_bidi, bidiargs, candargs) body arg na tycon =
         (* trace is the coercion trace from coercing the body to funclass *)
-        let bidi = n >= nargs_before_bidi in
+        let erased_value =
+          if erased then GradualTyping.unknown_at !!env sigma tycon else None
+        in
+        let bidi = n >= nargs_before_bidi && Option.is_empty erased_value in
         let sigma, c, bidiargs =
+          match erased_value with
+          | Some (sigma, u) -> sigma, u, bidiargs
+          | None ->
           if bidi then
             (* We want to get some typing information from the context
                before typing the argument, so we replace it by an
@@ -1172,8 +1178,18 @@ struct
             in
             sigma, body, na, c1, Esubst.subs_id 0, c2, trace
           in
+          (* GCIC: an implicit argument whose binder occurs nowhere in the
+             rest of the type of the function (precision erased it:
+             [map {A B} (f : Dyn) (l : Dyn) : Dyn]) can never be
+             determined, so it is [?]. One that occurs, like [A] in
+             [nil : forall A, list A], is inferred as usual. *)
+          let erased =
+            GradualTyping.enabled !!env
+            && (match DAst.get c with GHole (GImplicitArg _) -> true | _ -> false)
+            && EConstr.Vars.noccurn sigma 1 c2
+          in
           let sigma, arg_state, body, arg =
-            pretype_arg env sigma arg_state ~trace body c na.binder_name c1
+            pretype_arg env sigma arg_state ~trace ~erased body c na.binder_name c1
           in
           let subs = Esubst.subs_cons (Vars.make_substituend arg) subs in
           apply_rec env sigma arg_state body (subs, c2) rest

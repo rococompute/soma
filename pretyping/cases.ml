@@ -2800,6 +2800,10 @@ let compile_program_cases ?loc style (typing_function, sigma) tycon env
 (* Main entry of the matching compilation                                 *)
 
 let compile_cases ?loc ~program_mode style (typing_fun, sigma) tycon env (predopt, tomatchl, eqns) =
+  (* Gradual typing: a scrutinee of type [?] is cast to the inductive type of
+     the patterns, whose undetermined indices are [?] only when there is no
+     return clause, which could depend on them (GradualTyping). *)
+  GradualTyping.with_index_defaulting (Option.is_empty predopt) @@ fun () ->
   if predopt == None && program_mode && Program.is_program_cases () then
     compile_program_cases ?loc style (typing_fun, sigma)
       tycon env (predopt, tomatchl, eqns)

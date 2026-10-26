@@ -44,6 +44,15 @@ val inconsistency : ?cumul:bool -> env -> Evd.evar_map -> types -> types ->
     above the universe of gradual types. Raised by [coerce_to_type]. *)
 exception Above_gradual of env * Evd.evar_map * types * types * types
 
+(** [with_index_defaulting b f] runs [f] with the undetermined indices of
+    casts from [?] to inductive types defaulted to [?] or not ([true]
+    outside of [match]); parameters are always. *)
+val with_index_defaulting : bool -> (unit -> 'a) -> 'a
+
+(** [unknown_at env sigma ty] is the unknown term [?_ty], when Gradual Typing
+    is enabled and [ty] lives in the universe of gradual types. *)
+val unknown_at : env -> Evd.evar_map -> types -> (Evd.evar_map * constr) option
+
 (** [coerce_to_type env sigma v ~inferred ~expected] casts [v : inferred]
     to [expected] if the types are consistent. *)
 val coerce_to_type : env -> Evd.evar_map -> constr -> inferred:types -> expected:types ->

@@ -89,6 +89,35 @@ Fail Eval lazy in loop_dyn 0.
 (* without gradual primitives, the guard is still checked *)
 Fail Fixpoint not_structural (n : nat) : nat := not_structural n.
 
+(** * Implicit arguments that precision erased
+
+    An implicit argument whose binder occurs nowhere in the rest of the type
+    of the function can never be determined: it is [?]. *)
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint map_dyn {A B : Type} (f : Dyn) (l : Dyn) : Dyn :=
+  match l with nil => nil | cons x r => cons (f x) (map_dyn f r) end.
+Definition map_obs : list nat := map_dyn (fun x : nat => x * 2) (cons 1 (cons 2 (cons 3 nil))).
+Goal map_obs = cons 2 (cons 4 (cons 6 nil)). Proof. reflexivity. Qed.
+(* [A] occurs in [list A]: still an error *)
+Fail Definition no_type := nil.
+
+(** In a [match] with a return clause, the indices of a cast from [Dyn] are
+    not [?]: the return type may depend on them. *)
+Module DependentMatch.
+  Inductive vec (A : Type) : nat -> Type :=
+  | vnil : vec A 0
+  | vcons : forall n, A -> vec A n -> vec A (S n).
+  Arguments vnil {A}. Arguments vcons {A n}.
+  Fail Definition vhead_dyn {A : Type} (v : Dyn) : A :=
+    match v in vec _ m return match m with 0 => unit | S _ => A end with
+    | vnil => tt | vcons x _ => x end.
+  (* without a return clause, they are *)
+  #[warnings="-gradual-unguarded-fixpoint"]
+  Fixpoint vsum_dyn (v : Dyn) : nat :=
+    match v with vnil => 0 | vcons x r => x + vsum_dyn r end.
+  Goal vsum_dyn (cast (vec nat 2) Dyn (vcons 1 (vcons 2 vnil))) = 3. Proof. reflexivity. Qed.
+End DependentMatch.
+
 (** * Graduality: a term accepted at a type is accepted at less precise ones
 
     Each group gives one term at decreasingly precise types. *)

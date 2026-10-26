@@ -2126,9 +2126,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "map: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of map whose type is \"Type\" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2212,9 +2221,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "filter: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of filter whose type is \"Type\" in environment: filter : Type -> Dyn -> Dyn -> Dyn A : Type p : Dyn l : Dyn x : Dyn r : list Dyn",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2298,9 +2316,18 @@
   "file": "lists.v",
   "kind": "definition",
   "mutant": "fold: all 4 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of fold whose type is \"Type\" in environment: fold : Type -> Type -> Dyn -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn z : Dyn x : Dyn r : list Dyn",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3087,9 +3114,18 @@
   "file": "lists.v",
   "kind": "file",
   "mutant": "all 29 annotations of the file -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of map whose type is \"Type\" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3322,7 +3358,7 @@
   "kind": "single",
   "mutant": "vhead: binder whole (line 8) vec A (S n) -> Dyn",
   "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (vhead (cast (vec nat 3) Dyn v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
+  "error": "Error: In environment A : Type n : nat v : Dyn The term \"match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end\" has type \"match ?n with | 0 => unit | S _ => A end\" while it is expected to have type \"A\". No cast was i",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3347,7 +3383,7 @@
   "kind": "definition",
   "mutant": "vhead: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (cast Dyn nat (vhead (cast (vec nat 3) Dyn v3))) More precisely: - ?A: Cannot infer the implicit parameter A of vhead whose type is \"Type\". - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end) More p",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3396,9 +3432,14 @@
   "file": "vectors.v",
   "kind": "definition",
   "mutant": "vmap: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of vmap whose type is \"Type\" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3406,9 +3447,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vsum: binder whole (line 15) vec nat n -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of vsum whose type is \"nat\" in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3446,9 +3492,14 @@
   "file": "vectors.v",
   "kind": "definition",
   "mutant": "vsum: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of vsum whose type is \"nat\" in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3526,9 +3577,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "to_list: binder whole (line 21) vec A n -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of to_list whose type is \"nat\" in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3551,9 +3607,14 @@
   "file": "vectors.v",
   "kind": "definition",
   "mutant": "to_list: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of to_list whose type is \"Type\" in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3587,7 +3648,7 @@
   "kind": "file",
   "mutant": "all 13 annotations of the file -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter A of vmap whose type is \"Type\" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
+  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end) More p",
   "observations": {},
   "values": {},
   "expected": {}
