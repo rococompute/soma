@@ -66,6 +66,10 @@ Module Graduality.
   Definition s_bool : option bool := @Some bool false.
   Definition s_dyn : option bool := @Some Dyn false.
 
+  (* the given argument wins over what the expected type fixes for it *)
+  Definition e_nat := @eq_refl _ 0 : 0 = 0.
+  Definition e_dyn := @eq_refl _ unk : 0 = unk.
+
   Definition m_list : list Dyn := cons 1 (cons true nil).
   Definition m_dyn : Dyn := cons 1 (cons true nil).
 
