@@ -2,7 +2,7 @@
 
 How much of a typed program can be made less precise and still compile, and
 does it still compute the same thing? Measured with `dev/gradual-lattice/` at
-commit `5942c46eb3`. The latest raw numbers are in
+commit `8fe222a410`. The latest raw numbers are in
 `dev/gradual-lattice/results/report.md`.
 
 ## The question
@@ -66,12 +66,12 @@ exactly its original value:
 
 | Observations of compiled mutants | Same | Less precise | `raise` | Different |
 |---|---|---|---|---|
-| final run (284 mutants) | 2100 | 0 | 0 | 0 |
+| final run (290 mutants) | 2134 | 0 | 0 | 0 |
 
 One run did find a changed value, and the change that caused it was
 narrowed before it was committed (see `d15787e665` below).
 
-### Static graduality: 69% → 98%
+### Static graduality: 69% → 100%
 
 Nothing ran out of steps or timed out. Each fix below was driven by the
 rejections the harness reported.
@@ -86,6 +86,8 @@ rejections the harness reported.
 | In a match on a value of `Dyn`, a branch of another index is cast through `Dyn` | `bed62ca1f6` | 204 / 208 (98%) |
 | `fmap.v` added to the corpus | `842eb1a60f` | 282 / 290 before the fix, 284 / 290 after |
 | At `Dyn`, an application is inferred from its arguments first | `5942c46eb3` | 284 / 290 (98%) |
+| Leftover implicits of a term that uses the primitives are `?` | `dd96446eae` | 289 / 290 |
+| The return clause picks the index of a scrutinee of `Dyn` | `8fe222a410` | 290 / 290 (100%) |
 
 Causes of rejection on the original six files, at the first measurement and
 now:
@@ -94,8 +96,8 @@ now:
 |---|---|---|
 | Structural recursion on an argument of type `Dyn` (`Fixpoint fact (n : Dyn)`) | 32 | 0 |
 | A recursive call through a constructor field made `Dyn` (`Plus (a : Dyn) …`, then `eval a`) | 8 | 0 |
-| A type parameter or index left undetermined | 14 | 3 |
-| A dependent match on a cast to an indexed family | 8 | 1 |
+| A type parameter or index left undetermined | 14 | 0 |
+| A dependent match on a cast to an indexed family | 8 | 0 |
 | `match`/`if` on a value of type `Dyn` | 3 | 0 |
 
 By file and by kind of mutant (final run):
@@ -104,17 +106,17 @@ By file and by kind of mutant (final run):
 |---|---|---|---|
 | `arith.v` | 30 | 30 | 240 |
 | `expr.v` | 20 | 20 | 60 |
-| `fmap.v` | 82 | 80 | 720 |
+| `fmap.v` | 82 | 82 | 738 |
 | `higher.v` | 64 | 64 | 512 |
 | `lists.v` | 56 | 56 | 448 |
 | `records.v` | 16 | 16 | 48 |
-| `vectors.v` | 22 | 18 | 72 |
+| `vectors.v` | 22 | 22 | 88 |
 
 | Kind | Compile | Rejected |
 |---|---|---|
-| one annotation | 222 | 4 |
-| all annotations of a definition | 56 | 1 |
-| all annotations of a file | 6 | 1 |
+| one annotation | 226 | 0 |
+| all annotations of a definition | 57 | 0 |
+| all annotations of a file | 7 | 0 |
 
 ### What changed to get there
 
@@ -159,38 +161,39 @@ By file and by kind of mutant (final run):
   `Dyn` fixes nothing, so such an application is now inferred from its
   arguments first. Only when its arguments disagree (`cons 1 (cons true nil)
   : Dyn`) are its parameters `Dyn`.
+- **Leftover implicits** (`dd96446eae`). Some implicits occur in the
+  function's type but are reached by no argument and no expected type:
+  `vmap {A B n} f (v : Dyn) : vec B n` called as `vsum (vmap f v3)`, where
+  `vsum` takes any length; `find {V} k (t : Dyn) : option V` matched with
+  `Some _`; `mem 3 (remove 3 t)` with `remove`'s tree made `Dyn`. Before a
+  definition reports unresolved implicits, such an implicit is `?` when the
+  term itself mentions `cast`, `unknown` or `err`, and the implicit does not
+  occur in the type of the term. The same holds for the parameters and
+  indices of a match scrutinee's type, so the index of
+  `cast Dyn (vec Dyn ?n) v` in `vhead` with every annotation `Dyn` is `?`.
+  User holes are left alone. `Definition x := nil.` and
+  `let y := nil in 0` mention no primitive and stay rejected.
+- **The return clause picks the index** (`8fe222a410`). In `vhead {A n}
+  (v : Dyn) : A`, the match `return match m with 0 => unit | S _ => A end`
+  is on `cast Dyn (vec Dyn ?n) v`. In a match with a return clause on a
+  value of `Dyn`, an index that nothing determined is set to the one
+  constructor, with `?` arguments, at which the return clause is
+  consistent with the expected type. Here only `S` gives `A`, so the
+  scrutinee is a `vec Dyn (S unk)`, the match has type `A`, and `vhead`
+  returns the head itself. If no constructor or several fit (at expected
+  type `Dyn`, both do), the index is left alone. Indices under a return
+  clause are never defaulted to `unk`, which is what changed `vhead`'s
+  value in an earlier attempt.
 
 The full test suite is unchanged through these: 2751 pass, 3 environmental
 failures (`latex1`, `timing-per-file`, `bench-render`).
 
-## What still fails (6)
+## 290 of 290
 
-- **An implicit argument that nothing determines (5).** The implicit does
-  occur in the type, but only where no argument or expected type reaches it:
-  - `vmap {A B n} f (v : Dyn) : vec B n`, called as `vsum (vmap f v3)`.
-    `vsum {n}` takes any length, so neither the argument nor the expected
-    type fixes `vmap`'s `n`.
-  - `find {V} k (t : Dyn) : option V`, called in `mem` as `match find k t
-    with Some _ => … end`. The match never looks at the value, so nothing
-    fixes `V`.
-  - `remove {V} k (t : Dyn) : tree V`, called as `mem 3 (remove 3 sample)`.
-    `mem {V}` takes a tree of any `V`.
-  - `vhead` with all its annotations made `Dyn`, and the whole-file
-    `vectors.v` mutant, where `vhead`'s `n` is only in its return clause.
-
-  Defaulting these to `?` would be the gradual answer, but only safe where
-  the implicit is fixed by nothing at all, which differs from "not fixed
-  yet" in Rocq's elaborator: unification may still solve it later in the
-  same command. Defaulting it everywhere would also make `Definition x :=
-  nil.` succeed in code that never mentions `Dyn`.
-- **A dependent return clause (1).** `vhead {A n} (v : Dyn)` with `match v in
-  vec _ m return match m with 0 => unit | S _ => A end`. The return type
-  depends on the index, which the cast leaves unknown, so the branch type
-  cannot be compared with `A`. Rejected on purpose: defaulting the index
-  here is what changed `vhead`'s value.
-
-The first-order and higher-order programs (`arith`, `expr`, `higher`,
-`lists`, `records`) compile under every mutation.
+At `8fe222a410`, every mutant compiles and every observation of every
+mutant has exactly its original value: no `unk`, no `raise`, no stuck
+cast. The two rules above closed the last six. The kernel needed no new
+reduction rule: no observation was left as a stuck `cast Dyn nat 1`.
 
 ## Caveats
 
@@ -198,7 +201,7 @@ The first-order and higher-order programs (`arith`, `expr`, `higher`,
   numbers say where the implementation breaks, not how often real code does.
   `fmap.v`, the first library-shaped file, found one new bug (the recursive
   argument of an unguarded fixpoint) and one loss of precision (applications
-  at `Dyn`).
+  at `Dyn`). 290 of 290 is a statement about this corpus.
 - **Observations are evaluated by the kernel's `lazy`.** The three-way
   extraction test (`test-suite/misc/gradual_extraction.sh`) separately
   checks that the other reduction machines and the extracted OCaml agree
