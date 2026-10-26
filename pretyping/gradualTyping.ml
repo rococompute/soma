@@ -177,9 +177,40 @@ let check_below_gradual env sigma ~inferred ~expected =
     | None -> ()
     | Some ty -> raise (Above_gradual (env, sigma, inferred, expected, ty))
 
+(* At type [?], nothing determines the parameters of an inductive type:
+   [cons 1 (cons true nil) : Dyn] would choose [nat] from the first
+   element and reject [true]. Type parameters still undetermined are set
+   to [?] instead (explicit ones are already instantiated). *)
+let default_params_to_unknown env sigma inferred =
+  let t = Reductionops.whd_all env sigma inferred in
+  match kind sigma t with
+  | App (f, args) ->
+    begin match kind sigma f with
+      | Ind ((mind, _), _) ->
+        let npar = (Environ.lookup_mind mind env).Declarations.mind_nparams in
+        let sigma = ref sigma in
+        Array.iteri (fun i a ->
+            if i < npar && isEvar !sigma a then
+              let ty = Reductionops.whd_all env !sigma (Retyping.get_type_of env !sigma a) in
+              if isSort !sigma ty then
+                try
+                  let s, d = Typing.checked_appvect env !sigma (prim env Gradual.GUnknown) [|ty|] in
+                  sigma := Evarconv.unify_delay env s a d
+                with e when CErrors.noncritical e -> ())
+          args;
+        !sigma
+      | _ -> sigma
+    end
+  | _ -> sigma
+
 let coerce_to_type env sigma v ~inferred ~expected =
   if not (enabled env) then None
-  else match unify_consistent env sigma inferred expected with
+  else
+    let sigma =
+      if is_unknown_type env sigma expected then default_params_to_unknown env sigma inferred
+      else sigma
+    in
+    match unify_consistent env sigma inferred expected with
     | Some sigma ->
       begin match cast env sigma ~inferred ~expected v with
         | Some _ as r -> r

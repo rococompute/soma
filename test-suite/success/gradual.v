@@ -44,8 +44,13 @@ Goal cons_dyn_bad = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 Goal pair_dyn = (1, true). Proof. reflexivity. Qed.
 Fail Definition some_wrong : option bool := @Some nat 0.
 
-(** [Dyn] alone does not choose the parameters of [cons]. *)
-Fail Definition mixed_dyn : Dyn := cons 1 (cons true nil).
+(** At [Dyn], parameters left undetermined are [Dyn]; explicit ones win. *)
+Definition mixed_dyn : Dyn := cons 1 (cons true nil).
+Definition mixed_pair_dyn : Dyn := (1, true).
+Definition explicit_dyn : Dyn := @cons nat 1 nil.
+Fail Definition explicit_bad : Dyn := @cons nat 1 (cons true nil).
+Goal (mixed_dyn : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
+Goal (explicit_dyn : list nat) = cons 1 nil. Proof. reflexivity. Qed.
 
 (** * Graduality: a term accepted at a type is accepted at less precise ones
 
@@ -60,6 +65,9 @@ Module Graduality.
 
   Definition s_bool : option bool := @Some bool false.
   Definition s_dyn : option bool := @Some Dyn false.
+
+  Definition m_list : list Dyn := cons 1 (cons true nil).
+  Definition m_dyn : Dyn := cons 1 (cons true nil).
 
   Definition b_nat : nat * nat := both 1 1.
   Definition b_pair : Dyn * Dyn := both 1 1.

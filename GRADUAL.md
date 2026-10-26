@@ -273,9 +273,10 @@ Extraction differs from the kernel in these ways:
   with the result, so `cons 1 (cons true nil) : list Dyn` checks both
   elements at `Dyn`. Leading type arguments are still inferred first, so
   an explicit one wins over the expected type: `@cons Dyn 1 nil : list nat`
-  is a cast from `list Dyn`. An ascription of `Dyn` does not determine
-  constructor parameters, so `cons 1 (cons true nil) : Dyn` is still
-  rejected. Write `list Dyn`, or `@cons Dyn 1 …`.
+  is a cast from `list Dyn`. At type `Dyn` itself, type parameters that
+  nothing determines are set to `Dyn`, so `cons 1 (cons true nil) : Dyn`
+  is a `list Dyn` cast to `Dyn`; explicit ones still win
+  (`@cons nat 1 nil : Dyn` is a `list nat`).
 
 ## Tests
 
