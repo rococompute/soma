@@ -847,7 +847,10 @@ let gradual_step ~whd env sigma k head stack =
                 (mkApp (head, [|Vars.substl (v :: indices) p|]), s'))
           | Stack.Fix (f, s') :: s'' ->
             Some (reduce_and_refold_fix env sigma f (s' @ Stack.append_app [|v|] s''))
-          | (Stack.App _ | Stack.Proj _ | Stack.Primitive _) :: _ | [] -> None
+          | Stack.Proj (p, _) :: s' ->
+            Gradual.projection_type env p (to_c a) (to_c v) |> Option.map (fun ty ->
+                (mkApp (head, [|EConstr.of_constr ty|]), s'))
+          | (Stack.App _ | Stack.Primitive _) :: _ | [] -> None
           end
       end
     | Gradual.GCast, [a; b; t] ->

@@ -2162,6 +2162,18 @@ and knr_gradual info tab ~pat_state m k stk =
           let hd = { mark = Red; term = m.term } in
           kni info tab ~pat_state { mark = Red; term = FApp (hd, [|p|]) } s'
         end
+      | Zproj (p, _) :: s' when red_set info.i_flags fMATCH ->
+        (* ?_(R pars).(p) ~> ?_(T pars ?_(R pars)) *)
+        let ty = Option.bind (readback h) (fun scrut -> match kind scrut with
+            | App (_, [|a|]) -> Gradual.projection_type env (Projection.make p true) a scrut
+            | _ -> None)
+        in
+        begin match ty with
+        | None -> stuck ()
+        | Some ty ->
+          let hd = { mark = Red; term = m.term } in
+          kni info tab ~pat_state { mark = Red; term = FApp (hd, [|inject ty|]) } s'
+        end
       | Zfix (fx, par) :: s' when red_set info.i_flags fFIX ->
         (* ?_I and err_I are canonical forms of I: unfold the fixpoint, the
            match on the recursive argument will consume them *)

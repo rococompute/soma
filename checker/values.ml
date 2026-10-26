@@ -486,10 +486,14 @@ let v_prim_ind = v_enum "prim_ind" 6
 let v_prim_type = v_enum "prim_type" 4
 (* Number of constructors of prim_type in "kernel/cPrimitives.ml" *)
 
+let v_gradual_prim = v_enum "gradual_prim" 3
+(* Number of constructors of gradual_prim in "kernel/retroknowledge.ml" *)
+
 let v_retro_action =
   v_sum "retro_action" 0 [|
     [|v_prim_ind; v_ind|];
     [|v_prim_type; v_cst|];
+    [|v_gradual_prim; v_cst|];
   |]
 
 let v_retroknowledge =

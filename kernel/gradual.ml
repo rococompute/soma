@@ -120,6 +120,10 @@ let view_type env c =
     end
   | _ -> HOther
 
+let is_unknown_type env c = match view_type env c with
+  | HUnknown -> true
+  | HProd _ | HSort _ | HInd _ | HErr | HOther -> false
+
 type tview =
   | TUnknown
   | TErr
@@ -187,6 +191,7 @@ let cast_constructor env cast ((ind, k), _) u1 u2 pars1 pars2 cargs =
   let npar = mib.mind_nparams in
   if Array.length cargs <> npar + mip.mind_consnrealargs.(k - 1) then None
   else
+    let cu = u2 in
     let u1 = template_instance mib u1 and u2 = template_instance mib u2 in
     let ctx, concl = mip.mind_nf_lc.(k - 1) in
     let decls = List.rev ctx in
@@ -215,7 +220,7 @@ let cast_constructor env cast ((ind, k), _) u1 u2 pars1 pars2 cargs =
       | App (_, all) -> Array.sub all npar (Array.length all - npar)
       | _ -> [||]
     in
-    let c = mkApp (mkConstructU ((ind, k), u2), Array.append pars2 (Array.of_list args)) in
+    let c = mkApp (mkConstructU ((ind, k), cu), Array.append pars2 (Array.of_list args)) in
     Some (c, indices)
 
 (* Comparing the indices computed for a casted constructor with the indices
@@ -273,7 +278,7 @@ let reduce_cast env ~whnf a b t t_whnf =
   | HUnknown, _ ->
     (* projection out of the unknown type *)
     begin match view_term env (Lazy.force t_whnf) with
-      | TCast (a', b', t') when view_type env (whnf b') == HUnknown ->
+      | TCast (a', b', t') when is_unknown_type env (whnf b') ->
         Some (mkApp (cast, [|a'; b; t'|]))
       | TUnknown -> unknown ()
       | TErr -> err ()
@@ -340,3 +345,13 @@ let inductive_indices env ci a =
     | HInd (_, args) when Array.length args = ci.ci_npar + mip.mind_nrealargs ->
       Some (Array.sub args ci.ci_npar mip.mind_nrealargs)
     | _ -> None
+
+let projection_type env p a scrut =
+  match view_type env a with
+  | HInd ((ind, u), args)
+    when Ind.CanOrd.equal ind (Projection.inductive p)
+      && Int.equal (Array.length args) (Projection.npars p) ->
+    let _, pty = Environ.lookup_projection p env in
+    let pty = Vars.subst_instance_constr u pty in
+    Some (Vars.substl (scrut :: List.rev (Array.to_list args)) pty)
+  | _ -> None

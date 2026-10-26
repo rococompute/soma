@@ -958,9 +958,18 @@ and reduce_nested_projection infos env sigma c =
     | _ -> NotReducible
   in redrec c
 
-and reduce_projection infos env sigma p ~npars c =
-  let* f, s = whd_construct infos env sigma (c, []) in
-  contract_projection env sigma f p ~npars s
+and reduce_projection infos env sigma (p, r as pr) ~npars c =
+  let* f, (hd, args as s) = whd_construct infos env sigma (c, []) in
+  match EConstr.kind sigma hd with
+  | Const (cst, _) when is_gradual_canonical env sigma s ->
+    let k = Option.get (Gradual.kind_of env cst) in
+    let whd c = whd_all env sigma c in
+    let stk = Stack.append_app_list args [Stack.Proj (p, r)] in
+    begin match Reductionops.gradual_step ~whd env sigma k hd stk with
+    | Some (t, stk) -> Reduced (Stack.zip sigma (t, stk))
+    | None -> NotReducible
+    end
+  | _ -> contract_projection env sigma f pr ~npars s
 
 and reduce_case infos env sigma (ci, u, pms, p, iv, c, lf) =
   let* f, (hd, args) = whd_construct infos env sigma (c, []) in

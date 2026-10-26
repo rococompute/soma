@@ -776,6 +776,10 @@ and cbv_gradual info c k args stk =
               let scrut = mkApp (c, [|a|]) in
               let p = Vars.substl (scrut :: List.rev (Array.to_list indices)) p in
               (mkApp (c, [|p|]), stk'))
+        | [], PROJ (p, _, stk') ->
+          let scrut = mkApp (c, [|a|]) in
+          Gradual.projection_type info.env p a scrut
+          |> Option.map (fun ty -> (mkApp (c, [|ty|]), stk'))
         | _ -> None
       end
     | Gradual.GCast, [a; b; t] ->

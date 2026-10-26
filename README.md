@@ -21,6 +21,10 @@
 [doi-badge]: https://zenodo.org/badge/DOI/10.5281/zenodo.15149628.svg
 [doi-link]: https://doi.org/10.5281/zenodo.15149628
 
+> **This is Gradual Rocq**, a fork implementing gradual dependent types
+> (GCIC^G: conservativity and graduality are kept, *normalization is
+> sacrificed*). See [GRADUAL.md](GRADUAL.md).
+
 The Rocq Prover is an interactive theorem prover, or proof assistant. It provides a formal language to write
 mathematical definitions, executable algorithms and theorems together with an
 environment for semi-interactive development of machine-checked proofs.

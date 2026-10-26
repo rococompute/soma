@@ -1046,6 +1046,14 @@ let rec whd_state_gen ?csts flags env sigma =
               whrec Cst_stack.empty (CbnClos.inject t, s')
             | None -> fold ()
             end
+          | (Gradual.GUnknown | Gradual.GErr), [a], [], Stack.Proj (p, r, _) :: s' ->
+            let rstk = Reductionops.Stack.append_app [|a|] [Reductionops.Stack.Proj (p, r)] in
+            begin match Reductionops.gradual_step ~whd env sigma k head rstk with
+            | Some (t, rstk) ->
+              let t = Reductionops.Stack.zip sigma (t, rstk) in
+              whrec Cst_stack.empty (CbnClos.inject t, s')
+            | None -> fold ()
+            end
           | (Gradual.GUnknown | Gradual.GErr), [_], [], Stack.Fix (subs, f, s', cst_l) :: s''
             when RedFlags.red_set flags RedFlags.fFIX ->
             let x' = clos_of_app_stack sigma x (Stack.append_app (Array.of_list args) Stack.empty) in

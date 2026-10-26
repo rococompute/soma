@@ -82,3 +82,7 @@ val reduce_cast :
     [a] (in whnf) for a match described by [ci], or [None] when they cannot
     be computed. Used for [match ?{_I} return P with ... ~> ?{_P}]. *)
 val inductive_indices : Environ.env -> case_info -> constr -> constr array option
+
+(** [projection_type env p a scrut] is the type of [p scrut] where
+    [scrut : a] and [a] is in whnf. Used for [?{_R}.(p) ~> ?{_T}]. *)
+val projection_type : Environ.env -> Projection.t -> constr -> constr -> constr option
