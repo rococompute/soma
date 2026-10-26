@@ -152,7 +152,10 @@ GCIC elaboration replaces conversion by **consistency**: equality up to `?`.
 It plugs into Rocq's coercion mechanism (`pretyping/coercion.ml`) as the
 last resort, after unification and ordinary coercions have failed:
 
-- a term `t : A` where `B` is expected, with `A ~ B` consistent, becomes `cast A B t`;
+- a term `t : A` where `B` is expected, with `A ~ B` consistent, becomes `cast A B t`.
+  Evars are instantiated where the two types agree, so for
+  `vcons 1 (vcons true vnil) : vec Dyn unk` the parameter is set to `Dyn`
+  although `S ?n` and `unk` do not unify;
 - a term `f : Dyn` in function position becomes `cast Dyn (Dyn -> Dyn) f`;
 - a term `T : Dyn` in type position becomes `cast Dyn Type T`.
 
@@ -235,7 +238,11 @@ Extraction differs from the kernel in these ways:
   `Corelib.Gradual.Gradual.gradual`.
 - **SProp** is not supported, because the axioms quantify over `Type`.
 - **Indexed families** go beyond the paper, which only treats parameters.
-  The behaviour is a pragmatic first-order index check.
+  The behaviour is a first-order index check. The indices a rebuilt
+  constructor computes are compared with the target ones: `?` is
+  compatible with anything, and distinct constructors are a mismatch
+  (`raise`). Anything undecided, such as a neutral index, leaves the cast
+  stuck (`test-suite/success/gradual_vec.v`).
 - **VM / native compilation** treat the axioms as opaque. Under
   `Gradual Typing`, `vm_compute`, `native_compute` and `Compute` fall back
   to `cbv`.
@@ -254,6 +261,7 @@ Extraction differs from the kernel in these ways:
 ## Tests
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
+- `test-suite/success/gradual_vec.v`: indexed families (`vec`, `Fin`, `eq`): index checks, stuck casts on neutral indices, `match` on `?`
 - `test-suite/output/Gradual.v`: the elaborated terms (cast insertion)
 - `test-suite/misc/gradual_extraction.sh`: one program checked three ways. Each case's value holds as a syntactic normal form under `lazy`, `cbv`, `cbn`, `simpl` and `vm_compute`, and the extracted OCaml agrees with it, except for the documented differences, which are marked in `main.out`
 - `test-suite/coqchk/gradual_register.v`, `test-suite/misc/gradual_rocqchk.sh`: `rocqchk` installs the rules of gradual primitives registered in the module it checks, and validates `Corelib.Gradual.Gradual` itself

@@ -92,10 +92,38 @@ let cast env sigma ~inferred ~expected v =
     Some (sigma, c, expected)
   with e when CErrors.noncritical e -> None
 
+(* [consistent], also instantiating evars where the two types agree:
+   [vec ?A (S ?n)] against [vec Dyn ?] sets [?A := Dyn], although the whole
+   types do not unify ([S ?n] against [?]). Elaboration then checks the
+   arguments of [vcons] at [Dyn]. *)
+let rec unify_consistent ?(cumul=true) env sigma a b =
+  let unify = if cumul then Evarconv.unify_leq_delay else Evarconv.unify_delay in
+  match unify env sigma a b with
+  | sigma -> Some sigma
+  | exception Evarconv.UnableToUnify _ ->
+    let a = Reductionops.whd_all env sigma a in
+    let b = Reductionops.whd_all env sigma b in
+    if is_unknown env sigma a || is_unknown env sigma b then Some sigma
+    else
+      let fold sigma l1 l2 =
+        CArray.fold_left2 (fun sigma a b ->
+            Option.bind sigma (fun sigma -> unify_consistent ~cumul:false env sigma a b))
+          (Some sigma) l1 l2
+      in
+      match kind sigma a, kind sigma b with
+      | Evar _, _ | _, Evar _ -> Some sigma
+      | Prod (na, a1, b1), Prod (_, a2, b2) ->
+        Option.bind (unify_consistent ~cumul:false env sigma a1 a2) (fun sigma ->
+            unify_consistent ~cumul (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2)
+      | App (f1, args1), App (f2, args2) when Int.equal (Array.length args1) (Array.length args2) ->
+        fold sigma (Array.append [|f1|] args1) (Array.append [|f2|] args2)
+      | _ -> if consistent ~cumul env sigma a b then Some sigma else None
+
 let coerce_to_type env sigma v ~inferred ~expected =
-  if enabled env && consistent env sigma inferred expected then
-    cast env sigma ~inferred ~expected v
-  else None
+  if not (enabled env) then None
+  else match unify_consistent env sigma inferred expected with
+    | Some sigma -> cast env sigma ~inferred ~expected v
+    | None -> None
 
 (* In GCIC, [f : ?] used as a function is cast to the germ [? -> ?]. As in
    GCIC^G, this germ lives in the same universe as [?] itself. *)
