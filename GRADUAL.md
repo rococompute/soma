@@ -141,7 +141,8 @@ Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
 | `cast (I p1) (I p2) (c p1 args)` | `c p2 (cast Tᵢ[p1] Tᵢ[p2] argsᵢ)` |
 | `cast (I p1 i1) (I p2 i2) (c …)` (indexed) | as above, if the indices the constructor produces are compatible with `i2` (`?` matches anything), else `err` |
 | `cast (I …) (I …) (unknown _)` | `unknown B` (same for `err`) |
-| any other head clash among Π / Sort / inductive | `err B` |
+| `cast (array A1) (array A2) t`, `A1 ≢ A2` | stuck (array elements are not cast) |
+| any other head clash among Π / Sort / inductive / primitive type (`int`, `float`, `string`, `array`) | `err B` |
 | anything involving a neutral type | stuck |
 
 The GCIC^G decision is in the injection rule `cast A Dyn t`. It keeps `A`
@@ -245,7 +246,14 @@ Extraction differs from the kernel in these ways:
 - **Universe levels are erased.** The runtime compares only Prop, Set
   and Type, where the kernel asks the universe graph.
 - **Proofs are erased**, so casts between propositions are not checked.
-- **Coinductive types** are not supported in casts yet.
+- **Coinductive types** are not supported in casts yet. The kernel would
+  have to rebuild a constructor of a `cofix` without unfolding it more than
+  once, and the runtime would have to keep the rebuilt value lazy.
+- **Primitive types** follow the kernel. Equal ones cast to themselves and
+  clashes give `err`. Their values are OCaml values (e.g. `int` through
+  `Extract Inlined Constant`), so `?` and `err` at them raise at once.
+  Casts between arrays of different element types raise
+  `Cast_error`; the kernel leaves them stuck.
 - Only OCaml is supported. Haskell and Scheme extraction print an error.
 
 ## Limitations and known gaps

@@ -119,5 +119,8 @@ let () =
   run "t_poly_mutual" (fun () -> list nat (t_poly_mutual ())) "[1; 2; 3]";
   run "t_poly_fun" (fun () -> nat (t_poly_fun ())) "2";
   run "t_poly_fun_bad" (fun () -> nat (t_poly_fun_bad ())) "raise";
+  run "t_int" (fun () -> string_of_int (t_int ())) "3";
+  run "t_int_bad" (fun () -> nat (t_int_bad ())) "raise";
+  run "t_int_float" (fun () -> string_of_float (t_int_float ())) "raise";
   (* t_omega loops *)
   Printf.printf "%d disagreements with the kernel\n" !disagreements

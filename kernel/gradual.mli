@@ -66,13 +66,20 @@ val check_registration : Environ.env -> kind -> Constant.t -> unit
 
 (** {6 Views} *)
 
+(** Primitive types (registered in the retroknowledge). *)
+type prim = PInt | PFloat | PString | PArray
+
 type head =
   | HProd of Name.t binder_annot * types * types
   | HSort of Sorts.t
   | HInd of pinductive * constr array
+  | HPrim of prim * constr array (** a primitive type, with the element type of arrays *)
   | HUnknown (** [unknown X], the unknown type [?{_□}] *)
   | HErr (** [err X], the erroneous type *)
   | HOther (** neutral, or a head we do not know how to cast *)
+
+(** [prim_type env c] tells whether [c] is a registered primitive type. *)
+val prim_type : Environ.env -> Constant.t -> prim option
 
 (** [view_type env c] classifies a type in weak head normal form. *)
 val view_type : Environ.env -> constr -> head

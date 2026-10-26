@@ -1304,6 +1304,14 @@ and gradual_reify table sg ctx t =
       match gradual_kind_of_term env sg t, EConstr.kind sg hd with
       | Some Gradual.GUnknown, _ -> rt "unknown_ty"
       | Some Gradual.GErr, _ -> rt "err_ty"
+      | _, Const (c, _) when Option.has_some (Gradual.prim_type env c) ->
+        begin match Option.get (Gradual.prim_type env c), args with
+          | Gradual.PInt, [||] -> rt_app "prim" [MLraw "\"int\""]
+          | Gradual.PFloat, [||] -> rt_app "prim" [MLraw "\"float\""]
+          | Gradual.PString, [||] -> rt_app "prim" [MLraw "\"string\""]
+          | Gradual.PArray, [|a|] -> rt_app "prim_array" [gradual_reify table sg ctx a]
+          | _ -> gradual_error env sg (Pp.str "no runtime description for type") t
+        end
       | _, Ind (ind, u) ->
         let mib, mip = Inductive.lookup_mind_specif env ind in
         if Array.length args <> mib.mind_nparams + mip.mind_nrealargs then

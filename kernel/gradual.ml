@@ -116,27 +116,45 @@ let check_registration env k c =
 
 (* Views *)
 
+type prim = PInt | PFloat | PString | PArray
+
 type head =
   | HProd of Name.t binder_annot * types * types
   | HSort of Sorts.t
   | HInd of pinductive * constr array
+  | HPrim of prim * constr array
   | HUnknown
   | HErr
   | HOther
+
+let prim_type env cst =
+  let r = Environ.retroknowledge env in
+  let is = function Some c -> Constant.CanOrd.equal c cst | None -> false in
+  if is r.Retroknowledge.retro_int63 then Some PInt
+  else if is r.Retroknowledge.retro_float64 then Some PFloat
+  else if is r.Retroknowledge.retro_string then Some PString
+  else if is r.Retroknowledge.retro_array then Some PArray
+  else None
 
 let view_type env c =
   match kind c with
   | Prod (na, a, b) -> HProd (na, a, b)
   | Sort s -> HSort s
   | Ind pi -> HInd (pi, [||])
+  | Const (cst, _) ->
+    begin match prim_type env cst with
+      | Some p -> HPrim (p, [||])
+      | None -> HOther
+    end
   | App (f, args) ->
     begin match kind f with
       | Ind pi -> HInd (pi, args)
       | Const (cst, _) when Int.equal (Array.length args) 1 ->
-        begin match kind_of env cst with
-          | Some GUnknown -> HUnknown
-          | Some GErr -> HErr
-          | Some GCast | None -> HOther
+        begin match kind_of env cst, prim_type env cst with
+          | Some GUnknown, _ -> HUnknown
+          | Some GErr, _ -> HErr
+          | None, Some p -> HPrim (p, args)
+          | (Some GCast | None), _ -> HOther
         end
       | _ -> HOther
     end
@@ -144,7 +162,7 @@ let view_type env c =
 
 let is_unknown_type env c = match view_type env c with
   | HUnknown -> true
-  | HProd _ | HSort _ | HInd _ | HErr | HOther -> false
+  | HProd _ | HSort _ | HInd _ | HPrim _ | HErr | HOther -> false
 
 type tview =
   | TUnknown
@@ -261,8 +279,8 @@ let rec check_index env whnf i1 i2 =
         if not (Ind.CanOrd.equal ind1 ind2)
         || Array.length args1 <> Array.length args2 then IMismatch
         else check_indices env whnf args1 args2
-      | HSort _, HSort _ | HProd _, HProd _ -> IStuck
-      | (HProd _ | HSort _ | HInd _), (HProd _ | HSort _ | HInd _) -> IMismatch
+      | HSort _, HSort _ | HProd _, HProd _ | HPrim _, HPrim _ -> IStuck
+      | (HProd _ | HSort _ | HInd _ | HPrim _), (HProd _ | HSort _ | HInd _ | HPrim _) -> IMismatch
       | _ -> IStuck
 
 and check_indices env whnf is1 is2 =
@@ -349,7 +367,11 @@ let reduce_cast env ~whnf a b t t_whnf =
           end
         | TCast _ | TOther -> None
       end
-  | (HProd _ | HSort _ | HInd _), (HProd _ | HSort _ | HInd _) ->
+  | HPrim (p1, _), HPrim (p2, _) when p1 = p2 ->
+    (* equal primitive types were handled above: arrays of different element
+       types, whose elements casts do not visit *)
+    None
+  | (HProd _ | HSort _ | HInd _ | HPrim _), (HProd _ | HSort _ | HInd _ | HPrim _) ->
     (* head constructor mismatch *)
     err ()
   | HOther, _ | _, HOther -> None

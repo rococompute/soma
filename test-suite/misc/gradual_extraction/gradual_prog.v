@@ -4,6 +4,7 @@
    agrees, up to the differences documented in GRADUAL.md. *)
 From Corelib.Gradual Require Import Gradual.
 From Corelib Require Extraction.
+From Corelib Require Import PrimInt63 PrimFloat.
 
 (* Both sides have the same normal form, up to universes and not only up
    to conversion, under each reduction machine: lazy (the kernel machine),
@@ -142,6 +143,14 @@ Goal t_err_fun tt = raise. Proof. machines. Qed.
 Definition t_sort_bad (_ : unit) : nat := cast Type nat bool.
 Goal t_sort_bad tt = raise. Proof. machines. Qed.
 
+(** primitive types: equal ones cast to themselves, others clash *)
+Definition t_int (_ : unit) : int := cast Dyn int (cast int Dyn 3%uint63).
+Definition t_int_bad (_ : unit) : nat := cast Dyn nat (cast int Dyn 3%uint63).
+Definition t_int_float (_ : unit) : float := cast Dyn float (cast int Dyn 3%uint63).
+Goal t_int tt = 3%uint63. Proof. machines. Qed.
+Goal t_int_bad tt = raise. Proof. machines. Qed.
+Goal t_int_float tt = raise. Proof. machines. Qed.
+
 (** Omega is well typed, and loops *)
 Definition delta := fun x : Dyn => x x.
 Definition t_omega (_ : unit) : Dyn := delta (cast (Dyn -> Dyn) Dyn delta).
@@ -194,10 +203,14 @@ Set Extraction Output Directory ".".
    cannot, so casts to bool raise at once. *)
 Extract Inductive bool => "bool" [ "true" "false" ].
 Extract Inductive unit => "unit" [ "()" ].
+(* primitive integers, as OCaml integers (see uint63.ml) *)
+Extract Inlined Constant int => "Uint63.t".
+Extract Inlined Constant float => "float".
 
 Extraction "gradual_prog.ml"
   t_ok t_bad t_app t_app_bad t_list t_list_bad t_list_bad_length t_list_bad_head
   t_pair t_pair_bad t_option t_tree_bad_root t_unk_plus t_unk_elim
+  t_int t_int_bad t_int_float
   t_fs t_record t_record_bad t_sig t_vec t_vec_bad t_dep t_dep_bad
   t_tree t_tree_bad t_rose t_unk t_unk_fun t_unk_dyn t_err t_err_fun
   t_sort_bad t_omega vhead

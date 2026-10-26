@@ -129,6 +129,23 @@ Lemma under_binder_fun : forall (f : nat -> nat) (n : nat),
   cast (Dyn -> Dyn) (nat -> nat) (cast (nat -> nat) (Dyn -> Dyn) f) n = f n.
 Proof. intros. reflexivity. Qed.
 
+(** * Primitive types *)
+
+Module Prim.
+  From Corelib Require Import PrimInt63 PrimFloat PrimString PrimArray.
+  Goal cast Dyn int (cast int Dyn 3%uint63) = 3%uint63. Proof. reflexivity. Qed.
+  Goal cast int nat 3%uint63 = raise. Proof. reflexivity. Qed.
+  Goal cast float int 1.5%float = raise. Proof. reflexivity. Qed.
+  Goal cast string int "a"%pstring = raise. Proof. reflexivity. Qed.
+  Goal cast int Type 3%uint63 = raise. Proof. reflexivity. Qed.
+  (* the elements of arrays are not cast: such a cast is stuck *)
+  Goal True.
+    let t := eval lazy in (cast (array nat) (array bool) (make 1 0)) in
+    match t with cast _ _ _ => idtac end.
+    exact I.
+  Qed.
+End Prim.
+
 (** * Sorts: consistent only when cumulative *)
 
 (** Without [?], elaboration is CIC: a type is not cast into [Prop] or into

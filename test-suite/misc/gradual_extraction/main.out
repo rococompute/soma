@@ -40,4 +40,7 @@ t_poly_local = [true]
 t_poly_mutual = [1; 2; 3]
 t_poly_fun = 2
 t_poly_fun_bad = raise (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_int = 3
+t_int_bad = raise
+t_int_float = raise (cannot cast from int to float)
 0 disagreements with the kernel

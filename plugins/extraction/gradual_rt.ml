@@ -69,6 +69,7 @@ type ty =
   | Sort of int  (* 0 = Prop, 1 = Set, 2 = Type *)
   | Pi of ty * (Obj.t -> ty)
   | Ind of ind
+  | Prim of string * ty list  (* int, float, string, array (of its elements) *)
 
 and ind = {
   name : string;
@@ -104,6 +105,8 @@ let rec to_string = function
     if Array.length args = 0 then name
     else
       "(" ^ String.concat " " (name :: Array.to_list (Array.map arg_to_string args)) ^ ")"
+  | Prim (name, []) -> name
+  | Prim (name, args) -> "(" ^ String.concat " " (name :: List.map to_string args) ^ ")"
 
 and arg_to_string = function
   | Ty t -> to_string t
@@ -132,6 +135,8 @@ let rec equal a b =
     String.equal i1.name i2.name
     && Array.length i1.args = Array.length i2.args
     && Array.for_all2 equal_arg i1.args i2.args
+  | Prim (p1, a1), Prim (p2, a2) ->
+    String.equal p1 p2 && List.length a1 = List.length a2 && List.for_all2 equal a1 a2
   | _ -> false
 
 and equal_arg a b = match a, b with
@@ -145,13 +150,14 @@ let rec unknown_term ty : Obj.t = match ty with
   | Erased | Sort _ -> dummy
   | Pi (_, b) -> Obj.repr (fun x -> unknown_term (b x))
   | Ind i -> if i.data then make_exc true i.name else raise (Unknown_term i.name)
+  | Prim (name, _) -> raise (Unknown_term name)
   | Err -> raise (Cast_error "unknown term of the error type")
 
 let rec err_term ty : Obj.t = match ty with
   | Unknown -> Obj.repr { dty = Err; dv = dummy }
   | Erased | Sort _ -> dummy
   | Pi (_, b) -> Obj.repr (fun x -> err_term (b x))
-  | Ind _ | Err -> error_at ty ("error at type " ^ to_string ty)
+  | Ind _ | Prim _ | Err -> error_at ty ("error at type " ^ to_string ty)
 
 let rec cast a b (v : Obj.t) : Obj.t =
   if equal a b then v
@@ -183,6 +189,10 @@ let rec cast a b (v : Obj.t) : Obj.t =
              casts (like Omega) run in constant stack. *)
           if equal b1 b2 then f x' else cast b1 b2 (f x'))
     | Sort s1, Sort s2 -> if s1 <= s2 then v else fail a b
+    | Prim (p1, _), Prim (p2, _) when String.equal p1 p2 ->
+      (* arrays of different element types: elements are not cast, as in
+         the kernel, where such a cast is stuck *)
+      raise (Cast_error ("cast between " ^ to_string a ^ " and " ^ to_string b ^ " is not supported"))
     | Ind i1, Ind i2 when String.equal i1.name i2.name ->
       begin match Hashtbl.find_opt casts i1.name with
         | Some f -> f i1 i2 v
@@ -216,6 +226,8 @@ let erased = Erased
 let sort n = Sort n
 let pi a b = Pi (a, b)
 let ind name data args = Ind { name; data; args = Array.of_list args }
+let prim name = Prim (name, [])
+let prim_array t = Prim ("array", [t])
 let rnil : (string * (ind -> ind -> Obj.t -> Obj.t)) list = []
 let rcons name f l = (name, f) :: l
 let anil : arg list = []
