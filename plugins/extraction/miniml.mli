@@ -158,6 +158,7 @@ and ml_ast =
   | MLdummy  of kill_reason
   | MLaxiom  of string
   | MLraw    of string (** OCaml code, printed verbatim (runtime of gradual casts) *)
+  | MLif     of ml_ast * ml_ast * ml_ast (** [if c then a else b], an OCaml [bool] condition (runtime of gradual casts) *)
   | MLmagic  of ml_ast
   | MLuint   of Uint63.t
   | MLfloat  of Float64.t

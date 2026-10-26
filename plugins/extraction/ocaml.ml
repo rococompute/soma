@@ -236,6 +236,7 @@ let expr_needs_par = function
   | MLlam _  -> true
   | MLcase (_,_,[|_|]) -> false
   | MLcase (_,_,pv) -> not (is_ifthenelse pv)
+  | MLif _ -> true
   | _        -> false
 
 let rec pp_expr table par env args =
@@ -280,6 +281,11 @@ let rec pp_expr table par env args =
     | MLaxiom s ->
         pp_par par (str "failwith \"AXIOM TO BE REALIZED (" ++ str s ++ str ")\"")
     | MLraw s -> pp_apply (str s) par args
+    | MLif (c, a, b) ->
+        let pp = pp_expr table false env [] in
+        apply2 (hv 0 (hov 2 (str "if" ++ spc () ++ pp c) ++ spc () ++
+                      hov 2 (str "then" ++ spc () ++ pp a) ++ spc () ++
+                      hov 2 (str "else" ++ spc () ++ pp b)))
     | MLcons (_,r,a) as c ->
         assert (List.is_empty args);
         begin match a with

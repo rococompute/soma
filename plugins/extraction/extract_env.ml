@@ -617,10 +617,16 @@ let gradual_guard_cases struc =
         | Ptuple _ | Prel _ | Pwild -> false) br
   in
   let rec guard a =
-    match Mlutil.ast_map guard a with
-    | MLcase (typ, e, br) when not (custom_ind br) ->
-      MLcase (typ, MLapp (MLraw "Gradual_rt.check", [e]), br)
-    | a -> a
+    match a with
+    | MLif (MLapp (MLraw "Gradual_rt.is_exc_value", [MLrel i]) as c, p, MLcase (typ, (MLrel j as e), br))
+      when Int.equal i j ->
+      (* already guarded: extraction propagates [?] and [err] there *)
+      MLif (c, guard p, MLcase (typ, e, Array.map (fun (ids, pat, b) -> (ids, pat, guard b)) br))
+    | _ ->
+      match Mlutil.ast_map guard a with
+      | MLcase (typ, e, br) when not (custom_ind br) ->
+        MLcase (typ, MLapp (MLraw "Gradual_rt.check", [e]), br)
+      | a -> a
   in
   Modutil.struct_ast_map guard struc
 

@@ -35,20 +35,27 @@ exception Unknown_term of string
    coinductive types) raise at once instead. *)
 let exc_tag = 245
 
-let make_exc (unknown : bool) (msg : string) : Obj.t =
-  Obj.with_tag exc_tag (Obj.repr (unknown, msg))
+(* The first field of these blocks, which no other value has: testing it
+   needs no call to the C function behind [Obj.tag], so that the test
+   guarding every match stays cheap. *)
+let marker = Obj.repr (ref ())
 
-let is_exc (v : Obj.t) = Obj.is_block v && Obj.tag v = exc_tag
+let make_exc (unknown : bool) (msg : string) : Obj.t =
+  Obj.with_tag exc_tag (Obj.repr (marker, (unknown, msg)))
+
+let is_exc (v : Obj.t) = Obj.is_block v && Obj.size v = 2 && Obj.field v 0 == marker
+
+let exc_payload (v : Obj.t) : bool * string = Obj.obj (Obj.field v 1)
 
 let raise_exc (v : Obj.t) =
-  let (unknown, msg) : bool * string = Obj.obj (Obj.with_tag 0 v) in
+  let (unknown, msg) = exc_payload v in
   if unknown then raise (Unknown_term msg) else raise (Cast_error msg)
 
 (** [check v] is [v], unless [v] is [?] or [err] at an inductive type, which
     it raises. Extracted code calls it on everything it matches on. *)
 let check (v : 'a) : 'a = let r = Obj.repr v in if is_exc r then raise_exc r else v
 
-let is_unknown (v : 'a) = let r = Obj.repr v in is_exc r && fst (Obj.obj (Obj.with_tag 0 r) : bool * string)
+let is_unknown (v : 'a) = let r = Obj.repr v in is_exc r && fst (exc_payload r)
 let is_error (v : 'a) = let r = Obj.repr v in is_exc r && not (is_unknown v)
 
 (** [force v] is [v], unless [?] or [err] occurs in the data of [v] (not
@@ -57,7 +64,7 @@ let force (v : 'a) : 'a =
   let rec go r =
     if Obj.is_block r then
       let t = Obj.tag r in
-      if t = exc_tag then raise_exc r
+      if is_exc r then raise_exc r
       else if t < exc_tag then for i = 0 to Obj.size r - 1 do go (Obj.field r i) done
   in
   go (Obj.repr v); v
@@ -199,6 +206,18 @@ let rec cast a b (v : Obj.t) : Obj.t =
         | None -> raise (Cast_error ("no cast function for " ^ i1.name))
       end
     | _ -> fail a b
+
+(* A [match] on a value [x] that may be [?] or [err] at an inductive type
+   is extracted to [if is_exc_value x then propagate ty x else match x
+   with ...], where [ty] is the type of the match: as in the kernel, the
+   match is then [?] or [err] at [ty], which raises when [ty] cannot hold
+   it. *)
+let is_exc_value (v : 'a) = is_exc (Obj.repr v)
+
+let propagate (ty : ty) (v : 'a) : Obj.t =
+  match ty with
+  | Ind { data = true; _ } -> Obj.repr v
+  | ty -> if is_unknown v then unknown_term ty else err_term ty
 
 let cast_with fs a b v =
   List.iter (fun (name, f) ->

@@ -127,7 +127,7 @@ let ast_iter_references do_term do_cons do_type a =
         Array.iter (fun (_,p,_) -> patt_iter_references do_cons p) v
 
       | MLrel _ | MLlam _ | MLapp _ | MLletin _ | MLtuple _ | MLfix _ | MLexn _
-      | MLdummy _ | MLaxiom _ | MLraw _ | MLmagic _ | MLuint _ | MLfloat _
+      | MLdummy _ | MLaxiom _ | MLraw _ | MLif _ | MLmagic _ | MLuint _ | MLfloat _
       | MLstring _ | MLparray _ -> ()
   in iter a
 

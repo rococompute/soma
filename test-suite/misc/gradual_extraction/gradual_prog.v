@@ -131,6 +131,9 @@ Definition t_unk_plus (_ : unit) : nat := 2 + unk.
 Definition t_unk_elim (_ : unit) : nat := unk + 2.
 Goal t_unk_plus tt = S (S unk). Proof. machines. Qed.
 Goal t_unk_elim tt = unk. Proof. machines. Qed.
+(* a match on [unk] is [unk] at its type, here the mapped bool *)
+Definition t_elim_mapped (_ : unit) : bool := match (unk : nat) with O => true | S _ => false end.
+Goal t_elim_mapped tt = unk. Proof. machines. Qed.
 Definition t_err (_ : unit) : nat := raise.
 Definition t_err_fun (_ : unit) : nat -> nat := raise.
 Goal t_unk_dyn tt = unk. Proof. machines. Qed.
@@ -209,7 +212,7 @@ Extract Inlined Constant float => "float".
 
 Extraction "gradual_prog.ml"
   t_ok t_bad t_app t_app_bad t_list t_list_bad t_list_bad_length t_list_bad_head
-  t_pair t_pair_bad t_option t_tree_bad_root t_unk_plus t_unk_elim
+  t_pair t_pair_bad t_option t_tree_bad_root t_unk_plus t_unk_elim t_elim_mapped
   t_int t_int_bad t_int_float
   t_fs t_record t_record_bad t_sig t_vec t_vec_bad t_dep t_dep_bad
   t_tree t_tree_bad t_rose t_unk t_unk_fun t_unk_dyn t_err t_err_fun

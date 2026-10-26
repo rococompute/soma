@@ -224,8 +224,10 @@ Extraction succ_dyn.
 
   Other type parameters are erased as usual, so code without casts is
   extracted as before.
-- The test is `test-suite/misc/gradual_extraction.sh`. The MirageOS on
-  Apple Silicon test matrix runs the same program as an `hvt` unikernel.
+- The test is `test-suite/misc/gradual_extraction.sh`. Each result must
+  print as the kernel's value, or be marked with the documented difference
+  that explains it. The MirageOS on Apple Silicon test matrix runs the same
+  program as an `hvt` unikernel.
 
 Extraction differs from the kernel in these ways:
 
@@ -235,9 +237,15 @@ Extraction differs from the kernel in these ways:
   needs type parameters at run time used without them, for example
   `@to_dyn` passed to a function expecting `forall A, A -> Dyn`: the
   callee would not pass the description.
-- **Eliminating `?` or `err` raises**, where the kernel propagates them
-  through the `match`. `unk + 2` raises `Unknown_term`; the kernel computes
-  `unk`.
+- **Eliminating `?` or `err` propagates them only when the type of the
+  `match` has a runtime description.** As in the kernel, a `match` on them is
+  `?` or `err` at its type: `unk + 2` is `unk`. Extraction compiles such a
+  `match` to `if Gradual_rt.is_exc_value x then Gradual_rt.propagate ty x
+  else match x with …`. The type's description is only built when `x` is
+  `?` or `err`, and the test needs no allocation or C call. When the type of
+  the `match` has no runtime description (it mentions a type variable that
+  is not passed), or cannot hold the value (see below), eliminating `?` or
+  `err` raises `Unknown_term` or `Cast_error`.
 - **Types that cannot hold them raise at once.** This covers types mapped
   to an OCaml type by `Extract Inductive` (`nat => int`, `bool => bool`),
   singleton and coinductive types, and types with more than 244

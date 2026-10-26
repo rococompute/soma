@@ -959,9 +959,13 @@ let rec extract_term table env sg mle mlt c args =
         in extract_app table env sg mle mlt extract_rel args
     | Case (ci, u, pms, r, iv, c0, br) ->
         (* If invert_case then this is a match that will get erased later, but right now we don't care. *)
+        (* the type of the match, for gradual elimination (see [extract_case]) *)
+        let rty =
+          if Option.has_some (Gradual.get env Gradual.GCast) then Some (type_of env sg c) else None
+        in
         let (ip, r, iv, c0, br) = EConstr.expand_case env sg (ci, u, pms, r, iv, c0, br) in
         let ip = ci.ci_ind in
-        extract_app table env sg mle mlt (extract_case table env sg mle (ip, u, c0, br)) args
+        extract_app table env sg mle mlt (extract_case ?rty table env sg mle (ip, u, c0, br)) args
     | Fix ((_,i),recd) ->
         extract_app table env sg mle mlt (extract_fix table env sg mle i recd) args
     | CoFix (i,recd) ->
@@ -1150,7 +1154,7 @@ and extract_cons_app table env sg mle mlt (cp, u) args =
 
 (*S Extraction of a case. *)
 
-and extract_case table env sg mle ((kn,i) as ip, u, c, br) mlt =
+and extract_case ?rty table env sg mle ((kn,i) as ip, u, c, br) mlt =
   (* [br]: bodies of each branch (in functional form) *)
   (* [ni]: number of arguments without parameters in each branch *)
   let ni = constructors_nrealargs env ip in
@@ -1211,7 +1215,29 @@ and extract_case table env sg mle ((kn,i) as ip, u, c, br) mlt =
         (* Standard case: we apply [extract_branch]. *)
         let typs = List.map type_simpl (Array.to_list metas) in
         let typ = Tglob (gind, typs) in
-        MLcase (typ, a, Array.init br_size extract_branch)
+        let case = MLcase (typ, a, Array.init br_size extract_branch) in
+        (* Gradual casts: as in the kernel, matching on [?] or [err] gives
+           [?] or [err] at the type of the match [rty], when the values of
+           the scrutinee's type can be them and [rty] has a runtime
+           description; otherwise matching on them raises (see
+           [Extract_env.gradual_guard_cases]). *)
+        match rty with
+        | Some rty when gradual_ind_holds_exc table env ip u ->
+          let ty =
+            try Some (gradual_reify table sg (gradual_ctx env mle) rty)
+            with e when CErrors.noncritical e -> None
+          in
+          (* [let x = a in if is_exc x then propagate ty x else match x with ...]:
+             the description is only built when [x] is [?] or [err] *)
+          begin match ty, ast_lift 1 case with
+            | Some ty, MLcase (typ, _, br) ->
+              MLletin (Id (Id.of_string "x"), a,
+                       MLif (rt_app "is_exc_value" [MLrel 1],
+                             MLmagic (rt_app "propagate" [ast_lift 1 ty; MLrel 1]),
+                             MLcase (typ, MLrel 1, br)))
+            | _ -> case
+          end
+        | _ -> case
 
 (*s Extraction of a (co)-fixpoint. *)
 
