@@ -20,10 +20,8 @@ Goal t_app tt = 4. Proof. reflexivity. Qed.
 Goal t_app_bad tt = raise. Proof. reflexivity. Qed.
 
 (** parametrized inductive types: elementwise *)
-Definition l12 : list Dyn := @cons Dyn 1 (@cons Dyn 2 nil).
-Definition l1t : list Dyn := @cons Dyn 1 (@cons Dyn true nil).
-Definition t_list (_ : unit) : list nat := l12.
-Definition t_list_bad (_ : unit) : list nat := l1t.
+Definition t_list (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
+Definition t_list_bad (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn true nil).
 Goal t_list tt = cons 1 (cons 2 nil). Proof. reflexivity. Qed.
 Goal t_list_bad tt = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 
@@ -31,8 +29,7 @@ Definition pr : Dyn * Dyn := @pair Dyn Dyn 1 true.
 Definition t_pair (_ : unit) : nat * bool := pr.
 Definition t_pair_bad (_ : unit) : bool * nat := pr.
 
-Definition sf : option Dyn := @Some Dyn false.
-Definition t_option (_ : unit) : option bool := sf.
+Definition t_option (_ : unit) : option bool := @Some Dyn false.
 
 (** casts of functions inside data are lazy *)
 Definition fs : list Dyn := @cons Dyn S (@cons Dyn negb nil).
@@ -67,10 +64,8 @@ Goal vhead (t_vec_bad tt) = raise. Proof. reflexivity. Qed.
 Fixpoint rep (n : nat) : vec nat n :=
   match n with 0 => vnil | S k => vcons k (rep k) end.
 Definition rep_dyn : Dyn := cast (forall n, vec nat n) Dyn rep.
-Definition rep_ok : forall n, vec nat n := cast Dyn (forall n, vec nat n) rep_dyn.
-Definition rep_bad : forall n, vec nat (S n) := cast Dyn (forall n, vec nat (S n)) rep_dyn.
-Definition t_dep (_ : unit) := vhead (rep_ok 3).
-Definition t_dep_bad (_ : unit) := vhead (rep_bad 3).
+Definition t_dep (_ : unit) := vhead (cast Dyn (forall n, vec nat n) rep_dyn 3).
+Definition t_dep_bad (_ : unit) := vhead (cast Dyn (forall n, vec nat (S n)) rep_dyn 3).
 Goal t_dep tt = 2. Proof. reflexivity. Qed.
 Goal t_dep_bad tt = raise. Proof. reflexivity. Qed.
 

@@ -210,7 +210,9 @@ Extraction differs from the kernel in these ways:
 - **Bidirectionality is checking, not synthesis.** With an expected
   type, argument inference is delayed until that type has been unified
   with the result, so `cons 1 (cons true nil) : list Dyn` checks both
-  elements at `Dyn`. An ascription of `Dyn` does not determine
+  elements at `Dyn`. Leading type arguments are still inferred first, so
+  an explicit one wins over the expected type: `@cons Dyn 1 nil : list nat`
+  is a cast from `list Dyn`. An ascription of `Dyn` does not determine
   constructor parameters, so `cons 1 (cons true nil) : Dyn` is still
   rejected. Write `list Dyn`, or `@cons Dyn 1 …`.
 

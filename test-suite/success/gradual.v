@@ -31,6 +31,19 @@ Goal snd (mixed_both : nat * bool) = true. Proof. reflexivity. Qed.
 Fail Definition still_static : list nat := cons true nil.
 Fail Definition still_pair : nat * nat := (true, 1).
 
+(** Explicit type arguments are not overridden by the expected type: a
+    less precise one is cast, as the precise one is accepted (graduality). *)
+Definition some_precise : option bool := @Some bool false.
+Definition some_dyn : option bool := @Some Dyn false.
+Definition cons_dyn : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
+Definition cons_dyn_bad : list nat := @cons Dyn 1 (@cons Dyn true nil).
+Definition pair_dyn : nat * bool := @pair Dyn Dyn 1 true.
+Goal some_dyn = Some false. Proof. reflexivity. Qed.
+Goal cons_dyn = cons 1 (cons 2 nil). Proof. reflexivity. Qed.
+Goal cons_dyn_bad = cons 1 (cons raise nil). Proof. reflexivity. Qed.
+Goal pair_dyn = (1, true). Proof. reflexivity. Qed.
+Fail Definition some_wrong : option bool := @Some nat 0.
+
 (** [Dyn] alone does not choose the parameters of [cons]. *)
 Fail Definition mixed_dyn : Dyn := cons 1 (cons true nil).
 

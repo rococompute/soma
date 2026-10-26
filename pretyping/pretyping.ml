@@ -1053,14 +1053,27 @@ struct
       (* We apply bidirectionality hints only if an expected type is specified *)
       else if GradualTyping.enabled !!env then
         (* GCIC checking. The expected type is unified with the result
-           before any argument is inferred, and each argument is then
+           before the arguments are inferred, and each argument is then
            checked at the domain that unification produced.
            [cons 1 (cons true nil) : list Dyn] checks [1] and [true]
            at [Dyn] instead of rejecting [true] at [nat].
            An ascription of [Dyn] itself does not determine the
            parameters: inference of [cons 1 (cons true nil) : Dyn]
-           still fails. *)
-        0
+           still fails.
+           Leading type arguments are inferred first, so that the
+           expected type does not override the ones given explicitly:
+           [@cons Dyn 1 nil : list nat] elaborates to a cast from
+           [list Dyn], since [@cons nat 1 nil : list nat] is accepted
+           (graduality). An implicit type argument is a hole, which
+           stays undetermined until the expected type is unified. *)
+        let rec leading_types env typ n =
+          if Int.equal n length then n
+          else match EConstr.kind sigma (whd_all env sigma typ) with
+            | Prod (na, a, b) when is_arity env sigma a ->
+              leading_types (EConstr.push_rel (LocalAssum (na, a)) env) b (n + 1)
+            | _ -> n
+        in
+        leading_types !!env fj.uj_type 0
       else
       (* if `f` is a global, we retrieve bidirectionality hints *)
         try
