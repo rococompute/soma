@@ -2804,6 +2804,7 @@ let compile_cases ?loc ~program_mode style (typing_fun, sigma) tycon env (predop
      the patterns, whose undetermined indices are [?] only when there is no
      return clause, which could depend on them (GradualTyping). *)
   GradualTyping.with_index_defaulting (Option.is_empty predopt) @@ fun () ->
+  GradualTyping.with_gradual_scrutinee @@ fun () ->
   if predopt == None && program_mode && Program.is_program_cases () then
     compile_program_cases ?loc style (typing_fun, sigma)
       tycon env (predopt, tomatchl, eqns)
@@ -2815,6 +2816,7 @@ let compile_cases ?loc ~program_mode style (typing_fun, sigma) tycon env (predop
   (* We build the vector of terms to match consistently with the *)
   (* constructors found in patterns *)
   let predenv, sigma, tomatchs = coerce_to_indtype ~program_mode typing_fun env sigma matx tomatchl in
+  let () = GradualTyping.set_gradual_scrutinee !!env sigma (List.map fst tomatchs) in
 
   (* If an elimination predicate is provided, we check it is compatible
      with the type of arguments to match; if none is provided, we

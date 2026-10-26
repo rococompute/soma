@@ -238,13 +238,14 @@ CAUSES = [
      r'Recursive definition on "Dyn"|Cannot guess decreasing argument'),
     ("recursive call on a cast (a constructor field made Dyn)",
      r"principal argument equal to \"cast"),
-    ("type parameter left undetermined by a cast from Dyn",
+    ("an implicit argument that nothing determines (no argument or expected type fixes it)",
      r"unresolved implicit arguments|Cannot infer the implicit parameter"),
+    ("an argument of an inductive type left undetermined",
+     r"Cannot infer the \w+ argument of the inductive type"),
     ("match or if on a scrutinee of type Dyn",
      r"which is not a \(co-\)inductive type"),
     ("dependent match on a cast to an indexed family (index or return type not inferred)",
-     r"Cannot infer the \w+ argument of the inductive type|match cast Dyn|cast Dyn \w+ \?u|"
-     r"The term \"vnil\" has type"),
+     r"match cast Dyn|cast Dyn \w+ \?u|The term \"vnil\" has type"),
 ]
 
 def cause(err):

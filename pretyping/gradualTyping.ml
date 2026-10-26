@@ -197,6 +197,31 @@ let with_index_defaulting b f =
   index_defaulting := b;
   Fun.protect ~finally:(fun () -> index_defaulting := saved) f
 
+(* Inside a [match] whose scrutinee was cast from [?] (see
+   [Cases.compile_cases]), the index a branch is at is only known at run
+   time: a branch of type [vec B 0] where [vec B n] is expected goes through
+   [?], and the cast back checks the index. *)
+let gradual_scrutinee = ref false
+
+let with_gradual_scrutinee f =
+  let saved = !gradual_scrutinee in
+  gradual_scrutinee := false;
+  Fun.protect ~finally:(fun () -> gradual_scrutinee := saved) f
+
+let set_gradual_scrutinee env sigma scrutinees =
+  let from_unknown c = match kind sigma c with
+    | App (f, [|a; _; _|]) when isConst sigma f ->
+      Option.equal (==) (Gradual.kind_of env (fst (destConst sigma f))) (Some Gradual.GCast)
+      && is_unknown_type env sigma a
+    | _ -> false
+  in
+  let of_unknown c =
+    try is_unknown_type env sigma (Retyping.get_type_of env sigma c)
+    with e when CErrors.noncritical e -> false
+  in
+  if enabled env && List.exists (fun c -> from_unknown c || of_unknown c) scrutinees then
+    gradual_scrutinee := true
+
 let default_args_to_unknown env sigma t =
   let t = Reductionops.whd_all env sigma t in
   match kind sigma t with
@@ -230,6 +255,26 @@ let unknown_at env sigma ty =
     try Some (Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|])
     with e when CErrors.noncritical e -> None
 
+(* [inferred] and [expected] are the same inductive family, with consistent
+   parameters (indices may differ). *)
+let same_family env sigma inferred expected =
+  let a = Reductionops.whd_all env sigma inferred in
+  let b = Reductionops.whd_all env sigma expected in
+  match kind sigma a, kind sigma b with
+  | App (f1, args1), App (f2, args2) when isInd sigma f1 && isInd sigma f2 ->
+    let (ind1, _), (ind2, _) = destInd sigma f1, destInd sigma f2 in
+    if not (Ind.CanOrd.equal ind1 ind2 && Int.equal (Array.length args1) (Array.length args2))
+    then None
+    else
+      let npar = (Environ.lookup_mind (fst ind1) env).Declarations.mind_nparams in
+      let rec params sigma i =
+        if i >= npar then Some sigma
+        else Option.bind (unify_consistent ~cumul:false env sigma args1.(i) args2.(i))
+            (fun sigma -> params sigma (i + 1))
+      in
+      params sigma 0
+  | _ -> None
+
 let coerce_to_type env sigma v ~inferred ~expected =
   if not (enabled env) then None
   else
@@ -243,6 +288,17 @@ let coerce_to_type env sigma v ~inferred ~expected =
       begin match cast env sigma ~inferred ~expected v with
         | Some _ as r -> r
         | None -> check_below_gradual env sigma ~inferred ~expected; None
+      end
+    | None when !gradual_scrutinee ->
+      (* a branch of a match on a value cast from [?], at another index *)
+      begin match same_family env sigma inferred expected with
+        | None -> None
+        | Some sigma ->
+          (* its indices that nothing determines, as for a cast from [?] *)
+          let sigma = with_index_defaulting true (fun () -> default_args_to_unknown env sigma inferred) in
+          Option.bind (unknown_at env sigma (Retyping.get_type_of env sigma expected)) (fun (sigma, dyn) ->
+          Option.bind (cast env sigma ~inferred ~expected:dyn v) (fun (sigma, v, _) ->
+              cast env sigma ~inferred:dyn ~expected v))
       end
     | None -> None
 

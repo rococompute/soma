@@ -49,6 +49,13 @@ exception Above_gradual of env * Evd.evar_map * types * types * types
     outside of [match]); parameters are always. *)
 val with_index_defaulting : bool -> (unit -> 'a) -> 'a
 
+(** [with_gradual_scrutinee f] runs [f], the elaboration of a [match];
+    [set_gradual_scrutinee env sigma scrutinees] records that a scrutinee is
+    a cast from [?]: the branches of the [match] may then be at another index
+    of the same inductive family than expected, and are cast through [?]. *)
+val with_gradual_scrutinee : (unit -> 'a) -> 'a
+val set_gradual_scrutinee : env -> Evd.evar_map -> constr list -> unit
+
 (** [unknown_at env sigma ty] is the unknown term [?_ty], when Gradual Typing
     is enabled and [ty] lives in the universe of gradual types. *)
 val unknown_at : env -> Evd.evar_map -> types -> (Evd.evar_map * constr) option

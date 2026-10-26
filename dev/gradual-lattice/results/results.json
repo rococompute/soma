@@ -3408,7 +3408,7 @@
   "kind": "single",
   "mutant": "vmap: binder whole (line 12) vec A n -> Dyn",
   "status": "rejected",
-  "error": "Error: In environment vmap : forall (A B : Type) (n : nat), (A -> B) -> Dyn -> vec B n A : Type B : Type n : nat f : A -> B v : Dyn The term \"vnil\" has type \"vec B 0\" while it is expected to have type \"vec B n\" (cannot unify \"0\" and \"n\"). No cast was inserted: the types are not consistent, \"0\" and \"",
+  "error": "Error: The following term contains unresolved implicit arguments: (vsum (vmap (fun x : nat => x * 10) (cast (vec nat 3) Dyn v3))) More precisely: - ?n: Cannot infer the implicit parameter n of vmap whose type is \"nat\".",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3507,9 +3507,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vrep: binder whole (line 18) nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: In environment vrep : forall n : Dyn, nat -> vec nat (cast Dyn nat n) n : Dyn x : nat The term \"vnil\" has type \"vec nat 0\" while it is expected to have type \"vec nat (cast Dyn nat ?u@{n1:=0})\". No cast was inserted: the types are not consistent, \"0\" and \"cast Dyn nat ?u@{n1:=0}\" differ.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },

@@ -122,6 +122,17 @@ Module DependentMatch.
     | vnil => tt | vcons x _ => x end.
   Definition v3_dyn : Dyn := vcons 1 (vcons 2 (vcons 3 vnil)).
   Goal vhead v3_dyn = 1. Proof. reflexivity. Qed.
+  (* the branches of a match on a value cast from [Dyn] may be at another
+     index than expected: they go through [Dyn], and the index is checked
+     at run time *)
+  #[warnings="-gradual-unguarded-fixpoint"]
+  Fixpoint vrep_dyn (n : Dyn) (x : nat) : vec nat n :=
+    match n with O => vnil | S k => vcons x (vrep_dyn k x) end.
+  Fixpoint vsum {n : nat} (v : vec nat n) : nat :=
+    match v with vnil => 0 | vcons x r => x + vsum r end.
+  Goal vsum (vrep_dyn 4 5) = 20. Proof. reflexivity. Qed.
+  (* still an error outside such a match *)
+  Fail Definition wrong_length : vec nat 1 := (vnil : vec nat 0).
 End DependentMatch.
 
 (** * Graduality: a term accepted at a type is accepted at less precise ones
