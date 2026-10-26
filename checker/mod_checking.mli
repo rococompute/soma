@@ -18,3 +18,7 @@ exception BadConstant of Names.Constant.t * Pp.t
 
 val constants_of_opaques : Environ.env -> opaques -> Names.Constant.t list
 val empty_opaques : opaques
+
+(** The budget of gradual reduction steps for each declaration (see
+    {!Gradual.step}); [None], the default, means no limit. *)
+val gradual_step_limit : int option ref

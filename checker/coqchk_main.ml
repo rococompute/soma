@@ -232,6 +232,7 @@ let print_usage_channel co command =
 \n  -o, --output-context        print the list of assumptions\
 \n  -m, --memory                print the maximum heap size\
 \n  -silent                     disable trace of constants being checked\
+\n  -gradual-steps n            stop gradual reduction after n steps per declaration\
 \n\
 \n  -impredicative-set          set sort Set impredicative\
 \n  -indices-matter             levels of indices (and nonuniform parameters)\
@@ -376,6 +377,12 @@ let explain_exn = function
                report ())
   | e -> CErrors.print e (* for anomalies and other uncaught exceptions *)
 
+let () = CErrors.register_handler (function
+    | Gradual.Out_of_steps (_, n) ->
+      Some Pp.(str "Gradual reduction exceeded " ++ int n ++
+               str " steps; raise the limit with -gradual-steps, or omit it.")
+    | _ -> None)
+
 let profile = ref None
 
 let parse_args argv =
@@ -440,6 +447,13 @@ let parse_args argv =
 
     | "-silent" :: rem ->
         Flags.quiet := true; parse rem
+
+    | "-gradual-steps" :: n :: rem ->
+        begin match int_of_string_opt n with
+          | Some n when n >= 0 -> Mod_checking.gradual_step_limit := Some n; parse rem
+          | _ -> usage 1
+        end
+    | "-gradual-steps" :: [] -> usage 1
 
     | s :: _ when s<>"" && s.[0]='-' ->
         fatal_error (str "Unknown option " ++ str s) 1

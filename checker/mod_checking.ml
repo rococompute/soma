@@ -113,11 +113,15 @@ let check_constant_declaration env opac kn cb opacify =
   | Some body when opacify -> retro, register_opacified_constant env opac kn body
   | Some _ | None -> retro, opac
 
+(* The budget of gradual reduction steps for each declaration (option
+   -gradual-steps). None by default: the kernel accepted the declaration,
+   so its conversions terminate, possibly under a higher Gradual Steps
+   limit than the prover's default; a limit guards against a tampered
+   .vo whose gradual reduction loops. *)
+let gradual_step_limit = ref None
+
 let check_constant_declaration env opac kn cb opacify =
-  (* No budget of gradual reduction steps: the kernel accepted this
-     declaration, so its conversions terminate, possibly under a higher
-     Gradual Steps limit than the default. *)
-  Gradual.set_step_limit None;
+  Gradual.set_step_limit !gradual_step_limit;
   let retro, opac = NewProfile.profile "check_constant" ~args:(fun () ->
       [("name", `String (Constant.to_string kn))])
       (fun () -> check_constant_declaration env opac kn cb opacify)

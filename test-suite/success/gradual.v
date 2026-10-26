@@ -201,7 +201,8 @@ Fail Eval cbn in omega.
 Fail Check (eq_refl : omega = unk).
 Goal omega = unk. Proof. Fail reflexivity. Abort.
 
-(* The budget counts gradual steps only, per command. *)
+(* The budget counts gradual steps only, and each command has its own: these
+   come right after commands that spent theirs. *)
 Goal 1 + 1 = 2. Proof. reflexivity. Qed.
 Goal succ_dyn 41 = 42. Proof. reflexivity. Qed.
 Set Gradual Steps 1.

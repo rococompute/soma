@@ -21,3 +21,19 @@ EOT
 
 rocq c -q -Q . Test uses_gradual.v
 rocqchk -silent -Q . Test -norec Corelib.Gradual.Gradual -norec Test.uses_gradual
+
+# -gradual-steps bounds gradual reduction per declaration (none by default):
+# this proof takes a few dozen steps.
+cat > many_steps.v <<'EOT'
+From Corelib.Gradual Require Import Gradual.
+Definition l : list Dyn := @cons Dyn 1 (@cons Dyn 2 (@cons Dyn 3 (@cons Dyn 4 (@cons Dyn 5 nil)))).
+Lemma cast_list : (l : list nat) = cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil)))).
+Proof. reflexivity. Qed.
+EOT
+rocq c -q -Q . Test many_steps.v
+rocqchk -silent -Q . Test -norec Test.many_steps
+rocqchk -silent -gradual-steps 100000 -Q . Test -norec Test.many_steps
+if rocqchk -silent -gradual-steps 10 -Q . Test -norec Test.many_steps > out.txt 2>&1; then
+  echo "rocqchk -gradual-steps 10 should have failed"; exit 1
+fi
+grep -q "Gradual reduction exceeded 10 steps" out.txt

@@ -40,8 +40,9 @@ Raise the limit with "Set Gradual Steps <n>." or remove it with "Unset Gradual S
 
 Only steps headed by `cast`, `unknown` or `err` that make progress count.
 The rest is CIC reduction, which terminates, so ordinary terms are not
-affected. `rocqchk` runs without a limit: it rechecks what the kernel
-already accepted.
+affected. `rocqchk` runs without a limit by default, since it rechecks what
+the kernel already accepted. `rocqchk -gradual-steps n` bounds each
+declaration, against a tampered `.vo` whose gradual reduction loops.
 
 ## Quick start
 
@@ -277,6 +278,15 @@ Extraction differs from the kernel in these ways:
   rejected. Write `list Dyn`, or `@cons Dyn 1 …`.
 
 ## Tests
+
+The whole Rocq test suite (`make -C test-suite`) passes with these changes.
+That is the conservativity check: none of its files import `Gradual`, apart
+from the gradual tests below. The last full run was at `cf78047a14`:
+2751 tests passed and 3 failed, on macOS. All three failures are
+environmental and also fail on the unmodified base:
+`coq-makefile/latex1` (LaTeX), `coq-makefile/timing-per-file` (GNU
+`time` output) and `misc/bench-render` (`rocq-devtools` not built). The
+unit tests need `ounit2`.
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/success/gradual_vec.v`: indexed families (`vec`, `Fin`, `eq`): index checks, stuck casts on neutral indices, `match` on `?`
