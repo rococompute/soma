@@ -33,6 +33,12 @@ val is_unknown_type : env -> Evd.evar_map -> types -> bool
     it when [cumul] (the default). *)
 val consistent : ?cumul:bool -> env -> Evd.evar_map -> types -> types -> bool
 
+(** [inconsistency env sigma a b] is [None] when [a] and [b] are
+    consistent, and otherwise the first pair of subterms (in their
+    environment) whose heads are not consistent. *)
+val inconsistency : ?cumul:bool -> env -> Evd.evar_map -> types -> types ->
+  (env * types * types) option
+
 (** [coerce_to_type env sigma v ~inferred ~expected] casts [v : inferred]
     to [expected] if the types are consistent. *)
 val coerce_to_type : env -> Evd.evar_map -> constr -> inferred:types -> expected:types ->

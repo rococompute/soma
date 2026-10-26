@@ -39,3 +39,23 @@ mixed_pair = (cast nat Dyn 1, cast bool Dyn true)
 File "./output/Gradual.v", line 39, characters 29-33:
 The command has indeed failed with message:
 The term "true" has type "bool" while it is expected to have type "nat".
+No cast was inserted: the types are not consistent, "bool" and "nat" differ.
+File "./output/Gradual.v", line 42, characters 39-41:
+The command has indeed failed with message:
+The term "lb" has type "list bool" while it is expected to have type
+ "list nat".
+No cast was inserted: the types are not consistent, "bool" and "nat" differ.
+File "./output/Gradual.v", line 43, characters 35-38:
+The command has indeed failed with message:
+The term "nat" has type "Set" while it is expected to have type 
+"Prop" (universe inconsistency: Cannot enforce Set <= Prop).
+No cast was inserted: the types are not consistent, 
+"Set" and "Prop" differ (sorts are consistent only when cumulative).
+File "./output/Gradual.v", line 46, characters 54-55:
+The command has indeed failed with message:
+In environment
+T : Type
+The term "T" has type "Type@{i}" while it is expected to have type 
+"Type@{j}" (universe inconsistency: Cannot enforce i <= j because j < i).
+No cast was inserted: the types are not consistent, 
+"Type@{i}" and "Type@{j}" differ (sorts are consistent only when cumulative).

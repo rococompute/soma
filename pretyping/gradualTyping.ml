@@ -86,6 +86,32 @@ let rec consistent ?(cumul=true) env sigma a b =
     && Array.for_all2 (consistent ~cumul:false env sigma) args1 args2
   | _ -> false
 
+(* Where [consistent] fails: the first pair of subterms, with their
+   environment, whose heads are not consistent. *)
+let rec inconsistency ?(cumul=true) env sigma a b =
+  if consistent ~cumul env sigma a b then None
+  else
+    let a = Reductionops.whd_all env sigma a in
+    let b = Reductionops.whd_all env sigma b in
+    let rec first env = function
+      | [] -> None
+      | (a, b) :: l ->
+        if consistent ~cumul:false env sigma a b then first env l
+        else inconsistency ~cumul:false env sigma a b
+    in
+    match kind sigma a, kind sigma b with
+    | Prod (na, a1, b1), Prod (_, a2, b2) ->
+      if not (consistent ~cumul:false env sigma a1 a2) then
+        inconsistency ~cumul:false env sigma a1 a2
+      else inconsistency ~cumul (EConstr.push_rel (LocalAssum (na, a1)) env) sigma b1 b2
+    | App (f1, args1), App (f2, args2) when Int.equal (Array.length args1) (Array.length args2)
+                                         && consistent ~cumul:false env sigma f1 f2 ->
+      begin match first env (Array.to_list (Array.map2 (fun a b -> (a, b)) args1 args2)) with
+        | Some _ as r -> r
+        | None -> Some (env, a, b)
+      end
+    | _ -> Some (env, a, b)
+
 let cast env sigma ~inferred ~expected v =
   try
     let sigma, c = Typing.checked_appvect env sigma (prim env Gradual.GCast) [|inferred; expected; v|] in

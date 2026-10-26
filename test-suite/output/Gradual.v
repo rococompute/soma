@@ -37,3 +37,10 @@ Eval lazy in 2 + unk.
 
 (* static errors are still errors *)
 Fail Definition bad : nat := true.
+(* the error says where the types are not consistent *)
+Definition lb : list bool := cons true nil.
+Fail Definition bad_list : list nat := lb.
+Fail Definition bad_prop : Prop := nat.
+Universes i j.
+Constraint j < i.
+Fail Definition bad_univ (T : Type@{i}) : Type@{j} := T.

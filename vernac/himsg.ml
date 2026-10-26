@@ -455,12 +455,26 @@ let explain_actual_type env sigma j t reason =
   let pc = pr_leconstr_env env sigma (Environ.j_val j) in
   let (pt, pct) = pr_explicit env sigma t (Environ.j_type j) in
   let ppreason = explain_unification_error env sigma j.uj_type t reason in
+  (* Under gradual typing, the cast was not inserted because the types are
+     not consistent: say where. *)
+  let ppgradual =
+    if not (GradualTyping.enabled env) then mt ()
+    else match GradualTyping.inconsistency env sigma j.uj_type t with
+      | None -> mt ()
+      | Some (env', a, b) ->
+        let pa, pb = pr_explicit env' sigma a b in
+        fnl () ++ hov 0 (
+          str "No cast was inserted: the types are not consistent," ++ spc () ++
+          pa ++ spc () ++ str "and" ++ spc () ++ pb ++ spc () ++ str "differ" ++
+          (if EConstr.isSort sigma a || EConstr.isSort sigma b then spc () ++ str "(sorts are consistent only when cumulative)" else mt ()) ++
+          str ".")
+  in
   pe ++
   hov 0 (
   str "The term" ++ brk(1,1) ++ pc ++ spc () ++
   str "has type" ++ brk(1,1) ++ pct ++ spc () ++
   str "while it is expected to have type" ++ brk(1,1) ++ pt ++
-  ppreason ++ str ".")
+  ppreason ++ str ".") ++ ppgradual
 
 let explain_incorrect_primitive env sigma j exp =
   let env = make_all_name_different env sigma in
