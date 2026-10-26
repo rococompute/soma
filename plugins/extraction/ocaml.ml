@@ -98,6 +98,10 @@ let pp_gradual_rt_sig usf =
     str "module Gradual_rt : sig" ++ fnl () ++
     str "  exception Cast_error of string" ++ fnl () ++
     str "  exception Unknown_term of string" ++ fnl () ++
+    str "  val check : 'a -> 'a" ++ fnl () ++
+    str "  val force : 'a -> 'a" ++ fnl () ++
+    str "  val is_unknown : 'a -> bool" ++ fnl () ++
+    str "  val is_error : 'a -> bool" ++ fnl () ++
     str "end" ++ fnl ()
   else mt ()
 

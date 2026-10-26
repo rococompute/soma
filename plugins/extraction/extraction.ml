@@ -1314,8 +1314,24 @@ and gradual_reify table sg ctx t =
         && not (List.exists (fun (i, _) -> Ind.CanOrd.equal i ind) !(ctx.rt_needed)) then
           ctx.rt_needed := (ind, u) :: !(ctx.rt_needed);
         let args = Array.map_to_list (gradual_reify_arg table sg ctx) args in
-        rt_app "ind" [gradual_ind_name_ml env ind; rt_list args]
+        let data = if gradual_ind_holds_exc table env ind u then "true" else "false" in
+        rt_app "ind" [gradual_ind_name_ml env ind; MLraw data; rt_list args]
       | _ -> gradual_error env sg (Pp.str "no runtime description for type") t
+
+(* Can the values of this inductive type be [?] and [err], as data (see
+   [Gradual_rt.exc_tag])? Not when they are OCaml values of another type
+   (Extract Inductive), unboxed (singleton) or lazy (coinductive), nor when
+   the tag of these values could be a constructor's. *)
+and gradual_ind_holds_exc table env ind u =
+  let inst = InfvInst.ground (EConstr.EInstance.kind (Evd.from_env env) u) in
+  let mi = extract_ind table env (fst ind) inst in
+  let oi = mi.ind_packets.(snd ind) in
+  let non_constant = Array.fold_left (fun n tys ->
+      if List.for_all (function Tdummy _ -> true | _ -> false) tys then n else n + 1)
+      0 oi.ip_types in
+  not (is_custom { glob = GlobRef.IndRef ind; inst })
+  && (match mi.ind_kind with Standard | Record _ -> true | Singleton | Coinductive -> false)
+  && non_constant < 245
 
 (* A parameter or an index of an inductive type, as a [Gradual_rt.arg]. *)
 

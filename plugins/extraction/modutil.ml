@@ -73,6 +73,25 @@ let struct_iter do_decl do_spec do_mp s =
   List.iter
     (function (_,sel) -> List.iter (se_iter do_decl do_spec do_mp) sel) s
 
+(* Maps [f] on the terms of the declarations of a structure. *)
+let struct_ast_map f s =
+  let decl = function
+    | Dterm (r, a, t) -> Dterm (r, f a, t)
+    | Dfix (rv, c, t) -> Dfix (rv, Array.map f c, t)
+    | (Dind _ | Dtype _) as d -> d
+  in
+  let rec se = function
+    | (l, SEdecl d) -> (l, SEdecl (decl d))
+    | (l, SEmodule m) -> (l, SEmodule { m with ml_mod_expr = me m.ml_mod_expr })
+    | (_, SEmodtype _) as e -> e
+  and me = function
+    | MEident _ as e -> e
+    | MEfunctor (id, mt, e) -> MEfunctor (id, mt, me e)
+    | MEapply (e, e') -> MEapply (me e, me e')
+    | MEstruct (mp, sel) -> MEstruct (mp, List.map se sel)
+  in
+  List.map (fun (mp, sel) -> (mp, List.map se sel)) s
+
 (*s Apply some fonctions upon all references in [ml_type], [ml_ast],
   [ml_decl], [ml_spec] and [ml_structure]. *)
 

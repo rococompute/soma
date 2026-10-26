@@ -41,6 +41,11 @@ Goal t_app_bad tt = raise. Proof. machines. Qed.
 Definition t_list (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
 Definition t_list_bad (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn true nil).
 Goal t_list tt = cons 1 (cons 2 nil). Proof. machines. Qed.
+(* only the elements that are used are eliminated *)
+Definition t_list_bad_length (_ : unit) := length (t_list_bad tt).
+Definition t_list_bad_head (_ : unit) := match t_list_bad tt with cons x _ => x | nil => 0 end.
+Goal t_list_bad_length tt = 2. Proof. machines. Qed.
+Goal t_list_bad_head tt = 1. Proof. machines. Qed.
 Goal t_list_bad tt = cons 1 (cons raise nil). Proof. machines. Qed.
 
 Definition pr : Dyn * Dyn := @pair Dyn Dyn 1 true.
@@ -105,6 +110,8 @@ Definition tr : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast nat Dyn 2) 
 Definition t_tree (_ : unit) : tree nat := tr.
 Definition tr_bad : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast bool Dyn true) fnil) fnil).
 Definition t_tree_bad (_ : unit) : tree nat := tr_bad.
+Definition t_tree_bad_root (_ : unit) := match t_tree_bad tt with node x _ => x end.
+Goal t_tree_bad_root tt = 1. Proof. machines. Qed.
 Goal t_tree tt = node 1 (fcons (node 2 fnil) fnil). Proof. machines. Qed.
 Goal t_tree_bad tt = node 1 (fcons (node raise fnil) fnil). Proof. machines. Qed.
 
@@ -119,6 +126,10 @@ Goal t_rose tt = rnode 1 (cons (rnode 2 nil) nil). Proof. machines. Qed.
 Definition t_unk (_ : unit) : nat := unk.
 Definition t_unk_fun (_ : unit) : nat := (unk : nat -> nat) 3.
 Definition t_unk_dyn (_ : unit) : nat := succ_dyn unk.
+Definition t_unk_plus (_ : unit) : nat := 2 + unk.
+Definition t_unk_elim (_ : unit) : nat := unk + 2.
+Goal t_unk_plus tt = S (S unk). Proof. machines. Qed.
+Goal t_unk_elim tt = unk. Proof. machines. Qed.
 Definition t_err (_ : unit) : nat := raise.
 Definition t_err_fun (_ : unit) : nat -> nat := raise.
 Goal t_unk_dyn tt = unk. Proof. machines. Qed.
@@ -178,16 +189,15 @@ Definition bad_local := let g (A : Type) (x : A) : Dyn := x in g nat 1.
 Fail Extraction bad_local.
 
 Set Extraction Output Directory ".".
-Extract Inductive nat => "int" [ "0" "succ" ]
-  "(fun fO fS n -> if n = 0 then fO () else fS (n - 1))".
+(* nat, list, prod and option are extracted as OCaml variants, which can
+   hold [?] and [err] as values; bool is mapped to OCaml's bool, which
+   cannot, so casts to bool raise at once. *)
 Extract Inductive bool => "bool" [ "true" "false" ].
-Extract Inductive list => "list" [ "[]" "(::)" ].
-Extract Inductive prod => "( * )" [ "(,)" ].
-Extract Inductive option => "option" [ "Some" "None" ].
 Extract Inductive unit => "unit" [ "()" ].
 
 Extraction "gradual_prog.ml"
-  t_ok t_bad t_app t_app_bad t_list t_list_bad t_pair t_pair_bad t_option
+  t_ok t_bad t_app t_app_bad t_list t_list_bad t_list_bad_length t_list_bad_head
+  t_pair t_pair_bad t_option t_tree_bad_root t_unk_plus t_unk_elim
   t_fs t_record t_record_bad t_sig t_vec t_vec_bad t_dep t_dep_bad
   t_tree t_tree_bad t_rose t_unk t_unk_fun t_unk_dyn t_err t_err_fun
   t_sort_bad t_omega vhead

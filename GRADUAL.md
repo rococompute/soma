@@ -197,8 +197,18 @@ Extraction succ_dyn.
 - For each inductive type, extraction generates a match on its
   constructors that casts their arguments and checks the indices. It
   therefore works with `Extract Inductive` (e.g. `nat => int`).
-- A failed cast, or reaching `raise`, raises `Gradual_rt.Cast_error`. The
-  extracted `.mli` exports it.
+- **`?` and `err` are values**, as in the kernel, at inductive types
+  extracted as OCaml variants or records. `cons raise nil` is a list of
+  length 1, `2 + unk` is `S (S unk)`, and a cast that fails inside data
+  gives `raise` there. They are blocks with a reserved tag (245). Every
+  `match` of a file that uses the runtime goes through
+  `Gradual_rt.check`, which raises `Gradual_rt.Cast_error` or
+  `Gradual_rt.Unknown_term` when such a value is eliminated. The extracted
+  `.mli` exports these exceptions together with `check`, `force` (raises if
+  `?` or `err` occurs anywhere in a value's data) and
+  `is_unknown`/`is_error`. OCaml code that receives extracted values must
+  use them before matching on values that may contain `?` or `err`:
+  matching on them directly is undefined behavior in OCaml.
 - **Type parameters** that casts need are passed at run time. A parameter
   is needed when it occurs in the types of a cast, `unknown` or `err`, or in
   an argument for a needed parameter of another function, including
@@ -224,12 +234,16 @@ Extraction differs from the kernel in these ways:
   needs type parameters at run time used without them, for example
   `@to_dyn` passed to a function expecting `forall A, A -> Dyn`: the
   callee would not pass the description.
-- **A failed cast raises at once**, also inside data: the kernel computes
-  `cons raise nil`, where the extracted code raises.
-- **`?_A` at an inductive type raises `Gradual_rt.Unknown_term`** when it is
-  evaluated. Extracted code is call-by-value and has no value for it, so
-  `2 + unk` raises, where the kernel computes `S (S unk)`. At function types
-  `unk` is `fun _ => unk`, as in the kernel, and `unk : Dyn` is a value.
+- **Eliminating `?` or `err` raises**, where the kernel propagates them
+  through the `match`. `unk + 2` raises `Unknown_term`; the kernel computes
+  `unk`.
+- **Types that cannot hold them raise at once.** This covers types mapped
+  to an OCaml type by `Extract Inductive` (`nat => int`, `bool => bool`),
+  singleton and coinductive types, and types with more than 244
+  constructors with arguments. A cast that fails at such a type, or `?`
+  at it, raises immediately, also inside data.
+- **Universe levels are erased.** The runtime compares only Prop, Set
+  and Type, where the kernel asks the universe graph.
 - **Proofs are erased**, so casts between propositions are not checked.
 - **Coinductive types** are not supported in casts yet.
 - Only OCaml is supported. Haskell and Scheme extraction print an error.

@@ -21,12 +21,46 @@
    extracted code also builds for MirageOS unikernels. *)
 
 exception Cast_error of string
-(** The error [err_A] was reached: a cast failed at run time. *)
+(** The error [err_A] was eliminated: a cast failed at run time. *)
 
 exception Unknown_term of string
-(** The unknown term [?_A] at an inductive type was evaluated. Extracted
-    code is call-by-value and cannot represent [?_A] as a value of [A], so
-    this is raised instead. *)
+(** The unknown term [?_A] at an inductive type was eliminated. *)
+
+(* As in the kernel, [?_I] and [err_I] at an inductive type [I] are values:
+   [cons raise nil] is a list, and [2 + ?] is [S (S ?)]. They are blocks
+   with a tag that no extracted constructor uses, holding their kind and a
+   message, and they raise only when eliminated: every [match] of a file
+   that uses this runtime goes through [check]. Types whose values cannot
+   hold them (mapped to OCaml types by Extract Inductive, singleton and
+   coinductive types) raise at once instead. *)
+let exc_tag = 245
+
+let make_exc (unknown : bool) (msg : string) : Obj.t =
+  Obj.with_tag exc_tag (Obj.repr (unknown, msg))
+
+let is_exc (v : Obj.t) = Obj.is_block v && Obj.tag v = exc_tag
+
+let raise_exc (v : Obj.t) =
+  let (unknown, msg) : bool * string = Obj.obj (Obj.with_tag 0 v) in
+  if unknown then raise (Unknown_term msg) else raise (Cast_error msg)
+
+(** [check v] is [v], unless [v] is [?] or [err] at an inductive type, which
+    it raises. Extracted code calls it on everything it matches on. *)
+let check (v : 'a) : 'a = let r = Obj.repr v in if is_exc r then raise_exc r else v
+
+let is_unknown (v : 'a) = let r = Obj.repr v in is_exc r && fst (Obj.obj (Obj.with_tag 0 r) : bool * string)
+let is_error (v : 'a) = let r = Obj.repr v in is_exc r && not (is_unknown v)
+
+(** [force v] is [v], unless [?] or [err] occurs in the data of [v] (not
+    under functions), which it raises. *)
+let force (v : 'a) : 'a =
+  let rec go r =
+    if Obj.is_block r then
+      let t = Obj.tag r in
+      if t = exc_tag then raise_exc r
+      else if t < exc_tag then for i = 0 to Obj.size r - 1 do go (Obj.field r i) done
+  in
+  go (Obj.repr v); v
 
 type ty =
   | Unknown
@@ -38,6 +72,7 @@ type ty =
 
 and ind = {
   name : string;
+  data : bool;  (* its values can be [?] and [err] (see [exc_tag]) *)
   args : arg array;  (* parameters, then indices *)
 }
 
@@ -76,8 +111,13 @@ and arg_to_string = function
   | Unk -> "?"
   | Error -> "err"
 
-let fail a b =
-  raise (Cast_error ("cannot cast from " ^ to_string a ^ " to " ^ to_string b))
+(* [err] at type [b]: a value when [b] is an inductive type that can hold
+   it. *)
+let error_at b msg = match b with
+  | Ind { data = true; _ } -> make_exc false msg
+  | _ -> raise (Cast_error msg)
+
+let fail a b = error_at b ("cannot cast from " ^ to_string a ^ " to " ^ to_string b)
 
 let same_value (a : Obj.t) (b : Obj.t) =
   a == b || (try compare a b = 0 with Invalid_argument _ -> false)
@@ -104,17 +144,24 @@ let rec unknown_term ty : Obj.t = match ty with
   | Unknown -> Obj.repr { dty = Unknown; dv = dummy }
   | Erased | Sort _ -> dummy
   | Pi (_, b) -> Obj.repr (fun x -> unknown_term (b x))
-  | Ind i -> raise (Unknown_term i.name)
+  | Ind i -> if i.data then make_exc true i.name else raise (Unknown_term i.name)
   | Err -> raise (Cast_error "unknown term of the error type")
 
 let rec err_term ty : Obj.t = match ty with
   | Unknown -> Obj.repr { dty = Err; dv = dummy }
   | Erased | Sort _ -> dummy
   | Pi (_, b) -> Obj.repr (fun x -> err_term (b x))
-  | Ind _ | Err -> raise (Cast_error ("error at type " ^ to_string ty))
+  | Ind _ | Err -> error_at ty ("error at type " ^ to_string ty)
 
 let rec cast a b (v : Obj.t) : Obj.t =
   if equal a b then v
+  else if is_exc v then
+    (* [?_A] and [err_A] cast to [B] are [?_B] and [err_B] *)
+    begin match b with
+      | Ind { data = true; _ } -> v
+      | Unknown -> Obj.repr { dty = (if is_unknown v then Unknown else Err); dv = dummy }
+      | _ -> raise_exc v
+    end
   else match a, b with
     | Err, _ | _, Err -> fail a b
     | Erased, Erased -> v
@@ -151,13 +198,16 @@ let cast_with fs a b v =
 (* The indices computed for a rebuilt constructor must be compatible with
    the indices of the target type ([?] is compatible with anything). *)
 let check_indices tgt nparams computed v =
-  List.iteri (fun k c ->
-      match tgt.args.(nparams + k), c with
-      | Unk, _ | _, Unk | Ty _, _ | _, Ty _ -> ()
-      | Val i, Val c when same_value i c -> ()
-      | _ -> raise (Cast_error ("index mismatch at type " ^ to_string (Ind tgt))))
-    computed;
-  v
+  let compatible k c = match tgt.args.(nparams + k), c with
+    | Unk, _ | _, Unk | Ty _, _ | _, Ty _ -> true
+    | Val i, Val c ->
+      (* an index computed as [?] is compatible with anything *)
+      if is_exc c || is_exc i then is_unknown c || is_unknown i
+      else same_value i c
+    | (Val _ | Error), _ -> false
+  in
+  if List.for_all Fun.id (List.mapi compatible computed) then v
+  else error_at (Ind tgt) ("index mismatch at type " ^ to_string (Ind tgt))
 
 (* Builders used by the extracted code. *)
 let unknown_ty = Unknown
@@ -165,7 +215,7 @@ let err_ty = Err
 let erased = Erased
 let sort n = Sort n
 let pi a b = Pi (a, b)
-let ind name args = Ind { name; args = Array.of_list args }
+let ind name data args = Ind { name; data; args = Array.of_list args }
 let rnil : (string * (ind -> ind -> Obj.t -> Obj.t)) list = []
 let rcons name f l = (name, f) :: l
 let anil : arg list = []

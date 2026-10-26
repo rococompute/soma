@@ -14,6 +14,7 @@ open Miniml
 (*s Functions upon ML modules. *)
 
 val struct_ast_search : (ml_ast -> bool) -> ml_structure -> bool
+val struct_ast_map : (ml_ast -> ml_ast) -> ml_structure -> ml_structure
 val struct_type_search : (ml_type -> bool) -> ml_structure -> bool
 
 type do_ref = global -> unit

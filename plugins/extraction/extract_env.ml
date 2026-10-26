@@ -602,6 +602,28 @@ let get_comment () =
     let split_comment = Str.split (Str.regexp "[ \t\n]+") s in
     Some (prlist_with_sep spc str split_comment)
 
+(* With the runtime of gradual casts, [?] and [err] may be values of
+   inductive types (see gradual_rt.ml): every [match] on such a type goes
+   through [Gradual_rt.check], which raises them when they are eliminated. *)
+let gradual_guard_cases struc =
+  let custom_ind br =
+    is_custom_match br ||
+    Array.exists (fun (_, p, _) -> match p with
+        | Pusual r | Pcons (r, _) ->
+          begin match r.glob with
+            | GlobRef.ConstructRef (ind, _) -> is_custom { r with glob = GlobRef.IndRef ind }
+            | _ -> false
+          end
+        | Ptuple _ | Prel _ | Pwild -> false) br
+  in
+  let rec guard a =
+    match Mlutil.ast_map guard a with
+    | MLcase (typ, e, br) when not (custom_ind br) ->
+      MLcase (typ, MLapp (MLraw "Gradual_rt.check", [e]), br)
+    | a -> a
+  in
+  Modutil.struct_ast_map guard struc
+
 let print_structure_to_file table (fn,si,mo) dry struc =
   let buf = Buffer.create 1000 in
   let d = descr () in
@@ -615,6 +637,7 @@ let print_structure_to_file table (fn,si,mo) dry struc =
       else struct_ast_search (function MLmagic _ -> true | _ -> false) struc;
     gradual_rt = struct_ast_search (function MLraw _ -> true | _ -> false) struc }
   in
+  let struc = if unsafe_needs.gradual_rt && lang () == Ocaml then gradual_guard_cases struc else struc in
   (* First, a dry run, for computing objects to rename or duplicate *)
   let table = State.set_phase table Pre in
   ignore (d.pp_struct table struc);
