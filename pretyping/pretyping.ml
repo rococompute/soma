@@ -1487,6 +1487,18 @@ struct
     let open Context.Rel.Declaration in
     let pretype tycon env sigma c = eval_pretyper self ~flags tycon env sigma c in
     let sigma, cj = pretype empty_tycon env sigma c in
+    (* GCIC: a condition of type [?] is cast to [bool] *)
+    let sigma, cj =
+      match Rocqlib.lib_ref_opt "core.bool.type" with
+      | Some bool when GradualTyping.enabled !!env
+                     && GradualTyping.is_unknown_type !!env sigma cj.uj_type ->
+        let bool = EConstr.of_constr (UnivGen.constr_of_monomorphic_global !!env bool) in
+        begin match GradualTyping.coerce_to_type !!env sigma cj.uj_val ~inferred:cj.uj_type ~expected:bool with
+          | Some (sigma, c, ty) -> sigma, { uj_val = c; uj_type = ty }
+          | None -> sigma, cj
+        end
+      | _ -> sigma, cj
+    in
     let (IndType (indf,realargs)) as indty =
       try find_rectype !!env sigma cj.uj_type
       with Not_found ->

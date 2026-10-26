@@ -4,31 +4,30 @@
 
 | Static: mutant | count |
 |---|---|
-| compiled | 143 |
-| rejected | 65 |
+| compiled | 152 |
+| rejected | 56 |
 | out_of_steps | 0 |
 | timeout | 0 |
 
 | Dynamic: observation of a compiled mutant | count |
 |---|---|
-| same | 1007 |
+| same | 1071 |
 | less_precise | 0 |
 | raise | 0 |
 | different | 0 |
 
 | Mutants by kind | compiled | rejected | out of steps | timeout |
 |---|---|---|---|---|
-| single | 125 | 36 | 0 | 0 |
-| definition | 17 | 24 | 0 | 0 |
+| single | 132 | 29 | 0 | 0 |
+| definition | 19 | 22 | 0 | 0 |
 | file | 1 | 5 | 0 | 0 |
 
 | Why mutants are rejected | count |
 |---|---|
-| structural recursion on a Dyn argument | 32 |
-| type parameter left undetermined by a cast from Dyn | 14 |
+| structural recursion on a Dyn argument | 33 |
+| type parameter left undetermined by a cast from Dyn | 13 |
 | recursive call on a cast (a constructor field made Dyn) | 8 |
-| dependent match on a cast to an indexed family (index or return type not inferred) | 8 |
-| match or if on a scrutinee of type Dyn | 3 |
+| dependent match on a cast to an indexed family (index or return type not inferred) | 2 |
 
 ## Mutants that do not compile
 
@@ -56,44 +55,35 @@
 - `expr.v` all 15 annotations of the file -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of eval is ill-formed. In environment eval : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun e : Dyn => match cast Dyn expr e with | Num n => n | Plus a b => cast nat Dyn (cast Dyn nat (eval a) + cast Dyn 
 - `higher.v` iter: binder whole (line 7) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `higher.v` iter: all 4 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `higher.v` swap: binder whole (line 10) nat * bool -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun p : Dyn => (snd (cast Dyn (?A * bool) p), fst (cast Dyn (nat * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is "Type" in environment: p : Dyn - ?B: Cannot infer the implicit parameter B o
-- `higher.v` swap: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun p : Dyn => cast (Dyn * Dyn) Dyn (snd (cast Dyn (?A * Dyn) p), fst (cast Dyn (Dyn * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is "Type" in environment: p : Dyn - ?B: Cannot infer the im
-- `higher.v` uncurry: binder whole (line 14) nat * nat -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun (f : nat -> nat -> nat) (p : Dyn) => f (fst (cast Dyn (nat * ?B) p)) (snd (cast Dyn (?A * nat) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is "Type" in environment: f : nat -> nat -> nat p :
-- `higher.v` uncurry: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun f p : Dyn => cast Dyn (Dyn -> Dyn) (cast Dyn (Dyn -> Dyn) f (fst (cast Dyn (Dyn * ?B) p))) (snd (cast Dyn (?A * Dyn) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is "Type" in environment: f :
 - `higher.v` all 28 annotations of the file -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` map: binder whole (line 3) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` map: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of map whose type is "Type" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn
-- `lists.v` filter: binder whole (line 6) A -> bool -> Dyn: **rejected** (match or if on a scrutinee of type Dyn) — Error: The term "cast Dyn (Dyn -> Dyn) p (cast A Dyn x)" has type "Dyn" which is not a (co-)inductive type.
-- `lists.v` filter: binder inner bool (line 6) A -> bool -> A -> Dyn: **rejected** (match or if on a scrutinee of type Dyn) — Error: The term "p x" has type "Dyn" which is not a (co-)inductive type.
 - `lists.v` filter: binder whole (line 6) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` filter: all 3 annotations -> Dyn: **rejected** (match or if on a scrutinee of type Dyn) — Error: The term "cast Dyn (Dyn -> Dyn) p x" has type "Dyn" which is not a (co-)inductive type.
+- `lists.v` filter: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of filter whose type is "Type" in environment: filter : Type -> Dyn -> Dyn -> Dyn A : Type p : Dyn l : Dyn x : Dyn r : list Dyn
 - `lists.v` fold: binder whole (line 12) list A -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` fold: all 4 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of fold whose type is "Type" in environment: fold : Type -> Type -> Dyn -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn z : Dyn x : Dyn r : list Dyn
-- `lists.v` sum: binder whole (line 15) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list nat) l with | nil => 0 | (x :: r)%list => x + sum (cast (list nat) Dyn r) end".
-- `lists.v` sum: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list nat) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (x + cast Dyn 
+- `lists.v` sum: binder whole (line 15) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => 0 | (x :: r)%list => cast Dyn nat x + sum (cast (list Dyn) Dy
+- `lists.v` sum: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (cast Dyn nat 
 - `lists.v` rev_acc: binder whole (line 18) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` rev_acc: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` mem: binder whole (line 23) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` mem: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` insert: binder whole (line 26) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
 - `lists.v` insert: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
-- `lists.v` sort: binder whole (line 32) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list nat) l with | nil => nil | (x :: r)%list => insert x (sort (cast (list nat)
-- `lists.v` sort: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list nat) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) 
+- `lists.v` sort: binder whole (line 32) list nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => nil | (x :: r)%list => insert (cast Dyn nat x) (sort (
+- `lists.v` sort: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) 
 - `lists.v` range: binder whole (line 35) nat -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of range is ill-formed. In environment range : Dyn -> list nat Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => nil | S k => (range (cast nat Dyn k) ++ k :: nil)%list end".
-- `lists.v` range: return whole (line 35) list nat -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (length (cast Dyn (list ?A) (range 6))) More precisely: - ?A: Cannot infer the implicit parameter A of length whose type is "Type".
 - `lists.v` range: all 2 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Recursive definition of range is ill-formed. In environment range : Dyn -> Dyn Recursive definition on "Dyn" which should be a recursive inductive type. Recursive definition is: "fun n : Dyn => match cast Dyn nat n with | 0 => cast (list Dyn) Dyn nil | S k => cast (list Dyn) Dyn (cast Dyn (li
 - `lists.v` all 29 annotations of the file -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of map whose type is "Type" in environment: map : Type -> Type -> Dyn -> Dyn -> Dyn A : Type B : Type f : Dyn l : Dyn x : Dyn r : list Dyn
-- `vectors.v` vhead: binder whole (line 8) vec A (S n) -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: In environment A : Type n : nat v : Dyn The term "match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end" has type "match ?n with | 0 => unit | S _ => A end" while it is expected to have type "A". No cast was inserted: the 
-- `vectors.v` vhead: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?
+- `vectors.v` vhead: binder whole (line 8) vec A (S n) -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (vhead (cast (vec nat 3) Dyn v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".
+- `vectors.v` vhead: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (cast Dyn nat (vhead (cast (vec nat 3) Dyn v3))) More precisely: - ?A: Cannot infer the implicit parameter A of vhead whose type is "Type". - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".
 - `vectors.v` vmap: binder whole (line 12) vec A n -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: In environment vmap : forall (A B : Type) (n : nat), (A -> B) -> Dyn -> vec B n A : Type B : Type n : nat f : A -> B v : Dyn The term "vnil" has type "vec B 0" while it is expected to have type "vec B n" (cannot unify "0" and "n"). No cast was inserted: the types are not consistent, "0" and "
-- `vectors.v` vmap: return whole (line 12) vec B n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vcons whose type is "nat" in environment: vmap : forall (A B : Type) (n : nat), (A -> B) -> vec A n -> Dyn A : Type B : Type n : nat f : A -> B v : vec A n n0 : nat x : A r : vec A n0
-- `vectors.v` vmap: all 3 annotations -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn
-- `vectors.v` vsum: binder whole (line 15) vec nat n -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn
-- `vectors.v` vsum: all 2 annotations -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn
+- `vectors.v` vmap: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of vmap whose type is "Type" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0
+- `vectors.v` vsum: binder whole (line 15) vec nat n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vsum whose type is "nat" in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
+- `vectors.v` vsum: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vsum whose type is "nat" in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` vrep: binder whole (line 18) nat -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: In environment vrep : forall n : Dyn, nat -> vec nat (cast Dyn nat n) n : Dyn x : nat The term "vnil" has type "vec nat 0" while it is expected to have type "vec nat (cast Dyn nat ?u@{n1:=0})". No cast was inserted: the types are not consistent, "0" and "cast Dyn nat ?u@{n1:=0}" differ.
-- `vectors.v` vrep: return whole (line 18) vec nat n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vcons whose type is "nat" in environment: vrep : nat -> nat -> Dyn n, x, k : nat
-- `vectors.v` vrep: all 3 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of vcons whose type is "nat" in environment: vrep : Dyn -> Dyn -> Dyn n : Dyn x : Dyn k : nat
-- `vectors.v` to_list: binder whole (line 21) vec A n -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn
-- `vectors.v` to_list: all 2 annotations -> Dyn: **rejected** (dependent match on a cast to an indexed family (index or return type not inferred)) — Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn
+- `vectors.v` vrep: all 3 annotations -> Dyn: **rejected** (structural recursion on a Dyn argument) — Error: Cannot guess decreasing argument of fix.
+- `vectors.v` to_list: binder whole (line 21) vec A n -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter n of to_list whose type is "nat" in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
+- `vectors.v` to_list: all 2 annotations -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of to_list whose type is "Type" in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0
 - `vectors.v` v3: return whole (line 24) vec nat 3 -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (vhead (cast Dyn (vec nat (S ?n)) v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is "nat".
-- `vectors.v` all 13 annotations of the file -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?
+- `vectors.v` all 13 annotations of the file -> Dyn: **rejected** (type parameter left undetermined by a cast from Dyn) — Error: Cannot infer the implicit parameter A of vmap whose type is "Type" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0

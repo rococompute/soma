@@ -1130,9 +1130,18 @@
   "file": "higher.v",
   "kind": "single",
   "mutant": "swap: binder whole (line 10) nat * bool -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun p : Dyn => (snd (cast Dyn (?A * bool) p), fst (cast Dyn (nat * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is \"Type\" in environment: p : Dyn - ?B: Cannot infer the implicit parameter B o",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1235,9 +1244,18 @@
   "file": "higher.v",
   "kind": "definition",
   "mutant": "swap: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun p : Dyn => cast (Dyn * Dyn) Dyn (snd (cast Dyn (?A * Dyn) p), fst (cast Dyn (Dyn * ?B) p))) More precisely: - ?A: Cannot infer the implicit parameter A of snd whose type is \"Type\" in environment: p : Dyn - ?B: Cannot infer the im",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1473,9 +1491,18 @@
   "file": "higher.v",
   "kind": "single",
   "mutant": "uncurry: binder whole (line 14) nat * nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (f : nat -> nat -> nat) (p : Dyn) => f (fst (cast Dyn (nat * ?B) p)) (snd (cast Dyn (?A * nat) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is \"Type\" in environment: f : nat -> nat -> nat p :",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1540,9 +1567,18 @@
   "file": "higher.v",
   "kind": "definition",
   "mutant": "uncurry: all 3 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun f p : Dyn => cast Dyn (Dyn -> Dyn) (cast Dyn (Dyn -> Dyn) f (fst (cast Dyn (Dyn * ?B) p))) (snd (cast Dyn (?A * Dyn) p))) More precisely: - ?B: Cannot infer the implicit parameter B of fst whose type is \"Type\" in environment: f :",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_compose": "same",
+   "obs_twice": "same",
+   "obs_iter": "same",
+   "obs_swap": "same",
+   "obs_curry": "same",
+   "obs_uncurry": "same",
+   "obs_bind": "same",
+   "obs_none": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1941,9 +1977,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "filter: binder whole (line 6) A -> bool -> Dyn",
-  "status": "rejected",
-  "error": "Error: The term \"cast Dyn (Dyn -> Dyn) p (cast A Dyn x)\" has type \"Dyn\" which is not a (co-)inductive type.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1951,9 +1996,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "filter: binder inner bool (line 6) A -> bool -> A -> Dyn",
-  "status": "rejected",
-  "error": "Error: The term \"p x\" has type \"Dyn\" which is not a (co-)inductive type.",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1991,7 +2045,7 @@
   "kind": "definition",
   "mutant": "filter: all 3 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: The term \"cast Dyn (Dyn -> Dyn) p x\" has type \"Dyn\" which is not a (co-)inductive type.",
+  "error": "Error: Cannot infer the implicit parameter A of filter whose type is \"Type\" in environment: filter : Type -> Dyn -> Dyn -> Dyn A : Type p : Dyn l : Dyn x : Dyn r : list Dyn",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2078,7 +2132,7 @@
   "kind": "single",
   "mutant": "sum: binder whole (line 15) list nat -> Dyn",
   "status": "rejected",
-  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => 0 | (x :: r)%list => x + sum (cast (list nat) Dyn r) end\".",
+  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => 0 | (x :: r)%list => cast Dyn nat x + sum (cast (list Dyn) Dy",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2126,7 +2180,7 @@
   "kind": "definition",
   "mutant": "sum: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (x + cast Dyn ",
+  "error": "Error: Recursive definition of sum is ill-formed. In environment sum : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast nat Dyn 0 | (x :: r)%list => cast nat Dyn (cast Dyn nat ",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2519,7 +2573,7 @@
   "kind": "single",
   "mutant": "sort: binder whole (line 32) list nat -> Dyn",
   "status": "rejected",
-  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => nil | (x :: r)%list => insert x (sort (cast (list nat)",
+  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> list nat Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => nil | (x :: r)%list => insert (cast Dyn nat x) (sort (",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2586,7 +2640,7 @@
   "kind": "definition",
   "mutant": "sort: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list nat) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) ",
+  "error": "Error: Recursive definition of sort is ill-formed. In environment sort : Dyn -> Dyn Recursive definition on \"Dyn\" which should be a recursive inductive type. Recursive definition is: \"fun l : Dyn => match cast Dyn (list Dyn) l with | nil => cast (list Dyn) Dyn nil | (x :: r)%list => cast (list nat) ",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2605,9 +2659,18 @@
   "file": "lists.v",
   "kind": "single",
   "mutant": "range: return whole (line 35) list nat -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (length (cast Dyn (list ?A) (range 6))) More precisely: - ?A: Cannot infer the implicit parameter A of length whose type is \"Type\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_map": "same",
+   "obs_filter": "same",
+   "obs_fold": "same",
+   "obs_sum": "same",
+   "obs_rev": "same",
+   "obs_mem": "same",
+   "obs_sort": "same",
+   "obs_length": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -2974,7 +3037,7 @@
   "kind": "single",
   "mutant": "vhead: binder whole (line 8) vec A (S n) -> Dyn",
   "status": "rejected",
-  "error": "Error: In environment A : Type n : nat v : Dyn The term \"match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end\" has type \"match ?n with | 0 => unit | S _ => A end\" while it is expected to have type \"A\". No cast was inserted: the ",
+  "error": "Error: The following term contains unresolved implicit arguments: (vhead (cast (vec nat 3) Dyn v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
   "observations": {},
   "values": {},
   "expected": {}
@@ -2999,7 +3062,7 @@
   "kind": "definition",
   "mutant": "vhead: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?",
+  "error": "Error: The following term contains unresolved implicit arguments: (cast Dyn nat (vhead (cast (vec nat 3) Dyn v3))) More precisely: - ?A: Cannot infer the implicit parameter A of vhead whose type is \"Type\". - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3033,9 +3096,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vmap: return whole (line 12) vec B n -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vmap : forall (A B : Type) (n : nat), (A -> B) -> vec A n -> Dyn A : Type B : Type n : nat f : A -> B v : vec A n n0 : nat x : A r : vec A n0",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3044,7 +3112,7 @@
   "kind": "definition",
   "mutant": "vmap: all 3 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn",
+  "error": "Error: Cannot infer the implicit parameter A of vmap whose type is \"Type\" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3054,7 +3122,7 @@
   "kind": "single",
   "mutant": "vsum: binder whole (line 15) vec nat n -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn",
+  "error": "Error: Cannot infer the implicit parameter n of vsum whose type is \"nat\" in environment: vsum : nat -> Dyn -> nat n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3094,7 +3162,7 @@
   "kind": "definition",
   "mutant": "vsum: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn",
+  "error": "Error: Cannot infer the implicit parameter n of vsum whose type is \"nat\" in environment: vsum : nat -> Dyn -> Dyn n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3128,9 +3196,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vrep: return whole (line 18) vec nat n -> Dyn",
-  "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vrep : nat -> nat -> Dyn n, x, k : nat",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -3154,7 +3227,7 @@
   "kind": "definition",
   "mutant": "vrep: all 3 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the implicit parameter n of vcons whose type is \"nat\" in environment: vrep : Dyn -> Dyn -> Dyn n : Dyn x : Dyn k : nat",
+  "error": "Error: Cannot guess decreasing argument of fix.",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3164,7 +3237,7 @@
   "kind": "single",
   "mutant": "to_list: binder whole (line 21) vec A n -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn",
+  "error": "Error: Cannot infer the implicit parameter n of to_list whose type is \"nat\" in environment: to_list : forall A : Type, nat -> Dyn -> list A A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3189,7 +3262,7 @@
   "kind": "definition",
   "mutant": "to_list: all 2 annotations -> Dyn",
   "status": "rejected",
-  "error": "Error: Cannot infer the 2nd argument of the inductive type (vec) of this term in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn",
+  "error": "Error: Cannot infer the implicit parameter A of to_list whose type is \"Type\" in environment: to_list : Type -> nat -> Dyn -> Dyn A : Type n : nat v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}
@@ -3224,7 +3297,7 @@
   "kind": "file",
   "mutant": "all 13 annotations of the file -> Dyn",
   "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec A ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => x end) More precisely: - ?",
+  "error": "Error: Cannot infer the implicit parameter A of vmap whose type is \"Type\" in environment: vmap : Type -> Type -> nat -> Dyn -> Dyn -> Dyn A : Type B : Type n : nat f : Dyn v : Dyn n0 : nat x : Dyn r : vec Dyn n0",
   "observations": {},
   "values": {},
   "expected": {}

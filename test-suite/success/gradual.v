@@ -52,6 +52,15 @@ Fail Definition explicit_bad : Dyn := @cons nat 1 (cons true nil).
 Goal (mixed_dyn : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 Goal (explicit_dyn : list nat) = cons 1 nil. Proof. reflexivity. Qed.
 
+(** * Casts from [Dyn] do not leave arguments undetermined *)
+
+(* the other component of a pair, the length of a vector: [?] *)
+Definition snd_dyn (p : Dyn) : bool := snd p.
+Goal snd_dyn (cast (nat * bool) Dyn (1, true)) = true. Proof. reflexivity. Qed.
+Definition if_dyn (b : Dyn) : nat := if b then 1 else 0.
+Goal if_dyn (cast bool Dyn false) = 0. Proof. reflexivity. Qed.
+Goal if_dyn (cast nat Dyn 3) = raise. Proof. reflexivity. Qed.
+
 (** * Graduality: a term accepted at a type is accepted at less precise ones
 
     Each group gives one term at decreasingly precise types. *)
