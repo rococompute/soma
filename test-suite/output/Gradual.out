@@ -68,3 +68,15 @@ The command has indeed failed with message:
 Cannot cast from "Type" to "Dyn": "Type@{Set+1}"
 lives above the universe of gradual types
 (Corelib.Gradual.Gradual.gradual), so no cast was inserted.
+File "./output/Gradual.v", line 62, characters 44-48:
+Warning: by_unknown: the proof is the unknown term (unk),
+so it may not hold in Rocq (see Print Assumptions).
+[gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 63, characters 68-72:
+Warning: by_error: the proof is the error term (raise),
+so it may not hold in Rocq (see Print Assumptions).
+[gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 64, characters 68-72:
+Warning: by_cast: the proof uses gradual primitives its statement does not
+(cast), so it may not hold in Rocq (see Print Assumptions).
+[gradual-proof,vernacular,default]

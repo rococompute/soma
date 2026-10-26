@@ -54,3 +54,11 @@ Definition box : Box := {| contents := nat |}.
 Definition box_dyn : Dyn := box.
 Print box_dyn.
 Fail Definition set_dyn : Dyn := Set.
+
+(* proofs that rely on the gradual primitives in a way their statement
+   does not account for are reported; the others are silent *)
+Lemma about_program : succ_dyn 41 = 42. Proof. reflexivity. Qed.
+Lemma plain : forall n : nat, 0 + n = n. Proof. reflexivity. Qed.
+Lemma by_unknown : False. Proof. exact unk. Qed.
+Lemma by_error : forall n : nat, n = 0. Proof. intros; exact raise. Qed.
+Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.

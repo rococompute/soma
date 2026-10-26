@@ -58,3 +58,13 @@ val coerce_to_product : env -> Evd.evar_map -> constr -> inferred:types ->
     fresh universe. *)
 val coerce_to_sort : env -> Evd.evar_map -> constr -> inferred:types ->
   (Evd.evar_map * constr * types) option
+
+(** [proof_uses_gradual env ~typ ~body] tells whether the proof [body] of
+    the statement [typ] relies on gradual primitives in a way that may not
+    hold in Rocq: [`Is k] when the proof is itself [unknown] or [err] (under
+    abstractions), [`Uses l] when it uses primitives [l] that the statement
+    does not (through the types and transparent bodies of the constants it
+    mentions). [None] otherwise, or when no gradual primitive is
+    registered. *)
+val proof_uses_gradual : env -> typ:Constr.types -> body:Constr.constr ->
+  [ `Is of Gradual.kind | `Uses of Gradual.kind list ] option

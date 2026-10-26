@@ -985,6 +985,34 @@ let interp_mutual_using env cinfo bodies_types using =
       interp_proof_using_gen f env evd cinfos using)
     using
 
+let gradual_prim_name = function
+  | Gradual.GCast -> "cast" | Gradual.GUnknown -> "unknown" | Gradual.GErr -> "err"
+
+let warn_gradual_proof =
+  CWarnings.create ~name:"gradual-proof" ~category:CWarnings.CoreCategories.vernacular
+    (fun (name, why) ->
+       let why = match why with
+         | `Is Gradual.GErr -> Pp.(str "the proof is the error term (raise)")
+         | `Is _ -> Pp.(str "the proof is the unknown term (unk)")
+         | `Uses l ->
+           Pp.(str "the proof uses gradual primitives its statement does not" ++ spc () ++
+               str "(" ++ prlist_with_sep pr_comma (fun k -> str (gradual_prim_name k)) l ++ str ")")
+       in
+       Pp.(Id.print name ++ str ":" ++ spc () ++ why ++ str "," ++ spc () ++
+           str "so it may not hold in Rocq (see Print Assumptions)."))
+
+(* Under gradual typing, [unk : False]: say when a proof relies on the
+   gradual primitives in a way its statement does not account for. Deferred
+   (asynchronous) proofs are not forced for this. *)
+let check_gradual_proof ~kind name (entry : proof_entry) =
+  match kind, entry.proof_entry_body, entry.proof_entry_type with
+  | Decls.IsProof _, Default { body; _ }, Some typ ->
+    begin match GradualTyping.proof_uses_gradual (Global.env ()) ~typ ~body with
+      | Some why -> warn_gradual_proof (name, why)
+      | None -> ()
+    end
+  | _ -> ()
+
 let declare_possibly_mutual_definitions ~info ~cinfo ~obls ?(is_telescope=false) obj =
   let eff, entries = process_proof ~info ~is_telescope obj in
   let () = export_side_effects eff in
@@ -992,6 +1020,7 @@ let declare_possibly_mutual_definitions ~info ~cinfo ~obls ?(is_telescope=false)
   let _, refs = List.fold_left2_map (fun subst CInfo.{name; impargs; loc} (entry, uctx) ->
       (* replacing matters for Derive-like statement but it does not hurt otherwise *)
       let entry = ProofEntry.map_entry entry ~f:(Vars.replace_vars subst) in
+      let () = check_gradual_proof ~kind name entry in
       let gref = declare_entry ~loc ~name ~scope ~clearbody ~kind ?hook ~impargs ~typing_flags ~user_warns ~obls ~uctx entry in
       let inst = instance_of_univs entry.proof_entry_universes in
       let const = Constr.mkRef (gref, inst) in

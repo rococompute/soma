@@ -207,3 +207,51 @@ let coerce_to_sort env sigma t ~inferred =
       let sigma, s = Evd.new_sort_variable Evd.univ_flexible sigma in
       cast env sigma ~inferred ~expected:(mkSort s) t
     else None
+
+(* The gradual primitives a term depends on, through the types and the
+   transparent bodies of the constants it mentions (opaque proofs are not
+   followed: each proof is checked when it is saved). *)
+let uses_cache = ref Names.Cmap_env.empty
+
+let rec uses env acc c = match Constr.kind c with
+  | Constr.Const (cst, _) ->
+    begin match Gradual.kind_of env cst with
+      | Some k -> if List.mem k acc then acc else k :: acc
+      | None -> List.fold_left (fun acc k -> if List.mem k acc then acc else k :: acc) acc (const_uses env cst)
+    end
+  | _ -> Constr.fold (uses env) acc c
+
+and const_uses env cst =
+  match Names.Cmap_env.find_opt cst !uses_cache with
+  | Some l -> l
+  | None ->
+    let cb = Environ.lookup_constant cst env in
+    let l = uses env [] cb.Declarations.const_type in
+    let l = match cb.Declarations.const_body with
+      | Declarations.Def b -> uses env l b
+      | _ -> l
+    in
+    uses_cache := Names.Cmap_env.add cst l !uses_cache;
+    l
+
+let rec strip_lambdas c = match Constr.kind c with
+  | Constr.Lambda (_, _, c) | Constr.LetIn (_, _, _, c) -> strip_lambdas c
+  | Constr.Cast (c, _, _) -> strip_lambdas c
+  | _ -> c
+
+let proof_uses_gradual env ~typ ~body =
+  if not (Gradual.enabled env) then None
+  else
+    let head = match Constr.kind (strip_lambdas body) with
+      | Constr.App (f, _) -> f
+      | _ -> strip_lambdas body
+    in
+    match Constr.kind head with
+    | Constr.Const (c, _) when Option.has_some (Gradual.kind_of env c)
+                               && not (Option.equal (==) (Gradual.kind_of env c) (Some Gradual.GCast)) ->
+      Some (`Is (Option.get (Gradual.kind_of env c)))
+    | _ ->
+      let in_type = uses env [] typ in
+      match List.filter (fun k -> not (List.mem k in_type)) (uses env [] body) with
+      | [] -> None
+      | l -> Some (`Uses l)

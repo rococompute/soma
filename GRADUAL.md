@@ -106,6 +106,19 @@ static fragment behaves exactly as in CIC (conservativity), and why
 `Print Assumptions` lists the axioms whenever a development uses gradual
 features. (The theory is deliberately inconsistent: `unk : False`.)
 
+So that proofs stay proofs, saving a proof (`Qed`, `Defined`) warns
+(`gradual-proof`) when it relies on the primitives in a way its
+statement does not account for. That covers a proof that is `unk` or
+`raise`, and a proof that uses `cast`, `unknown` or `err` when its
+statement does not. Lemmas about gradual programs, such as
+`succ_dyn 41 = 42`, and proofs without gradual primitives stay silent:
+
+```
+Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
+(* Warning: by_cast: the proof uses gradual primitives its statement does not
+   (cast), so it may not hold in Rocq (see Print Assumptions). *)
+```
+
 ### Reduction rules (`kernel/gradual.ml`)
 
 `A`, `B` are in weak head normal form. "Germ-free": a value of type `?` is
