@@ -163,9 +163,12 @@ last resort, after unification and ordinary coercions have failed:
 - **Reducts of `match` on `?` may live above `gradual`** when the match
   returns a large type. This is harmless for computation, but such a
   reduct would not re-typecheck.
-- **Bidirectionality.** Rocq infers implicit arguments from the first
-  argument, so `cons 1 (cons true nil) : list Dyn` fails. Write
-  `@cons Dyn 1 …`.
+- **Bidirectionality is checking, not synthesis.** With an expected
+  type, argument inference is delayed until that type has been unified
+  with the result, so `cons 1 (cons true nil) : list Dyn` checks both
+  elements at `Dyn`. An ascription of `Dyn` does not determine
+  constructor parameters, so `cons 1 (cons true nil) : Dyn` is still
+  rejected. Write `list Dyn`, or `@cons Dyn 1 …`.
 
 ## Tests
 

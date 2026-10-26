@@ -11,6 +11,29 @@ Definition apply3 (g : Dyn) : nat := g 3.
 Fail Definition bad : nat := true.
 Fail Check (fun x : nat => x) true.
 
+(** * Expected types flow into arguments before they are inferred *)
+
+Definition mixed : list Dyn := cons 1 (cons true nil).
+Definition mixed_asc := (cons 1 (cons true nil) : list Dyn).
+Definition mixed_pair : Dyn * Dyn := (1, true).
+
+Definition both {A : Type} (x y : A) : A * A := (x, y).
+Definition mixed_both : Dyn * Dyn := both 1 true.
+
+Goal (mixed : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
+Goal (mixed : list bool) = cons raise (cons true nil). Proof. reflexivity. Qed.
+Goal fst (mixed_pair : nat * nat) = 1. Proof. reflexivity. Qed.
+Goal snd (mixed_pair : bool * bool) = true. Proof. reflexivity. Qed.
+Goal fst (mixed_both : nat * bool) = 1. Proof. reflexivity. Qed.
+Goal snd (mixed_both : nat * bool) = true. Proof. reflexivity. Qed.
+
+(** A precise expected parameter is still a static constraint. *)
+Fail Definition still_static : list nat := cons true nil.
+Fail Definition still_pair : nat * nat := (true, 1).
+
+(** [Dyn] alone does not choose the parameters of [cons]. *)
+Fail Definition mixed_dyn : Dyn := cons 1 (cons true nil).
+
 (** * Reduction of casts *)
 
 Goal succ_dyn 41 = 42. Proof. reflexivity. Qed.

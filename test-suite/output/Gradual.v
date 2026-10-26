@@ -19,6 +19,13 @@ Print omega.
 Definition T (X : Dyn) : Type := X -> X.
 Print T.
 
+(* the expected type list Dyn reaches both elements *)
+Definition mixed : list Dyn := cons 1 (cons true nil).
+Print mixed.
+
+Definition mixed_pair : Dyn * Dyn := (1, true).
+Print mixed_pair.
+
 (* the inserted casts compute *)
 Eval lazy in succ_dyn 41.
 Eval lazy in succ_dyn true.
