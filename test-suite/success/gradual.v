@@ -115,6 +115,23 @@ Definition map_obs : list nat := map_dyn (fun x : nat => x * 2) (cons 1 (cons 2 
 Goal map_obs = cons 2 (cons 4 (cons 6 nil)). Proof. reflexivity. Qed.
 (* [A] occurs in [list A]: still an error *)
 Fail Definition no_type := nil.
+(* no gradual primitive in the term: still an error *)
+Fail Definition no_type_let := let y := nil in 0.
+
+(** An implicit argument that nothing determines, in a term that already
+    uses the gradual primitives, is [?] when it does not occur in the type
+    of the term. *)
+#[warnings="-gradual-unguarded-fixpoint"]
+Fixpoint assoc_dyn {V : Type} (k : nat) (l : Dyn) : option V :=
+  match l with
+  | nil => None
+  | cons (k', v) r => if Nat.eqb k k' then Some v else assoc_dyn k r
+  end.
+(* the payload is ignored, so nothing fixes [V] *)
+Definition mem_dyn {V : Type} (k : nat) (l : list (nat * V)) : bool :=
+  match assoc_dyn k l with Some _ => true | None => false end.
+Goal mem_dyn 2 (cons (1, true) (cons (2, false) nil)) = true. Proof. reflexivity. Qed.
+Goal mem_dyn 3 (cons (1, true) (cons (2, false) nil)) = false. Proof. reflexivity. Qed.
 
 (** In a [match] with a return clause, the indices of a cast from [Dyn] are
     not [?]: the return type may depend on them. *)
@@ -146,6 +163,19 @@ Module DependentMatch.
   Fixpoint vsum {n : nat} (v : vec nat n) : nat :=
     match v with vnil => 0 | vcons x r => x + vsum r end.
   Goal vsum (vrep_dyn 4 5) = 20. Proof. reflexivity. Qed.
+  (* [vsum] takes any length, so nothing fixes [vmap_dyn]'s [n] *)
+  #[warnings="-gradual-unguarded-fixpoint"]
+  Fixpoint vmap_dyn {A B : Type} {n : nat} (f : A -> B) (v : Dyn) : vec B n :=
+    match v with vnil => vnil | vcons x r => vcons (f x) (vmap_dyn f r) end.
+  Definition v3 : vec nat 3 := vcons 1 (vcons 2 (vcons 3 vnil)).
+  Definition vmap_obs : nat := vsum (vmap_dyn (fun x : nat => x * 10) v3).
+  Goal vmap_obs = 60. Proof. reflexivity. Qed.
+  (* the result is [Dyn]: the index of the scrutinee is [?] *)
+  Definition vhead_all {A : Type} {n : nat} (v : Dyn) : Dyn :=
+    match v in vec _ m return match m with 0 => unit | S _ => A end with
+    | vnil => tt | vcons x _ => x end.
+  Definition vhead_obs : nat := vhead_all v3.
+  Goal vhead_obs = 1. Proof. reflexivity. Qed.
   (* still an error outside such a match *)
   Fail Definition wrong_length : vec nat 1 := (vnil : vec nat 0).
 End DependentMatch.

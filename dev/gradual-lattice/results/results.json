@@ -893,9 +893,19 @@
   "file": "fmap.v",
   "kind": "single",
   "mutant": "find: binder whole (line 10) tree V -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (V : Type) (k : nat) (t : tree V) => match find k (cast (tree V) Dyn t) with | Some _ => true | None => false end) More precisely: - ?V: Cannot infer the implicit parameter V of find whose type is \"Type\" in environment: V : Type ",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -1283,9 +1293,19 @@
   "file": "fmap.v",
   "kind": "single",
   "mutant": "remove: binder whole (line 43) tree V -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (mem 3 (remove 3 (cast (tree bool) Dyn sample))) More precisely: - ?V: Cannot infer the implicit parameter V of mem whose type is \"Type\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_find": "same",
+   "obs_find_none": "same",
+   "obs_elements": "same",
+   "obs_size": "same",
+   "obs_height": "same",
+   "obs_remove": "same",
+   "obs_mem": "same",
+   "obs_map_values": "same",
+   "obs_counts": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -5002,9 +5022,14 @@
   "file": "vectors.v",
   "kind": "definition",
   "mutant": "vhead: all 2 annotations -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end) More p",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -5027,9 +5052,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "vmap: binder whole (line 12) vec A n -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (vsum (vmap (fun x : nat => x * 10) (cast (vec nat 3) Dyn v3))) More precisely: - ?n: Cannot infer the implicit parameter n of vmap whose type is \"nat\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },
@@ -5277,9 +5307,14 @@
   "file": "vectors.v",
   "kind": "file",
   "mutant": "all 13 annotations of the file -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (fun (A : Type) (n : nat) (v : Dyn) => cast match ?n with | 0 => unit | S _ => A end Dyn match cast Dyn (vec Dyn ?n) v in vec _ m return match m with | 0 => unit | S _ => A end with | vnil => tt | vcons x _ => cast Dyn A x end) More p",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  }

@@ -1190,6 +1190,7 @@ let check_evars_are_solved env sigma t =
 let declare_definition ~info ~cinfo ~opaque ~obls ~body ?using sigma =
   let { CInfo.name; typ; _ } = cinfo in
   let env = Global.env () in
+  let sigma = GradualTyping.default_leftover_implicits env sigma ~typ body in
   Option.iter (check_evars_are_solved env sigma) typ;
   check_evars_are_solved env sigma body;
   let poly = info.Info.poly in

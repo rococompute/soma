@@ -60,6 +60,13 @@ val set_gradual_scrutinee : env -> Evd.evar_map -> constr list -> unit
     is enabled and [ty] lives in the universe of gradual types. *)
 val unknown_at : env -> Evd.evar_map -> types -> (Evd.evar_map * constr) option
 
+(** [default_leftover_implicits env sigma ~typ body] sets to [?] the
+    implicit arguments (of functions, and of the inductive types of match
+    scrutinees) that are still undefined in [body], when Gradual Typing is
+    enabled, [body] itself mentions a gradual primitive, and they do not
+    occur in [typ] (or the type of [body]). *)
+val default_leftover_implicits : env -> Evd.evar_map -> typ:types option -> constr -> Evd.evar_map
+
 (** [coerce_to_type env sigma v ~inferred ~expected] casts [v : inferred]
     to [expected] if the types are consistent. *)
 val coerce_to_type : env -> Evd.evar_map -> constr -> inferred:types -> expected:types ->

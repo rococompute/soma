@@ -255,6 +255,51 @@ let unknown_at env sigma ty =
     try Some (Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|])
     with e when CErrors.noncritical e -> None
 
+(* The term itself mentions [cast], [unknown] or [err] (not through the
+   constants it uses). *)
+let mentions_primitive env sigma c =
+  let rec aux c = match kind sigma c with
+    | Const (cst, _) -> Option.has_some (Gradual.kind_of env cst)
+    | _ -> EConstr.fold sigma (fun b c -> b || aux c) false c
+  in
+  aux c
+
+(* An implicit argument, of a function or of the inductive type of a match
+   scrutinee, that nothing determined, in a term that already uses the
+   gradual primitives, is [?] when it does not occur in the type of the
+   term. [Definition x := nil] mentions no primitive, and its [A] occurs in
+   [list A]: it stays unsolved. *)
+let default_leftover_implicits env sigma ~typ body =
+  if not (enabled env) || not (mentions_primitive env sigma body) then sigma
+  else
+    let typ = match typ with
+      | Some t -> t
+      | None -> Retyping.get_type_of env sigma body
+    in
+    let defaultable sigma evk =
+      match snd (Evd.evar_source (Evd.find_undefined sigma evk)) with
+      | Evar_kinds.ImplicitArg _ | Evar_kinds.TomatchTypeParameter _ -> true
+      | _ -> false
+    in
+    let default evk sigma =
+      if Evd.is_defined sigma evk then sigma
+      else
+        let evi = Evd.find_undefined sigma evk in
+        match unknown_at (Evd.evar_filtered_env env evi) sigma (Evd.evar_concl evi) with
+        | Some (sigma, u) -> Evd.define evk u sigma
+        | None -> sigma
+    in
+    let rec loop sigma =
+      let in_type = Evarutil.undefined_evars_of_term sigma typ in
+      let leftover = Evar.Set.filter
+          (fun evk -> defaultable sigma evk && not (Evar.Set.mem evk in_type))
+          (Evarutil.undefined_evars_of_term sigma body)
+      in
+      let sigma' = Evar.Set.fold default leftover sigma in
+      if sigma' == sigma then sigma else loop sigma'
+    in
+    loop sigma
+
 (* [inferred] and [expected] are the same inductive family, with consistent
    parameters (indices may differ). *)
 let same_family env sigma inferred expected =
