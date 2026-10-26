@@ -3622,9 +3622,14 @@
   "file": "vectors.v",
   "kind": "single",
   "mutant": "v3: return whole (line 24) vec nat 3 -> Dyn",
-  "status": "rejected",
-  "error": "Error: The following term contains unresolved implicit arguments: (vhead (cast Dyn (vec nat (S ?n)) v3)) More precisely: - ?n: Cannot infer the implicit parameter n of vhead whose type is \"nat\".",
-  "observations": {},
+  "status": "compiled",
+  "error": "",
+  "observations": {
+   "obs_vhead": "same",
+   "obs_vsum": "same",
+   "obs_vrep": "same",
+   "obs_to_list": "same"
+  },
   "values": {},
   "expected": {}
  },

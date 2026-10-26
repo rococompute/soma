@@ -205,14 +205,22 @@ let default_args_to_unknown env sigma t =
       | Ind ((mind, _), _) -> (Environ.lookup_mind mind env).Declarations.mind_nparams
       | _ -> 0
     in
+    let default sigma a =
+      let ty = Reductionops.whd_all env sigma (Retyping.get_type_of env sigma a) in
+      try
+        let s, d = Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|] in
+        Evarconv.unify_delay env s a d
+      with e when CErrors.noncritical e -> sigma
+    in
+    (* the evars of an argument, also under constructors: the index of
+       [cast Dyn (vec nat (S ?n)) v] is [S ?] (not under binders) *)
+    let rec walk sigma a = match kind sigma a with
+      | Evar _ -> default sigma a
+      | App (f, args) when isConstruct sigma f -> Array.fold_left walk sigma args
+      | _ -> sigma
+    in
     CArray.fold_left_i (fun i sigma a ->
-        if (i < npar || !index_defaulting) && isEvar sigma a then
-          let ty = Reductionops.whd_all env sigma (Retyping.get_type_of env sigma a) in
-          try
-            let s, d = Typing.checked_appvect env sigma (prim env Gradual.GUnknown) [|ty|] in
-            Evarconv.unify_delay env s a d
-          with e when CErrors.noncritical e -> sigma
-        else sigma)
+        if i < npar || !index_defaulting then walk sigma a else sigma)
       sigma args
   | _ -> sigma
 
