@@ -1,0 +1,29 @@
+t_ok = 42
+t_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.bool to Corelib.Init.Datatypes.nat)
+t_app = 4
+t_app_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_list = [1; 2]
+t_list_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.bool to Corelib.Init.Datatypes.nat)
+t_pair = (1, true)
+t_pair_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_option = false
+t_fs (cast) = 2
+t_fs (first) = 2
+t_fs (second): Cast_error (cannot cast from Corelib.Init.Datatypes.nat to Corelib.Init.Datatypes.bool)
+t_record = 1
+t_record_bad: Cast_error (cannot cast from gradual_prog.point to Corelib.Init.Datatypes.nat)
+t_sig = 1
+t_vec = 1
+t_vec_bad: Cast_error (index mismatch at type (gradual_prog.vec Corelib.Init.Datatypes.nat _))
+t_dep = 2
+t_dep_bad: Cast_error (index mismatch at type (gradual_prog.vec Corelib.Init.Datatypes.nat _))
+t_tree = 1(2)
+t_tree_bad: Cast_error (cannot cast from Corelib.Init.Datatypes.bool to Corelib.Init.Datatypes.nat)
+t_rose = 1(2)
+t_unk: Unknown_term (Corelib.Init.Datatypes.nat)
+t_unk_fun: Unknown_term (Corelib.Init.Datatypes.nat)
+t_unk_dyn: Unknown_term (Corelib.Init.Datatypes.nat)
+t_err: Cast_error (error at type Corelib.Init.Datatypes.nat)
+t_err_fun (cast) = <fun>
+t_err_fun (call): Cast_error (error at type Corelib.Init.Datatypes.nat)
+t_sort_bad: Cast_error (cannot cast from Type to Corelib.Init.Datatypes.nat)

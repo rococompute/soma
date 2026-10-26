@@ -8,3 +8,15 @@
  (targets g_extraction.ml)
  (deps (:mlg g_extraction.mlg))
  (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))
+
+; The runtime of gradual casts is compiled as part of the plugin, so that it
+; is type checked, and embedded as a string that extraction prints.
+(rule
+ (targets gradual_rt_source.ml)
+ (deps gradual_rt.ml)
+ (action
+  (with-stdout-to %{targets}
+   (progn
+    (echo "let source = {gradual_rt|")
+    (cat %{deps})
+    (echo "|gradual_rt}\n")))))

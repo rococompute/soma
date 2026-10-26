@@ -683,6 +683,68 @@ let record_constant_type table env sg kn inst opt_typ =
 
 (*S Extraction of a term. *)
 
+(*S Gradual casts. *)
+
+(* Extraction erases types, so a cast [cast A B t] of gradual Rocq (GCIC^G,
+   see kernel/gradual.ml) is extracted to a call to the runtime [Gradual_rt]
+   (gradual_rt.ml) with runtime descriptions of [A] and [B]. For each
+   inductive type in a description, we generate a function that rebuilds its
+   constructors at another instance of the type, casting their arguments.
+   Types are only known at run time when they are closed, up to inductive
+   parameters and values: casts involving type variables are rejected. *)
+
+let rt name = MLraw ("Gradual_rt." ^ name)
+let rt_app name args = MLapp (rt name, args)
+let rt_list l = List.fold_right (fun a l -> rt_app "acons" [a; l]) l (rt "anil")
+
+(* What a Rocq variable is at run time, while building descriptions. The
+   functions give the ML expression at a given ML depth (see [rt_var]). *)
+type rt_binding =
+  | RtTy of (int -> ml_ast)  (* a type: its runtime description *)
+  | RtVal of (int -> ml_ast) (* a value *)
+  | RtNone                   (* a type or a proof without runtime counterpart *)
+  | RtMissing                (* a value without runtime counterpart *)
+
+type rt_ctx = {
+  rt_env : env;       (* [rt_outer] extended with [rt_binders] *)
+  rt_outer : env;     (* environment of the term being extracted *)
+  rt_mle : Mlenv.t;   (* and its ML environment *)
+  rt_binders : (EConstr.rel_declaration * rt_binding) list; (* innermost first *)
+  rt_depth : int;     (* number of ML binders introduced since [rt_outer] *)
+  rt_needed : (inductive * EConstr.EInstance.t) list ref;
+  (* inductive types whose cast function the runtime will need *)
+}
+
+(* The ML variable introduced at depth [l], seen at depth [d]. *)
+let rt_var l d = MLrel (d - l + 1)
+
+let rt_push_ml ctx = { ctx with rt_depth = ctx.rt_depth + 1 }, ctx.rt_depth + 1
+
+let rt_push ctx decl b =
+  { ctx with rt_env = EConstr.push_rel decl ctx.rt_env;
+             rt_binders = (decl, b) :: ctx.rt_binders }
+
+let gradual_error env sg msg t =
+  CErrors.user_err
+    Pp.(str "Cannot extract a gradual cast: " ++ msg ++ str ":" ++
+        brk (1, 2) ++ Printer.pr_econstr_env env sg t ++ str ".")
+
+let gradual_kind_of_term env sg t =
+  let f = match EConstr.kind sg t with App (f, _) -> f | _ -> t in
+  match EConstr.kind sg f with
+  | Const (c, _) -> Gradual.kind_of env c
+  | _ -> None
+
+(* The name of an inductive type at run time, as an OCaml string literal. *)
+let gradual_ind_name_ml env ind =
+  let mib = lookup_mind (fst ind) env in
+  let kn = KerName.to_string (MutInd.canonical (fst ind)) in
+  let name =
+    if Int.equal (Array.length mib.mind_packets) 1 then kn
+    else kn ^ "#" ^ Id.to_string mib.mind_packets.(snd ind).mind_typename
+  in
+  MLraw ("\"" ^ String.escaped name ^ "\"")
+
 (* Precondition: [(c args)] is not a type scheme, and is informative. *)
 
 (* [mle] is a ML environment [Mlenv.t]. *)
@@ -733,7 +795,11 @@ let rec extract_term table env sg mle mlt c args =
           let mle' = Mlenv.push_std_type mle (Tdummy d) in
           ast_pop (extract_term table env' sg mle' mlt c2 args'))
     | Const (kn,u) ->
-        extract_cst_app table env sg mle mlt (kn, u) args
+        begin match Gradual.kind_of env kn with
+        | Some k when not (is_custom { glob = GlobRef.ConstRef kn; inst = InfvInst.empty }) ->
+          extract_gradual table env sg mle mlt k (kn, u) args
+        | _ -> extract_cst_app table env sg mle mlt (kn, u) args
+        end
     | Construct (cp,u) ->
         extract_cons_app table env sg mle mlt (cp, u) args
     | Proj (p, _, c) ->
@@ -1001,6 +1067,247 @@ and extract_fix table env sg mle i (fi,ti,ci as recd) mlt =
   let mle = Array.fold_left Mlenv.push_type mle metas in
   let ei = Array.map2 (extract_maybe_term table env sg mle) metas ci in
   MLfix (i, Array.map (fun x -> id_of_name x.binder_name) fi, ei)
+
+(*s Extraction of [cast A B t], [unknown A] and [err A], applied to [args]. *)
+
+and extract_gradual table env sg mle mlt kind (kn, u) args =
+  let needed = Gradual.arity kind in
+  let la = List.length args in
+  if la < needed then
+    (* Partial application: eta-expand. *)
+    let rec eta env n c ty =
+      if Int.equal n 0 then c
+      else match EConstr.kind sg (whd_all env sg ty) with
+        | Prod (na, a, b) ->
+          let c = EConstr.mkApp (EConstr.Vars.lift 1 c, [|EConstr.mkRel 1|]) in
+          EConstr.mkLambda (na, a, eta (push_rel_assum (na, a) env) (n - 1) c b)
+        | _ -> assert false
+    in
+    let c = applistc (EConstr.mkConstU (kn, u)) args in
+    extract_term table env sg mle mlt (eta env (needed - la) c (type_of env sg c)) []
+  else
+    let ctx = { rt_env = env; rt_outer = env; rt_mle = mle; rt_binders = [];
+                rt_depth = 0; rt_needed = ref [] } in
+    let with_args head rest =
+      let rest = List.map (fun a -> extract_maybe_term table env sg mle (new_meta ()) a) rest in
+      MLmagic (mlapp (MLmagic head) rest)
+    in
+    match kind, args with
+    | Gradual.GCast, a :: b :: t :: rest ->
+      if EConstr.eq_constr sg a b then extract_term table env sg mle mlt t rest
+      else
+        let ra = gradual_reify table sg ctx a in
+        let rb = gradual_reify table sg ctx b in
+        let casts = gradual_ind_casts table sg ctx in
+        let t = extract_maybe_term table env sg mle (new_meta ()) t in
+        with_args (rt_app "cast_with" [casts; ra; rb; MLmagic t]) rest
+    | Gradual.GUnknown, a :: rest ->
+      with_args (rt_app "unknown_term" [gradual_reify table sg ctx a]) rest
+    | Gradual.GErr, a :: rest ->
+      with_args (rt_app "err_term" [gradual_reify table sg ctx a]) rest
+    | _ -> assert false
+
+(* The runtime description (a [Gradual_rt.ty]) of the type [t]. *)
+
+and gradual_reify table sg ctx t =
+  let env = ctx.rt_env in
+  let t = whd_all env sg t in
+  if info_of_quality (sort_of env sg t) == Logic then rt "erased"
+  else match EConstr.kind sg t with
+    | Sort s ->
+      let s = EConstr.ESorts.kind sg s in
+      let n = if Sorts.is_prop s || Sorts.is_sprop s then 0 else if Sorts.is_set s then 1 else 2 in
+      rt_app "sort" [MLraw (string_of_int n)]
+    | Prod (na, a, b) ->
+      let ra = gradual_reify table sg ctx a in
+      let ctx', l = rt_push_ml ctx in
+      let binding = match flag_of_type env sg a with
+        | (Info, Default) -> RtVal (rt_var l)
+        | _ -> RtNone
+      in
+      let ctx' = rt_push ctx' (LocalAssum (na, a)) binding in
+      let id = Id (id_of_name na.binder_name) in
+      rt_app "pi" [ra; MLlam (id, gradual_reify table sg ctx' b)]
+    | Rel n when n <= List.length ctx.rt_binders ->
+      begin match snd (List.nth ctx.rt_binders (n - 1)) with
+        | RtTy f -> f ctx.rt_depth
+        | RtVal _ | RtNone | RtMissing ->
+          gradual_error env sg (Pp.str "no runtime description for type") t
+      end
+    | Rel _ ->
+      gradual_error env sg (Pp.str "type variables are not supported yet") t
+    | _ ->
+      let hd, args = EConstr.decompose_app sg t in
+      match gradual_kind_of_term env sg t, EConstr.kind sg hd with
+      | Some Gradual.GUnknown, _ -> rt "unknown_ty"
+      | Some Gradual.GErr, _ -> rt "err_ty"
+      | _, Ind (ind, u) ->
+        let mib, mip = Inductive.lookup_mind_specif env ind in
+        if Array.length args <> mib.mind_nparams + mip.mind_nrealargs then
+          gradual_error env sg (Pp.str "partially applied inductive type") t;
+        (* Without parameters and indices, all instances are equal and casts
+           between them are the identity. *)
+        if not (Array.is_empty args)
+        && not (List.exists (fun (i, _) -> Ind.CanOrd.equal i ind) !(ctx.rt_needed)) then
+          ctx.rt_needed := (ind, u) :: !(ctx.rt_needed);
+        let args = Array.map_to_list (gradual_reify_arg table sg ctx) args in
+        rt_app "ind" [gradual_ind_name_ml env ind; rt_list args]
+      | _ -> gradual_error env sg (Pp.str "no runtime description for type") t
+
+(* A parameter or an index of an inductive type, as a [Gradual_rt.arg]. *)
+
+and gradual_reify_arg table sg ctx a =
+  let env = ctx.rt_env in
+  match gradual_kind_of_term env sg a with
+  | Some Gradual.GUnknown -> rt "unk_arg"
+  | Some Gradual.GErr -> rt "err_arg"
+  | Some Gradual.GCast | None ->
+    match flag_of_type env sg (type_of env sg a) with
+    | (Logic, _) -> rt "erased_arg"
+    | (Info, TypeScheme) -> rt_app "ty_arg" [gradual_reify table sg ctx a]
+    | (Info, Default) -> rt_app "val_arg" [gradual_value table sg ctx a]
+
+(* The value of the term [a], which lives in [ctx.rt_env]: we extract it
+   abstracted over [ctx.rt_binders], and apply it to their runtime values. *)
+
+and gradual_value table sg ctx a =
+  List.iteri (fun i (_, b) -> match b with
+      | RtMissing when not (EConstr.Vars.noccurn sg (i + 1) a) ->
+        gradual_error ctx.rt_env sg (Pp.str "the value of an argument is not available") a
+      | _ -> ()) ctx.rt_binders;
+  let lam = List.fold_left (fun t (d, _) -> EConstr.mkLambda_or_LetIn d t) a ctx.rt_binders in
+  let ml = extract_maybe_term table ctx.rt_outer sg ctx.rt_mle (new_meta ()) lam in
+  let ml = ast_lift ctx.rt_depth ml in
+  let args = List.rev_map (fun (_, b) -> match b with
+      | RtVal f -> f ctx.rt_depth
+      | RtTy _ | RtNone | RtMissing -> MLdummy Ktype) ctx.rt_binders
+  in
+  if List.is_empty args then ml else MLapp (MLmagic ml, args)
+
+(* The cast functions of the inductive types needed by the descriptions
+   built in [ctx], and of the ones they need in turn, as a list for
+   [Gradual_rt.cast_with]. They refer to each other by name, through the
+   runtime. *)
+
+and gradual_ind_casts table sg ctx =
+  let rec loop is_done acc =
+    match List.find_opt (fun (i, _) -> not (List.mem_f Ind.CanOrd.equal i is_done)) !(ctx.rt_needed) with
+    | None -> acc
+    | Some (ind, u) ->
+      let fn = gradual_ind_cast table sg ctx (ind, u) in
+      let acc = rt_app "rcons" [gradual_ind_name_ml ctx.rt_outer ind; fn; acc] in
+      loop (ind :: is_done) acc
+  in
+  loop [] (rt "rnil")
+
+(* The function [fun src tgt v -> ...] that rebuilds [v], an inhabitant of
+   the instance [src] of the inductive type [ind], at the instance [tgt]:
+   the arguments of the constructor are cast from their type in [src] to
+   their type in [tgt], and the indices it computes must agree with the
+   indices of [tgt]. The function is a closed ML term. *)
+
+and gradual_ind_cast table sg ctx (ind, u) =
+  let env = ctx.rt_outer in
+  let mib, mip = Inductive.lookup_mind_specif env ind in
+  let ind_term = EConstr.mkIndU (ind, u) in
+  if mib.mind_finite == Declarations.CoFinite then
+    gradual_error env sg (Pp.str "coinductive types are not supported yet") ind_term;
+  let inst = InfvInst.ground (EConstr.EInstance.kind sg u) in
+  let mi = extract_ind table env (fst ind) inst in
+  let oi = mi.ind_packets.(snd ind) in
+  let npar = mib.mind_nparams in
+  let params_ctx = EConstr.of_rel_context
+      (Inductive.inductive_paramdecls (mib, EConstr.EInstance.kind sg u)) in
+  if List.length params_ctx <> npar then
+    gradual_error env sg (Pp.str "let-ins in parameters are not supported") ind_term;
+  (* [fun src tgt v]: levels of these ML variables *)
+  let l_src = 1 and l_tgt = 2 in
+  let ctx0 = { ctx with rt_env = env; rt_binders = []; rt_depth = 3 } in
+  (* The parameters, seen in the source and in the target instance. *)
+  let push_params l_d =
+    let _, ctx = List.fold_left (fun (k, ctx) decl ->
+        let arg f = fun d -> rt_app f [rt_var l_d d; MLraw (string_of_int k)] in
+        let b = match flag_of_type ctx.rt_env sg (get_type decl) with
+          | (Info, TypeScheme) -> RtTy (arg "param_ty")
+          | (Info, Default) -> RtVal (arg "param_val")
+          | (Logic, _) -> RtNone
+        in
+        k + 1, rt_push ctx decl b) (0, ctx0) (List.rev params_ctx)
+    in ctx
+  in
+  let csrc = push_params l_src and ctgt = push_params l_tgt in
+  let params = List.init npar (fun k -> EConstr.mkRel (npar - k)) in
+  let cstrs = get_constructors csrc.rt_env (make_ind_family ((ind, u), params)) in
+  let gind = { glob = GlobRef.IndRef ind; inst } in
+  let typ = Tglob (gind, List.map (fun _ -> Tunknown) oi.ip_vars) in
+  let branch j cs =
+    let r = { glob = GlobRef.ConstructRef (ind, j + 1); inst } in
+    let s = List.map (type2sign table env) oi.ip_types.(j) in
+    let s = sign_with_implicits r s npar in
+    let decls = List.rev cs.cs_args in
+    if List.exists is_local_def decls || List.length decls <> List.length s then
+      gradual_error env sg (Pp.str "let-ins in constructors are not supported") ind_term;
+    (* The arguments [x] of the constructor, as lambdas: for each one, its
+       type in the source and the level of [x] if it is kept. *)
+    let rec lams csrc acc = function
+      | [] -> csrc.rt_depth, List.rev acc
+      | (decl, sign) :: l ->
+        (* Killed arguments are dummy lambdas, removed by [case_expunge]. *)
+        let csrc', lx = rt_push_ml csrc in
+        let b, x = match sign with
+          | Keep -> RtVal (rt_var lx), Some lx
+          | Kill (Kimplicit _) -> RtMissing, None
+          | Kill (Ktype | Kprop) -> RtNone, None
+        in
+        lams (rt_push csrc' decl b) ((decl, sign, csrc, x) :: acc) l
+    in
+    let depth, args = lams csrc [] (List.combine decls s) in
+    (* The casted arguments [y], as let-ins. *)
+    let rec lets ctgt ys = function
+      | [] -> body ctgt (List.rev ys)
+      | (decl, sign, csrc, x) :: l ->
+        match x, sign with
+        | Some lx, _ ->
+          let ty = get_type decl in
+          let x = rt_var lx ctgt.rt_depth in
+          let y =
+            (* The type does not depend on the instance: nothing to cast. *)
+            if EConstr.Vars.closed0 sg ty then x
+            else
+              let ra = gradual_reify table sg { csrc with rt_depth = ctgt.rt_depth } ty in
+              let rb = gradual_reify table sg ctgt ty in
+              rt_app "cast" [ra; rb; MLmagic x]
+          in
+          let ctgt', ly = rt_push_ml ctgt in
+          let ctgt' = rt_push ctgt' decl (RtVal (rt_var ly)) in
+          MLletin (Id (id_of_name (get_name decl)), y, lets ctgt' (ly :: ys) l)
+        | None, Kill (Kimplicit _) -> lets (rt_push ctgt decl RtMissing) ys l
+        | None, _ -> lets (rt_push ctgt decl RtNone) ys l
+    and body ctgt ys =
+      let d = ctgt.rt_depth in
+      let computed = Array.map_to_list (gradual_reify_arg table sg ctgt) cs.cs_concl_realargs in
+      let ys = List.map (fun l -> MLmagic (rt_var l d)) ys in
+      let v = if mi.ind_kind == Singleton then List.hd ys else MLcons (typ, r, ys) in
+      rt_app "check_indices" [rt_var l_tgt d; MLraw (string_of_int npar); rt_list computed; MLmagic v]
+    in
+    let e = lets { ctgt with rt_depth = depth } [] args in
+    let e = List.fold_right (fun (decl, _, _, x) e ->
+        let id = match x with Some _ -> Id (id_of_name (get_name decl)) | None -> Dummy in
+        MLlam (id, e)) args e
+    in
+    let ids, e = case_expunge s e in
+    (List.rev ids, Pusual r, e)
+  in
+  let v = MLmagic (MLrel 1) in
+  let body =
+    if Array.length cstrs = 0 then MLexn "absurd case"
+    else if mi.ind_kind == Singleton then
+      let (ids, _, e) = branch 0 cstrs.(0) in
+      MLletin (tmp_id (List.hd ids), v, e)
+    else MLcase (typ, v, Array.mapi branch cstrs)
+  in
+  let lam s e = MLlam (Id (Id.of_string s), e) in
+  lam "src" (lam "tgt" (lam "v" body))
 
 (*S ML declarations. *)
 

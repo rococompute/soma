@@ -130,6 +130,7 @@ whenever `Dyn : Type@{i}`.
 | simpl / hnf | `pretyping/tacred.ml` | `simpl`, `hnf` |
 | cbn | `tactics/cbn.ml` | `cbn` |
 | registration | `kernel/retroknowledge.ml`, `safe_typing.ml`, `vernacentries.ml`, `checker/` | `Register … as kernel.gradual_*`, `.vo` validation |
+| extraction | `plugins/extraction/extraction.ml` (`extract_gradual`), `gradual_rt.ml` | OCaml extraction, with casts checked at run time |
 
 ### Elaboration (`pretyping/gradualTyping.ml`)
 
@@ -140,6 +141,49 @@ last resort, after unification and ordinary coercions have failed:
 - a term `t : A` where `B` is expected, with `A ~ B` consistent, becomes `cast A B t`;
 - a term `f : Dyn` in function position becomes `cast Dyn (Dyn -> Dyn) f`;
 - a term `T : Dyn` in type position becomes `cast Dyn Type T`.
+
+## Extraction to OCaml
+
+Extraction erases types, which casts need. So OCaml extraction compiles
+each `cast A B t` to a call to a small runtime, `Gradual_rt`
+(`plugins/extraction/gradual_rt.ml`), with runtime descriptions of `A`
+and `B`. The runtime applies the rules above. The extracted file embeds the
+runtime: it only needs the OCaml standard library, so it also builds for
+MirageOS unikernels.
+
+```coq
+Definition succ_dyn (x : Dyn) : nat := x + 1.
+Extraction succ_dyn.
+(* let succ_dyn x =
+     add (Gradual_rt.cast_with ... Gradual_rt.unknown_ty
+            (Gradual_rt.ind "Corelib.Init.Datatypes.nat" Gradual_rt.anil) x)
+       (succ 0) *)
+```
+
+- A value of type `Dyn` is the value plus the description of its type.
+- A cast between function types wraps the function. The wrapper makes a
+  tail call when the codomain needs no cast, so Ω loops in constant stack.
+- For each inductive type, extraction generates a match on its
+  constructors that casts their arguments and checks the indices. It
+  therefore works with `Extract Inductive` (e.g. `nat => int`).
+- A failed cast, or reaching `raise`, raises `Gradual_rt.Cast_error`. The
+  extracted `.mli` exports it.
+- The test is `test-suite/misc/gradual_extraction.sh`. The MirageOS on
+  Apple Silicon test matrix runs the same program as an `hvt` unikernel.
+
+Extraction differs from the kernel in these ways:
+
+- **Types must be closed** at each cast, apart from the parameters of
+  inductive types and value dependencies (`forall n, vec nat n` is fine).
+  A cast at a type variable, as in `fun (A : Type) (x : A) => (x : Dyn)`,
+  is rejected at extraction time. Supporting it needs type passing.
+- **`?_A` at an inductive type raises `Gradual_rt.Unknown_term`** when it is
+  evaluated. Extracted code is call-by-value and has no value for it, so
+  `2 + unk` raises, where the kernel computes `S (S unk)`. At function types
+  `unk` is `fun _ => unk`, as in the kernel, and `unk : Dyn` is a value.
+- **Proofs are erased**, so casts between propositions are not checked.
+- **Coinductive types** are not supported in casts yet.
+- Only OCaml is supported. Haskell and Scheme extraction print an error.
 
 ## Limitations and known gaps
 
@@ -174,3 +218,4 @@ last resort, after unification and ordinary coercions have failed:
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/output/Gradual.v`: the elaborated terms (cast insertion)
+- `test-suite/misc/gradual_extraction.sh`: extracted code, compiled and run, agrees with the kernel

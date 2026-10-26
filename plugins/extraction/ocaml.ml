@@ -77,15 +77,35 @@ let pp_mldummy usf =
     str "let __ = let rec f _ = Obj.repr f in Obj.repr f" ++ fnl ()
   else mt ()
 
+(* The runtime of gradual casts (gradual_rt.ml), printed line by line since
+   '\n' interacts badly with Format boxes. *)
+let pp_gradual_rt usf =
+  if usf.gradual_rt then
+    let lines = String.split_on_char '\n' Gradual_rt_source.source in
+    str "module Gradual_rt = struct" ++ fnl () ++
+    prlist (fun l -> str l ++ fnl ()) lines ++
+    str "end" ++ fnl ()
+  else mt ()
+
 let preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
-  then_nl (pp_tdummy usf ++ pp_mldummy usf)
+  then_nl (pp_tdummy usf ++ pp_mldummy usf) ++
+  then_nl (pp_gradual_rt usf)
+
+let pp_gradual_rt_sig usf =
+  if usf.gradual_rt then
+    str "module Gradual_rt : sig" ++ fnl () ++
+    str "  exception Cast_error of string" ++ fnl () ++
+    str "  exception Unknown_term of string" ++ fnl () ++
+    str "end" ++ fnl ()
+  else mt ()
 
 let sig_preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
-  then_nl (pp_tdummy usf)
+  then_nl (pp_tdummy usf) ++
+  then_nl (pp_gradual_rt_sig usf)
 
 (*s The pretty-printer for Ocaml syntax*)
 
@@ -255,6 +275,7 @@ let rec pp_expr table par env args =
         pp_apply (str "Obj.magic") par (pp_expr table true env [] a :: args)
     | MLaxiom s ->
         pp_par par (str "failwith \"AXIOM TO BE REALIZED (" ++ str s ++ str ")\"")
+    | MLraw s -> pp_apply (str s) par args
     | MLcons (_,r,a) as c ->
         assert (List.is_empty args);
         begin match a with

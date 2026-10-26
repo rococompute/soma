@@ -131,6 +131,7 @@ let rec pp_expr table env args =
     | MLmagic a ->
         pp_expr table env args a
     | MLaxiom s -> paren (str "error \"AXIOM TO BE REALIZED (" ++ str s ++ str ")\"")
+    | MLraw _ -> paren (str "error \"gradual casts are only supported in OCaml extraction\"")
     | MLuint _ ->
       paren (str "Prelude.error \"EXTRACTION OF UINT NOT IMPLEMENTED\"")
     | MLfloat _ ->

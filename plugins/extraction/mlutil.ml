@@ -398,13 +398,14 @@ let rec eq_ml_ast t1 t2 = match t1, t2 with
 | MLexn e1, MLexn e2 -> String.equal e1 e2
 | MLdummy k1, MLdummy k2 -> k1 == k2
 | MLaxiom _, MLaxiom _ -> true (* ignore the name of the axiom *)
+| MLraw s1, MLraw s2 -> String.equal s1 s2
 | MLmagic t1, MLmagic t2 -> eq_ml_ast t1 t2
 | MLuint i1, MLuint i2 -> Uint63.equal i1 i2
 | MLfloat f1, MLfloat f2 -> Float64.equal f1 f2
 | MLstring s1, MLstring s2 -> Pstring.equal s1 s2
 | MLparray (t1,def1), MLparray (t2, def2) -> Array.equal eq_ml_ast t1 t2 && eq_ml_ast def1 def2
 | (MLrel _|MLapp _|MLlam _|MLletin _|MLglob _|MLcons _
-  |MLtuple _|MLcase _|MLfix _|MLexn _|MLdummy _|MLaxiom _
+  |MLtuple _|MLcase _|MLfix _|MLexn _|MLdummy _|MLaxiom _|MLraw _
   | MLmagic _| MLuint _| MLfloat _| MLstring _| MLparray _), _
   -> false
 
@@ -439,7 +440,7 @@ let ast_iter_rel f =
     | MLcons (_,_,l) | MLtuple l ->  List.iter (iter n) l
     | MLmagic a -> iter n a
     | MLparray (t,def) -> Array.iter (iter n) t; iter n def
-    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
     | MLuint _ | MLfloat _ | MLstring _ -> ()
   in iter 0
 
@@ -460,7 +461,7 @@ let ast_map f = function
   | MLtuple l -> MLtuple (List.map f l)
   | MLmagic a -> MLmagic (f a)
   | MLparray (t,def) -> MLparray (Array.map f t, f def)
-  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
   | MLuint _ | MLfloat _ | MLstring _ as a -> a
 
 (*s Map over asts, with binding depth as parameter. *)
@@ -480,7 +481,7 @@ let ast_map_lift f n = function
   | MLtuple l -> MLtuple (List.map (f n) l)
   | MLmagic a -> MLmagic (f n a)
   | MLparray (t,def) -> MLparray (Array.map (f n) t, f n def)
-  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
   | MLuint _ | MLfloat _ | MLstring _ as a -> a
 
 (*s Iter over asts. *)
@@ -496,7 +497,7 @@ let ast_iter f = function
   | MLcons (_,_,l) | MLtuple l -> List.iter f l
   | MLmagic a -> f a
   | MLparray (t,def) -> Array.iter f t; f def
-  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
   | MLuint _ | MLfloat _ | MLstring _ -> ()
 
 (*S Operations concerning De Bruijn indices. *)
@@ -534,7 +535,7 @@ let nb_occur_match =
     | MLcons (_,_,l) | MLtuple l -> List.fold_left (fun r a -> r+(nb k a)) 0 l
     | MLmagic a -> nb k a
     | MLparray (t,def) -> Array.fold_left (fun r a -> r+(nb k a)) 0 t + nb k def
-    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
     | MLuint _ | MLfloat _ | MLstring _ -> 0
   in nb 1
 
@@ -592,7 +593,7 @@ let dump_unused_vars a =
        let def' = ren env def in
        if def' == def && t' == t then a else MLparray(t',def')
 
-    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _
+    | MLglob _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
     | MLuint _ | MLfloat _ | MLstring _ -> a
 
     and ren_branch env ((ids,p,b) as tr) =
@@ -1036,7 +1037,7 @@ let iota_gen br hd =
   in iota 0 hd
 
 let is_atomic = function
-  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ -> true
+  | MLrel _ | MLglob _ | MLexn _ | MLdummy _ | MLraw _ -> true
   | _ -> false
 
 let is_imm_apply = function MLapp (MLrel 1, _) -> true | _ -> false
@@ -1427,7 +1428,7 @@ let rec ml_size = function
   | MLletin (_,_,t) -> ml_size t
   | MLmagic t -> ml_size t
   | MLparray(t,def) -> ml_size_array t + ml_size def
-  | MLglob _ | MLrel _ | MLexn _ | MLdummy _ | MLaxiom _
+  | MLglob _ | MLrel _ | MLexn _ | MLdummy _ | MLaxiom _ | MLraw _
   | MLuint _ | MLfloat _ | MLstring _ -> 0
 
 and ml_size_list l = List.fold_left (fun a t -> a + ml_size t) 0 l

@@ -157,6 +157,7 @@ let rec json_expr table env = function
       ("value", json_expr table env a)
     ]
   | MLaxiom _ -> json_dict [("what", json_str "expr:axiom")]
+  | MLraw s -> json_dict [("what", json_str "expr:raw"); ("code", json_str s)]
   | MLuint i -> json_dict [
       ("what", json_str "expr:int");
       ("int", json_str (Uint63.to_string i))

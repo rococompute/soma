@@ -157,6 +157,7 @@ and ml_ast =
   | MLexn    of string
   | MLdummy  of kill_reason
   | MLaxiom  of string
+  | MLraw    of string (** OCaml code, printed verbatim (runtime of gradual casts) *)
   | MLmagic  of ml_ast
   | MLuint   of Uint63.t
   | MLfloat  of Float64.t
@@ -228,7 +229,8 @@ type unsafe_needs = {
   mldummy : bool;
   tdummy : bool;
   tunknown : bool;
-  magic : bool
+  magic : bool;
+  gradual_rt : bool
 }
 
 type 's language_descr = {
