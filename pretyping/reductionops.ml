@@ -819,6 +819,45 @@ let rec apply_rules whrec env sigma u r stk =
       (rhs', stk)
     with PatternFailure -> apply_rules whrec env sigma u rs stk
 
+(* One step of the gradual primitives (GCIC^G, see kernel/gradual.mli) at the
+   head of [(head, stack)], where [whd] computes weak head normal forms with
+   all reductions. Returns [None] when the term is canonical or stuck. *)
+let gradual_step ~whd env sigma k head stack =
+  let args, rest = Stack.strip_app stack in
+  let args = Option.get (Stack.list_of_app_stack args) in
+  let n = Gradual.arity k in
+  if List.length args < n then None
+  else
+    let mine, extra = List.chop n args in
+    let rest_extra = Stack.append_app_list extra rest in
+    let to_c c = EConstr.to_constr ~abort_on_undefined_evars:false sigma c in
+    match k, mine with
+    | (Gradual.GUnknown | Gradual.GErr), [a] ->
+      let a = whd a in
+      begin match Gradual.eta_unknown env k (to_c a) with
+      | Some r -> Some (EConstr.of_constr r, rest_extra)
+      | None ->
+        if not (List.is_empty extra) then None
+        else
+          let v = mkApp (head, [|a|]) in
+          begin match rest with
+          | Stack.Case (ci, _, _, ((_, p), _), _, _) :: s' ->
+            Gradual.inductive_indices env ci (to_c a) |> Option.map (fun indices ->
+                let indices = List.rev_map EConstr.of_constr (Array.to_list indices) in
+                (mkApp (head, [|Vars.substl (v :: indices) p|]), s'))
+          | Stack.Fix (f, s') :: s'' ->
+            Some (reduce_and_refold_fix env sigma f (s' @ Stack.append_app [|v|] s''))
+          | (Stack.App _ | Stack.Proj _ | Stack.Primitive _) :: _ | [] -> None
+          end
+      end
+    | Gradual.GCast, [a; b; t] ->
+      let a = whd a and b = whd b in
+      let t_whnf = lazy (to_c (whd t)) in
+      let whnf c = to_c (whd (EConstr.of_constr c)) in
+      Gradual.reduce_cast env ~whnf (to_c a) (to_c b) (to_c t) t_whnf
+      |> Option.map (fun r -> (EConstr.of_constr r, rest_extra))
+    | _ -> None
+
 let rec whd_state_gen flags ?metas env sigma =
   let open Context.Named.Declaration in
   let rec whrec (x, stack) : state =
@@ -851,6 +890,13 @@ let rec whd_state_gen flags ?metas env sigma =
       (match safe_meta_value metas ev with
       | Some body -> whrec (body, stack)
       | None -> fold ())
+    | Const (c, _) when RedFlags.red_set flags RedFlags.fMATCH
+                       && Option.has_some (Gradual.kind_of env c) ->
+      let whd c = Stack.zip sigma (whd_state_gen RedFlags.all ?metas env sigma (c, Stack.empty)) in
+      begin match gradual_step ~whd env sigma (Option.get (Gradual.kind_of env c)) x stack with
+      | Some st -> whrec st
+      | None -> fold ()
+      end
     | Const (c,u as const) ->
       reduction_effect_hook env sigma c
          (lazy (Stack.zip sigma (x,fst (Stack.strip_app stack))));

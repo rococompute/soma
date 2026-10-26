@@ -562,8 +562,18 @@ let activate_hook ~name =
   deactivate_hook ~name;
   active_hooks := name :: !active_hooks
 
+(* Gradual typing (GCIC^G) comes last: it accepts any pair of consistent
+   types by inserting a cast. *)
+let gradual_coercion env sigma body ~inferred ~expected =
+  match expected with
+  | Type expected -> GradualTyping.coerce_to_type env sigma body ~inferred ~expected
+  | Sort -> GradualTyping.coerce_to_sort env sigma body ~inferred
+  | Product -> GradualTyping.coerce_to_product env sigma body ~inferred
+
 let apply_hooks env sigma ~flags body ~inferred ~expected =
-  List.find_map (fun name -> CString.Map.get name !all_hooks env sigma ~flags body ~inferred ~expected) !active_hooks
+  match List.find_map (fun name -> CString.Map.get name !all_hooks env sigma ~flags body ~inferred ~expected) !active_hooks with
+  | Some _ as r -> r
+  | None -> gradual_coercion env sigma body ~inferred ~expected
 
 let default_flags_of env =
   default_flags_of TransparentState.full

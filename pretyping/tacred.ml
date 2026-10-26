@@ -741,6 +741,15 @@ let make_hnf_reds env =
    constants by keeping the name of the constants in the recursive calls;
    it fails if no redex is around *)
 
+(* [?_I] and [err_I] are canonical forms of inductive types (GCIC^G) *)
+let is_gradual_canonical env sigma (hd, args) = match EConstr.kind sigma hd, args with
+  | Const (cst, _), [_] ->
+    begin match Gradual.kind_of env cst with
+      | Some (Gradual.GUnknown | Gradual.GErr) -> true
+      | Some Gradual.GCast | None -> false
+    end
+  | _ -> false
+
 let rec red_elim_const infos env sigma ref u largs =
   let open ReductionBehaviour in
   let nargs = List.length largs in
@@ -871,6 +880,17 @@ and whd_simpl_stack infos env sigma =
           | NotReducible -> s'
           end
 
+      | Const (cst, _) when Option.has_some (Gradual.kind_of env cst) ->
+        let k = Option.get (Gradual.kind_of env cst) in
+        let whd c = whd_all env sigma c in
+        begin match Reductionops.gradual_step ~whd env sigma k x (Stack.append_app_list stack Stack.empty) with
+        | Some (t, stk) ->
+          begin match Stack.list_of_app_stack stk with
+          | Some stack -> redrec (t, stack)
+          | None -> s'
+          end
+        | None -> s'
+        end
       | _ ->
         match match_eval_ref env sigma x stack with
         | EvEval (ref, u) ->
@@ -916,6 +936,9 @@ and reduce_fix infos env sigma f fix stack =
     | Construct _ ->
       let stack' = List.assign stack recargnum (applist recarg') in
       Reduced (contract_fix env sigma f fix, stack')
+    | _ when is_gradual_canonical env sigma recarg' ->
+      let stack' = List.assign stack recargnum (applist recarg') in
+      Reduced (contract_fix env sigma f fix, stack')
     | _ -> NotReducible
 
 and reduce_nested_projection infos env sigma c =
@@ -957,6 +980,14 @@ and reduce_case infos env sigma (ci, u, pms, p, iv, c, lf) =
        Eval simpl in fun x => (const x).(tl) *)
     Reduced (mkCase (ci, u, pms, p, iv, applist(cofix_def, args), lf))
   | Int _ | Float _ | String _ | Array _ -> NotReducible (* TODO: assert false? *)
+  | Const (cst, _) when is_gradual_canonical env sigma (hd, args) ->
+    let k = Option.get (Gradual.kind_of env cst) in
+    let whd c = whd_all env sigma c in
+    let stk = Stack.append_app_list args [Stack.Case (Stack.mkCaseStk (ci, u, pms, p, iv, lf))] in
+    begin match Reductionops.gradual_step ~whd env sigma k hd stk with
+    | Some (t, stk) -> Reduced (Stack.zip sigma (t, stk))
+    | None -> NotReducible
+    end
   | _ -> assert false
 
 and whd_construct_stack infos env sigma s =
@@ -985,7 +1016,8 @@ and whd_construct infos env sigma c =
        whd_construct infos env sigma (c, cargs)
      | NotACoEliminationConstant -> NotReducible)
   | EvSymbol | EvPrim _ | EvNone ->
-    if reducible_construct sigma constr then Reduced (None, (constr, cargs))
+    if reducible_construct sigma constr || is_gradual_canonical env sigma (constr, cargs)
+    then Reduced (None, (constr, cargs))
     else NotReducible
 
 (************************************************************************)

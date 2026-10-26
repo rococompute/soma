@@ -210,7 +210,20 @@ let rec fixp_reducible_symb_stk = function
   | CASE _ | PROJ _ -> false
 
 (* Tests if fixpoint reduction is possible. *)
-let fixp_reducible flgs ((reci,i),_) stk =
+(* [?_I] and [err_I] are canonical forms of inductive types (GCIC^G) *)
+let gradual_kind env c = match kind c with
+  | Const (cst, _) -> Gradual.kind_of env cst
+  | _ -> None
+
+let is_gradual_canonical env = function
+  | STACK (_, VAL (_, c), APP ([_], TOP)) ->
+    begin match gradual_kind env c with
+      | Some (Gradual.GUnknown | Gradual.GErr) -> true
+      | Some Gradual.GCast | None -> false
+    end
+  | _ -> false
+
+let fixp_reducible env flgs ((reci,i),_) stk =
   if red_set flgs fFIX then
     match stk with
       | APP(appl,_) ->
@@ -221,6 +234,7 @@ let fixp_reducible flgs ((reci,i),_) stk =
           | CONSTRUCT _ -> true
           | SYMBOL { unfoldfix=true; stk; _ } ->
               fixp_reducible_symb_stk stk
+          | v when is_gradual_canonical env v -> true
           | _ -> false
           else check (n - 1) appl
         in
@@ -644,7 +658,7 @@ and cbv_stack_value info env = function
 
   (* a Fix applied enough -> IOTA *)
   | (FIX(fix,env,[]), stk)
-    when fixp_reducible info.reds fix stk ->
+    when fixp_reducible info.env info.reds fix stk ->
     let (envf,redfix) = contract_fixp env fix in
     cbv_stack_term info stk envf redfix
 
@@ -711,6 +725,18 @@ and cbv_stack_value info env = function
        PRIMITIVE(op,c, appl))
     end
 
+  (* gradual primitives (GCIC^G) *)
+  | (STACK (k, (VAL (_, c) as h), stk0), (APP _ | CASE _ | PROJ _ as stk))
+    when red_set info.reds fMATCH && Option.has_some (gradual_kind info.env c) ->
+    (* an already evaluated gradual term meets an eliminator *)
+    cbv_stack_value info env (shift_value k h, stack_concat (shift_stack k stk0) stk)
+  | (VAL (_, c), APP (args, stk)) as v
+    when red_set info.reds fMATCH && Option.has_some (gradual_kind info.env c) ->
+    begin match cbv_gradual info c (Option.get (gradual_kind info.env c)) args stk with
+      | Some (t, stk) -> cbv_stack_term info stk (subs_id 0) t
+      | None -> mkSTACK v
+    end
+
   | SYMBOL ({ cst; rules; stk } as s ), stk' ->
     let stk = stack_concat stk stk' in
     begin try
@@ -722,6 +748,40 @@ and cbv_stack_value info env = function
 
   (* definitely a value *)
   | (head,stk) -> mkSTACK(head, stk)
+
+(* Reduction of the gradual primitives: the rules live in Gradual and work on
+   terms, the arguments are read back. Returns the reduct, to be evaluated in
+   the current context, and the remaining stack. *)
+and cbv_gradual info c k args stk =
+  let n = Gradual.arity k in
+  if List.length args < n then None
+  else
+    let mine, extra = List.chop n args in
+    let rest = stack_app extra stk in
+    let whnf t =
+      EConstr.Unsafe.to_constr
+        (Reductionops.whd_all info.env info.sigma (EConstr.of_constr t))
+    in
+    let mine = List.map reify_value mine in
+    match k, mine with
+    | (Gradual.GUnknown | Gradual.GErr), [a] ->
+      let a = whnf a in
+      begin match Gradual.eta_unknown info.env k a with
+      | Some r -> Some (r, rest)
+      | None ->
+        match extra, stk with
+        | [], CASE (_, _, ((nas, p), _), _, _, ci, env, stk') ->
+          Gradual.inductive_indices info.env ci a |> Option.map (fun indices ->
+              let p = apply_env (subs_liftn (Array.length nas) env) p in
+              let scrut = mkApp (c, [|a|]) in
+              let p = Vars.substl (scrut :: List.rev (Array.to_list indices)) p in
+              (mkApp (c, [|p|]), stk'))
+        | _ -> None
+      end
+    | Gradual.GCast, [a; b; t] ->
+      Gradual.reduce_cast info.env ~whnf (whnf a) (whnf b) t (lazy (whnf t))
+      |> Option.map (fun r -> (r, rest))
+    | _ -> None
 
 and cbv_value_cache info ref =
   try KeyTable.find info.tab ref with

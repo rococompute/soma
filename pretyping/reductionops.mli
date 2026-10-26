@@ -168,6 +168,11 @@ val whd_beta_stack : ?metas:meta_handler -> stack_reduction_function
 val whd_betaiota_stack : ?metas:meta_handler -> stack_reduction_function
 val whd_betaiotazeta_stack : ?metas:meta_handler -> stack_reduction_function
 val whd_all_stack : ?metas:meta_handler -> stack_reduction_function
+
+(** One reduction step of the gradual primitives (see {!Gradual}) applied to
+    a stack, [whd] computing weak head normal forms of types. *)
+val gradual_step : whd:(constr -> constr) -> env -> evar_map -> Gradual.kind ->
+  constr -> Stack.t -> (constr * Stack.t) option
 val whd_allnolet_stack : ?metas:meta_handler -> stack_reduction_function
 val whd_betalet_stack : ?metas:meta_handler -> stack_reduction_function
 

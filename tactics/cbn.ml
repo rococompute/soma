@@ -1015,6 +1015,43 @@ let rec whd_state_gen ?csts flags env sigma =
         whrec (Cst_stack.add_cst (mkVar id) cst_l) (CbnClos.inject body, stack)
       | _ -> fold ())
     | _, (Evar _ | Meta _) -> fold ()
+    | _, Const (c, _) when RedFlags.red_set flags RedFlags.fMATCH
+                          && Option.has_some (Gradual.kind_of env c) ->
+      (* gradual primitives (GCIC^G), see kernel/gradual.mli *)
+      let k = Option.get (Gradual.kind_of env c) in
+      let args, rest = Stack.strip_app stack in
+      let args = Option.get (Stack.list_of_app_stack args) in
+      if List.length args < Gradual.arity k then fold ()
+      else
+        let head = CbnClos.force x in
+        let mine, extra = List.chop (Gradual.arity k) args in
+        let mine = List.map CbnClos.force mine in
+        let rest_extra = Stack.append_app (Array.of_list extra) rest in
+        let whd c = Reductionops.whd_all env sigma c in
+        let rstk = Reductionops.Stack.append_app_list mine Reductionops.Stack.empty in
+        begin match Reductionops.gradual_step ~whd env sigma k head rstk with
+        | Some (t, rstk) ->
+          (* head rules: η-expansion of unknown at Π types, casts *)
+          let t = Reductionops.Stack.zip sigma (t, rstk) in
+          whrec Cst_stack.empty (CbnClos.inject t, rest_extra)
+        | None ->
+          match k, mine, extra, rest with
+          | (Gradual.GUnknown | Gradual.GErr), [a], [], Stack.Case (subs, case, _) :: s' ->
+            let (ci, u, pms, p, iv, brs) = CbnClos.force_case subs case in
+            let rstk = Reductionops.Stack.append_app [|a|]
+                [Reductionops.Stack.Case (Reductionops.Stack.mkCaseStk (ci, u, pms, p, iv, brs))] in
+            begin match Reductionops.gradual_step ~whd env sigma k head rstk with
+            | Some (t, rstk) ->
+              let t = Reductionops.Stack.zip sigma (t, rstk) in
+              whrec Cst_stack.empty (CbnClos.inject t, s')
+            | None -> fold ()
+            end
+          | (Gradual.GUnknown | Gradual.GErr), [_], [], Stack.Fix (subs, f, s', cst_l) :: s''
+            when RedFlags.red_set flags RedFlags.fFIX ->
+            let x' = clos_of_app_stack sigma x (Stack.append_app (Array.of_list args) Stack.empty) in
+            reduce_and_refold_fix whrec env sigma cst_l subs f (s' @ Stack.append_app [|x'|] s'')
+          | _ -> fold ()
+        end
     | _, Const (c,u as const) ->
       Reductionops.reduction_effect_hook env sigma c
          (lazy (Stack.zip sigma (x,fst (Stack.strip_app stack))));

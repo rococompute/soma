@@ -26,8 +26,13 @@ let warn_vm_disabled =
    strbrk "vm_compute disabled at configure time; falling back to cbv.")
 
 (* call by value normalisation function using the virtual machine *)
+(* The VM and native compilers treat the gradual primitives as opaque
+   axioms: when gradual typing is on, use the (gradual-aware) cbv machine. *)
+let gradual_fallback env = GradualTyping.enabled env
+
 let cbv_vm env sigma c =
-  if (Environ.typing_flags env).enable_VM then
+  if gradual_fallback env then compute env sigma c
+  else if (Environ.typing_flags env).enable_VM then
     let ctyp = Retyping.get_type_of env sigma c in
     Vnorm.cbv_vm env sigma c ctyp
   else begin
@@ -41,7 +46,8 @@ let warn_native_compute_disabled =
    strbrk "native_compute disabled at configure time; falling back to vm_compute.")
 
 let cbv_native env sigma c =
-  if (Environ.typing_flags env).enable_native_compiler then
+  if gradual_fallback env then compute env sigma c
+  else if (Environ.typing_flags env).enable_native_compiler then
     let ctyp = Retyping.get_type_of env sigma c in
     Nativenorm.native_norm env sigma c ctyp
   else
@@ -353,8 +359,12 @@ let reduction_of_red_expr_val = function
       with Not_found ->
            user_err
              (str "Unknown user-defined reduction \"" ++ str s ++ str "\"."))
-  | CbvVm o -> (contextualize cbv_vm o, VMcast)
-  | CbvNative o -> (contextualize cbv_native o, NATIVEcast)
+  | CbvVm o ->
+    let kind = if gradual_fallback (Global.env ()) then DEFAULTcast else VMcast in
+    (contextualize cbv_vm o, kind)
+  | CbvNative o ->
+    let kind = if gradual_fallback (Global.env ()) then DEFAULTcast else NATIVEcast in
+    (contextualize cbv_native o, kind)
   | UserRed usr -> eval_user_red_expr usr
 
 let reduction_of_red_expr env r =

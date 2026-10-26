@@ -179,7 +179,8 @@ let template_instance mib u = match mib.mind_template with
 
 (* <I pars2 <= I pars1> (c pars1 args) ~> c pars2 (<T2_i <= T1_i> args_i)
    where T1_i / T2_i are the types of the constructor arguments instantiated
-   with the source / target parameters and the source / casted arguments. *)
+   with the source / target parameters and the source / casted arguments.
+   Also returns the indices of the type of the result. *)
 let cast_constructor env cast ((ind, k), _) u1 u2 pars1 pars2 cargs =
   let mib = Environ.lookup_mind (fst ind) env in
   let mip = mib.mind_packets.(snd ind) in
@@ -187,10 +188,10 @@ let cast_constructor env cast ((ind, k), _) u1 u2 pars1 pars2 cargs =
   if Array.length cargs <> npar + mip.mind_consnrealargs.(k - 1) then None
   else
     let u1 = template_instance mib u1 and u2 = template_instance mib u2 in
-    let ctx, _ = mip.mind_nf_lc.(k - 1) in
+    let ctx, concl = mip.mind_nf_lc.(k - 1) in
     let decls = List.rev ctx in
     let rec go decls i s1 s2 acc = match decls with
-      | [] -> List.rev acc
+      | [] -> List.rev acc, s2
       | LocalAssum (_, ty) :: decls ->
         if i < npar then
           go decls (i + 1) (pars1.(i) :: s1) (pars2.(i) :: s2) acc
@@ -208,8 +209,52 @@ let cast_constructor env cast ((ind, k), _) u1 u2 pars1 pars2 cargs =
         let b2 = Vars.substl s2 (Vars.subst_instance_constr u2 b) in
         go decls i (b1 :: s1) (b2 :: s2) acc
     in
-    let args = go decls 0 [] [] [] in
-    Some (mkApp (mkConstructU ((ind, k), u2), Array.append pars2 (Array.of_list args)))
+    let args, s2 = go decls 0 [] [] [] in
+    let concl = Vars.substl s2 (Vars.subst_instance_constr u2 concl) in
+    let indices = match kind concl with
+      | App (_, all) -> Array.sub all npar (Array.length all - npar)
+      | _ -> [||]
+    in
+    let c = mkApp (mkConstructU ((ind, k), u2), Array.append pars2 (Array.of_list args)) in
+    Some (c, indices)
+
+(* Comparing the indices computed for a casted constructor with the indices
+   of the target type. [?] is compatible with anything, distinct
+   constructors are incompatible, anything else is not decided. *)
+type index_check = IOk | IMismatch | IStuck
+
+let rec check_index env whnf i1 i2 =
+  if Constr.equal i1 i2 then IOk
+  else
+    let i1 = whnf i1 and i2 = whnf i2 in
+    if Constr.equal i1 i2 then IOk
+    else match view_term env i1, view_term env i2 with
+    | TUnknown, _ | _, TUnknown -> IOk
+    | TErr, _ | _, TErr -> IMismatch
+    | TConstruct ((c1, _), args1), TConstruct ((c2, _), args2) ->
+      if not (Construct.CanOrd.equal c1 c2)
+      || Array.length args1 <> Array.length args2 then IMismatch
+      else check_indices env whnf args1 args2
+    | _ ->
+      match view_type env i1, view_type env i2 with
+      | HUnknown, _ | _, HUnknown -> IOk
+      | HInd ((ind1, _), args1), HInd ((ind2, _), args2) ->
+        if not (Ind.CanOrd.equal ind1 ind2)
+        || Array.length args1 <> Array.length args2 then IMismatch
+        else check_indices env whnf args1 args2
+      | HSort _, HSort _ | HProd _, HProd _ -> IStuck
+      | (HProd _ | HSort _ | HInd _), (HProd _ | HSort _ | HInd _) -> IMismatch
+      | _ -> IStuck
+
+and check_indices env whnf is1 is2 =
+  CArray.fold_left2 (fun acc i1 i2 -> match acc with
+      | IMismatch -> IMismatch
+      | IOk | IStuck ->
+        match check_index env whnf i1 i2 with
+        | IMismatch -> IMismatch
+        | IStuck -> IStuck
+        | IOk -> acc)
+    IOk is1 is2
 
 let reduce_cast env ~whnf a b t t_whnf =
   match get env GCast with
@@ -259,14 +304,26 @@ let reduce_cast env ~whnf a b t t_whnf =
     else
       let mib = Environ.lookup_mind (fst ind1) env in
       let mip = mib.mind_packets.(snd ind1) in
-      if mip.mind_nrealargs > 0 then None (* indexed families: unsupported, stuck *)
-      else if Array.length args1 <> mib.mind_nparams
-           || Array.length args2 <> mib.mind_nparams then None
+      let npar = mib.mind_nparams in
+      let nargs = npar + mip.mind_nrealargs in
+      if Array.length args1 <> nargs || Array.length args2 <> nargs then None
       else begin match view_term env (Lazy.force t_whnf) with
         | TUnknown -> unknown ()
         | TErr -> err ()
         | TConstruct (pc, cargs) ->
-          cast_constructor env cast pc u1 u2 args1 args2 cargs
+          let pars1 = Array.sub args1 0 npar and pars2 = Array.sub args2 0 npar in
+          begin match cast_constructor env cast pc u1 u2 pars1 pars2 cargs with
+            | None -> None
+            | Some (c, indices) ->
+              (* Indexed families (beyond the GCIC paper, which only has
+                 parameters): the indices the constructor produces must be
+                 compatible with the target ones. *)
+              let target = Array.sub args2 npar mip.mind_nrealargs in
+              match check_indices env whnf indices target with
+              | IOk -> Some c
+              | IMismatch -> err ()
+              | IStuck -> None
+          end
         | TCast _ | TOther -> None
       end
   | (HProd _ | HSort _ | HInd _), (HProd _ | HSort _ | HInd _) ->
