@@ -1061,9 +1061,10 @@ struct
            checked at the domain that unification produced.
            [cons 1 (cons true nil) : list Dyn] checks [1] and [true]
            at [Dyn] instead of rejecting [true] at [nat].
-           An ascription of [Dyn] itself does not determine the
-           parameters: inference of [cons 1 (cons true nil) : Dyn]
-           still fails.
+           At [Dyn] itself, nothing determines the parameters: the
+           gradual coercion sets the undetermined ones to [Dyn]
+           ([GradualTyping.coerce_to_type]), so
+           [cons 1 (cons true nil) : Dyn] is a [list Dyn] cast to [Dyn].
            Leading type arguments are inferred first, so that the
            expected type does not override the ones given explicitly:
            [@cons Dyn 1 nil : list nat] elaborates to a cast from
