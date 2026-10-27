@@ -81,6 +81,13 @@ let test_id_colon =
     lk_ident >> lk_kw ":"
   end
 
+(* Recursive as Fixpoint, but not the Recursive Extraction command *)
+let test_recursive_fixpoint =
+  let open Procq.Lookahead in
+  to_entry "test_recursive_fixpoint" begin
+    lk_kw "Recursive" >> lk_ident_except ["Extraction"]
+  end
+
 let warn_chdir_pwd = CWarnings.create ~name:"change-dir-pwd-deprecated" ~category:Deprecation.Version.v8_20
     (fun () -> strbrk "Command \"Cd\" as a synonym of \"Pwd\" is deprecated." ++ spc () ++
                strbrk "Use \"Pwd\" instead.")
@@ -163,7 +170,11 @@ GRAMMAR EXTEND Gram
     [ [ prfcom = command_entry -> { prfcom } ] ]
   ;
 
-  noedit_mode: [ [ c = query_command -> { VernacSynPure (c None) } ] ]
+  noedit_mode:
+    [ [ c = query_command -> { VernacSynPure (c None) }
+      (* Lightlang: outside a proof, a bare term [t.] is [Eval lazy in t.] *)
+      | c = lconstr; "." ->
+        { VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, c)) } ] ]
   ;
 
   subprf:
@@ -268,6 +279,9 @@ GRAMMAR EXTEND Gram
       | IDENT "Symbols"; bl = assum_list ->
           { test_plural_form loc "Symbols" bl;
             VernacSymbol bl }
+      (* Before the Let definition rule, which would read Recursive as a name *)
+      | IDENT "Let"; fixpoint_token; recs = LIST1 fix_definition SEP "with" ->
+          { VernacFixpoint (DoDischarge, List.split recs) }
       | IDENT "Let"; id = ident_decl; b = def_body ->
           { VernacDefinition ((DoDischarge, Let), name_of_ident_decl id, b) }
       (* Gallina inductive declarations *)
@@ -275,10 +289,8 @@ GRAMMAR EXTEND Gram
           { VernacInductive (f, [ind]) }
       | f = inductive_token; indl = LIST1 inductive_or_record_definition SEP "with" ->
           { VernacInductive (f, indl) }
-      | "Fixpoint"; recs = LIST1 fix_definition SEP "with" ->
+      | fixpoint_token; recs = LIST1 fix_definition SEP "with" ->
           { VernacFixpoint (NoDischarge, List.split recs) }
-      | IDENT "Let"; "Fixpoint"; recs = LIST1 fix_definition SEP "with" ->
-          { VernacFixpoint (DoDischarge, List.split recs) }
       | "CoFixpoint"; corecs = LIST1 cofix_definition SEP "with" ->
           { VernacCoFixpoint (NoDischarge, corecs) }
       | IDENT "Let"; "CoFixpoint"; corecs = LIST1 cofix_definition SEP "with" ->
@@ -470,6 +482,11 @@ GRAMMAR EXTEND Gram
       | IDENT "Record" -> { Record }
       | IDENT "Structure" -> { Structure }
       | IDENT "Class" -> { Class true } ] ]
+  ;
+  (* Lightlang spells Fixpoint as Recursive; Fixpoint stays for Rocq sources *)
+  fixpoint_token:
+    [ [ "Fixpoint" -> { () }
+      | test_recursive_fixpoint; IDENT "Recursive" -> { () } ] ]
   ;
   (* Simple definitions *)
   def_body:
@@ -1306,6 +1323,7 @@ GRAMMAR EXTEND Gram
     [ [ k = def_token -> { snd k }
       | IDENT "Coercion" -> { Coercion }
       | IDENT "Fixpoint" -> { Fixpoint }
+      | IDENT "Recursive" -> { Fixpoint }
       | IDENT "CoFixpoint" -> { CoFixpoint }
       | IDENT "Instance" -> { Instance }
       | IDENT "Scheme" -> { Scheme }
