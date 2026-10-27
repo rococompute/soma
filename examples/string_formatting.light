@@ -1,19 +1,20 @@
-(** Building a string from a value of unknown type. [name : Dyn] is
-    accepted where a [string] is expected; Lightlang inserts a cast that
-    is checked when [greet] runs. *)
+(** Building strings. [greet]'s parameter has no annotation: its type is
+    inferred from [append] as [string]. *)
 
-Definition greet (name : Dyn) : string := append "Hello, " name.
+From Stdlib Require Import DecimalString.
 
-Print greet.
-(* greet = fun name : Dyn => append "Hello, " (cast Dyn string name) *)
+Definition greet name := append "Hello, " name.
 
-greet "world".
-(* = "Hello, world" *)
+(** A [nat] in decimal, with Stdlib's DecimalString. *)
+Definition to_string (n : nat) : string := NilZero.string_of_uint (Nat.to_uint n).
 
-(** A [nat] is not a [string]: the cast fails at run time and [name]
-    becomes [raise], the runtime type error. A [string] is a list of
-    characters, so [append] copies "Hello, " and leaves [raise] as its
-    tail; such a string is printed with its [String] and [Ascii]
-    constructors instead of quotes. *)
-greet 42.
-(* = String.String (Ascii.Ascii ...) ( ... (String.String ... raise)) *)
+Check greet.
+(* greet : string -> string *)
+
+greet "world".         (* "Hello, world" *)
+greet (to_string 42).  (* "Hello, 42" *)
+
+(** The type of [name] is known, so a [nat] is rejected when the program
+    is checked, not when it runs: there is no [Dyn] to defer the check.
+    [Fail] expects the command to be rejected. *)
+Fail greet 42.         (* nat and string differ *)
