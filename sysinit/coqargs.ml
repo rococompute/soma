@@ -81,6 +81,7 @@ type vo_path = {
 type coqargs_pre = {
   boot        : bool;
   load_init   : bool;
+  load_lightlang : bool;
   load_rcfile : bool;
 
   ml_includes : string list;
@@ -138,6 +139,7 @@ let default_config = {
 let default_pre = {
   boot         = false;
   load_init    = true;
+  load_lightlang = true;
   load_rcfile  = true;
   ml_includes  = [];
   vo_includes  = [];
@@ -176,7 +178,7 @@ let add_vo_require opts d ?(allow_failure=false) p export =
   { opts with pre = { opts.pre with injections = RequireInjection {lib=d; prefix=p; export; allow_failure} :: opts.pre.injections }}
 
 let add_load_vernacular opts s =
-    { opts with pre = { opts.pre with load_vernacular_list = (CUnix.make_suffix s ".v") :: opts.pre.load_vernacular_list }}
+    { opts with pre = { opts.pre with load_vernacular_list = s :: opts.pre.load_vernacular_list }}
 
 let add_set_option opts opt_name value =
   { opts with pre = { opts.pre with injections = OptionInjection (opt_name, value) :: opts.pre.injections }}
@@ -408,6 +410,7 @@ let parse_args ~init arglist : t * string list =
     |"-indices-matter" -> set_logic (fun o -> { o with indices_matter = true }) oval
     |"-m"|"--memory" -> { oval with post = { memory_stat = true }}
     |"-noinit"|"-nois" -> { oval with pre = { oval.pre with load_init = false }}
+    |"-no-lightlang-prelude" -> { oval with pre = { oval.pre with load_lightlang = false }}
     |"-boot" -> { oval with pre = { oval.pre with boot = true }}
     |"-profile-ltac" -> add_set_option oval ["Ltac"; "Profiling"] (OptionSet None)
     |"-q" -> { oval with pre = { oval.pre with load_rcfile = false; }}
@@ -453,5 +456,12 @@ let parse_args ~init args =
 (* prelude_data == From Corelib Require Import Prelude. *)
 let prelude_data = RequireInjection { lib = "Prelude"; prefix = Some "Corelib"; export = Some Import; allow_failure = false }
 
+(* lightlang_data == From Corelib.Lightlang Require Import Lightlang.
+   Not under -boot, so Corelib and Ltac2 themselves are built as plain CIC. *)
+let lightlang_data = RequireInjection { lib = "Lightlang"; prefix = Some "Corelib.Lightlang"; export = Some Import; allow_failure = false }
+
 let injection_commands opts =
-  if opts.pre.load_init then prelude_data :: opts.pre.injections else opts.pre.injections
+  if not opts.pre.load_init then opts.pre.injections
+  else if opts.pre.load_lightlang && not opts.pre.boot then
+    prelude_data :: lightlang_data :: opts.pre.injections
+  else prelude_data :: opts.pre.injections

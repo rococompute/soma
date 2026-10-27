@@ -94,12 +94,13 @@ else
 endif
 
 COQEXTRAFLAGS?=
-COQFLAGS?=$(COQEXTRAFLAGS)
+# The inherited Rocq tests are plain Rocq; gradual tests import Gradual themselves.
+COQFLAGS?=-no-lightlang-prelude $(COQEXTRAFLAGS)
 
 coqc := $(BIN)rocq c -q -R prerequisite TestSuite $(COQFLAGS)
 coqchk := $(BIN)rocqchk -R prerequisite TestSuite
 coqdoc := $(BIN)rocq doc
-coqtop := $(BIN)rocq repl -q -test-mode -R prerequisite TestSuite
+coqtop := $(BIN)rocq repl -q -no-lightlang-prelude -test-mode -R prerequisite TestSuite
 
 coqidetop := $(BIN)coqidetop
 
