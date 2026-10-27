@@ -33,8 +33,9 @@
     - The theory is (intentionally) logically inconsistent once [unknown] or
       [err] are used: [unknown False : False]. Use [Print Assumptions] to
       see whether a development depends on them.
-    - [vm_compute], [native_compute] and therefore [Compute] treat the
-      primitives as opaque: use [Eval lazy] or [Eval cbv]. *)
+    - The VM and native compilation treat the primitives as opaque, so
+      under [Gradual Typing] [vm_compute], [native_compute] and [Compute]
+      fall back to [cbv]. *)
 
 Require Import Corelib.Init.Prelude.
 

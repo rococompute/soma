@@ -52,12 +52,28 @@ opam install --switch=. dune ocamlfind zarith
 eval $(opam env --switch=. --set-switch)
 make dunestrap
 dune build rocq-runtime.install coq-core.install rocq-core.install
-_build/install/default/bin/rocq c my_file.v
+_build/install/default/bin/rocq c my_file.light
 ```
 
-```coq
-From Corelib.Gradual Require Import Gradual.   (* also sets Gradual Typing *)
+Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
+also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
+name without an extension, they look for `.light` first, then `.v`.
+`rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
+Every file starts with the Lightlang prelude,
+`theories/Corelib/Lightlang/Lightlang.v`, loaded right after Rocq's Prelude. It
+exports `Corelib.Gradual.Gradual`, which sets `Gradual Typing`, and makes
+`"..."` a primitive `string` everywhere (with `string` and `cat` in scope).
+Pass `-no-lightlang-prelude` for plain Rocq. The Lightlang prelude is skipped
+under `-boot` and `-noinit`, so Corelib and Ltac2 themselves are built as plain
+CIC. The inherited Rocq test-suite runs with `-no-lightlang-prelude`, and the
+gradual tests import `Gradual` explicitly.
+
+Outside a proof, a bare term `t.` is evaluated and printed as `Eval lazy in t.`,
+so `"Hello, world!".` is a complete program. Inside a proof the same position
+holds a tactic, as in Rocq. `Recursive` is another spelling of `Fixpoint`.
+
+```coq
 Definition succ_dyn (x : Dyn) : nat := x + 1.
 Print succ_dyn.
 (* succ_dyn = fun x : Dyn => cast Dyn nat x + 1 *)

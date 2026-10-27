@@ -1,0 +1,16 @@
+(** Building a string from a value of unknown type. [name : Dyn] is
+    accepted where a [string] is expected; Lightlang inserts a cast that
+    is checked when [greet] runs. *)
+
+Definition greet (name : Dyn) : string := cat "Hello, " name.
+
+Print greet.
+(* greet = fun name : Dyn => cat "Hello, " (cast Dyn string name) *)
+
+greet "world".
+(* = "Hello, world" *)
+
+(** A [nat] is not a [string]: the cast fails at run time and [name]
+    becomes [raise], the runtime type error. *)
+greet 42.
+(* = cat "Hello, " raise *)
