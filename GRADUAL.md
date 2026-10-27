@@ -60,14 +60,19 @@ also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
 name without an extension, they look for `.light` first, then `.v`.
 `rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
-Every file starts with the Lightlang prelude,
-`theories/Corelib/Lightlang/Lightlang.v`, loaded right after Rocq's Prelude. It
-exports `Corelib.Gradual.Gradual`, which sets `Gradual Typing`, and makes
-`"..."` a primitive `string` everywhere (with `string` and `cat` in scope).
-Pass `-no-lightlang-prelude` for plain Rocq. The Lightlang prelude is skipped
-under `-boot` and `-noinit`, so Corelib and Ltac2 themselves are built as plain
-CIC. The inherited Rocq test-suite runs with `-no-lightlang-prelude`, and the
-gradual tests import `Gradual` explicitly.
+Every file starts with the Lightlang prelude, `theories/Lightlang/Lightlang.v`,
+loaded right after Rocq's Prelude. It exports `Corelib.Gradual.Gradual`, which
+sets `Gradual Typing`, and makes `"..."` a Stdlib `string` (a list of ascii
+characters) everywhere, with `string` and `append` in scope, so Stdlib's string
+functions apply to literals. Pass `-no-lightlang-prelude` for plain Rocq. The
+Lightlang prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
+Stdlib and the prelude itself are built as plain CIC. The inherited Rocq
+test-suite runs with `-no-lightlang-prelude`, and the gradual tests import
+`Gradual` explicitly.
+
+Rocq's standard library is vendored in `theories/Stdlib` (V9.2.0, see its
+README) and built and installed with the rest, so `From Stdlib Require ...`
+works without flags.
 
 Outside a proof, a bare term `t.` is evaluated and printed as `Eval lazy in t.`,
 so `"Hello, world!".` is a complete program. Inside a proof the same position

@@ -365,10 +365,10 @@ and ``rocq repl``, unless stated otherwise:
   and ``_darcs`` are excluded.
 :-nois, -noinit: Start from an empty state instead of loading the `Init.Prelude`
   module.
-:-no-lightlang-prelude: Do not load `Corelib.Lightlang.Lightlang` after the
+:-no-lightlang-prelude: Do not load `Lightlang.Lightlang` after the
   prelude, so `Gradual Typing` stays off and string literals need
-  `Corelib.Strings.PrimString`. It is not loaded with `-boot` or `-noinit`
-  either.
+  `Stdlib.Strings.String` (or `Corelib.Strings.PrimString`). It is not loaded
+  with `-boot` or `-noinit` either.
 :-init-file *file*: Load *file* as the resource file instead of
   loading the default resource file from the standard configuration
   directories.

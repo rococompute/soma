@@ -165,4 +165,5 @@ bin
 /theories/Corelib/dune
 /theories/Ltac2/dune
 /theories/Stdlib/dune
+/theories/Lightlang/dune
 /test-suite/test_suite_config.inc

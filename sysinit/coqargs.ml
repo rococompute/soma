@@ -456,9 +456,10 @@ let parse_args ~init args =
 (* prelude_data == From Corelib Require Import Prelude. *)
 let prelude_data = RequireInjection { lib = "Prelude"; prefix = Some "Corelib"; export = Some Import; allow_failure = false }
 
-(* lightlang_data == From Corelib.Lightlang Require Import Lightlang.
-   Not under -boot, so Corelib and Ltac2 themselves are built as plain CIC. *)
-let lightlang_data = RequireInjection { lib = "Lightlang"; prefix = Some "Corelib.Lightlang"; export = Some Import; allow_failure = false }
+(* lightlang_data == From Lightlang Require Import Lightlang.
+   Not under -boot, so Corelib, Ltac2, Stdlib and the Lightlang prelude
+   itself are built as plain CIC. *)
+let lightlang_data = RequireInjection { lib = "Lightlang"; prefix = Some "Lightlang"; export = Some Import; allow_failure = false }
 
 let injection_commands opts =
   if not opts.pre.load_init then opts.pre.injections
