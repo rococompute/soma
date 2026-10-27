@@ -13,6 +13,6 @@ Inductive nat := O | S (n : nat).
 Inductive bool := true | false.
 Inductive eq {A : Type} (x : A) : A -> Prop := eq_refl : eq x x.
 
-Definition Dyn := unknown Type.
-Definition roundtrip : eq (cast Dyn nat (cast nat Dyn (S O))) (S O) := eq_refl _.
-Definition mismatch : eq (cast Dyn bool (cast nat Dyn O)) (err bool) := eq_refl _.
+Definition Any := unknown Type.
+Definition roundtrip : eq (cast Any nat (cast nat Any (S O))) (S O) := eq_refl _.
+Definition mismatch : eq (cast Any bool (cast nat Any O)) (err bool) := eq_refl _.

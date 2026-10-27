@@ -15,6 +15,6 @@ greet "world".         (* "Hello, world" *)
 greet (to_string 42).  (* "Hello, 42" *)
 
 (** The type of [name] is known, so a [nat] is rejected when the program
-    is checked, not when it runs: there is no [Dyn] to defer the check.
+    is checked, not when it runs: there is no [Any] to defer the check.
     [Fail] expects the command to be rejected. *)
 Fail greet 42.         (* nat and string differ *)

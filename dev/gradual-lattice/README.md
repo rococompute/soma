@@ -14,9 +14,9 @@ functions, options, a record, an expression evaluator, length-indexed
 vectors, and a small library of finite maps as search trees). Each file ends with observations, `Definition obs_… : T := …`, at
 fixed types. For every type annotation (binders, `fun` binders, constructor
 arguments, return types) the harness compiles the whole file with that
-annotation made less precise: replaced by `Dyn`, or with one base type inside
-it replaced (`list nat` → `list Dyn`). It also compiles the file with all
-annotations of a definition, or of the whole file, replaced by `Dyn`. Files
+annotation made less precise: replaced by `Any`, or with one base type inside
+it replaced (`list nat` → `list Any`). It also compiles the file with all
+annotations of a definition, or of the whole file, replaced by `Any`. Files
 are compiled with gradual typing on (`rocq c -ri Corelib.Gradual.Gradual`),
 and the observations are evaluated (`Eval lazy`) and compared with the
 original.

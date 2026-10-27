@@ -119,9 +119,9 @@ let cast env sigma ~inferred ~expected v =
   with e when CErrors.noncritical e -> None
 
 (* [consistent], also instantiating evars where the two types agree:
-   [vec ?A (S ?n)] against [vec Dyn ?] sets [?A := Dyn], although the whole
+   [vec ?A (S ?n)] against [vec Any ?] sets [?A := Any], although the whole
    types do not unify ([S ?n] against [?]). Elaboration then checks the
-   arguments of [vcons] at [Dyn]. *)
+   arguments of [vcons] at [Any]. *)
 let rec unify_consistent ?(cumul=true) env sigma a b =
   let unify = if cumul then Evarconv.unify_leq_delay else Evarconv.unify_delay in
   match unify env sigma a b with
@@ -179,16 +179,16 @@ let check_below_gradual env sigma ~inferred ~expected =
 
 (* A cast between [?] and an inductive type whose arguments are still
    undetermined evars: nothing will determine them, so they are [?]. At
-   type [?], [cons 1 (cons true nil) : Dyn] would otherwise choose [nat]
+   type [?], [cons 1 (cons true nil) : Any] would otherwise choose [nat]
    from the first element and reject [true]; from type [?], [snd p] with
-   [p : Dyn] would leave the type of the first component undetermined, and
-   [match v with vnil => ... end] with [v : Dyn] the length of the vector.
-   Type parameters become [Dyn] and indices [?_A]; explicit ones are
+   [p : Any] would leave the type of the first component undetermined, and
+   [match v with vnil => ... end] with [v : Any] the length of the vector.
+   Type parameters become [Any] and indices [?_A]; explicit ones are
    already instantiated. *)
 (* Indices are defaulted too, except in a [match] with a return clause
    (see [Cases.compile_cases]): its type may depend on the index, and a
    value whose real index is known would be used at the type computed for
-   [?] ([vhead] on a [v : Dyn], whose result type is
+   [?] ([vhead] on a [v : Any], whose result type is
    [match ?_nat with 0 => unit | S _ => A end], that is [?], not [A]). *)
 let index_defaulting = ref true
 
@@ -240,7 +240,7 @@ let default_args_to_unknown env sigma t =
       with e when CErrors.noncritical e -> sigma
     in
     (* the evars of an argument, also under constructors: the index of
-       [cast Dyn (vec nat (S ?n)) v] is [S ?] (not under binders) *)
+       [cast Any (vec nat (S ?n)) v] is [S ?] (not under binders) *)
     let rec walk sigma a = match kind sigma a with
       | Evar _ -> default sigma a
       | App (f, args) when isConstruct sigma f -> Array.fold_left walk sigma args

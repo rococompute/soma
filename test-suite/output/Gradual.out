@@ -1,31 +1,31 @@
-succ_dyn = fun x : Dyn => cast Dyn nat x + 1
-     : Dyn -> nat
+succ_dyn = fun x : Any => cast Any nat x + 1
+     : Any -> nat
 
 Arguments succ_dyn x
 apply3 =
-fun g : Dyn => cast Dyn nat (cast Dyn (Dyn -> Dyn) g (cast nat Dyn 3))
-     : Dyn -> nat
+fun g : Any => cast Any nat (cast Any (Any -> Any) g (cast nat Any 3))
+     : Any -> nat
 
 Arguments apply3 g
-delta = fun x : Dyn => cast Dyn (Dyn -> Dyn) x x
-     : Dyn -> Dyn
+delta = fun x : Any => cast Any (Any -> Any) x x
+     : Any -> Any
 
 Arguments delta x
-omega = delta (cast (Dyn -> Dyn) Dyn delta)
-     : Dyn
+omega = delta (cast (Any -> Any) Any delta)
+     : Any
 File "./output/Gradual.v", line 18, characters 0-24:
 The command has indeed failed with message:
 Gradual reduction exceeded 100000 steps (while reducing cast).
 Normalization does not hold for gradual terms, so this may be a loop.
 Raise the limit with "Set Gradual Steps <n>." or remove it with "Unset Gradual Steps."
-T = fun X : Dyn => cast Dyn Type X -> cast Dyn Type X
-     : Dyn -> Type
+T = fun X : Any => cast Any Type X -> cast Any Type X
+     : Any -> Type
 
 Arguments T X
-mixed = (cast nat Dyn 1 :: cast bool Dyn true :: nil)%list
-     : list Dyn
-mixed_pair = (cast nat Dyn 1, cast bool Dyn true)
-     : Dyn * Dyn
+mixed = (cast nat Any 1 :: cast bool Any true :: nil)%list
+     : list Any
+mixed_pair = (cast nat Any 1, cast bool Any true)
+     : Any * Any
      = 42
      : nat
      = raise
@@ -59,13 +59,13 @@ The term "T" has type "Type@{i}" while it is expected to have type
 "Type@{j}" (universe inconsistency: Cannot enforce i <= j because j < i).
 No cast was inserted: the types are not consistent, 
 "Type@{i}" and "Type@{j}" differ (sorts are consistent only when cumulative).
-large_list_dyn = cast (list Type) Dyn large_list
-     : Dyn
-box_dyn = cast Box Dyn box
-     : Dyn
+large_list_dyn = cast (list Type) Any large_list
+     : Any
+box_dyn = cast Box Any box
+     : Any
 File "./output/Gradual.v", line 56, characters 33-36:
 The command has indeed failed with message:
-Cannot cast from "Type" to "Dyn": "Type@{Set+1}"
+Cannot cast from "Type" to "Any": "Type@{Set+1}"
 lives above the universe of gradual types
 (Corelib.Gradual.Gradual.gradual), so no cast was inserted.
 File "./output/Gradual.v", line 62, characters 44-48:

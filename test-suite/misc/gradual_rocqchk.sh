@@ -14,7 +14,7 @@ cd "$TMP"
 
 cat > uses_gradual.v <<'EOT'
 From Corelib.Gradual Require Import Gradual.
-Definition succ_dyn (x : Dyn) : nat := x + 1.
+Definition succ_dyn (x : Any) : nat := x + 1.
 Lemma ok : succ_dyn 41 = 42. Proof. reflexivity. Qed.
 Lemma bad : succ_dyn true = raise. Proof. reflexivity. Qed.
 EOT
@@ -26,7 +26,7 @@ rocqchk -silent -Q . Test -norec Corelib.Gradual.Gradual -norec Test.uses_gradua
 # this proof takes a few dozen steps.
 cat > many_steps.v <<'EOT'
 From Corelib.Gradual Require Import Gradual.
-Definition l : list Dyn := @cons Dyn 1 (@cons Dyn 2 (@cons Dyn 3 (@cons Dyn 4 (@cons Dyn 5 nil)))).
+Definition l : list Any := @cons Any 1 (@cons Any 2 (@cons Any 3 (@cons Any 4 (@cons Any 5 nil)))).
 Lemma cast_list : (l : list nat) = cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil)))).
 Proof. reflexivity. Qed.
 EOT

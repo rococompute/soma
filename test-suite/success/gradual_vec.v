@@ -27,13 +27,13 @@ Definition vtail {A n} (v : vec A (S n)) : vec A n :=
 
 (** * Unknown length, heterogeneous elements *)
 
-(* The expected type gives the parameter: [vcons] is checked at [Dyn], and
-   the unknown length is a cast from [vec Dyn 2]. *)
-Definition v2 : vec Dyn unk := vcons 1 (vcons true vnil).
+(* The expected type gives the parameter: [vcons] is checked at [Any], and
+   the unknown length is a cast from [vec Any 2]. *)
+Definition v2 : vec Any unk := vcons 1 (vcons true vnil).
 
-Definition v2_ok : vec Dyn 2 := v2.
-Definition v2_short : vec Dyn 1 := v2.
-Goal v2_ok = vcons (cast nat Dyn 1) (vcons (cast bool Dyn true) vnil). Proof. reflexivity. Qed.
+Definition v2_ok : vec Any 2 := v2.
+Definition v2_short : vec Any 1 := v2.
+Goal v2_ok = vcons (cast nat Any 1) (vcons (cast bool Any true) vnil). Proof. reflexivity. Qed.
 Goal v2_short = raise. Proof. reflexivity. Qed.
 Goal (vhead v2_ok : nat) = 1. Proof. reflexivity. Qed.
 Goal (vhead (vtail v2_ok) : nat) = raise. Proof. reflexivity. Qed.

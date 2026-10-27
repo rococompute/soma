@@ -22,8 +22,8 @@ implements **GCIC^G**: the unknown type `?` at universe `i` can hold
 ```coq
 From Corelib.Gradual Require Import Gradual.
 
-Definition delta := fun x : Dyn => x x.
-Definition omega : Dyn := delta delta.   (* well typed *)
+Definition delta := fun x : Any => x x.
+Definition omega : Any := delta delta.   (* well typed *)
 Eval lazy in omega.                      (* does not terminate *)
 ```
 
@@ -74,20 +74,24 @@ Rocq's standard library is vendored in `theories/Stdlib` (V9.2.0, see its
 README) and built and installed with the rest, so `From Stdlib Require ...`
 works without flags.
 
+The unknown type `Any` (`unknown Type`) was called `Dyn` until the commit that
+renamed it; `GROK_*.md`, `gradual-coverage.md` and
+`dev/gradual-lattice/results/` predate that and still say `Dyn`.
+
 Outside a proof, a bare term `t.` is evaluated and printed as `Eval lazy in t.`,
 so `"Hello, world!".` is a complete program. Inside a proof the same position
 holds a tactic, as in Rocq. `Recursive` is another spelling of `Fixpoint`.
 
 ```coq
-Definition succ_dyn (x : Dyn) : nat := x + 1.
+Definition succ_dyn (x : Any) : nat := x + 1.
 Print succ_dyn.
-(* succ_dyn = fun x : Dyn => cast Dyn nat x + 1 *)
+(* succ_dyn = fun x : Any => cast Any nat x + 1 *)
 
 Compute succ_dyn 41.     (* = 42 *)
 Compute succ_dyn true.   (* = raise : nat, a runtime type error *)
 
-Definition apply3 (g : Dyn) : nat := g 3.
-(* elaborates to: cast Dyn nat (cast Dyn (Dyn -> Dyn) g (cast nat Dyn 3)) *)
+Definition apply3 (g : Any) : nat := g 3.
+(* elaborates to: cast Any nat (cast Any (Any -> Any) g (cast nat Any 3)) *)
 Compute apply3 S.        (* = 4 *)
 Compute apply3 negb.     (* = raise *)
 
@@ -99,7 +103,7 @@ Fail Definition bad : nat := true.  (* still a static error: not consistent *)
 
 | Surface syntax | Meaning (paper notation) |
 |---|---|
-| `Dyn` | the unknown type `?_□` (abbreviation for `unknown Type`) |
+| `Any` | the unknown type `?_□` (abbreviation for `unknown Type`) |
 | `unk` | the unknown term `?_A` at the expected type `A` |
 | `raise` | the error `err_A` at the expected type |
 | `cast A B t` | the cast `⟨B ⇐ A⟩ t` |
@@ -144,7 +148,7 @@ Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
 ### Reduction rules (`kernel/gradual.ml`)
 
 `A`, `B` are in weak head normal form. "Germ-free": a value of type `?` is
-`cast A Dyn t`, where `A` is the original head type.
+`cast A Any t`, where `A` is the original head type.
 
 | Redex | Reduct |
 |---|---|
@@ -154,9 +158,9 @@ Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
 | `(unknown R).(p)` (primitive projection) | `unknown (type of p)` |
 | `cast A A t` (syntactically equal) | `t` |
 | `cast (err _) B t`, `cast A (err _) t` | `err B` |
-| `cast Dyn Dyn t` | `t` |
-| `cast Dyn B (cast A Dyn t)` | `cast A B t` |
-| `cast A Dyn (unknown _)` / `cast Dyn B (unknown _)` | `unknown B` (same for `err`) |
+| `cast Any Any t` | `t` |
+| `cast Any B (cast A Any t)` | `cast A B t` |
+| `cast A Any (unknown _)` / `cast Any B (unknown _)` | `unknown B` (same for `err`) |
 | `cast (forall x:A1, B1) (forall x:A2, B2) f` | `fun x:A2 => cast B1[x'/x] B2 (f x')` where `x' := cast A2 A1 x` |
 | `cast (Sort s1) (Sort s2) T` | `T` if `s1 ≤ s2` in the universe graph, else `err` (stuck on universe variables the environment does not know) |
 | `cast (I p1) (I p2) (c p1 args)` | `c p2 (cast Tᵢ[p1] Tᵢ[p2] argsᵢ)` |
@@ -166,9 +170,9 @@ Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
 | any other head clash among Π / Sort / inductive / primitive type (`int`, `float`, `string`, `array`) | `err B` |
 | anything involving a neutral type | stuck |
 
-The GCIC^G decision is in the injection rule `cast A Dyn t`. It keeps `A`
-as is and never lowers the universe of a Π germ, so `Dyn -> Dyn : Type@{i}`
-whenever `Dyn : Type@{i}`.
+The GCIC^G decision is in the injection rule `cast A Any t`. It keeps `A`
+as is and never lowers the universe of a Π germ, so `Any -> Any : Type@{i}`
+whenever `Any : Type@{i}`.
 
 ### Where the rules are hooked
 
@@ -190,39 +194,39 @@ last resort, after unification and ordinary coercions have failed:
 
 - a term `t : A` where `B` is expected, with `A ~ B` consistent, becomes `cast A B t`.
   Evars are instantiated where the two types agree, so for
-  `vcons 1 (vcons true vnil) : vec Dyn unk` the parameter is set to `Dyn`
+  `vcons 1 (vcons true vnil) : vec Any unk` the parameter is set to `Any`
   although `S ?n` and `unk` do not unify;
-- a term `f : Dyn` in function position becomes `cast Dyn (Dyn -> Dyn) f`;
-- a term `T : Dyn` in type position becomes `cast Dyn Type T`;
-- in a cast between `Dyn` and an inductive type, arguments that nothing
-  determines are `?`: `snd p` with `p : Dyn` casts `p` to `Dyn * bool`;
-- the condition of an `if` of type `Dyn` is cast to `bool`.
+- a term `f : Any` in function position becomes `cast Any (Any -> Any) f`;
+- a term `T : Any` in type position becomes `cast Any Type T`;
+- in a cast between `Any` and an inductive type, arguments that nothing
+  determines are `?`: `snd p` with `p : Any` casts `p` to `Any * bool`;
+- the condition of an `if` of type `Any` is cast to `bool`.
 
-### Recursion through `Dyn`
+### Recursion through `Any`
 
 Rocq accepts a `Fixpoint` only if its recursion is structural, checked by
 the guard condition. GCIC^G gives up termination, and recursion through
-`Dyn` has no structure to check: an argument of type `Dyn` (`fact (n : Dyn)`),
-or a constructor argument made `Dyn` (`Plus (a : Dyn) …`, then `eval a`).
+`Any` has no structure to check: an argument of type `Any` (`fact (n : Any)`),
+or a constructor argument made `Any` (`Plus (a : Any) …`, then `eval a`).
 Under Gradual Typing, a block of fixpoints that uses the gradual primitives
 and fails the guard is therefore accepted without checking it, with a
 `gradual-unguarded-fixpoint` warning:
 
 ```coq
-Fixpoint fact (n : Dyn) : nat := match n with O => 1 | S k => n * fact k end.
+Fixpoint fact (n : Any) : nat := match n with O => 1 | S k => n * fact k end.
 (* Warning: fact: not structurally recursive; it recurses through gradual
    types, so its guard is not checked (gradual typing gives up termination). *)
 Eval lazy in fact 5.      (* = 120 *)
 Print Assumptions fact.   (* fact is assumed to be guarded. *)
 ```
 
-- The recursive argument is the first possible one of type `Dyn`, or the
+- The recursive argument is the first possible one of type `Any`, or the
   first possible one. A fixpoint unfolds on `?`, `err` and the values of
-  `Dyn` (injections `cast A Dyn t`), in every reduction machine.
-- These unfoldings count towards `Gradual Steps`, so a loop through `Dyn`
+  `Any` (injections `cast A Any t`), in every reduction machine.
+- These unfoldings count towards `Gradual Steps`, so a loop through `Any`
   stops with the step error.
 - Fixpoints without gradual primitives are checked as usual.
-- The kernel accepts a fixpoint whose recursive argument has type `Dyn`
+- The kernel accepts a fixpoint whose recursive argument has type `Any`
   only without guard checking and without VM and native compilation
   (`kernel/inductive.ml`). The declaration sets both, and gradual terms
   never run on the VM (`vm_compute` falls back to `cbv`). Any other
@@ -241,7 +245,7 @@ runtime: it only needs the OCaml standard library, so it also builds for
 MirageOS unikernels.
 
 ```coq
-Definition succ_dyn (x : Dyn) : nat := x + 1.
+Definition succ_dyn (x : Any) : nat := x + 1.
 Extraction succ_dyn.
 (* let succ_dyn x =
      add (Gradual_rt.cast_with ... Gradual_rt.unknown_ty
@@ -249,7 +253,7 @@ Extraction succ_dyn.
        (succ 0) *)
 ```
 
-- A value of type `Dyn` is the value plus the description of its type.
+- A value of type `Any` is the value plus the description of its type.
 - A cast between function types wraps the function. The wrapper makes a
   tail call when the codomain needs no cast, so Ω loops in constant stack.
 - For each inductive type, extraction generates a match on its
@@ -274,7 +278,7 @@ Extraction succ_dyn.
   argument and its callers pass it:
 
   ```coq
-  Definition to_dyn {A : Type} (x : A) : Dyn := x.
+  Definition to_dyn {A : Type} (x : A) : Any := x.
   (* val to_dyn : __ -> 'a1 -> __
      let to_dyn a x = Gradual_rt.cast_with ... a Gradual_rt.unknown_ty x *)
   ```
@@ -292,7 +296,7 @@ Extraction differs from the kernel in these ways:
   variable bound elsewhere (a local `fun (A : Type) => …`, a type stored in
   a constructor) is rejected at extraction time. So is a function that
   needs type parameters at run time used without them, for example
-  `@to_dyn` passed to a function expecting `forall A, A -> Dyn`: the
+  `@to_dyn` passed to a function expecting `forall A, A -> Any`: the
   callee would not pass the description.
 - **Eliminating `?` or `err` propagates them only when the type of the
   `match` has a runtime description.** As in the kernel, a `match` on them is
@@ -339,8 +343,8 @@ Extraction differs from the kernel in these ways:
   `Corelib.Gradual.Gradual.gradual`. A large type such as `list Type`, or
   a universe-polymorphic record, can still be cast. When a cast would
   need a type above `gradual`, elaboration says so instead of reporting
-  a plain type mismatch, e.g. for `Set : Dyn`:
-  `Cannot cast from "Type" to "Dyn": "Type@{Set+1}" lives above the universe
+  a plain type mismatch, e.g. for `Set : Any`:
+  `Cannot cast from "Type" to "Any": "Type@{Set+1}" lives above the universe
   of gradual types (Corelib.Gradual.Gradual.gradual), so no cast was inserted.`
 - **SProp** is not supported, because the axioms quantify over `Type`.
 - **Indexed families** go beyond the paper, which only treats parameters.
@@ -357,13 +361,13 @@ Extraction differs from the kernel in these ways:
   reduct would not re-typecheck.
 - **Bidirectionality is checking, not synthesis.** With an expected
   type, argument inference is delayed until that type has been unified
-  with the result, so `cons 1 (cons true nil) : list Dyn` checks both
-  elements at `Dyn`. Leading type arguments are still inferred first, so
-  an explicit one wins over the expected type: `@cons Dyn 1 nil : list nat`
-  is a cast from `list Dyn`. At type `Dyn` itself, type parameters that
-  nothing determines are set to `Dyn`, so `cons 1 (cons true nil) : Dyn`
-  is a `list Dyn` cast to `Dyn`; explicit ones still win
-  (`@cons nat 1 nil : Dyn` is a `list nat`).
+  with the result, so `cons 1 (cons true nil) : list Any` checks both
+  elements at `Any`. Leading type arguments are still inferred first, so
+  an explicit one wins over the expected type: `@cons Any 1 nil : list nat`
+  is a cast from `list Any`. At type `Any` itself, type parameters that
+  nothing determines are set to `Any`, so `cons 1 (cons true nil) : Any`
+  is a `list Any` cast to `Any`; explicit ones still win
+  (`@cons nat 1 nil : Any` is a `list nat`).
 
 ## Tests
 

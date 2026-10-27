@@ -24,24 +24,24 @@ Ltac machines :=
     reflexivity
   end.
 
-Definition succ_dyn (x : Dyn) : nat := x + 1.
-Definition apply3 (g : Dyn) : nat := g 3.
+Definition succ_dyn (x : Any) : nat := x + 1.
+Definition apply3 (g : Any) : nat := g 3.
 
 (** base types *)
-Definition t_ok (_ : unit) := succ_dyn (cast nat Dyn 41).
-Definition t_bad (_ : unit) := succ_dyn (cast bool Dyn true).
+Definition t_ok (_ : unit) := succ_dyn (cast nat Any 41).
+Definition t_bad (_ : unit) := succ_dyn (cast bool Any true).
 Goal t_ok tt = 42. Proof. machines. Qed.
 Goal t_bad tt = raise. Proof. machines. Qed.
 
 (** functions are wrapped *)
-Definition t_app (_ : unit) := apply3 (cast (nat -> nat) Dyn S).
-Definition t_app_bad (_ : unit) := apply3 (cast (bool -> bool) Dyn negb).
+Definition t_app (_ : unit) := apply3 (cast (nat -> nat) Any S).
+Definition t_app_bad (_ : unit) := apply3 (cast (bool -> bool) Any negb).
 Goal t_app tt = 4. Proof. machines. Qed.
 Goal t_app_bad tt = raise. Proof. machines. Qed.
 
 (** parametrized inductive types: elementwise *)
-Definition t_list (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
-Definition t_list_bad (_ : unit) : list nat := @cons Dyn 1 (@cons Dyn true nil).
+Definition t_list (_ : unit) : list nat := @cons Any 1 (@cons Any 2 nil).
+Definition t_list_bad (_ : unit) : list nat := @cons Any 1 (@cons Any true nil).
 Goal t_list tt = cons 1 (cons 2 nil). Proof. machines. Qed.
 (* only the elements that are used are eliminated *)
 Definition t_list_bad_length (_ : unit) := length (t_list_bad tt).
@@ -50,32 +50,32 @@ Goal t_list_bad_length tt = 2. Proof. machines. Qed.
 Goal t_list_bad_head tt = 1. Proof. machines. Qed.
 Goal t_list_bad tt = cons 1 (cons raise nil). Proof. machines. Qed.
 
-Definition pr : Dyn * Dyn := @pair Dyn Dyn 1 true.
+Definition pr : Any * Any := @pair Any Any 1 true.
 Definition t_pair (_ : unit) : nat * bool := pr.
 Definition t_pair_bad (_ : unit) : bool * nat := pr.
 Goal t_pair tt = (1, true). Proof. machines. Qed.
 Goal t_pair_bad tt = (raise, raise). Proof. machines. Qed.
 
-Definition t_option (_ : unit) : option bool := @Some Dyn false.
+Definition t_option (_ : unit) : option bool := @Some Any false.
 Goal t_option tt = Some false. Proof. machines. Qed.
 
 (** casts of functions inside data are lazy *)
-Definition fs : list Dyn := @cons Dyn S (@cons Dyn negb nil).
+Definition fs : list Any := @cons Any S (@cons Any negb nil).
 Definition t_fs (_ : unit) : list (nat -> nat) := fs.
 Goal match t_fs tt with cons f (cons g nil) => (f 1, g 1) | _ => (0, 0) end = (2, raise).
 Proof. machines. Qed.
 
 (** records *)
 Record point := mkPoint { px : nat; py : bool }.
-Definition pt : Dyn := cast point Dyn (mkPoint 1 true).
+Definition pt : Any := cast point Any (mkPoint 1 true).
 Definition t_record (_ : unit) : nat := px pt.
-Definition t_record_bad (_ : unit) : nat := cast Dyn nat pt.
+Definition t_record_bad (_ : unit) : nat := cast Any nat pt.
 Goal t_record tt = 1. Proof. machines. Qed.
 Goal t_record_bad tt = raise. Proof. machines. Qed.
 
 (** subset types: the proof is erased, the value is cast *)
-Definition pos : Dyn := cast {n : nat | 0 < n} Dyn (exist _ 1 (le_n 1)).
-Definition t_sig (_ : unit) : nat := proj1_sig (cast Dyn {n : nat | 0 < n} pos).
+Definition pos : Any := cast {n : nat | 0 < n} Any (exist _ 1 (le_n 1)).
+Definition t_sig (_ : unit) : nat := proj1_sig (cast Any {n : nat | 0 < n} pos).
 Goal t_sig tt = 1. Proof. machines. Qed.
 
 (** indexed families *)
@@ -98,9 +98,9 @@ Goal t_vec_bad tt = raise. Proof. machines. Qed.
 (** dependent functions: the codomain depends on the argument *)
 Fixpoint rep (n : nat) : vec nat n :=
   match n with 0 => vnil | S k => vcons k (rep k) end.
-Definition rep_dyn : Dyn := cast (forall n, vec nat n) Dyn rep.
-Definition t_dep (_ : unit) := vhead (cast Dyn (forall n, vec nat n) rep_dyn 3).
-Definition t_dep_bad (_ : unit) := vhead (cast Dyn (forall n, vec nat (S n)) rep_dyn 3).
+Definition rep_dyn : Any := cast (forall n, vec nat n) Any rep.
+Definition t_dep (_ : unit) := vhead (cast Any (forall n, vec nat n) rep_dyn 3).
+Definition t_dep_bad (_ : unit) := vhead (cast Any (forall n, vec nat (S n)) rep_dyn 3).
 Goal t_dep tt = 2. Proof. machines. Qed.
 Goal t_dep_bad tt = raise. Proof. machines. Qed.
 
@@ -108,9 +108,9 @@ Goal t_dep_bad tt = raise. Proof. machines. Qed.
 Inductive tree (A : Type) := node : A -> forest A -> tree A
 with forest (A : Type) := fnil : forest A | fcons : tree A -> forest A -> forest A.
 Arguments node {A}. Arguments fnil {A}. Arguments fcons {A}.
-Definition tr : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast nat Dyn 2) fnil) fnil).
+Definition tr : tree Any := node (cast nat Any 1) (fcons (node (cast nat Any 2) fnil) fnil).
 Definition t_tree (_ : unit) : tree nat := tr.
-Definition tr_bad : tree Dyn := node (cast nat Dyn 1) (fcons (node (cast bool Dyn true) fnil) fnil).
+Definition tr_bad : tree Any := node (cast nat Any 1) (fcons (node (cast bool Any true) fnil) fnil).
 Definition t_tree_bad (_ : unit) : tree nat := tr_bad.
 Definition t_tree_bad_root (_ : unit) := match t_tree_bad tt with node x _ => x end.
 Goal t_tree_bad_root tt = 1. Proof. machines. Qed.
@@ -120,7 +120,7 @@ Goal t_tree_bad tt = node 1 (fcons (node raise fnil) fnil). Proof. machines. Qed
 #[warnings="-register-all"]
 Inductive rose (A : Type) := rnode : A -> list (rose A) -> rose A.
 Arguments rnode {A}.
-Definition ro : rose Dyn := rnode (cast nat Dyn 1) (cons (rnode (cast nat Dyn 2) nil) nil).
+Definition ro : rose Any := rnode (cast nat Any 1) (cons (rnode (cast nat Any 2) nil) nil).
 Definition t_rose (_ : unit) : rose nat := ro.
 Goal t_rose tt = rnode 1 (cons (rnode 2 nil) nil). Proof. machines. Qed.
 
@@ -148,16 +148,16 @@ Definition t_sort_bad (_ : unit) : nat := cast Type nat bool.
 Goal t_sort_bad tt = raise. Proof. machines. Qed.
 
 (** primitive types: equal ones cast to themselves, others clash *)
-Definition t_int (_ : unit) : int := cast Dyn int (cast int Dyn 3%uint63).
-Definition t_int_bad (_ : unit) : nat := cast Dyn nat (cast int Dyn 3%uint63).
-Definition t_int_float (_ : unit) : float := cast Dyn float (cast int Dyn 3%uint63).
+Definition t_int (_ : unit) : int := cast Any int (cast int Any 3%uint63).
+Definition t_int_bad (_ : unit) : nat := cast Any nat (cast int Any 3%uint63).
+Definition t_int_float (_ : unit) : float := cast Any float (cast int Any 3%uint63).
 Goal t_int tt = 3%uint63. Proof. machines. Qed.
 Goal t_int_bad tt = raise. Proof. machines. Qed.
 Goal t_int_float tt = raise. Proof. machines. Qed.
 (* casts do not visit the elements of arrays: the kernel leaves a cast
    between array types with different elements stuck *)
 Definition t_array (_ : unit) : PrimArray.array bool :=
-  cast Dyn (PrimArray.array bool) (cast (PrimArray.array nat) Dyn (PrimArray.make 1%uint63 0)).
+  cast Any (PrimArray.array bool) (cast (PrimArray.array nat) Any (PrimArray.make 1%uint63 0)).
 Goal True.
 Proof.
   let t := eval lazy in (t_array tt) in match t with cast _ _ _ => idtac end.
@@ -165,22 +165,22 @@ Proof.
 Qed.
 
 (** Omega is well typed, and loops *)
-Definition delta := fun x : Dyn => x x.
-Definition t_omega (_ : unit) : Dyn := delta (cast (Dyn -> Dyn) Dyn delta).
+Definition delta := fun x : Any => x x.
+Definition t_omega (_ : unit) : Any := delta (cast (Any -> Any) Any delta).
 
 (** type parameters: the ones casts need are passed at run time *)
-Definition to_dyn {A : Type} (x : A) : Dyn := x.
-Definition of_dyn {A : Type} (d : Dyn) : A := d.
+Definition to_dyn {A : Type} (x : A) : Any := x.
+Definition of_dyn {A : Type} (d : Any) : A := d.
 Definition roundtrip {A B : Type} (x : A) : B := of_dyn (to_dyn x).
-Fixpoint dyns {A : Type} (l : list A) : list Dyn :=
+Fixpoint dyns {A : Type} (l : list A) : list Any :=
   match l with nil => nil | cons x r => cons (to_dyn x) (dyns r) end.
-Definition dyns_local {A : Type} (l : list A) : list Dyn :=
-  (fix go (l : list A) := match l with nil => nil | cons x r => cons (x : Dyn) (go r) end) l.
-Fixpoint ev {A : Type} (l : list A) : list Dyn :=
+Definition dyns_local {A : Type} (l : list A) : list Any :=
+  (fix go (l : list A) := match l with nil => nil | cons x r => cons (x : Any) (go r) end) l.
+Fixpoint ev {A : Type} (l : list A) : list Any :=
   match l with nil => nil | cons x r => cons (to_dyn x) (od r) end
-with od {A : Type} (l : list A) : list Dyn :=
-  match l with nil => nil | cons x r => cons (x : Dyn) (ev r) end.
-Definition poly_fun {A : Type} (f : A -> A) : Dyn := f.
+with od {A : Type} (l : list A) : list Any :=
+  match l with nil => nil | cons x r => cons (x : Any) (ev r) end.
+Definition poly_fun {A : Type} (f : A -> A) : Any := f.
 
 Definition t_poly (_ : unit) : nat := roundtrip 41.
 Definition t_poly_bad (_ : unit) : bool := roundtrip 41.
@@ -204,10 +204,10 @@ Goal t_poly_fun tt = 2. Proof. machines. Qed.
 (** not supported: a function needing type parameters at run time used
     without them, and type abstractions that are not parameters of a
     constant *)
-Definition apply_poly (f : forall A : Type, A -> Dyn) := f nat 3.
+Definition apply_poly (f : forall A : Type, A -> Any) := f nat 3.
 Definition bad_first_class := apply_poly (@to_dyn).
 Fail Extraction bad_first_class.
-Definition bad_local := let g (A : Type) (x : A) : Dyn := x in g nat 1.
+Definition bad_local := let g (A : Type) (x : A) : Any := x in g nat 1.
 Fail Extraction bad_local.
 
 Set Extraction Output Directory ".".

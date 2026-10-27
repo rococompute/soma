@@ -1059,16 +1059,16 @@ struct
         (* GCIC checking. The expected type is unified with the result
            before the arguments are inferred, and each argument is then
            checked at the domain that unification produced.
-           [cons 1 (cons true nil) : list Dyn] checks [1] and [true]
-           at [Dyn] instead of rejecting [true] at [nat].
-           At [Dyn] itself, nothing determines the parameters: the
-           gradual coercion sets the undetermined ones to [Dyn]
+           [cons 1 (cons true nil) : list Any] checks [1] and [true]
+           at [Any] instead of rejecting [true] at [nat].
+           At [Any] itself, nothing determines the parameters: the
+           gradual coercion sets the undetermined ones to [Any]
            ([GradualTyping.coerce_to_type]), so
-           [cons 1 (cons true nil) : Dyn] is a [list Dyn] cast to [Dyn].
+           [cons 1 (cons true nil) : Any] is a [list Any] cast to [Any].
            Leading type arguments are inferred first, so that the
            expected type does not override the ones given explicitly:
-           [@cons Dyn 1 nil : list nat] elaborates to a cast from
-           [list Dyn], since [@cons nat 1 nil : list nat] is accepted
+           [@cons Any 1 nil : list nat] elaborates to a cast from
+           [list Any], since [@cons nat 1 nil : list nat] is accepted
            (graduality). An implicit type argument is a hole, which
            stays undetermined until the expected type is unified. *)
         let rec leading_types env typ n =
@@ -1180,7 +1180,7 @@ struct
           in
           (* GCIC: an implicit argument whose binder occurs nowhere in the
              rest of the type of the function (precision erased it:
-             [map {A B} (f : Dyn) (l : Dyn) : Dyn]) can never be
+             [map {A B} (f : Any) (l : Any) : Any]) can never be
              determined, so it is [?]. One that occurs, like [A] in
              [nil : forall A, list A], is inferred as usual. *)
           let erased =
@@ -1266,12 +1266,12 @@ struct
       in
       match tycon with
       | Some ty when GradualTyping.is_unknown_type !!env sigma ty ->
-        (* Unifying with [Dyn] fixes nothing, and setting the parameters
-           to [Dyn] first would lose what the arguments determine: in
-           [f (of_list r) : Dyn], [of_list r] is a [tree V] cast to [Dyn],
-           not a [tree Dyn] with [r] cast, which would no longer be a
+        (* Unifying with [Any] fixes nothing, and setting the parameters
+           to [Any] first would lose what the arguments determine: in
+           [f (of_list r) : Any], [of_list r] is a [tree V] cast to [Any],
+           not a [tree Any] with [r] cast, which would no longer be a
            structural call. Only when the arguments disagree
-           ([cons 1 (cons true nil) : Dyn]) are the parameters [Dyn]. *)
+           ([cons 1 (cons true nil) : Any]) are the parameters [Any]. *)
         begin try elaborate length
         with e when CErrors.noncritical e -> bidi ()
         end
@@ -1325,7 +1325,7 @@ struct
     let sigma, j, rng = match dom with
       | Some dom when GradualTyping.enabled !!env ->
         (* GCIC: the annotation of the binder only has to be consistent with
-           the expected domain, so [fun x : nat => x : Dyn -> nat] is a cast,
+           the expected domain, so [fun x : nat => x : Any -> nat] is a cast,
            as [fun x : nat => x : nat -> nat] is accepted (graduality). When
            they do not unify, the expected codomain is kept only if it does
            not depend on the bound variable. *)

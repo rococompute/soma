@@ -3,8 +3,8 @@ From Corelib.Gradual Require Import Gradual.
 
 (** * Elaboration: consistent types are accepted and casts are inserted *)
 
-Definition succ_dyn (x : Dyn) : nat := x + 1.
-Definition apply3 (g : Dyn) : nat := g 3.
+Definition succ_dyn (x : Any) : nat := x + 1.
+Definition apply3 (g : Any) : nat := g 3.
 
 (** The fragment without unknowns is unchanged: inconsistent types are still
     rejected. *)
@@ -13,12 +13,12 @@ Fail Check (fun x : nat => x) true.
 
 (** * Expected types flow into arguments before they are inferred *)
 
-Definition mixed : list Dyn := cons 1 (cons true nil).
-Definition mixed_asc := (cons 1 (cons true nil) : list Dyn).
-Definition mixed_pair : Dyn * Dyn := (1, true).
+Definition mixed : list Any := cons 1 (cons true nil).
+Definition mixed_asc := (cons 1 (cons true nil) : list Any).
+Definition mixed_pair : Any * Any := (1, true).
 
 Definition both {A : Type} (x y : A) : A * A := (x, y).
-Definition mixed_both : Dyn * Dyn := both 1 true.
+Definition mixed_both : Any * Any := both 1 true.
 
 Goal (mixed : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 Goal (mixed : list bool) = cons raise (cons true nil). Proof. reflexivity. Qed.
@@ -34,41 +34,41 @@ Fail Definition still_pair : nat * nat := (true, 1).
 (** Explicit type arguments are not overridden by the expected type: a
     less precise one is cast, as the precise one is accepted (graduality). *)
 Definition some_precise : option bool := @Some bool false.
-Definition some_dyn : option bool := @Some Dyn false.
-Definition cons_dyn : list nat := @cons Dyn 1 (@cons Dyn 2 nil).
-Definition cons_dyn_bad : list nat := @cons Dyn 1 (@cons Dyn true nil).
-Definition pair_dyn : nat * bool := @pair Dyn Dyn 1 true.
+Definition some_dyn : option bool := @Some Any false.
+Definition cons_dyn : list nat := @cons Any 1 (@cons Any 2 nil).
+Definition cons_dyn_bad : list nat := @cons Any 1 (@cons Any true nil).
+Definition pair_dyn : nat * bool := @pair Any Any 1 true.
 Goal some_dyn = Some false. Proof. reflexivity. Qed.
 Goal cons_dyn = cons 1 (cons 2 nil). Proof. reflexivity. Qed.
 Goal cons_dyn_bad = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 Goal pair_dyn = (1, true). Proof. reflexivity. Qed.
 Fail Definition some_wrong : option bool := @Some nat 0.
 
-(** At [Dyn], parameters left undetermined are [Dyn]; explicit ones win. *)
-Definition mixed_dyn : Dyn := cons 1 (cons true nil).
-Definition mixed_pair_dyn : Dyn := (1, true).
-Definition explicit_dyn : Dyn := @cons nat 1 nil.
-Fail Definition explicit_bad : Dyn := @cons nat 1 (cons true nil).
+(** At [Any], parameters left undetermined are [Any]; explicit ones win. *)
+Definition mixed_dyn : Any := cons 1 (cons true nil).
+Definition mixed_pair_dyn : Any := (1, true).
+Definition explicit_dyn : Any := @cons nat 1 nil.
+Fail Definition explicit_bad : Any := @cons nat 1 (cons true nil).
 Goal (mixed_dyn : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 Goal (explicit_dyn : list nat) = cons 1 nil. Proof. reflexivity. Qed.
 
-(** * Casts from [Dyn] do not leave arguments undetermined *)
+(** * Casts from [Any] do not leave arguments undetermined *)
 
 (* the other component of a pair, the length of a vector: [?] *)
-Definition snd_dyn (p : Dyn) : bool := snd p.
-Goal snd_dyn (cast (nat * bool) Dyn (1, true)) = true. Proof. reflexivity. Qed.
-Definition if_dyn (b : Dyn) : nat := if b then 1 else 0.
-Goal if_dyn (cast bool Dyn false) = 0. Proof. reflexivity. Qed.
-Goal if_dyn (cast nat Dyn 3) = raise. Proof. reflexivity. Qed.
+Definition snd_dyn (p : Any) : bool := snd p.
+Goal snd_dyn (cast (nat * bool) Any (1, true)) = true. Proof. reflexivity. Qed.
+Definition if_dyn (b : Any) : nat := if b then 1 else 0.
+Goal if_dyn (cast bool Any false) = 0. Proof. reflexivity. Qed.
+Goal if_dyn (cast nat Any 3) = raise. Proof. reflexivity. Qed.
 
-(** * Recursion through [Dyn]
+(** * Recursion through [Any]
 
-    GCIC^G gives up termination: a fixpoint that recurses through [Dyn] has
+    GCIC^G gives up termination: a fixpoint that recurses through [Any] has
     no structural guard, and is accepted without checking one (with a
-    warning). It unfolds on the values of [Dyn], and these unfoldings count
+    warning). It unfolds on the values of [Any], and these unfoldings count
     towards Gradual Steps. *)
 #[warnings="-gradual-unguarded-fixpoint"]
-Fixpoint fact_dyn (n : Dyn) : nat := match n with O => 1 | S k => n * fact_dyn k end.
+Fixpoint fact_dyn (n : Any) : nat := match n with O => 1 | S k => n * fact_dyn k end.
 Goal fact_dyn 5 = 120. Proof. reflexivity. Qed.
 Goal fact_dyn true = raise. Proof. reflexivity. Qed.
 Goal True.
@@ -77,26 +77,26 @@ Goal True.
   assert (fact_dyn 4 = 24) by (simpl; reflexivity).
   exact I.
 Qed.
-(* a constructor argument made [Dyn]: [eval a] is not structural *)
-Inductive dexpr := DNum (n : nat) | DPlus (a : Dyn) (b : dexpr).
+(* a constructor argument made [Any]: [eval a] is not structural *)
+Inductive dexpr := DNum (n : nat) | DPlus (a : Any) (b : dexpr).
 #[warnings="-gradual-unguarded-fixpoint"]
 Fixpoint deval (e : dexpr) : nat := match e with DNum n => n | DPlus a b => deval a + deval b end.
 Goal deval (DPlus (DPlus (DNum 1) (DNum 2)) (DNum 3)) = 6. Proof. reflexivity. Qed.
-(* a loop through [Dyn] stops at the step budget *)
+(* a loop through [Any] stops at the step budget *)
 #[warnings="-gradual-unguarded-fixpoint"]
-Fixpoint loop_dyn (n : Dyn) : nat := loop_dyn n.
+Fixpoint loop_dyn (n : Any) : nat := loop_dyn n.
 Fail Eval lazy in loop_dyn 0.
 (* a type parameter comes first, but the recursion is on the list *)
-Definition id_dyn (x : Dyn) : Dyn := x.
+Definition id_dyn (x : Any) : Any := x.
 #[warnings="-gradual-unguarded-fixpoint"]
 Fixpoint dlength {V : Type} (l : list V) : nat :=
   match l with nil => 0 | cons _ r => S (dlength (id_dyn r)) end.
 Goal dlength (cons 1 (cons 2 nil)) = 2. Proof. reflexivity. Qed.
-(* at [Dyn], the arguments of an application determine its parameters:
-   [dof_list r] is a [dtree V] cast to [Dyn], so the call stays structural *)
+(* at [Any], the arguments of an application determine its parameters:
+   [dof_list r] is a [dtree V] cast to [Any], so the call stays structural *)
 Inductive dtree (V : Type) := DLeaf | DNode (k : nat) (v : V) (t : dtree V).
 Arguments DLeaf {V}. Arguments DNode {V}.
-Definition dadd {V : Type} (k : nat) (v : V) (t : Dyn) : dtree V := DNode k v t.
+Definition dadd {V : Type} (k : nat) (v : V) (t : Any) : dtree V := DNode k v t.
 #[warnings="+gradual-unguarded-fixpoint"]
 Fixpoint dof_list {V : Type} (l : list (nat * V)) : dtree V :=
   match l with nil => DLeaf | cons (k, v) r => dadd k v (dof_list r) end.
@@ -109,7 +109,7 @@ Fail Fixpoint not_structural (n : nat) : nat := not_structural n.
     An implicit argument whose binder occurs nowhere in the rest of the type
     of the function can never be determined: it is [?]. *)
 #[warnings="-gradual-unguarded-fixpoint"]
-Fixpoint map_dyn {A B : Type} (f : Dyn) (l : Dyn) : Dyn :=
+Fixpoint map_dyn {A B : Type} (f : Any) (l : Any) : Any :=
   match l with nil => nil | cons x r => cons (f x) (map_dyn f r) end.
 Definition map_obs : list nat := map_dyn (fun x : nat => x * 2) (cons 1 (cons 2 (cons 3 nil))).
 Goal map_obs = cons 2 (cons 4 (cons 6 nil)). Proof. reflexivity. Qed.
@@ -122,7 +122,7 @@ Fail Definition no_type_let := let y := nil in 0.
     uses the gradual primitives, is [?] when it does not occur in the type
     of the term. *)
 #[warnings="-gradual-unguarded-fixpoint"]
-Fixpoint assoc_dyn {V : Type} (k : nat) (l : Dyn) : option V :=
+Fixpoint assoc_dyn {V : Type} (k : nat) (l : Any) : option V :=
   match l with
   | nil => None
   | cons (k', v) r => if Nat.eqb k k' then Some v else assoc_dyn k r
@@ -133,7 +133,7 @@ Definition mem_dyn {V : Type} (k : nat) (l : list (nat * V)) : bool :=
 Goal mem_dyn 2 (cons (1, true) (cons (2, false) nil)) = true. Proof. reflexivity. Qed.
 Goal mem_dyn 3 (cons (1, true) (cons (2, false) nil)) = false. Proof. reflexivity. Qed.
 
-(** In a [match] with a return clause, the indices of a cast from [Dyn] are
+(** In a [match] with a return clause, the indices of a cast from [Any] are
     not [?]: the return type may depend on them. An index is the one
     constructor, with [?] arguments, at which the return clause is
     consistent with the expected type, if there is exactly one. *)
@@ -142,40 +142,40 @@ Module DependentMatch.
   | vnil : vec A 0
   | vcons : forall n, A -> vec A n -> vec A (S n).
   Arguments vnil {A}. Arguments vcons {A n}.
-  (* only [S] gives [A]: the scrutinee is a [vec Dyn (S unk)] *)
-  Definition vhead_dyn {A : Type} (v : Dyn) : A :=
+  (* only [S] gives [A]: the scrutinee is a [vec Any (S unk)] *)
+  Definition vhead_dyn {A : Type} (v : Any) : A :=
     match v in vec _ m return match m with 0 => unit | S _ => A end with
     | vnil => tt | vcons x _ => x end.
-  Goal vhead_dyn (vcons 1 (vcons 2 (vcons 3 vnil)) : Dyn) = 1. Proof. reflexivity. Qed.
+  Goal vhead_dyn (vcons 1 (vcons 2 (vcons 3 vnil)) : Any) = 1. Proof. reflexivity. Qed.
   (* without a return clause, they are *)
   #[warnings="-gradual-unguarded-fixpoint"]
-  Fixpoint vsum_dyn (v : Dyn) : nat :=
+  Fixpoint vsum_dyn (v : Any) : nat :=
     match v with vnil => 0 | vcons x r => x + vsum_dyn r end.
-  Goal vsum_dyn (cast (vec nat 2) Dyn (vcons 1 (vcons 2 vnil))) = 3. Proof. reflexivity. Qed.
-  (* an index under a constructor: [cast Dyn (vec nat (S ?)) v3] *)
+  Goal vsum_dyn (cast (vec nat 2) Any (vcons 1 (vcons 2 vnil))) = 3. Proof. reflexivity. Qed.
+  (* an index under a constructor: [cast Any (vec nat (S ?)) v3] *)
   Definition vhead {A : Type} {n : nat} (v : vec A (S n)) : A :=
     match v in vec _ m return match m with 0 => unit | S _ => A end with
     | vnil => tt | vcons x _ => x end.
-  Definition v3_dyn : Dyn := vcons 1 (vcons 2 (vcons 3 vnil)).
+  Definition v3_dyn : Any := vcons 1 (vcons 2 (vcons 3 vnil)).
   Goal vhead v3_dyn = 1. Proof. reflexivity. Qed.
-  (* the branches of a match on a value cast from [Dyn] may be at another
-     index than expected: they go through [Dyn], and the index is checked
+  (* the branches of a match on a value cast from [Any] may be at another
+     index than expected: they go through [Any], and the index is checked
      at run time *)
   #[warnings="-gradual-unguarded-fixpoint"]
-  Fixpoint vrep_dyn (n : Dyn) (x : nat) : vec nat n :=
+  Fixpoint vrep_dyn (n : Any) (x : nat) : vec nat n :=
     match n with O => vnil | S k => vcons x (vrep_dyn k x) end.
   Fixpoint vsum {n : nat} (v : vec nat n) : nat :=
     match v with vnil => 0 | vcons x r => x + vsum r end.
   Goal vsum (vrep_dyn 4 5) = 20. Proof. reflexivity. Qed.
   (* [vsum] takes any length, so nothing fixes [vmap_dyn]'s [n] *)
   #[warnings="-gradual-unguarded-fixpoint"]
-  Fixpoint vmap_dyn {A B : Type} {n : nat} (f : A -> B) (v : Dyn) : vec B n :=
+  Fixpoint vmap_dyn {A B : Type} {n : nat} (f : A -> B) (v : Any) : vec B n :=
     match v with vnil => vnil | vcons x r => vcons (f x) (vmap_dyn f r) end.
   Definition v3 : vec nat 3 := vcons 1 (vcons 2 (vcons 3 vnil)).
   Definition vmap_obs : nat := vsum (vmap_dyn (fun x : nat => x * 10) v3).
   Goal vmap_obs = 60. Proof. reflexivity. Qed.
-  (* the result is [Dyn]: the index of the scrutinee is [?] *)
-  Definition vhead_all {A : Type} {n : nat} (v : Dyn) : Dyn :=
+  (* the result is [Any]: the index of the scrutinee is [?] *)
+  Definition vhead_all {A : Type} {n : nat} (v : Any) : Any :=
     match v in vec _ m return match m with 0 => unit | S _ => A end with
     | vnil => tt | vcons x _ => x end.
   Definition vhead_obs : nat := vhead_all v3.
@@ -189,33 +189,33 @@ End DependentMatch.
     Each group gives one term at decreasingly precise types. *)
 Module Graduality.
   Definition l_nat : list nat := cons 1 (cons 2 nil).
-  Definition l_list : list Dyn := cons 1 (cons 2 nil).
-  Definition l_dyn : Dyn := cons 1 (cons 2 nil).
+  Definition l_list : list Any := cons 1 (cons 2 nil).
+  Definition l_dyn : Any := cons 1 (cons 2 nil).
 
   Definition c_nat : list nat := @cons nat 1 nil.
-  Definition c_dyn : list nat := @cons Dyn 1 nil.
+  Definition c_dyn : list nat := @cons Any 1 nil.
 
   Definition s_bool : option bool := @Some bool false.
-  Definition s_dyn : option bool := @Some Dyn false.
+  Definition s_dyn : option bool := @Some Any false.
 
   (* the given argument wins over what the expected type fixes for it *)
   Definition e_nat := @eq_refl _ 0 : 0 = 0.
   Definition e_dyn := @eq_refl _ unk : 0 = unk.
 
-  Definition m_list : list Dyn := cons 1 (cons true nil).
-  Definition m_dyn : Dyn := cons 1 (cons true nil).
+  Definition m_list : list Any := cons 1 (cons true nil).
+  Definition m_dyn : Any := cons 1 (cons true nil).
 
   Definition b_nat : nat * nat := both 1 1.
-  Definition b_pair : Dyn * Dyn := both 1 1.
-  Definition b_dyn : Dyn := both 1 1.
+  Definition b_pair : Any * Any := both 1 1.
+  Definition b_dyn : Any := both 1 1.
 
   (* annotated binders: the annotation is consistent with the domain *)
   Definition f_nat : nat -> nat := fun x : nat => x.
-  Definition f_dom : Dyn -> nat := fun x : nat => x.
-  Definition f_fun : Dyn -> Dyn := fun x : nat => x.
-  Definition f_dyn : Dyn := fun x : nat => x.
-  Goal f_dom (cast nat Dyn 3) = 3. Proof. reflexivity. Qed.
-  Goal f_dom (cast bool Dyn true) = raise. Proof. reflexivity. Qed.
+  Definition f_dom : Any -> nat := fun x : nat => x.
+  Definition f_fun : Any -> Any := fun x : nat => x.
+  Definition f_dyn : Any := fun x : nat => x.
+  Goal f_dom (cast nat Any 3) = 3. Proof. reflexivity. Qed.
+  Goal f_dom (cast bool Any true) = raise. Proof. reflexivity. Qed.
 
   (* still static errors: inconsistent annotations *)
   Fail Definition f_bad : nat -> nat := fun x : bool => x.
@@ -230,12 +230,12 @@ Goal apply3 S = 4. Proof. reflexivity. Qed.
 Goal apply3 negb = raise. Proof. reflexivity. Qed.
 
 (** round trips through the unknown type *)
-Goal cast Dyn nat (cast nat Dyn 3) = 3. Proof. reflexivity. Qed.
-Goal cast Dyn bool (cast nat Dyn 3) = raise. Proof. reflexivity. Qed.
-Goal cast Dyn Dyn (cast nat Dyn 3) = cast nat Dyn 3. Proof. reflexivity. Qed.
+Goal cast Any nat (cast nat Any 3) = 3. Proof. reflexivity. Qed.
+Goal cast Any bool (cast nat Any 3) = raise. Proof. reflexivity. Qed.
+Goal cast Any Any (cast nat Any 3) = cast nat Any 3. Proof. reflexivity. Qed.
 
 (** parametrized inductive types *)
-Definition l : list Dyn := @cons Dyn 1 (@cons Dyn true nil).
+Definition l : list Any := @cons Any 1 (@cons Any true nil).
 Goal (l : list nat) = cons 1 (cons raise nil). Proof. reflexivity. Qed.
 
 (** functions between Pi types are wrapped lazily *)
@@ -252,20 +252,20 @@ Goal cast (nat -> nat) nat S = raise. Proof. reflexivity. Qed.
     the environment: the rules must keep its variable apart from the
     variables of the environment. *)
 Definition under_binder : forall m : nat, cast nat nat m = m := fun m => eq_refl.
-Definition under_binder_dyn : forall m : nat, cast Dyn nat (cast nat Dyn m) = m :=
+Definition under_binder_dyn : forall m : nat, cast Any nat (cast nat Any m) = m :=
   fun m => eq_refl.
 Definition under_binder_list :
-  forall m : nat, cast (list Dyn) (list nat) (cons (cast nat Dyn m) nil) = cons m nil :=
+  forall m : nat, cast (list Any) (list nat) (cons (cast nat Any m) nil) = cons m nil :=
   fun m => eq_refl.
 Lemma under_binder_fun : forall (f : nat -> nat) (n : nat),
-  cast (Dyn -> Dyn) (nat -> nat) (cast (nat -> nat) (Dyn -> Dyn) f) n = f n.
+  cast (Any -> Any) (nat -> nat) (cast (nat -> nat) (Any -> Any) f) n = f n.
 Proof. intros. reflexivity. Qed.
 
 (** * Primitive types *)
 
 Module Prim.
   From Corelib Require Import PrimInt63 PrimFloat PrimString PrimArray.
-  Goal cast Dyn int (cast int Dyn 3%uint63) = 3%uint63. Proof. reflexivity. Qed.
+  Goal cast Any int (cast int Any 3%uint63) = 3%uint63. Proof. reflexivity. Qed.
   Goal cast int nat 3%uint63 = raise. Proof. reflexivity. Qed.
   Goal cast float int 1.5%float = raise. Proof. reflexivity. Qed.
   Goal cast string int "a"%pstring = raise. Proof. reflexivity. Qed.
@@ -290,7 +290,7 @@ Fail Definition down (T : Type@{i}) : Type@{j} := T.
 Definition up (T : Type@{j}) : Type@{i} := T.
 
 (** Codomains are cumulative, as in Rocq. *)
-Definition const_nat (_ : Dyn) : Set := nat.
+Definition const_nat (_ : Any) : Set := nat.
 Definition cumul_codomain : nat -> Type := const_nat.
 Fail Definition bad_codomain : nat -> Set := (fun _ : nat => nat : Type).
 
@@ -350,8 +350,8 @@ Qed.
 
 (** * Normalization is lost: Omega is well typed *)
 
-Definition delta := fun x : Dyn => x x.
-Definition omega : Dyn := delta delta.
+Definition delta := fun x : Any => x x.
+Definition omega : Any := delta delta.
 
 (* Reduction and conversion stop with an error after [Gradual Steps]
    gradual steps (100000 by default) instead of hanging. *)
@@ -381,4 +381,4 @@ Print Assumptions succ_dyn.
 
 (** * Gradual typing can be switched off *)
 Unset Gradual Typing.
-Fail Definition succ_static (x : Dyn) : nat := x + 1.
+Fail Definition succ_static (x : Any) : nat := x + 1.

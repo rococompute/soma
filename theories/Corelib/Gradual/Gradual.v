@@ -21,7 +21,7 @@
       precise types), and
     - (strong) normalization.
     This development keeps the first two and gives up normalization: the
-    unknown type [Dyn] can contain [Dyn -> Dyn] in the same universe, so
+    unknown type [Any] can contain [Any -> Any] in the same universe, so
     [omega] below is well-typed and loops.
 
     The kernel only knows three axioms, registered below, and reduces them
@@ -57,7 +57,7 @@ Register cast as kernel.gradual_cast.
 
 (** The unknown type, [?_Type] in GCIC. Each occurrence lives in a fresh
     universe. *)
-Abbreviation Dyn := (unknown Type).
+Abbreviation Any := (unknown Type).
 
 (** The unknown term at the expected type. *)
 Abbreviation unk := (unknown _).

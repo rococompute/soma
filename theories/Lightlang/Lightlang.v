@@ -17,7 +17,7 @@
 Require Export Corelib.Gradual.Gradual.
 
 (** String literals: ["..."] is a Stdlib [string], a list of ascii
-    characters, everywhere, including where a [Dyn] is expected, so that
+    characters, everywhere, including where an [Any] is expected, so that
     Stdlib's string functions apply to it. Only [string] and [append] are
     exported: Stdlib's [length] or [get] on strings would shadow the ones
     on lists, and opening [string_scope] would make [++] append strings

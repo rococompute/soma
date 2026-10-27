@@ -5,9 +5,9 @@ precise, and check that the programs still compile and compute the same.
 For each file of the corpus (ordinary typed Rocq, compiled with gradual
 typing on), every type annotation is a site: binders `(x : T)` (also in
 `fun` and constructors) and return types `: T :=`. A mutant replaces one
-site by `Dyn`, or one base type inside it (`list nat` -> `list Dyn`); there
+site by `Any`, or one base type inside it (`list nat` -> `list Any`); there
 are also mutants with every site of a definition, or of the whole file, set
-to `Dyn`. Each mutant is the whole file with that change, so the uses of a
+to `Any`. Each mutant is the whole file with that change, so the uses of a
 mutated definition must keep compiling too.
 
 Graduality (Lennon-Bertrand et al., GCIC) predicts, for these programs:
@@ -98,23 +98,23 @@ def sites(text, start, end):
     return found
 
 def base_types(text):
-    """Types without arguments, which an inner mutation may replace by Dyn
-    (an applied type constructor cannot be: [Dyn A] is not a type)."""
+    """Types without arguments, which an inner mutation may replace by Any
+    (an applied type constructor cannot be: [Any A] is not a type)."""
     names = {"nat", "bool", "unit"}
     names |= set(re.findall(r"(?:Inductive|Record)\s+(" + IDENT + r")\s*:?=", text))
     return names
 
 def variants(text, site, types):
-    """Less precise replacements of the type at [site]: Dyn, and each base
-    type occurrence inside it replaced by Dyn."""
+    """Less precise replacements of the type at [site]: Any, and each base
+    type occurrence inside it replaced by Any."""
     s, e, _ = site
     typ = text[s:e]
-    res = [(" Dyn ", "whole")]
+    res = [(" Any ", "whole")]
     toks = list(re.finditer(IDENT, typ))
     if len(toks) > 1:
         for t in toks:
             if t.group(0) in types:
-                res.append((typ[:t.start()] + "Dyn" + typ[t.end():], "inner " + t.group(0)))
+                res.append((typ[:t.start()] + "Any" + typ[t.end():], "inner " + t.group(0)))
     return res
 
 # ---------------------------------------------------------------- running
@@ -188,13 +188,13 @@ def mutants(text):
         if len(ss) > 1:
             t = text
             for site in sorted(ss, reverse=True):
-                t = t[:site[0]] + " Dyn " + t[site[1]:]
-            res.append(("definition", "%s: all %d annotations -> Dyn" % (name, len(ss)), t))
+                t = t[:site[0]] + " Any " + t[site[1]:]
+            res.append(("definition", "%s: all %d annotations -> Any" % (name, len(ss)), t))
     all_sites = sorted([x for _, _, ss in per_sentence for x in ss], reverse=True)
     t = text
     for site in all_sites:
-        t = t[:site[0]] + " Dyn " + t[site[1]:]
-    res.append(("file", "all %d annotations of the file -> Dyn" % len(all_sites), t))
+        t = t[:site[0]] + " Any " + t[site[1]:]
+    res.append(("file", "all %d annotations of the file -> Any" % len(all_sites), t))
     return res
 
 def main():
@@ -234,18 +234,18 @@ def main():
 
 # Why a mutant is rejected, from the error message.
 CAUSES = [
-    ("structural recursion on a Dyn argument",
-     r'Recursive definition on "Dyn"|Cannot guess decreasing argument'),
-    ("recursive call on a cast (a constructor field made Dyn)",
+    ("structural recursion on an Any argument",
+     r'Recursive definition on "Any"|Cannot guess decreasing argument'),
+    ("recursive call on a cast (a constructor field made Any)",
      r"principal argument equal to \"cast"),
     ("an implicit argument that nothing determines (no argument or expected type fixes it)",
      r"unresolved implicit arguments|Cannot infer the implicit parameter"),
     ("an argument of an inductive type left undetermined",
      r"Cannot infer the \w+ argument of the inductive type"),
-    ("match or if on a scrutinee of type Dyn",
+    ("match or if on a scrutinee of type Any",
      r"which is not a \(co-\)inductive type"),
     ("dependent match on a cast to an indexed family (index or return type not inferred)",
-     r"match cast Dyn|cast Dyn \w+ \?u|The term \"vnil\" has type"),
+     r"match cast Any|cast Any \w+ \?u|The term \"vnil\" has type"),
 ]
 
 def cause(err):
