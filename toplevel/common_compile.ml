@@ -46,8 +46,13 @@ let ensure_exists f =
   if not (Sys.file_exists f) then
     fatal_error (hov 0 (str "Can't find file" ++ spc () ++ str f))
 
-let ensure_exists_with_prefix ~src ~tgt:f_out ~src_ext ~tgt_ext =
-  let long_f_dot_src = ensure ~ext:src_ext ~src ~tgt:src in
+let ensure_source f =
+  let long_f = CUnix.source_file ~exists:Sys.file_exists f in
+  if long_f <> f then warn_file_no_extension (f, Filename.extension long_f);
+  long_f
+
+let ensure_exists_with_prefix ~src ~tgt:f_out ~tgt_ext =
+  let long_f_dot_src = ensure_source src in
   ensure_exists long_f_dot_src;
   let long_f_dot_tgt = match f_out with
     | None -> safe_chop_extension long_f_dot_src ^ tgt_ext

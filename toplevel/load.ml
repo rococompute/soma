@@ -27,7 +27,7 @@ let load_init_file opts ~state =
 let load_vernacular opts ~state =
   List.fold_left
     (fun state f_in ->
-      let s = Loadpath.locate_file f_in in
+      let s = Loadpath.locate_source_file f_in in
       let load_vernac f = Vernac.load_vernac ~check:true ~state f in
       load_vernac s
     ) state opts.pre.load_vernacular_list

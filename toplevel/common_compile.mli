@@ -19,12 +19,13 @@ val ensure : ext:string -> src:string -> tgt:string -> string
 (* [ensure_exists f] fails if f does not exist *)
 val ensure_exists : string -> unit
 
-(* [ensure_exists_with_prefix src tgt src_ext tgt_ext] checks that [src] exists
-   (if needed adding the extension) and that [tgt] exists (if needed adding the
-   extension) and returns [src] and [tgt] with their respective extensions.
+(* [ensure_exists_with_prefix src tgt tgt_ext] checks that [src] exists
+   (if needed adding a source extension, see [CUnix.source_file]) and that
+   [tgt] exists (if needed adding the extension) and returns [src] and [tgt]
+   with their respective extensions.
    If [tgt] is [None], then it defaults to [src] (with [tgt_ext] as extension).
-   [src_ext] and [tgt_ext] are expected to begin with dot, eg [".v"]. *)
-val ensure_exists_with_prefix : src:string -> tgt:string option -> src_ext:string -> tgt_ext:string -> string * string
+   [tgt_ext] is expected to begin with dot, eg [".vo"]. *)
+val ensure_exists_with_prefix : src:string -> tgt:string option -> tgt_ext:string -> string * string
 
 (* [chop_extension f] is like Filename.chop_extension but fail safe *)
 val safe_chop_extension : string -> string

@@ -74,6 +74,17 @@ let canonical_path_name p =
 let make_suffix name suffix =
   if Filename.check_suffix name suffix then name else (name ^ suffix)
 
+let source_extensions = [".light"; ".v"]
+
+let has_source_extension name =
+  List.exists (Filename.check_suffix name) source_extensions
+
+let source_file ~exists name =
+  if has_source_extension name then name
+  else match List.find_opt (fun ext -> exists (name ^ ext)) source_extensions with
+    | Some ext -> name ^ ext
+    | None -> name ^ List.hd source_extensions
+
 let correct_path f dir =
   if Filename.is_relative f then Filename.concat dir f else f
 

@@ -455,9 +455,8 @@ let rec synterp ~intern ?loc ~atts v =
 and synterp_load ~intern verbosely fname =
   let fname =
     Envars.expand_path_macros ~warn:(fun x -> Feedback.msg_warning (Pp.str x)) fname in
-  let fname = CUnix.make_suffix fname ".v" in
   let input =
-    let longfname = Loadpath.locate_file fname in
+    let longfname = Loadpath.locate_source_file fname in
     let in_chan = Util.open_utf8_file_in longfname in
     Procq.Parsable.make ~loc:Loc.(initial (InFile { dirpath=None; file=longfname}))
         (Gramlib.Stream.of_channel in_chan) in

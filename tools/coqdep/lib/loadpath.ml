@@ -120,6 +120,8 @@ let rec get_extension f = function
   | s :: _ when Filename.check_suffix f s -> (Filename.chop_suffix f s, s)
   | _ :: l -> get_extension f l
 
+let source_file base = CUnix.source_file ~exists:Sys.file_exists base
+
 (** Compute the suffixes of a logical path together with the length of the missing part *)
 let rec suffixes full = function
   | [] -> assert false
@@ -267,8 +269,8 @@ let add_coqlib_known st recur root phys_dir log_dir f =
         add_paths recur root st.State.coqlibother phys_dir log_dir f
 
 let add_known st recur root phys_dir log_dir f =
-  match get_extension f [".v"; ".vo"; ".vos"] with
-    | (basename,".v") ->
+  match get_extension f (CUnix.source_extensions @ [".vo"; ".vos"]) with
+    | (basename, ext) when List.mem ext CUnix.source_extensions ->
         add_paths recur root st.State.vfiles phys_dir log_dir basename
     | (basename, (".vo" | ".vos")) when not st.State.boot ->
         add_paths recur root st.State.vfiles phys_dir log_dir basename

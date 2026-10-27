@@ -83,7 +83,7 @@ let warn_if_clash ?(what=Library) exact file dir f1 = function
       let fl = List.map Loadpath.Filename.repr fl in
       let f =
         match what with
-        | Library -> Filename.basename f1 ^ ".v"
+        | Library -> Filename.basename (Loadpath.source_file f1)
         | External -> Filename.basename f1 in
       let what = str_of_what what in
       let d1 = Filename.dirname f1 in
@@ -196,7 +196,7 @@ let rec find_dependencies ({State.vAccu; separator_hack; loadpath} as st) basena
   let add_dep_other s = add_dep (Dep_info.Dep.Other s) in
 
   (* Reading file contents *)
-  let f = basename ^ ".v" in
+  let f = Loadpath.source_file basename in
   with_in_descr ~fname:f @@ fun chan ->
   (* For lexing efficiency purposes, we ignore the positions in this function.
      We can still get accurate character counts, we're just missing newline info. *)
@@ -258,7 +258,7 @@ let rec find_dependencies ({State.vAccu; separator_hack; loadpath} as st) basena
          | Some l ->
            let decl canon =
              let canon = Loadpath.Filename.repr canon in
-             add_dep_other (Format.sprintf "%s.v" canon);
+             add_dep_other (Loadpath.source_file canon);
              let deps = find_dependencies st canon in
              List.iter add_dep deps
            in
@@ -308,8 +308,8 @@ let rec treat_file ~separator_hack vAccu old_dirname old_name =
        Array.fold_left (fun vAccu x -> treat_file ~separator_hack vAccu (Some newdirname) x) vAccu
          (Sys.readdir complete_name))
   | Unix.S_REG ->
-    (match Loadpath.get_extension name [".v"] with
-     | base,".v" ->
+    (match Loadpath.get_extension name CUnix.source_extensions with
+     | base, ext when List.mem ext CUnix.source_extensions ->
        let name = file_name ~separator_hack base dirname in
        let filename_concat = filename_concat ~separator_hack in
        let absname = Loadpath.absolute_file_name ~filename_concat base dirname in
@@ -328,7 +328,7 @@ let sort {State.vAccu; separator_hack; loadpath} =
     let file = canonize ~separator_hack vAccu file in
     if not (Hashtbl.mem seen file) then begin
       Hashtbl.add seen file ();
-      let cin = open_in (file ^ ".v") in
+      let cin = open_in (Loadpath.source_file file) in
       let lb = Lexing.from_channel cin in
       try
         while true do
@@ -344,7 +344,7 @@ let sort {State.vAccu; separator_hack; loadpath} =
         done
       with Lexer.Fin_fichier ->
         close_in cin;
-        Format.printf "%s.v " file
+        Format.printf "%s " (Loadpath.source_file file)
     end
   in
   List.iter (fun name -> loop (Loadpath.Filename.make name)) vAccu.acc

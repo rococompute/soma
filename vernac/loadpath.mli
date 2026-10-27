@@ -51,6 +51,10 @@ val locate_file : string -> string
 (** Locate a file among the registered paths. Do not use this function, as
     it does not respect the visibility of paths. *)
 
+val locate_source_file : string -> string
+(** Like [locate_file], adding a source extension (see [CUnix.source_file])
+    when [fname] has none. *)
+
 (** {6 Locate a library in the load path } *)
 module Error : sig
   type t = LibUnmappedDir | LibNotFound

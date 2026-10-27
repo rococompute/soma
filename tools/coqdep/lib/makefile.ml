@@ -102,7 +102,7 @@ let declare_ml_to_file file (decl : string) =
     CErrors.user_err Pp.(str "Failed to resolve plugin: " ++ str decl)
 
 let print_dep fmt { Dep_info.name; deps } =
-  let vfile = name^".v" in
+  let vfile = Loadpath.source_file name in
   let deps =
     let visited_ml = ref CString.Set.empty in
     let expand_package_dep package =
@@ -126,10 +126,11 @@ let print_dep fmt { Dep_info.name; deps } =
   in
 
   let ename = escape name in
+  let evfile = escape vfile in
     let glob = if !option_noglob then "" else ename^".glob " in
-  fprintf fmt "%s.vo %s%s.v.beautified %s.required_vo: %s.v %a\n" ename glob ename ename ename
+  fprintf fmt "%s.vo %s%s.beautified %s.required_vo: %s %a\n" ename glob evfile ename evfile
     (pp_dependency_list ~suffix:".vo") deps;
   if !option_write_vos then
-    fprintf fmt "%s.vos %s.vok %s.required_vos: %s.v %a\n" ename ename ename ename
+    fprintf fmt "%s.vos %s.vok %s.required_vos: %s %a\n" ename ename ename evfile
       (pp_dependency_list ~suffix:".vos") deps;
   fprintf fmt "%!"

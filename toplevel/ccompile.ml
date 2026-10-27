@@ -28,14 +28,14 @@ let compile opts stm_options injections copts ~f_in ~f_out =
     | NativeOff -> false | NativeOn {ondemand} -> not ondemand
   in
   let mode = copts.compilation_mode in
-  let ext_in, ext_out =
+  let ext_out =
      match mode with
-     | BuildVo -> ".v", ".vo"
-     | BuildVos -> ".v", ".vos"
-     | BuildVok -> ".v", ".vok"
+     | BuildVo -> ".vo"
+     | BuildVos -> ".vos"
+     | BuildVok -> ".vok"
   in
   let long_f_dot_in, long_f_dot_out =
-    ensure_exists_with_prefix ~src:f_in ~tgt:f_out ~src_ext:ext_in ~tgt_ext:ext_out in
+    ensure_exists_with_prefix ~src:f_in ~tgt:f_out ~tgt_ext:ext_out in
   let beautify = copts.beautify in
   let () = if beautify then CLexer.record_comments := true in
   match mode with

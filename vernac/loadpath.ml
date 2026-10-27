@@ -174,6 +174,14 @@ let locate_file fname =
     System.find_file_in_path ~warn:(not !Flags.quiet) paths fname in
   longfname
 
+let locate_source_file fname =
+  let paths = List.map physical !load_paths in
+  let exists f =
+    if Filename.is_implicit f then
+      List.exists (fun p -> System.file_exists_respecting_case p f) paths
+    else Sys.file_exists f in
+  locate_file (CUnix.source_file ~exists fname)
+
 (************************************************************************)
 (*s Locate absolute or partially qualified library names in the path *)
 
