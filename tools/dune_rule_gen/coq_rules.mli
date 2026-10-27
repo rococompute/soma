@@ -18,7 +18,8 @@ module Theory : sig
     ; implicit : bool
     (** Use -R or -Q *)
     ; deps : string list
-    (** Adds as -Q user-contrib/X X *)
+    (** Adds as -Q user-contrib/X X, or -Q dir X for X:dir, a theory of
+        this tree *)
     }
 end
 

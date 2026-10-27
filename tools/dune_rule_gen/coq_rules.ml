@@ -101,14 +101,21 @@ module Theory = struct
     ; implicit : bool
     (** Use -R or -Q *)
     ; deps : string list;
-    (** Adds as -Q user-contrib/X X *)
+    (** Adds as -Q user-contrib/X X, or -Q dir X for X:dir, a theory of
+        this tree *)
     }
 
   let args { directory; dirname; implicit; deps } =
     let barg = if implicit then "-R" else "-Q" in
     Arg.[ A barg; Path directory; A (String.concat "." dirname) ]
     @ List.flatten (deps |> List.map (fun dep ->
-        Arg.[A "-Q"; Path (Path.make @@ "user-contrib"^Filename.dir_sep^dep); A dep]))
+        match String.index_opt dep ':' with
+        | Some i ->
+          let name = String.sub dep 0 i in
+          let dir = String.sub dep (i + 1) (String.length dep - i - 1) in
+          Arg.[A "-Q"; Path (Path.make dir); A name]
+        | None ->
+          Arg.[A "-Q"; Path (Path.make @@ "user-contrib"^Filename.dir_sep^dep); A dep]))
 
 end
 
@@ -217,7 +224,8 @@ let module_rule ~(cctx : Context.t) coq_module =
   let vfile_deps = List.map (path_of_dep ~vo_ext) vfile_deps in
   (* handle -noinit, inject prelude.vo if needed *)
   let boot_flags, boot_deps = boot_module_setup ~cctx coq_module in
-  let coqc_flags = cctx.flags.loadpath @ cctx.flags.user @ cctx.flags.common @ cctx.flags.native_coqc in
+  (* user flags after the common -w +default, so a theory can turn warnings off *)
+  let coqc_flags = cctx.flags.loadpath @ cctx.flags.common @ cctx.flags.user @ cctx.flags.native_coqc in
   let vfile_deps, flags = boot_deps @ vfile_deps, boot_flags @ coqc_flags in
   let vfile_base = Path.basename vfile in
   let timeflags = if Coq_module.with_timing then
@@ -306,8 +314,7 @@ let package_install_rule ~(cctx : Context.t) coq_module =
   let tname, rule = cctx.theory.dirname, cctx.rule in
   let dst_base = match tname with
     | ["Corelib"] -> "rocq.d"
-    | ["Ltac2"] -> Filename.concat "ltac2" "rocq.d"
-    | _ -> invalid_arg "Unsupported theory name (not Corelib or Ltac2)."
+    | _ -> Filename.concat (String.lowercase_ascii (String.concat "." tname)) "rocq.d"
   in
   let files =
     Coq_module.install_files ~tname ~rule coq_module

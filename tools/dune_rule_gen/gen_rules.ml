@@ -41,6 +41,7 @@ type args = {
   rule : Coq_module.Rule_type.t;
   split : bool;
   noinit : bool;
+  implicit_theory : bool;
   user_flags : Arg.t list;
   dependencies : string list;
 }
@@ -54,6 +55,7 @@ let parse_args () : args =
                     async = false;
                     split = false;
                     noinit = false;
+                    implicit_theory = false;
                     rule = Coq_module.Rule_type.Regular { native };
                     user_flags = [];
                     dependencies = [];
@@ -65,6 +67,9 @@ let parse_args () : args =
       | "-split" :: rest -> parse { a with split = true } rest
       | "-dep" :: d :: rest -> parse { a with dependencies = d :: a.dependencies } rest
       | "-noinit" :: rest -> parse { a with noinit = true } rest
+      (* -R instead of -Q, for theories that Require their files by short names *)
+      | "-implicit" :: rest -> parse { a with implicit_theory = true } rest
+      | "-arg" :: f :: rest -> parse { a with user_flags = a.user_flags @ [Arg.A f] } rest
       (* Dune will sometimes pass this option as "" *)
       | "" :: rest -> parse a rest
       | unknown :: _ -> raise (Invalid_argument unknown)
@@ -77,7 +82,7 @@ let ppi fmt = List.iter (Dune_file.Install.pp fmt)
 
 let main () =
 
-  let { tname; base_dir; async; rule; user_flags; split; noinit; dependencies } = parse_args () in
+  let { tname; base_dir; async; rule; user_flags; split; noinit; implicit_theory; dependencies } = parse_args () in
   let root_lvl = List.length (String.split_on_char '/' base_dir) in
 
   let corelib =
@@ -91,7 +96,7 @@ let main () =
       if noinit then CErrors.user_err Pp.(str "Corelib handles -noinit automatically.");
       Coq_rules.Boot_type.Corelib, true
     end
-    else Coq_rules.Boot_type.Regular { corelib; noinit }, false
+    else Coq_rules.Boot_type.Regular { corelib; noinit }, implicit_theory
   in
 
   (* Rule generation *)

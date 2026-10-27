@@ -131,8 +131,8 @@ DUNESTRAPOPT=--root .
 # We regenerate always as to correctly track deps, can do better
 # We do a single call to dune as to avoid races and locking
 ifneq ($(COQ_SPLIT),) # avoid depending on local rocq-runtime
-_build/default/corelib_dune_split _build/default/ltac2_dune_split .dune-stamp: FORCE
-	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune_split ltac2_dune_split
+_build/default/corelib_dune_split _build/default/ltac2_dune_split _build/default/stdlib_dune_split .dune-stamp: FORCE
+	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune_split ltac2_dune_split stdlib_dune_split
 	touch .dune-stamp
 
 theories/Corelib/dune: .dune-stamp
@@ -140,9 +140,12 @@ theories/Corelib/dune: .dune-stamp
 
 theories/Ltac2/dune: .dune-stamp
 	cp -a _build/default/ltac2_dune_split $@ && chmod +w $@
+
+theories/Stdlib/dune: .dune-stamp
+	cp -a _build/default/stdlib_dune_split $@ && chmod +w $@
 else
-_build/default/corelib_dune _build/default/ltac2_dune .dune-stamp: FORCE
-	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune ltac2_dune
+_build/default/corelib_dune _build/default/ltac2_dune _build/default/stdlib_dune .dune-stamp: FORCE
+	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune ltac2_dune stdlib_dune
 	touch .dune-stamp
 
 theories/Corelib/dune: .dune-stamp
@@ -150,11 +153,14 @@ theories/Corelib/dune: .dune-stamp
 
 theories/Ltac2/dune: .dune-stamp
 	cp -a _build/default/ltac2_dune $@ && chmod +w $@
+
+theories/Stdlib/dune: .dune-stamp
+	cp -a _build/default/stdlib_dune $@ && chmod +w $@
 endif
 
 FORCE: ;
 
-DUNE_FILES=theories/Corelib/dune theories/Ltac2/dune
+DUNE_FILES=theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune
 
 dunestrap: $(DUNE_FILES)
 
@@ -223,7 +229,7 @@ ireport:
 	dune build $(DUNEOPT) @install --profile=ireport
 
 clean:
-	rm -f .dune-stamp theories/Corelib/dune theories/Ltac2/dune
+	rm -f .dune-stamp theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune
 	dune clean
 
 # docgram

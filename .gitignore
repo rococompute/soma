@@ -164,4 +164,5 @@ bin
 .dune-stamp
 /theories/Corelib/dune
 /theories/Ltac2/dune
+/theories/Stdlib/dune
 /test-suite/test_suite_config.inc
