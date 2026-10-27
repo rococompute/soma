@@ -1,4 +1,14 @@
-# The Rocq Prover
+# Lightlang
+
+Lightlang is this project. The kernel in this tree is a fork of the Rocq
+Prover (9.3.0) with gradual dependent types, GCIC^G: conservativity and
+graduality are kept, and normalization is sacrificed. See
+[GRADUAL.md](GRADUAL.md).
+
+Binaries, opam packages, and library names stay `rocq`. Those are the kernel
+you build.
+
+## The kernel
 
 [![GitLab CI][gitlab-badge]][gitlab-link]
 [![GitHub CI][gh-badge]][gh-link]
@@ -20,10 +30,6 @@
 
 [doi-badge]: https://zenodo.org/badge/DOI/10.5281/zenodo.15149628.svg
 [doi-link]: https://doi.org/10.5281/zenodo.15149628
-
-> **This is Gradual Rocq**, a fork implementing gradual dependent types
-> (GCIC^G: conservativity and graduality are kept, *normalization is
-> sacrificed*). See [GRADUAL.md](GRADUAL.md).
 
 The Rocq Prover is an interactive theorem prover, or proof assistant. It provides a formal language to write
 mathematical definitions, executable algorithms and theorems together with an

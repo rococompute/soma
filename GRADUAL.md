@@ -1,7 +1,7 @@
-# Gradual Rocq: GCIC^G, the variant that gives up normalization
+# Lightlang: GCIC^G, the variant that gives up normalization
 
-This fork of the Rocq Prover (based on 9.3.0) adds **gradual dependent
-types**, following
+Lightlang's kernel is this fork of the Rocq Prover (based on 9.3.0). It adds
+**gradual dependent types**, following
 
 > Meven Lennon-Bertrand, Kenji Maillard, Nicolas Tabareau, Éric Tanter.
 > *Gradualizing the Calculus of Inductive Constructions.* TOPLAS 44(2), 2022.
