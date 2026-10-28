@@ -1,0 +1,30 @@
+(** An HTTP server unikernel. [serve port handler] answers each TCP
+    connection on [port] with what [handler] makes of its request; the
+    unikernel goes on serving after [main] ends. A program that serves or
+    fetches gets a network stack, so it runs under solo5-vmnet, which gives
+    it an address on the Mac's vmnet network (printed when it starts):
+
+        rocq c examples/mirage_http_server.light
+        solo5-vmnet -- solo5-hvt -- examples/mirage_http_server.hvt
+
+    examples/mirage_fetch.light fetches from it. *)
+Require Import Mirage.
+
+two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.
+
+(** the reply to a request: its path, the time, and a random number *)
+answer request : io string :=
+  t <- now ;;
+  luck <- random 100 ;;
+  match t with
+  | (hour, minute, second) =>
+    print ("request for " ++ http_path request) ;;
+    ret (http_response (
+      "Hello from Lightlang! You asked for " ++ http_path request ++ " at " ++
+      two_digits hour ++ ":" ++ two_digits minute ++ ":" ++ two_digits second ++
+      " UTC. Your lucky number is " ++ to_string luck ++ "."))
+  end.
+
+main : io unit :=
+  print "serving HTTP on port 8080" ;;
+  serve 8080 answer.

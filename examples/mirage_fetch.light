@@ -1,0 +1,23 @@
+(** A unikernel that fetches a page over HTTP from the address it is given,
+    prints it, and exits: 0 when it got a reply, 1 when the connection
+    failed, 2 without an address. With mirage_http_server.hvt running at
+    192.168.105.46 (it prints its address):
+
+        rocq c examples/mirage_fetch.light
+        solo5-vmnet -- solo5-hvt -- examples/mirage_fetch.hvt --arg=192.168.105.46
+
+    [args] are the [--arg=...] given to the image, in order. *)
+Require Import Mirage.
+
+main : io unit :=
+  a <- args ;;
+  match a with
+  | [address] =>
+    print ("fetching http://" ++ address ++ ":8080/hello") ;;
+    reply <- fetch address 8080 (http_get "/hello") ;;
+    match reply with
+    | Some page => print page
+    | None => print "the connection failed" ;; exit 1
+    end
+  | _ => print "usage: --arg=ADDRESS" ;; exit 2
+  end.

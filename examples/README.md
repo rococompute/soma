@@ -25,10 +25,17 @@ _build/install/default/bin/rocq c examples/hello.light
   "`n * n` even means `n` even". `lia`, `nia` and `lra` do the arithmetic.
 - `sqrt2_irrational_bottom_up.light`: the same proof bottom up, as separate
   named lemmas proved before the theorem that uses them.
-- `mirage_hello.light`, `mirage_clock.light`: MirageOS unikernels. A program
-  that has `Require Import Mirage.` is built into an image, `<name>.hvt`, by
-  `rocq c`, and runs with `solo5-hvt -- <name>.hvt` (see the Mirage section
-  of GRADUAL.md).
+- `mirage_*.light`: MirageOS unikernels. A program that has
+  `Require Import Mirage.` is built into an image, `<name>.hvt`, by `rocq c`,
+  which says how to run it (see the Mirage section of GRADUAL.md):
+  - `mirage_hello.light`: console output and a countdown with `sleep`.
+  - `mirage_clock.light`: the time of day every second, `forever`.
+  - `mirage_http_server.light`: an HTTP server, with `serve`, `now` and
+    `random`.
+  - `mirage_fetch.light`: fetches a page from the server, with `args`,
+    `fetch` and exit codes.
+
+  `dev/mirage-check.sh` builds and runs them all.
 
 Outside a proof, `Definition` can be left out: `greet name := ...` is
 `Definition greet name := ...`. Recursive functions still need `Recursive`.

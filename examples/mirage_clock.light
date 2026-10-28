@@ -1,9 +1,28 @@
-(** A unikernel that never stops: [forever body] runs [body] again and
-    again. Recursion in Lightlang has to end, so an endless loop is an
-    [io] action, run by the image. Stop it with Ctrl-C, or with
-        solo5-hvt --cpu-limit=... *)
+(** A unikernel that never stops: every second, it prints the time of day.
+    [forever body] runs [body] again and again; recursion in Lightlang has
+    to end, so an endless loop is an [io] action, run by the image. Stop it
+    with Ctrl-C.
+
+        rocq c examples/mirage_clock.light
+        solo5-hvt -- examples/mirage_clock.hvt *)
 Require Import Mirage.
 
+two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.
+
+(** [t <- now ;; ...]: run [now], call its result [t], go on. *)
+tick : io unit :=
+  t <- now ;;
+  match t with
+  | (hour, minute, second) =>
+    print (two_digits hour ++ ":" ++ two_digits minute ++ ":" ++ two_digits second)
+  end.
+
 main : io unit :=
-  print "tick tock" ;;
-  forever (print "tick" ;; sleep 1).
+  print "the time, UTC:" ;;
+  forever (tick ;; sleep 1).
+
+(* console:
+   the time, UTC:
+   07:07:12
+   07:07:13
+   ... *)

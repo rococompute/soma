@@ -386,17 +386,34 @@ Extraction differs from the kernel in these ways:
 ## Mirage: programs as unikernels
 
 `theories/Lightlang/Mirage.v` (not in the prelude) makes a program a
-MirageOS unikernel. Its `main : io unit` says what the unikernel does, as
-data: `print s`, `sleep seconds`, `forever body`, `ret a`, sequenced with
-`a ;; b` and `x <- a ;; b` (`io_scope`). Building an `io` does nothing; the
-image runs it.
+MirageOS unikernel for Apple Silicon. Its `main : io unit` says what the
+unikernel does, as data; building an `io` does nothing, the image runs it.
+
+| Action | Type | What the image does |
+| --- | --- | --- |
+| `ret a` | `io A` | nothing; the result is `a` |
+| `a ;; b`, `x <- a ;; b` | | `a`, then `b` (`bind`, in `io_scope`) |
+| `print s` | `io unit` | a console line |
+| `sleep n` | `io unit` | waits `n` seconds (`Mirage_sleep`) |
+| `forever body` | `io A` | `body` again and again |
+| `now` | `io (nat * nat * nat)` | the UTC time of day, `(hour, minute, second)` |
+| `random n` | `io nat` | a random number below `n` (`Mirage_crypto_rng`) |
+| `args` | `io (list string)` | the `--arg=...` given to the image, in order |
+| `exit n` | `io A` | stops with exit code `n` |
+| `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |
+| `fetch address port request` | `io (option string)` | connects to the IP address, sends `request`, returns what comes back before the other side closes; `None` if the connection fails or nothing answers within 10 seconds |
+
+`http_response body`, `http_get path`, `http_path request` and `crlf` build
+and read HTTP. `++` appends strings wherever a `string` is expected (see
+`Strings.v`).
 
 ```coq
 Require Import Mirage.
 
 main : io unit :=
-  print "tick tock" ;;
-  forever (print "tick" ;; sleep 1).
+  print "serving HTTP on port 8080" ;;
+  serve 8080 (fun request =>
+    ret (http_response ("You asked for " ++ http_path request))).
 ```
 
 `rocq c prog.light` checks the program and, since it requires `Mirage`,
@@ -405,27 +422,45 @@ from `toplevel/ccompile.ml`):
 
 1. `main` must exist and have type `io unit`.
 2. `main` is extracted to `prog.ml` (strings as `char list`, with Stdlib's
-   `ExtrOcamlString`) in a MirageOS project, with a generated `config.ml`
-   (a `job`) and `unikernel.ml`, which runs an `io` with Lwt: `print` writes
-   a console line, `sleep` is `Mirage_sleep`, `forever` loops. `gradual.ml`
-   is the extracted gradual runtime, or a stand-in when the program has no
-   casts. A `raise` or `unk` that the image reaches is reported, and the
-   image exits with 1.
-3. The project is built for solo5's `hvt` target in the opam switch
+   `ExtrOcamlString`) into a MirageOS project with a generated `config.ml`,
+   `lightlang_rt.ml`, which runs an `io` with Lwt, and `unikernel.ml`.
+   `gradual.ml` is the extracted gradual runtime, or a stand-in when the
+   program has no casts. A `raise` or `unk` that the image reaches is
+   reported and the image exits with 1; in a `serve` handler, it ends that
+   connection only.
+3. A program that uses `serve` or `fetch` gets a network stack
+   (`generic_stackv4v6`, DHCP); the image runs under `solo5-vmnet`, which
+   gives it an address on the Mac's vmnet network (macOS 26 or later, no
+   root). The others have no network device.
+4. The project is built for solo5's `hvt` target in the opam switch
    `$LIGHTLANG_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
-   repository of solo5-mac, with `mirage`, `opam-monorepo` and `solo5-hvt`).
+   repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
+   `solo5-vmnet`), and `rocq c` says how to run the image.
 
-The project is kept in `$LIGHTLANG_MIRAGE_DIR`, or else
-`~/.cache/lightlang/mirage`, so `mirage configure` and fetching the
-dependencies (`make depends`, which needs the network) only happen the first
-time, about 15 s; later builds take about a second. Its `build.log` has the
-last build's output. `LIGHTLANG_MIRAGE_BUILD=0` skips the image.
+The projects are kept in `$LIGHTLANG_MIRAGE_DIR`, or else
+`~/.cache/lightlang/mirage` (`plain/` and `net/`), so `mirage configure`
+and fetching the dependencies (`make depends`, which needs the network) only
+happen the first time for each, about 15 s; later builds take about a
+second. Each one's `build.log` has its last build's output.
+`LIGHTLANG_MIRAGE_BUILD=0` skips the image.
+
+```sh
+rocq c examples/mirage_http_server.light
+solo5-vmnet -- solo5-hvt -- examples/mirage_http_server.hvt      # prints its IP
+rocq c examples/mirage_fetch.light
+solo5-vmnet -- solo5-hvt -- examples/mirage_fetch.hvt --arg=<that IP>
+```
+
+`dev/mirage-check.sh` builds the examples (`examples/mirage_*.light`), boots
+each image and checks its console and exit code, the network cases with one
+unikernel serving and another fetching from it.
 
 Lightlang's installed libraries can be required by their short name, as
 Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Mirage.` finds
 `Lightlang.Mirage`.
 
-Examples: `examples/mirage_hello.light`, `examples/mirage_clock.light`.
+Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
+and key-value stores, and state shared between `serve` handlers.
 
 ## Limitations and known gaps
 
