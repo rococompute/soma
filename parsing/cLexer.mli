@@ -45,6 +45,14 @@ val check_ident : string -> unit
 val is_ident : string -> bool
 val check_keyword : string -> unit
 
+(** Lightlang: the keywords of JSX, produced under [Set JSX Syntax] for
+    [<] directly followed by a letter, [</] directly followed by a letter,
+    [<>] and [</>]; source text cannot produce them otherwise. *)
+val jsx_tag_open : string
+val jsx_tag_close : string
+val jsx_fragment_open : string
+val jsx_fragment_close : string
+
 val add_keyword_tok : keyword_state -> 'c Tok.p -> keyword_state
 
 (** When string is not an ident, returns a keyword.

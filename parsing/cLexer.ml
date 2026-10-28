@@ -623,6 +623,32 @@ let parse_after_qmark ~diff_mode ttree loc bp s =
 (* between_commands is used to parse bullets and { and } differently depending on the context. *)
 let between_commands = ref true
 
+(* Lightlang: JSX. Under [Set JSX Syntax] (set by Lightlang's Reason
+   library), [<] directly followed by a letter opens a tag and [</]
+   directly followed by a letter closes one, so that [x < y] needs a space
+   or a non-letter after [<]; [<>] and [</>] open and close a fragment
+   ([!=] is Lightlang's "not equal"). Each is a keyword that source text
+   cannot produce: it ends with a zero-width space, so that it still prints
+   as [<], [</], [<>] and [</>]. *)
+let { Goptions.get = jsx_syntax } =
+  Goptions.declare_bool_option_and_ref ~stage:Summary.Stage.Synterp
+    ~key:["JSX"; "Syntax"] ~value:false ()
+
+let zero_width_space = "\u{200B}"
+let jsx_tag_open = "<" ^ zero_width_space
+let jsx_tag_close = "</" ^ zero_width_space
+let jsx_fragment_open = "<>" ^ zero_width_space
+let jsx_fragment_close = "</>" ^ zero_width_space
+
+let jsx_token s =
+  let is_letter = function 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false in
+  match Stream.npeek () 3 s with
+  | '<' :: '/' :: '>' :: _ -> Some (jsx_fragment_close, 3)
+  | '<' :: '/' :: c :: _ when is_letter c -> Some (jsx_tag_close, 2)
+  | '<' :: '>' :: _ -> Some (jsx_fragment_open, 2)
+  | '<' :: c :: _ when is_letter c -> Some (jsx_tag_open, 1)
+  | _ -> None
+
 let rec next_token ~diff_mode ttree loc s =
   let bp = Stream.count s in
   match Stream.peek () s with
@@ -698,6 +724,11 @@ let rec next_token ~diff_mode ttree loc s =
           between_commands := false;
           t
       end
+  | Some '<' when jsx_syntax () && Option.has_some (jsx_token s) ->
+      let tok, n = Option.get (jsx_token s) in
+      Stream.njunk () n s;
+      between_commands := false;
+      (KEYWORD tok, set_loc_pos loc bp (Stream.count s))
   | Some ('{' | '}' as c) ->
       Stream.junk () s;
       let ep = Stream.count s in

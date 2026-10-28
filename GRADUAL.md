@@ -475,6 +475,57 @@ Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Mirage.` finds
 Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
 and key-value stores, and state shared between `serve` handlers.
 
+## Reason: JSX components and apps
+
+`theories/Lightlang/Reason.v` (not in the prelude) brings ReasonReact's JSX
+to Lightlang, for components and apps that are checked, and can be proved
+about, but not yet compiled to JavaScript.
+
+```coq
+Require Import Reason.
+
+Greeting {name : string} := <p> "Hello, " name "!" </p>.
+page := <main> <Greeting name="world" /> <> <i> "a" </i> <b> "b" </b> </> </main>.
+render page.   (* "<main><p>Hello, world!</p><i>a</i><b>b</b></main>" *)
+```
+
+- `<tag attr=value ...> children </tag>` and `<tag ... />`, for a tag in
+  lowercase, are an HTML element, `node tag attributes children`. Its
+  attributes are strings, except `onClick=action` and the other `on...`,
+  events, whose value is an action: an element is an `element A`, `A` the
+  type of its actions.
+- `<Component prop=value ...> children </Component>` is
+  `Component (prop := value) ... (children := [...])`: a component's props
+  are implicit arguments, `Greeting {name : string} := ...`, so a missing or
+  unknown prop is an error when the program is checked. A prop of type
+  `Any` takes any value, checked when the element is evaluated.
+- `<> children </>` is a fragment.
+- An attribute value or a child is an atom or a term in braces,
+  `{to_string count}`; a string child is a text element (a coercion).
+- `render` turns an element into HTML, leaving events out.
+
+JSX is read by the lexer under `Set JSX Syntax`, which `Reason.v` exports
+(`parsing/cLexer.ml`, `parsing/g_constr.mlg`). With it, `<` directly
+followed by a letter opens a tag and `</` directly followed by a letter
+closes one, so a comparison is written `x < y` (`x<10` and `<=` are
+unaffected); `<>` and `</>` are a fragment, so "not equal" is `!=`. These
+are keywords that source text cannot produce otherwise (they end with a
+zero-width space), and other files are read as before.
+
+An app (`app S A`, made with `make_app init update view`) has a state of
+type `S`, starts at `init`, changes with `update : A -> S -> S` on each
+action, and shows it with `view : S -> element A`, whose events produce
+actions. `state_after app actions` is the state after a list of actions,
+what a theorem about the app's behavior is about.
+`examples/reason_counter.light` proves that a counter stays within its
+limit whatever buttons are clicked, with no type annotation outside the
+theorems.
+
+GCIC made an implicit argument `?` whenever its binder occurs nowhere in the
+rest of the function's type. This is now only for type arguments
+(`map {A B} (f : Any)`): an implicit value, like a prop, a type class
+instance or a Program proof, is inferred or an error, as in Rocq.
+
 ## Limitations and known gaps
 
 - **No mechanized proofs.** Graduality and conservativity come from the

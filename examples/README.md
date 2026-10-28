@@ -32,6 +32,12 @@ light run examples/hello.light
   "`n * n` even means `n` even". `lia`, `nia` and `lra` do the arithmetic.
 - `sqrt2_irrational_bottom_up.light`: the same proof bottom up, as separate
   named lemmas proved before the theorem that uses them.
+- `reason_components.light`: Reason React components with JSX
+  (`Require Import Reason.`): typed props, an untyped (`Any`) prop checked
+  when the page is built, a fragment, rendered to HTML.
+- `reason_counter.light`: a counter app (state, actions, a view) whose
+  count is proved to stay within a limit, whatever buttons are clicked;
+  only the theorems have types.
 - `mirage_*.light`: MirageOS unikernels. A program that has
   `Require Import Mirage.` is built into an image, `<name>.hvt`, by `light build`,
   which says how to run it (see the Mirage section of GRADUAL.md):

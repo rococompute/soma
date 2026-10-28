@@ -66,5 +66,7 @@ Entry term is
   | reference; univ_annot
   | string
   | test_array_opening; "["; "|"; array_elems; "|"; lconstr; type_cstr;
-    test_array_closing; "|"; "]"; univ_annot ] ]
+    test_array_closing; "|"; "]"; univ_annot
+  | jsx_tag_open; IDENT; LIST0 jsx_attr; jsx_tag_end
+  | jsx_fragment_open; LIST0 jsx_value; jsx_fragment_close ] ]
 

@@ -128,6 +128,71 @@ let sigref loc = Libnames.qualid_of_string ~loc "Corelib.Init.Specif.sig"
 
 let mk_delim ~loc c d = CAst.make ~loc @@ CDelimiters (fst d, snd d, c)
 
+(* Lightlang: JSX, under [Set JSX Syntax] (see CLexer), for Lightlang's
+   Reason library. The lexer produces the keywords [<], [</], [<>] and
+   [</>] of JSX, which these entries consume. *)
+let jsx_keyword entry_name kw =
+  Procq.Entry.(of_parser entry_name { parser_fun = fun kwstate strm ->
+      match Gramlib.LStream.peek kwstate strm with
+      | Some (Tok.KEYWORD s) when String.equal s kw -> Gramlib.LStream.junk kwstate strm; Ok ()
+      | _ -> Error () })
+
+let jsx_tag_open = jsx_keyword "jsx_tag_open" CLexer.jsx_tag_open
+let jsx_tag_close = jsx_keyword "jsx_tag_close" CLexer.jsx_tag_close
+let jsx_fragment_open = jsx_keyword "jsx_fragment_open" CLexer.jsx_fragment_open
+let jsx_fragment_close = jsx_keyword "jsx_fragment_close" CLexer.jsx_fragment_close
+
+let jsx_ref ~loc name =
+  CAst.make ~loc @@ CRef (qualid_of_string ~loc ("Lightlang.Reason." ^ name), None)
+
+let jsx_app ~loc f args = CAst.make ~loc @@ CApp (f, List.map (fun a -> (a, None)) args)
+
+let jsx_string ~loc s = CAst.make ~loc @@ CPrim (String s)
+
+(* [cons] is a cons of the list's element type, so that each item is checked
+   at that type (a string child becomes a text element by coercion) *)
+let jsx_list ~loc cons items =
+  List.fold_right (fun x l -> jsx_app ~loc (jsx_ref ~loc cons) [x; l]) items
+    (CAst.make ~loc @@ CRef (qualid_of_string ~loc "Corelib.Init.Datatypes.nil", None))
+
+(* <Greeting .../> is a component, <div .../> an element *)
+let jsx_is_component tag = tag <> "" && Char.uppercase_ascii tag.[0] = tag.[0] && tag.[0] <> '_'
+
+(* onClick=..., onChange=...: an event, whose value is an action *)
+let jsx_is_event name =
+  String.length name > 2 && String.sub name 0 2 = "on" &&
+  Char.uppercase_ascii name.[2] = name.[2]
+
+(* [<tag attrs/>] ([ending] is [None]) or [<tag attrs> children </close>] *)
+let jsx_element ~loc tag attrs ending =
+  let children = match ending with
+    | None -> None
+    | Some (children, close) ->
+      if not (String.equal close tag) then
+        CErrors.user_err ~loc (Pp.str ("The tag <" ^ tag ^ "> is closed by </" ^ close ^ ">."));
+      Some children
+  in
+  if jsx_is_component tag then
+    (* a component: its props are named arguments, children is one more *)
+    let named (name, v) = (v, Some (CAst.make ~loc (ExplByName (Id.of_string name)))) in
+    let props = List.map named attrs @
+      (match children with
+       | None -> []
+       | Some cs -> [named ("children", jsx_list ~loc "jsx_cons" cs)]) in
+    let f = CAst.make ~loc @@ CRef (qualid_of_string ~loc tag, None) in
+    if props = [] then f else CAst.make ~loc @@ CApp (f, props)
+  else
+    let attr (name, v) =
+      jsx_app ~loc (jsx_ref ~loc (if jsx_is_event name then "on" else "attr"))
+        [jsx_string ~loc name; v] in
+    jsx_app ~loc (jsx_ref ~loc "node")
+      [ jsx_string ~loc tag;
+        jsx_list ~loc "attr_cons" (List.map attr attrs);
+        jsx_list ~loc "jsx_cons" (Option.default [] children) ]
+
+let jsx_fragment ~loc children =
+  jsx_app ~loc (jsx_ref ~loc "fragment") [jsx_list ~loc "jsx_cons" children]
+
 }
 
 GRAMMAR EXTEND Gram
@@ -301,7 +366,24 @@ GRAMMAR EXTEND Gram
           CAst.make ~loc @@ CArray(u, t, def, ty)
         }
       | "`("; c = term LEVEL "200"; ")" ->
-        { CAst.make ~loc @@ CGeneralization (Explicit, c) } ] ]
+        { CAst.make ~loc @@ CGeneralization (Explicit, c) }
+      (* Lightlang: JSX, under [Set JSX Syntax] *)
+      | jsx_tag_open; tag = IDENT; attrs = LIST0 jsx_attr; e = jsx_tag_end ->
+        { jsx_element ~loc tag attrs e }
+      | jsx_fragment_open; cs = LIST0 jsx_value; jsx_fragment_close ->
+        { jsx_fragment ~loc cs } ] ]
+  ;
+  jsx_attr:
+    [ [ name = IDENT; "="; v = jsx_value -> { (name, v) } ] ]
+  ;
+  (* an attribute's value, or a child: an atom, or any term in braces *)
+  jsx_value:
+    [ [ "{"; c = lconstr; "}" -> { c }
+      | c = term LEVEL "0" -> { c } ] ]
+  ;
+  jsx_tag_end:
+    [ [ "/"; ">" -> { None }
+      | ">"; cs = LIST0 jsx_value; jsx_tag_close; close = IDENT; ">" -> { Some (cs, close) } ] ]
   ;
   if_dthen:
     [ [ mp = pattern; t = OPT ["in"; t = pattern -> { t } ]; rt = OPT case_type; "then"; c = lconstr ->

@@ -1,0 +1,37 @@
+(** Reason React components in Lightlang. [Require Import Reason.] turns on
+    JSX, as in ReasonReact: [<div className="x"> ... </div>] is an HTML
+    element, [<Greeting name="world" />] calls the component [Greeting]
+    with the prop [name], and [<> ... </>] is a fragment. Running the
+    program prints its last value, the page as HTML:
+
+        light run examples/reason_components.light
+
+    With JSX on, [<] directly followed by a letter opens a tag: a comparison
+    is written [x < y], and "not equal" is [!=]. *)
+Require Import Reason.
+
+(** A component's props are its arguments in braces. [name] is a [string]:
+    [<Greeting name=42 />] is rejected when the program is checked, and so
+    is [<Greeting />], without the prop. *)
+Greeting {name : string} := <p> "Hello, " name "!" </p>.
+
+(** A prop of type [Any] takes any value, as in JavaScript; it is checked
+    when the element is evaluated. [<Plus_one count="three" />] is
+    accepted, and becomes [raise] where [count + 1] needs a number. *)
+Plus_one {count : Any} := <span> {to_string (count + 1)} </span>.
+
+(** [{...}] holds any term; a string child is text. *)
+items := <> <li> "one" </li> <li> "two" </li> </>.
+
+page :=
+  <main>
+    <Greeting name="world" />
+    <Greeting name="Lightlang" />
+    <ul> items </ul>
+    <Plus_one count=41 />
+  </main>.
+
+(** [render] turns an element into HTML. *)
+render page.
+(* "<main><p>Hello, world!</p><p>Hello, Lightlang!</p>
+    <ul><li>one</li><li>two</li></ul><span>42</span></main>" *)
