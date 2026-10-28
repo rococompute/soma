@@ -69,6 +69,17 @@ _build/install/default/bin/light run my_file.light
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
 - `light help` lists the commands.
 
+A program `FILE.light` can have its lemmas and theorems in `FILE.proof`,
+next to it. Checking `FILE.light` (`rocq c`, so `light build` and `light
+run`) reads the program, then `FILE.proof` in the program's environment
+(`toplevel/ccompile.ml`): the proofs see what it defines and imports, JSX
+included, without importing anything. A proof that does not hold fails the
+build, with its location in `FILE.proof`, and no `.vo` or Mirage image is
+made; the theorems are part of the program's library. `light build
+FILE.proof` and `light run FILE.proof` stand for `FILE.light`.
+`examples/reason_counter.proof` and `examples/reason_components.proof` are
+examples; `test-suite/misc/lightlang_proof.sh` tests it.
+
 Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
 name without an extension, they look for `.light` first, then `.v`.

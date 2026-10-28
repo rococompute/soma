@@ -34,3 +34,15 @@ Delimit Scope lightlang_append_scope with str.
 Bind Scope lightlang_append_scope with string.
 #[global] Arguments Stdlib.Strings.String.append (_ _)%_str.
 Notation "s ++ t" := (append s t) : lightlang_append_scope.
+
+(** For proofs about strings built with [++]: it is associative, and [""]
+    is its unit. *)
+Lemma append_assoc : forall a b c : string, ((a ++ b) ++ c = a ++ (b ++ c))%str.
+Proof.
+  induction a as [|x a IH]; intros b c; simpl; [reflexivity | now rewrite IH].
+Qed.
+
+Lemma append_empty_r : forall a : string, (a ++ "")%str = a.
+Proof.
+  induction a as [|x a IH]; simpl; [reflexivity | now rewrite IH].
+Qed.

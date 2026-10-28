@@ -6,6 +6,10 @@
 
         light run examples/reason_components.light
 
+    What is proved about the components, such as [Greeting] escaping any
+    name, is in reason_components.proof, which building or running this
+    file checks after it.
+
     With JSX on, [<] directly followed by a letter opens a tag: a comparison
     is written [x < y], and "not equal" is [!=]. *)
 Require Import Reason.

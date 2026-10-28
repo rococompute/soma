@@ -42,6 +42,11 @@ Commands:
                          network), with ARGUMENTS (as --arg=...). Leaves no
                          files.
   help                   this message
+
+A program FILE.light can have its lemmas and theorems in FILE.proof, next
+to it: build and run read FILE.light, then check FILE.proof with the
+program's definitions in scope, and fail if a proof does not hold. FILE.proof
+can be given in place of FILE.light.
 |}
 
 let usage_error fmt =
@@ -89,6 +94,8 @@ let created ~before ~start ~source dir =
   modification_times dir
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
+      (* sources are not outputs, even when edited just before *)
+      not (List.exists (Filename.check_suffix name) [".light"; ".v"; ".proof"]) &&
       (time >= start || not (List.mem_assoc name before)))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare
@@ -110,14 +117,20 @@ let build ~verbose file args =
   else
     List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
       (lines output);
-  if code <> 0 then exit code;
   (* rocq c's files are of no use to a program once it is checked: they
-     are deleted. The rest (a Mirage image) is kept. *)
+     are deleted, also when checking failed partway. The rest (a Mirage
+     image) is kept. *)
   let compiled f = List.exists (Filename.check_suffix f) [".vo"; ".vos"; ".vok"; ".glob"; ".aux"] in
   List.iter (fun f ->
       if compiled f then begin Sys.remove f; print_endline ("Deleted " ^ f) end
       else print_endline f)
-    (created ~before ~start ~source:file dir)
+    (created ~before ~start ~source:file dir);
+  if code <> 0 then exit code
+
+(* FILE.proof, the properties of FILE.light, stands for the program *)
+let program_of file =
+  if Filename.check_suffix file ".proof" then Filename.chop_suffix file ".proof" ^ ".light"
+  else file
 
 let rec remove_tree path =
   if Sys.is_directory path then begin
@@ -205,7 +218,7 @@ let () =
       | file :: args ->
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
-        build ~verbose file args
+        build ~verbose (program_of file) args
     end
   | ["run"] -> usage_error "light run: no file given"
   | "run" :: file :: rest ->
@@ -217,5 +230,5 @@ let () =
     let args, image_args = split rest in
     let opts, args = parse_opts args in
     let () = init opts (file :: args) in
-    run file args image_args
+    run (program_of file) args image_args
   | command :: _ -> usage_error "light: unknown command %s" command

@@ -21,6 +21,25 @@ let source ldir file = Loc.InFile {
     file = file;
   }
 
+(* Lightlang: the properties of a program FILE.light (its lemmas and
+   theorems) are in FILE.proof next to it, which is read after the
+   program, in its environment: the proofs see what the program defines
+   and imports, and the program is only built once they are checked. *)
+let proof_file f =
+  if Filename.check_suffix f ".light" then
+    let p = Filename.chop_suffix f ".light" ^ ".proof" in
+    if Sys.file_exists p then Some p else None
+  else None
+
+let load_proof_file ~beautify ~check ~state ldir f =
+  match proof_file f with
+  | None -> state
+  | Some p ->
+    (* the .glob is the program's: positions in p would not be its *)
+    Dumpglob.push_output Dumpglob.NoGlob;
+    Fun.protect ~finally:Dumpglob.pop_output (fun () ->
+        Vernac.load_vernac ~beautify ~check ~state ~source:(source ldir p) p)
+
 (* Compile a vernac file *)
 let compile opts stm_options injections copts ~f_in ~f_out =
   let open Vernac.State in
@@ -62,6 +81,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let check = Stm.AsyncOpts.(stm_options.async_proofs_mode = APoff) in
       let source = source ldir long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
+      let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
       let fullstate = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs ~filename:long_f_dot_in fullstate;
       let () = Stm.join ~doc:state.doc in
@@ -92,6 +112,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let ldir = Stm.get_ldir ~doc:state.doc in
       let source = source ldir long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check:false ~source ~state long_f_dot_in in
+      let state = load_proof_file ~beautify ~check:false ~state ldir long_f_dot_in in
       let state = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs state ~filename:long_f_dot_in;
       let () = Stm.snapshot_vos ~doc ~output_native_objects ldir long_f_dot_out in

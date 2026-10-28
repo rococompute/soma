@@ -1,0 +1,33 @@
+(** What is proved about the counter of reason_counter.light. This file is
+    read after reason_counter.light, in its environment: [step], [limit],
+    [counter] and the Reason library are in scope, without importing
+    anything. Building or running reason_counter.light checks it, and fails
+    if a proof does not hold. *)
+
+(** each action keeps the count at most [limit] *)
+Lemma step_within_limit : forall action count, count <= limit -> step action count <= limit.
+Proof.
+  intros [] count H; unfold step; try lia.
+  destruct (Nat.ltb_spec count limit); lia.
+Qed.
+
+(** so does any list of actions, from any count at most [limit] *)
+Lemma replay_within_limit : forall clicks count,
+  count <= limit -> replay step count clicks <= limit.
+Proof.
+  induction clicks as [|action clicks IH]; intros count H; cbn [replay List.fold_left] in *.
+  - exact H.
+  - apply IH, step_within_limit, H.
+Qed.
+
+(** Whatever the clicks, the count stays at most [limit]. *)
+Theorem count_within_limit : forall clicks, state_after counter clicks <= limit.
+Proof.
+  intros clicks. exact (replay_within_limit clicks 0 ltac:(unfold limit; lia)).
+Qed.
+
+(** Whatever the clicks before it, [Reset] brings the count back to 0. *)
+Theorem reset_clears : forall clicks, state_after counter (clicks ++ [Reset]) = 0.
+Proof.
+  intros clicks. unfold state_after, replay. rewrite List.fold_left_app. reflexivity.
+Qed.

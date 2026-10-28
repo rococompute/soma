@@ -34,10 +34,15 @@ light run examples/hello.light
   named lemmas proved before the theorem that uses them.
 - `reason_components.light`: Reason React components with JSX
   (`Require Import Reason.`): typed props, an untyped (`Any`) prop checked
-  when the page is built, a fragment, rendered to HTML.
-- `reason_counter.light`: a counter app (state, actions, a view) whose
-  count is proved to stay within a limit, whatever buttons are clicked;
-  only the theorems have types.
+  when the page is built, a fragment, rendered to HTML. What is proved
+  about them (`Greeting` escapes any name) is in `reason_components.proof`.
+- `reason_counter.light`: a counter app (state, actions, a view);
+  `reason_counter.proof` proves that its count stays within a limit,
+  whatever buttons are clicked. Only the theorems have types.
+
+A program's lemmas and theorems can be in `NAME.proof` next to
+`NAME.light`: building or running the program reads it after the program
+and checks them, and fails if one does not hold.
 - `mirage_*.light`: MirageOS unikernels. A program that has
   `Require Import Mirage.` is built into an image, `<name>.hvt`, by `light build`,
   which says how to run it (see the Mirage section of GRADUAL.md):
