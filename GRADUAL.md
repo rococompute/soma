@@ -61,12 +61,35 @@ name without an extension, they look for `.light` first, then `.v`.
 `rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
 Every file starts with the Lightlang prelude, `theories/Lightlang/Lightlang.v`,
-loaded right after Rocq's Prelude. It exports `Corelib.Gradual.Gradual`, which
-sets `Gradual Typing`, and makes `"..."` a Stdlib `string` (a list of ascii
-characters) everywhere, with `string` and `append` in scope, so Stdlib's string
-functions apply to literals. It also defines `Succ` as another name for the
-`nat` constructor `S`, usable in patterns and used when printing. Pass
-`-no-lightlang-prelude` for plain Rocq. The
+loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
+
+- `Corelib.Gradual.Gradual`, which sets `Gradual Typing`.
+- `Strings.v`: `"..."` is a Stdlib `string` (a list of ascii characters)
+  everywhere, with `string` and `append` in scope, so Stdlib's string
+  functions apply to literals.
+- `Lists.v`: `[1, 2, 3]` list literals, also used when printing.
+- `Show.v`: `to_string`, a method of the type class `Show`, with instances
+  for `string`, `bool`, `nat`, `N`, `Z` and `list A`. `Hint Mode Show +`
+  makes instance search wait until the type is known.
+- `Succ`, another name for the `nat` constructor `S`, usable in patterns and
+  used when printing.
+
+It also sets `Automatic Generalization` (`vernac/comDefinition.ml`): a type
+that a `Definition` leaves unknown becomes a maximal implicit type parameter,
+followed by the type class instances that depend on it, as in ML's
+let-generalization. `Definition greet name := append "Hello, " (to_string
+name).` is `greet : forall {A : Type}, Show A -> A -> string`. Any other
+unsolved evar is still an error, and `Fixpoint`/`Recursive` are not
+generalized. Under the same flag, a bare term or `Eval` fails if an instance
+whose type is known is missing (`to_string tt`: no `Show unit`) instead of
+printing a stuck term.
+
+GCIC makes an implicit argument whose binder occurs nowhere in the rest of
+the function's type `?`, since nothing could determine it. A type class
+instance argument is the exception: its binder never occurs, but instance
+resolution determines it (`pretyping/pretyping.ml`, `erased`).
+
+Pass `-no-lightlang-prelude` for plain Rocq. The
 Lightlang prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
 Stdlib and the prelude itself are built as plain CIC. The inherited Rocq
 test-suite runs with `-no-lightlang-prelude`, and the gradual tests import

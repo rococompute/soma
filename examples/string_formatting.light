@@ -1,20 +1,23 @@
-(** Building strings. [greet]'s parameter has no annotation: its type is
-    inferred from [append] as [string]. *)
+(** Building strings. [to_string] turns a string, number, boolean, or a list
+    of these into a [string].
 
-From Stdlib Require Import DecimalString.
+    [greet]'s parameter has no annotation and nothing fixes its type, so it
+    becomes a type parameter: [greet] takes any [name] that has a
+    [to_string], and the [to_string] to use is chosen at each call, when
+    the program is checked. *)
 
-Definition greet name := append "Hello, " name.
+Definition greet name := append "Hello, " (to_string name).
 
-(** A [nat] in decimal, with Stdlib's DecimalString. *)
-Definition to_string (n : nat) : string := NilZero.string_of_uint (Nat.to_uint n).
+Check @greet.
+(* @greet : forall A : Type, Show A -> A -> string
+   [@] shows the parameters that are filled in at each call: the type [A]
+   of [name], and [Show A], the [to_string] for it. *)
 
-Check greet.
-(* greet : string -> string *)
+greet "world".          (* "Hello, world" *)
+greet 42.               (* "Hello, 42" *)
+greet [1, 2, 3].        (* "Hello, [1,2,3]" *)
+greet ["a", "b", "c"].  (* "Hello, [a,b,c]" *)
 
-greet "world".         (* "Hello, world" *)
-greet (to_string 42).  (* "Hello, 42" *)
-
-(** The type of [name] is known, so a [nat] is rejected when the program
-    is checked, not when it runs: there is no [Any] to defer the check.
+(** A type with no [to_string] is rejected when the program is checked.
     [Fail] expects the command to be rejected. *)
-Fail greet 42.         (* nat and string differ *)
+Fail greet tt.          (* Could not find an instance for "Show unit" *)

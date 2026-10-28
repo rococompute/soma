@@ -12,7 +12,8 @@
 
     Loaded after [Corelib.Init.Prelude] in every Lightlang program, unless
     [-no-lightlang-prelude], [-noinit] or [-boot] is given. It is built
-    after Stdlib (theories/Stdlib), which it uses. *)
+    after Stdlib (theories/Stdlib), which it uses. The rest of the
+    Lightlang library is in the files it exports. *)
 
 Require Export Corelib.Gradual.Gradual.
 
@@ -21,16 +22,16 @@ Require Export Corelib.Gradual.Gradual.
     less), and terms built with [S] print with [Succ]. *)
 Abbreviation Succ := S.
 
-(** String literals: ["..."] is a Stdlib [string], a list of ascii
-    characters, everywhere, including where an [Any] is expected, so that
-    Stdlib's string functions apply to it. Only [string] and [append] are
-    exported: Stdlib's [length] or [get] on strings would shadow the ones
-    on lists, and opening [string_scope] would make [++] append strings
-    even on lists, so the literals get a scope of their own. *)
-From Stdlib Require Strings.String.
-Export Stdlib.Strings.String(string, append).
+(** ["..."] string literals, [string] and [append] *)
+Require Export Lightlang.Strings.
 
-Declare Scope lightlang_string_scope.
-String Notation string Stdlib.Strings.String.string_of_list_byte
-  Stdlib.Strings.String.list_byte_of_string : lightlang_string_scope.
-Open Scope lightlang_string_scope.
+(** [[1, 2, 3]] list literals *)
+Require Export Lightlang.Lists.
+
+(** [to_string] *)
+Require Export Lightlang.Show.
+
+(** A type a definition leaves unknown becomes a type parameter, so
+    [Definition greet name := append "Hello, " (to_string name).] accepts
+    any [name] that has a [to_string]. *)
+#[export] Set Automatic Generalization.
