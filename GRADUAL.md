@@ -57,7 +57,8 @@ _build/install/default/bin/light build my_file.light
 
 `light` is Lightlang's command line (`topbin/light.ml`): `light build FILE`
 checks and builds a program as `rocq c FILE` does, with the same options,
-and `light help` lists the commands.
+and prints the names of the files it created instead of the values of the
+program's bare terms; `light help` lists the commands.
 
 Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
