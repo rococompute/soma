@@ -15,10 +15,10 @@ Definition fast_fib n := fib_loop n 0 1.
 fast_fib 20.           (* 6765 *)
 
 (** A [nat] is stored in unary, [Succ (Succ ... 0)], so large results are
-    slow and can overflow the stack. Stdlib's [N] is binary, so here the
-    types are written: [n] still counts the steps as a [nat], but the
-    numbers added are [N]s. [%N] in the output marks an [N] literal. *)
-From Stdlib Require Import NArith.
+    slow and can overflow the stack. Stdlib's [N], in the prelude, is
+    binary, so here the types are written: [n] still counts the steps as a
+    [nat], but the numbers added are [N]s. [%N] in the output marks an [N]
+    literal. *)
 
 Recursive big_fib_loop (n : nat) (a b : N) : N :=
   match n with

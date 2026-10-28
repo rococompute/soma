@@ -22,6 +22,11 @@ Require Export Corelib.Gradual.Gradual.
     less), and terms built with [S] print with [Succ]. *)
 Abbreviation Succ := S.
 
+(** Stdlib's binary natural numbers: the type [N], its literals ([5%N], or
+    [5] where an [N] is expected) and arithmetic ([+] on [N]s). A [nat] is
+    unary, so large [nat]s are slow; [N]s are not. *)
+From Stdlib Require Export NArith.
+
 (** ["..."] string literals, [string] and [append] *)
 Require Export Lightlang.Strings.
 

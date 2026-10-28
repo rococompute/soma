@@ -73,6 +73,8 @@ loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
   makes instance search wait until the type is known.
 - `Succ`, another name for the `nat` constructor `S`, usable in patterns and
   used when printing.
+- Stdlib's `NArith`: the binary natural numbers `N`, their literals and
+  arithmetic. `nat` stays the default for number literals.
 
 It also sets `Automatic Generalization` (`vernac/comDefinition.ml`): a type
 that a `Definition` leaves unknown becomes a maximal implicit type parameter,
