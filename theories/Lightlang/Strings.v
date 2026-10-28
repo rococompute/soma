@@ -24,3 +24,13 @@ Declare Scope lightlang_string_scope.
 String Notation string Stdlib.Strings.String.string_of_list_byte
   Stdlib.Strings.String.list_byte_of_string : lightlang_string_scope.
 Open Scope lightlang_string_scope.
+
+(** [s ++ t]: the string [s] then [t], where a [string] is expected (the
+    argument of a function on strings, or a definition given the type
+    [string]); elsewhere [++] appends lists. [(s ++ t)%str] is always on
+    strings. *)
+Declare Scope lightlang_append_scope.
+Delimit Scope lightlang_append_scope with str.
+Bind Scope lightlang_append_scope with string.
+#[global] Arguments Stdlib.Strings.String.append (_ _)%_str.
+Notation "s ++ t" := (append s t) : lightlang_append_scope.

@@ -62,3 +62,8 @@ Require Export Lightlang.Show.
     [Definition greet name := append "Hello, " (to_string name).] accepts
     any [name] that has a [to_string]. *)
 #[export] Set Automatic Generalization.
+
+(** A literal [nat] such as [8080] is computed from its digits instead of
+    being written as [8080] [Succ]s; Rocq warns about that every time.
+    Numbers like ports and counts are ordinary in programs, so no warning. *)
+#[export] Set Warnings "-abstract-large-number".

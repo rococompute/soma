@@ -67,6 +67,8 @@ loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
 - `Strings.v`: `"..."` is a Stdlib `string` (a list of ascii characters)
   everywhere, with `string` and `append` in scope, so Stdlib's string
   functions apply to literals.
+  `s ++ t` appends strings wherever a `string` is expected (argument scope
+  `str`); elsewhere `++` appends lists.
 - `Lists.v`: `[1, 2, 3]` list literals, also used when printing.
 - `Show.v`: `to_string`, a method of the type class `Show`, with instances
   for `string`, `bool`, `nat`, `N`, `Z` and `list A`. `Hint Mode Show +`
