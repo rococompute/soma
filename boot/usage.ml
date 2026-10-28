@@ -37,6 +37,8 @@ let print_usage_common co command =
 \n  -nois                  (idem)\
 \n  -no-lightlang-prelude  don't load Lightlang.Lightlang on start\
 \n                         (gradual typing, string literals)\
+\n  -no-prelude            -noinit and -no-lightlang-prelude: load no prelude,\
+\n                         every import is written in the file\
 \n  -compat X.Y            same as -compat-from Corelib RocqXY (or CoqXY when X is 8)\
 \n  -compat-from root lib  same as -require-import-from root lib, except that\
 \n                         a non existing file only produces a warning\

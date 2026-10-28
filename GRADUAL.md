@@ -89,7 +89,10 @@ the function's type `?`, since nothing could determine it. A type class
 instance argument is the exception: its binder never occurs, but instance
 resolution determines it (`pretyping/pretyping.ml`, `erased`).
 
-Pass `-no-lightlang-prelude` for plain Rocq. The
+Pass `-no-lightlang-prelude` for plain Rocq, where each part of the
+Lightlang prelude can be imported on its own (`From Lightlang Require Import
+Strings Lists Show.`), or `-no-prelude` to load no prelude at all, Rocq's
+included (`-noinit` and `-no-lightlang-prelude`). The
 Lightlang prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
 Stdlib and the prelude itself are built as plain CIC. The inherited Rocq
 test-suite runs with `-no-lightlang-prelude`, and the gradual tests import

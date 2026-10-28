@@ -411,6 +411,7 @@ let parse_args ~init arglist : t * string list =
     |"-m"|"--memory" -> { oval with post = { memory_stat = true }}
     |"-noinit"|"-nois" -> { oval with pre = { oval.pre with load_init = false }}
     |"-no-lightlang-prelude" -> { oval with pre = { oval.pre with load_lightlang = false }}
+    |"-no-prelude" -> { oval with pre = { oval.pre with load_init = false; load_lightlang = false }}
     |"-boot" -> { oval with pre = { oval.pre with boot = true }}
     |"-profile-ltac" -> add_set_option oval ["Ltac"; "Profiling"] (OptionSet None)
     |"-q" -> { oval with pre = { oval.pre with load_rcfile = false; }}

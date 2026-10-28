@@ -97,7 +97,7 @@ let parse st args =
     | "-sort" :: ll -> parse { st with sort = true } ll
     | "-vos" :: ll -> parse { st with vos = true } ll
     | ("-noglob" | "-no-glob") :: ll -> parse { st with noglob = true } ll
-    | "-noinit" :: ll -> (* do nothing *) parse st ll
+    | ("-noinit" | "-no-prelude") :: ll -> (* do nothing *) parse st ll
     | "-f" :: f :: ll -> parse (add_from_coqproject st f) ll
     | "-I" :: r :: ll -> parse (add_ml_path st r) ll
     | "-I" :: [] -> usage ()

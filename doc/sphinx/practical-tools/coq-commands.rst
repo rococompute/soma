@@ -366,9 +366,11 @@ and ``rocq repl``, unless stated otherwise:
 :-nois, -noinit: Start from an empty state instead of loading the `Init.Prelude`
   module.
 :-no-lightlang-prelude: Do not load `Lightlang.Lightlang` after the
-  prelude, so `Gradual Typing` stays off and string literals need
-  `Stdlib.Strings.String` (or `Corelib.Strings.PrimString`). It is not loaded
-  with `-boot` or `-noinit` either.
+  prelude, so `Gradual Typing` stays off and string literals, list literals
+  and `to_string` need `From Lightlang Require Import Strings Lists Show.`
+  It is not loaded with `-boot` or `-noinit` either.
+:-no-prelude: Load no prelude: both :n:`-noinit` and
+  :n:`-no-lightlang-prelude`, so every import is written in the file.
 :-init-file *file*: Load *file* as the resource file instead of
   loading the default resource file from the standard configuration
   directories.
