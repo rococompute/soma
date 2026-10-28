@@ -13,6 +13,8 @@ _build/install/default/bin/rocq c examples/hello.light
   unless the parameter is `Any`; then it fails with `raise` when it runs.
 - `fibonacci.light`: recursion with `Recursive` and `match`, a linear-time
   version, and Stdlib's binary `N` for large results.
+- `recursive_countdown.light`: why a recursive call on `n - 1` is rejected,
+  and the `Succ m` countdown that is accepted.
 
 Outside a proof, a bare term such as `greet "world".` is evaluated and printed,
 like `Eval lazy in greet "world".` Other strategies are still available:

@@ -18,14 +18,6 @@ Check fib.
 
 fib 10.                (* 55 *)
 
-(** A call on [n - 1] is rejected, because [-] is an ordinary function and
-    its result is not known to be smaller than [n]. *)
-Fail Recursive countdown n :=
-  match n with
-  | 0 => 0
-  | _ => countdown (n - 1)
-  end.
-
 (** Linear time: carry the last two numbers along. *)
 Recursive fib_loop n a b :=
   match n with

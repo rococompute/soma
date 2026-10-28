@@ -1,0 +1,31 @@
+(** Recursion must end, so every recursive call has to be on a value that is
+    visibly smaller than the argument: a piece of it taken apart by a
+    [match]. *)
+
+(** A call on [n - 1] is rejected, because [-] is an ordinary function and
+    its result is not known to be smaller than [n]. [Fail] expects the
+    command to be rejected. *)
+Fail Recursive countdown n :=
+  match n with
+  | 0 => 0
+  | _ => countdown (n - 1)
+  end.
+
+(** [Succ m] matches any number at least 1, and [m] is one less, so the
+    call on [m] counts down by one and stops at [0]. *)
+Recursive countdown_valid n :=
+  match n with
+  | 0 => 0
+  | Succ m => countdown_valid m
+  end.
+
+countdown_valid 5.     (* 0 *)
+
+(** The same countdown, keeping each number it passes. *)
+Recursive countdown_list n :=
+  match n with
+  | 0 => [0]
+  | Succ m => cons n (countdown_list m)
+  end.
+
+countdown_list 5.      (* [5, 4, 3, 2, 1, 0] *)
