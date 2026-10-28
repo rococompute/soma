@@ -1,0 +1,70 @@
+(** The square root of 2 is irrational, bottom up: each result is proved
+    before the one that uses it, so the headline, [sqrt2_irrational], comes
+    last. sqrt2_irrational.light proves the same top down. In three steps:
+    1. [no_whole_solution]: there are no whole numbers [p] and [q != 0]
+       with [p * p = 2 * (q * q)], by the classic infinite descent.
+    2. [sqrt2_not_rational]: no rational number squares to 2, since a
+       fraction [n / d] that did would give such whole numbers.
+    3. [sqrt2_irrational]: [sqrt 2] is irrational, since a rational equal
+       to it would square to 2.
+    [lia], [nia] and [lra], from the prelude, prove the arithmetic.
+
+    If this file compiles, the theorems are proved: every step is checked,
+    and nothing in it is assumed ([Axiom], [Admitted]) or left to run time
+    ([Any]). Steps 1 and 2 use no axioms at all. Step 3 is about Stdlib's
+    real numbers, which are built on axioms (classical logic and functional
+    extensionality); [Print Assumptions sqrt2_irrational] lists them. *)
+
+(** If [n * n] is even, so is [n]: [Nat.even (n * n)] is
+    [Nat.even n || Nat.even n]. *)
+Lemma even_square n : Nat.Even (n * n) -> Nat.Even n.
+Proof.
+  intros H. apply Nat.even_spec in H. apply Nat.even_spec.
+  rewrite Nat.even_mul in H. destruct (Nat.even n); auto.
+Qed.
+
+(** Step 1. By strong induction on [p]: assume no smaller [p] has a
+    solution.
+    1. [p * p = 2 * (q * q)] is even, so [p] is even: [p = 2 * k].
+    2. Then [4 * (k * k) = 2 * (q * q)], so [q * q = 2 * (k * k)]: a
+       solution with [q] in place of [p].
+    3. [q < p], so by the induction hypothesis it cannot exist.
+    The three [nia] goals are step 3's conditions: [q < 2 * k], [k != 0]
+    and [q * q = 2 * (k * k)]. *)
+Theorem no_whole_solution : forall p q, q != 0 -> p * p != 2 * (q * q).
+Proof.
+  intro p. induction p as [p IH] using (well_founded_induction lt_wf).
+  intros q Hq Heq.
+  destruct (even_square p) as [k Hk].
+  { exists (q * q). lia. }
+  subst p.
+  apply (IH q) with k.
+  - nia.
+  - nia.
+  - nia.
+Qed.
+
+(** Step 2. A rational [q : Q] is a fraction [n # d] of an integer [n] and a
+    positive [d], and [==] is equality of fractions as values ([1 # 2] and
+    [2 # 4] are [==]). [q * q == 2] is [n * n = 2 * (d * d)], and [|n|] and
+    [d] as whole numbers contradict step 1. *)
+Theorem sqrt2_not_rational : ~ exists q : Q, (q * q == 2)%Q.
+Proof.
+  intros [[n d] H]. unfold Qeq, Qmult in H. simpl in H.
+  apply (no_whole_solution (Z.abs_nat n) (Pos.to_nat d)).
+  - lia.
+  - apply Nat2Z.inj. rewrite !Nat2Z.inj_mul, Zabs2Nat.id_abs, positive_nat_Z.
+    nia.
+Qed.
+
+(** Step 3. A real number is irrational when no rational equals it; [Q2R]
+    turns a rational into a real. If [Q2R q = sqrt 2], then [q * q] is
+    [sqrt 2 * sqrt 2], which is [2] ([sqrt_sqrt]), contradicting step 2. *)
+Definition irrational (x : R) := ~ exists q : Q, Q2R q = x.
+
+Theorem sqrt2_irrational : irrational (sqrt 2).
+Proof.
+  intros [q Hq]. apply sqrt2_not_rational. exists q.
+  apply eqR_Qeq. rewrite Q2R_mult, Hq, sqrt_sqrt by lra.
+  unfold Q2R. simpl. lra.
+Qed.

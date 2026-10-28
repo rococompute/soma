@@ -19,8 +19,12 @@ _build/install/default/bin/rocq c examples/hello.light
   results.
 - `recursive_countdown.light`: why a recursive call on `n - 1` is rejected,
   and the `Succ m` countdown that is accepted.
-- `sqrt2_irrational.light`: a proof that the square root of 2 is irrational,
-  by infinite descent, with `lia` and `nia` for the arithmetic.
+- `sqrt2_irrational.light`: a proof that the square root of 2 is irrational
+  (`irrational (sqrt 2)`), top down: the theorem first, then a proof that
+  reduces it with `enough` to the rationals, to whole numbers, and to
+  "`n * n` even means `n` even". `lia`, `nia` and `lra` do the arithmetic.
+- `sqrt2_irrational_bottom_up.light`: the same proof bottom up, as separate
+  named lemmas proved before the theorem that uses them.
 
 Outside a proof, `Definition` can be left out: `greet name := ...` is
 `Definition greet name := ...`. Recursive functions still need `Recursive`.
