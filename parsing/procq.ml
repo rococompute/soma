@@ -263,6 +263,25 @@ struct
 
   let lk_qualid = lk_ident >> lk_list lk_field
 
+  (* [kw] occurs before the [.] that ends the sentence, outside of any
+     brackets: [:=] in [f x := t.] but not in [f (A := nat) x.] *)
+  let lk_kw_before_end kw n kwstate strm =
+    let opens k = match k.[String.length k - 1] with
+      | '(' | '[' | '{' -> true
+      | _ -> String.equal k "{|" in
+    let closes k = match k.[0] with
+      | ')' | ']' | '}' -> true
+      | _ -> String.equal k "|}" in
+    let rec scan depth n = match LStream.peek_nth kwstate n strm with
+      | None | Some Tok.EOI -> None
+      | Some (Tok.KEYWORD ".") when depth = 0 -> None
+      | Some (Tok.KEYWORD k) when depth = 0 && String.equal k kw -> Some (n + 1)
+      | Some (Tok.KEYWORD k) when opens k -> scan (depth + 1) (n + 1)
+      | Some (Tok.KEYWORD k) when closes k -> scan (max 0 (depth - 1)) (n + 1)
+      | Some _ -> scan depth (n + 1)
+    in
+    scan 0 n
+
 end
 
 (** An entry that checks we reached the end of the input. *)

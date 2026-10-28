@@ -88,6 +88,13 @@ let test_recursive_fixpoint =
     lk_kw "Recursive" >> lk_ident_except ["Extraction"]
   end
 
+(* Lightlang: [x := t.] and [f x y := t.] are definitions *)
+let test_implicit_definition =
+  let open Procq.Lookahead in
+  to_entry "test_implicit_definition" begin
+    lk_ident >> lk_kw_before_end ":="
+  end
+
 let warn_chdir_pwd = CWarnings.create ~name:"change-dir-pwd-deprecated" ~category:Deprecation.Version.v8_20
     (fun () -> strbrk "Command \"Cd\" as a synonym of \"Pwd\" is deprecated." ++ spc () ++
                strbrk "Use \"Pwd\" instead.")
@@ -95,7 +102,8 @@ let warn_chdir_pwd = CWarnings.create ~name:"change-dir-pwd-deprecated" ~categor
 }
 
 GRAMMAR EXTEND Gram
-  GLOBAL: vernac_control quoted_attributes attribute_list gallina_ext noedit_mode subprf subprf_with_selector qualid;
+  GLOBAL: vernac_control quoted_attributes attribute_list gallina_ext noedit_mode subprf subprf_with_selector qualid
+    ident_decl def_body;
   vernac_control: FIRST
     [ [ control = LIST0 control_flag; v = decorated_vernac ->
         { let (attrs, expr) = v in CAst.make ~loc { control; attrs; expr; } } ]
@@ -172,6 +180,11 @@ GRAMMAR EXTEND Gram
 
   noedit_mode:
     [ [ c = query_command -> { VernacSynPure (c None) }
+      (* Lightlang: outside a proof, [f x := t.] is [Definition f x := t.] *)
+      | test_implicit_definition; id = ident_decl; b = def_body; "." ->
+        { let (lid, u) = id in
+          VernacSynPure (VernacDefinition ((NoDischarge, Decls.Definition),
+                                           (CAst.map (fun s -> Name s) lid, u), b)) }
       (* Lightlang: outside a proof, a bare term [t.] is [Eval lazy in t.] *)
       | c = lconstr; "." ->
         { VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, c)) } ] ]

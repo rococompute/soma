@@ -20,6 +20,9 @@ _build/install/default/bin/rocq c examples/hello.light
 - `recursive_countdown.light`: why a recursive call on `n - 1` is rejected,
   and the `Succ m` countdown that is accepted.
 
+Outside a proof, `Definition` can be left out: `greet name := ...` is
+`Definition greet name := ...`. Recursive functions still need `Recursive`.
+
 Outside a proof, a bare term such as `greet "world".` is evaluated and printed,
 like `Eval lazy in greet "world".` Other strategies are still available:
 `Eval cbv in ...`, `Compute ...` (the VM, which falls back to `cbv` under

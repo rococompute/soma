@@ -42,6 +42,9 @@ module Lookahead : sig
   val lk_ident_except : string list -> t
   val lk_except_kws : string list -> t
   val lk_ident_list : t
+  val lk_kw_before_end : string -> t
+  (** [kw] occurs before the [.] that ends the sentence, outside of any
+      brackets. *)
 end
 
 (** The parser of Rocq is built from three kinds of rule declarations:

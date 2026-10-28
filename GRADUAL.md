@@ -112,8 +112,14 @@ renamed it; `GROK_*.md`, `gradual-coverage.md` and
 `dev/gradual-lattice/results/` predate that and still say `Dyn`.
 
 Outside a proof, a bare term `t.` is evaluated and printed as `Eval lazy in t.`,
-so `"Hello, world!".` is a complete program. Inside a proof the same position
-holds a tactic, as in Rocq. `Recursive` is another spelling of `Fixpoint`.
+so `"Hello, world!".` is a complete program. A sentence that starts with a
+name and has `:=` before its final `.`, outside brackets, is a `Definition`:
+`greet name := append "Hello, " name.` is
+`Definition greet name := append "Hello, " name.` (`test_implicit_definition`
+in `vernac/g_vernac.mlg`, `lk_kw_before_end` in `parsing/procq.ml`). Inside a
+proof the same position holds a tactic, as in Rocq, so both need the explicit
+command there; ssreflect's `set x := t.` is such a tactic. `Recursive` is
+another spelling of `Fixpoint`, and a recursive function still needs it.
 
 ```coq
 Definition succ_dyn (x : Any) : nat := x + 1.
