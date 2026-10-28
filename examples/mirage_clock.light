@@ -1,0 +1,9 @@
+(** A unikernel that never stops: [forever body] runs [body] again and
+    again. Recursion in Lightlang has to end, so an endless loop is an
+    [io] action, run by the image. Stop it with Ctrl-C, or with
+        solo5-hvt --cpu-limit=... *)
+Require Import Mirage.
+
+main : io unit :=
+  print "tick tock" ;;
+  forever (print "tick" ;; sleep 1).

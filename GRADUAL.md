@@ -381,6 +381,50 @@ Extraction differs from the kernel in these ways:
   `Cast_error`; the kernel leaves them stuck.
 - Only OCaml is supported. Haskell and Scheme extraction print an error.
 
+## Mirage: programs as unikernels
+
+`theories/Lightlang/Mirage.v` (not in the prelude) makes a program a
+MirageOS unikernel. Its `main : io unit` says what the unikernel does, as
+data: `print s`, `sleep seconds`, `forever body`, `ret a`, sequenced with
+`a ;; b` and `x <- a ;; b` (`io_scope`). Building an `io` does nothing; the
+image runs it.
+
+```coq
+Require Import Mirage.
+
+main : io unit :=
+  print "tick tock" ;;
+  forever (print "tick" ;; sleep 1).
+```
+
+`rocq c prog.light` checks the program and, since it requires `Mirage`,
+builds `prog.hvt` next to `prog.vo` (`toplevel/lightlangMirage.ml`, called
+from `toplevel/ccompile.ml`):
+
+1. `main` must exist and have type `io unit`.
+2. `main` is extracted to `prog.ml` (strings as `char list`, with Stdlib's
+   `ExtrOcamlString`) in a MirageOS project, with a generated `config.ml`
+   (a `job`) and `unikernel.ml`, which runs an `io` with Lwt: `print` writes
+   a console line, `sleep` is `Mirage_sleep`, `forever` loops. `gradual.ml`
+   is the extracted gradual runtime, or a stand-in when the program has no
+   casts. A `raise` or `unk` that the image reaches is reported, and the
+   image exits with 1.
+3. The project is built for solo5's `hvt` target in the opam switch
+   `$LIGHTLANG_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
+   repository of solo5-mac, with `mirage`, `opam-monorepo` and `solo5-hvt`).
+
+The project is kept in `$LIGHTLANG_MIRAGE_DIR`, or else
+`~/.cache/lightlang/mirage`, so `mirage configure` and fetching the
+dependencies (`make depends`, which needs the network) only happen the first
+time, about 15 s; later builds take about a second. Its `build.log` has the
+last build's output. `LIGHTLANG_MIRAGE_BUILD=0` skips the image.
+
+Lightlang's installed libraries can be required by their short name, as
+Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Mirage.` finds
+`Lightlang.Mirage`.
+
+Examples: `examples/mirage_hello.light`, `examples/mirage_clock.light`.
+
 ## Limitations and known gaps
 
 - **No mechanized proofs.** Graduality and conservativity come from the

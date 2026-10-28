@@ -47,6 +47,15 @@ let init_load_path ~coqenv =
   in
   let corelib = Boot.Env.corelib coqenv |> Boot.Path.to_string in
   let contrib_vo = build_userlib_path ~unix_path:user_contrib in
+  (* Lightlang: its libraries can be required by their short name, as
+     Corelib's are: [Require Import Mirage.] for [Lightlang.Mirage] *)
+  let lightlang_vo =
+    let unix_path = Filename.concat user_contrib "Lightlang" in
+    if Sys.file_exists unix_path then
+      [{ unix_path; coq_path = Names.DirPath.make [Names.Id.of_string "Lightlang"]
+       ; implicit = true; recursive = true; installed = true }]
+    else []
+  in
 
   let misc_vo =
     List.map (fun s -> build_userlib_path ~unix_path:s) (xdg_dirs @ (rocqpath())) in
@@ -66,6 +75,9 @@ let init_load_path ~coqenv =
 
     (* then user-contrib *)
     contrib_vo @
+
+    (* Lightlang's libraries again, now with short names *)
+    lightlang_vo @
 
     (* then directories in XDG_DATA_DIRS and XDG_DATA_HOME and ROCQPATH *)
     List.concat misc_vo
