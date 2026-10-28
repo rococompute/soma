@@ -12,7 +12,12 @@
 
    [light build FILE [OPTIONS]] checks and builds a Lightlang program, as
    [rocq c], and prints the names of the files it created (a program that
-   requires Mirage is also built into an image). *)
+   requires Mirage is also built into an image).
+
+   [light run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
+   temporary directory, so that it leaves no files, and prints the value of
+   its last bare term; a program that requires Mirage is built into an
+   image, which is run, with ARGUMENTS. *)
 
 open Rocqshim
 
@@ -25,6 +30,13 @@ Commands:
                          MirageOS image, for a program that requires
                          Mirage. The options are those of rocq c
                          (rocq c --help).
+  run FILE [OPTIONS] [-- ARGUMENTS]
+                         check a Lightlang program and print the value of
+                         its last bare term; for a program that requires
+                         Mirage, build its image and run it (solo5-hvt, or
+                         solo5-vmnet -- solo5-hvt for one that uses the
+                         network), with ARGUMENTS (as --arg=...). Leaves no
+                         files.
   help                   this message
 |}
 
@@ -92,6 +104,80 @@ let build file args =
   if code <> 0 then exit code;
   List.iter print_endline (created ~before ~source:file dir)
 
+let rec remove_tree path =
+  if Sys.is_directory path then begin
+    Array.iter (fun name -> remove_tree (Filename.concat path name)) (Sys.readdir path);
+    Sys.rmdir path
+  end else Sys.remove path
+
+let temp_dir () =
+  let file = Filename.temp_file "light-run" "" in
+  Sys.remove file;
+  Unix.mkdir file 0o700;
+  file
+
+(* The value of the last bare term in what [rocq c] printed: a line
+   ["     = value"] and the indented lines after it, up to the type *)
+let last_value output =
+  let rec from_last = function
+    | [] -> []
+    | l :: rest ->
+      match from_last rest with
+      | [] when starts_with ~prefix:"     = " l -> l :: rest
+      | found -> found
+  in
+  let rec block = function
+    | l :: rest when l <> "" && (l.[0] = ' ' || l.[0] = '\t') -> l :: block rest
+    | _ -> []
+  in
+  match from_last (lines output) with
+  | [] -> None
+  | first :: rest -> Some (String.concat "\n" (first :: block rest))
+
+(* The command Mirage's build says runs the image:
+   ["Mirage: built IMAGE; run it with: COMMAND"] *)
+let mirage_command output =
+  let marker = "; run it with: " in
+  List.find_map (fun l ->
+      if starts_with ~prefix:"Mirage: built " l then
+        let rec at i =
+          if i + String.length marker > String.length l then None
+          else if String.sub l i (String.length marker) = marker then
+            Some (String.sub l (i + String.length marker) (String.length l - i - String.length marker))
+          else at (i + 1)
+        in
+        Option.map (fun c -> List.filter (( <> ) "") (String.split_on_char ' ' c)) (at 0)
+      else None)
+    (lines output)
+
+let run file args image_args =
+  let dir = temp_dir () in
+  let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
+  let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
+  let code, output = compile (file :: "-o" :: vo :: args) in
+  List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
+    (lines output);
+  if code <> 0 then finish code;
+  match mirage_command output with
+  | Some command ->
+    (* the image's tools come from the same opam switch as its build *)
+    let switch = match Sys.getenv_opt "LIGHTLANG_MIRAGE_SWITCH" with
+      | Some s when s <> "" -> s | _ -> "hvf" in
+    let argv = "opam" :: "exec" :: ("--switch=" ^ switch) :: "--" :: command @ image_args in
+    (* Ctrl-C stops the image, which then exits; light waits for it to
+       remove the temporary directory *)
+    Sys.set_signal Sys.sigint Sys.Signal_ignore;
+    let pid = Unix.create_process "opam" (Array.of_list argv) Unix.stdin Unix.stdout Unix.stderr in
+    let _, status = Unix.waitpid [] pid in
+    finish (match status with Unix.WEXITED n -> n | _ -> 1)
+  | None ->
+    if image_args <> [] then begin
+      prerr_endline "light run: arguments after -- are for a program that requires Mirage";
+      finish 2
+    end;
+    Option.iter print_endline (last_value output);
+    finish 0
+
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
@@ -100,4 +186,15 @@ let () =
     let opts, args = parse_opts args in
     let () = init opts (file :: args) in
     build file args
+  | ["run"] -> usage_error "light run: no file given"
+  | "run" :: file :: rest ->
+    let rec split = function
+      | "--" :: image_args -> [], image_args
+      | a :: rest -> let args, image_args = split rest in a :: args, image_args
+      | [] -> [], []
+    in
+    let args, image_args = split rest in
+    let opts, args = parse_opts args in
+    let () = init opts (file :: args) in
+    run file args image_args
   | command :: _ -> usage_error "light: unknown command %s" command

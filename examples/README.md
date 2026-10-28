@@ -1,11 +1,15 @@
 # Examples
 
-Small Lightlang programs. Run one with `light build` (in
-`_build/install/default/bin` once Lightlang is built):
+Small Lightlang programs. Run one with `light run` (in
+`_build/install/default/bin` once Lightlang is built), which prints the value
+of its last line, or, for a Mirage program, runs its image:
 
 ```sh
-light build examples/hello.light
+light run examples/hello.light
 ```
+
+`light build` builds one instead, and prints the names of the files it
+created.
 
 - `hello.light`: hello world.
 - `string_formatting.light`: `to_string` on strings, numbers and lists, and

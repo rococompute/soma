@@ -3,8 +3,7 @@
     to end, so an endless loop is an [io] action, run by the image. Stop it
     with Ctrl-C.
 
-        light build examples/mirage_clock.light
-        solo5-hvt -- examples/mirage_clock.hvt *)
+        light run examples/mirage_clock.light *)
 Require Import Mirage.
 
 two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.

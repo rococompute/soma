@@ -1,7 +1,6 @@
 (** The smallest unikernel: it prints a line and exits.
 
-        light build examples/mirage_minimal.light
-        solo5-hvt -- examples/mirage_minimal.hvt *)
+        light run examples/mirage_minimal.light *)
 Require Import Mirage.
 
 main := print "Hello from a unikernel!".

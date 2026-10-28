@@ -52,13 +52,19 @@ opam install --switch=. dune ocamlfind zarith
 eval $(opam env --switch=. --set-switch)
 make dunestrap
 dune build rocq-runtime.install coq-core.install rocq-core.install
-_build/install/default/bin/light build my_file.light
+_build/install/default/bin/light run my_file.light
 ```
 
-`light` is Lightlang's command line (`topbin/light.ml`): `light build FILE`
-checks and builds a program as `rocq c FILE` does, with the same options,
-and prints the names of the files it created instead of the values of the
-program's bare terms; `light help` lists the commands.
+`light` is Lightlang's command line (`topbin/light.ml`):
+
+- `light build FILE` checks and builds a program as `rocq c FILE` does, with
+  the same options, and prints the names of the files it created instead of
+  the values of the program's bare terms.
+- `light run FILE [-- ARGUMENTS]` checks the program in a temporary
+  directory, so that it leaves no files, and prints the value of its last
+  bare term; a program that requires Mirage is built into an image, which
+  is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
+- `light help` lists the commands.
 
 Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
@@ -440,7 +446,8 @@ since it requires `Mirage`, builds `prog.hvt` next to `prog.vo`
 4. The project is built for solo5's `hvt` target in the opam switch
    `$LIGHTLANG_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
    repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
-   `solo5-vmnet`), and `light build` says how to run the image.
+   `solo5-vmnet`), and `rocq c` says how to run the image; `light run`
+   runs it.
 
 The projects are kept in `$LIGHTLANG_MIRAGE_DIR`, or else
 `~/.cache/lightlang/mirage` (`plain/` and `net/`), so `mirage configure`
@@ -450,10 +457,8 @@ second. Each one's `build.log` has its last build's output.
 `LIGHTLANG_MIRAGE_BUILD=0` skips the image.
 
 ```sh
-light build examples/mirage_http_server.light
-solo5-vmnet -- solo5-hvt -- examples/mirage_http_server.hvt      # prints its IP
-light build examples/mirage_fetch.light
-solo5-vmnet -- solo5-hvt -- examples/mirage_fetch.hvt --arg=<that IP>
+light run examples/mirage_http_server.light              # prints its IP
+light run examples/mirage_fetch.light -- --arg=<that IP>
 ```
 
 `dev/mirage-check.sh` builds the examples (`examples/mirage_*.light`), boots

@@ -1,8 +1,9 @@
 (** A MirageOS unikernel. Requiring [Mirage] makes the program one:
-    [light build examples/mirage_hello.light] also builds
-    [examples/mirage_hello.hvt], which runs on Apple Silicon with
-        solo5-hvt -- examples/mirage_hello.hvt
-    (see the Mirage section of GRADUAL.md for the setup).
+    [light build examples/mirage_hello.light] builds the image
+    [examples/mirage_hello.hvt], and
+        light run examples/mirage_hello.light
+    builds it and runs it on Apple Silicon, with solo5-hvt (see the Mirage
+    section of GRADUAL.md for the setup).
 
     [main : io unit] is what the unikernel does. An [io] is a description
     of actions, built like any other value; the image carries them out in
