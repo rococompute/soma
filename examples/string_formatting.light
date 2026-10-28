@@ -6,12 +6,7 @@
     [to_string], and the [to_string] to use is chosen at each call, when
     the program is checked. *)
 
-Definition greet name := append "Hello, " (to_string name).
-
-Check @greet.
-(* @greet : forall A : Type, Show A -> A -> string
-   [@] shows the parameters that are filled in at each call: the type [A]
-   of [name], and [Show A], the [to_string] for it. *)
+greet name := append "Hello, " (to_string name).
 
 greet "world".          (* "Hello, world" *)
 greet 42.               (* "Hello, 42" *)

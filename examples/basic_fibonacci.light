@@ -17,7 +17,4 @@ Recursive fib n :=
   | Succ (Succ m as p) => fib p + fib m
   end.
 
-Check fib.
-(* fib : nat -> nat *)
-
 fib 10.                (* 55 *)

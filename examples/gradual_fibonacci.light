@@ -10,7 +10,7 @@ Recursive fib_loop n a b :=
   | Succ m => fib_loop m b (a + b)
   end.
 
-Definition fast_fib n := fib_loop n 0 1.
+fast_fib n := fib_loop n 0 1.
 
 fast_fib 20.           (* 6765 *)
 
@@ -26,6 +26,6 @@ Recursive big_fib_loop (n : nat) (a b : N) : N :=
   | Succ m => big_fib_loop m b (a + b)
   end.
 
-Definition big_fib n := big_fib_loop n 0 1.
+big_fib n := big_fib_loop n 0 1.
 
 big_fib 100.           (* 354224848179261915075%N *)

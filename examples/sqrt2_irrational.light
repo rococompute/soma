@@ -11,7 +11,7 @@
 
 (** A real number is irrational when no rational equals it. [Q2R] turns a
     rational into a real. *)
-Definition irrational (x : R) := ~ exists q : Q, Q2R q = x.
+irrational (x : R) := ~ exists q : Q, Q2R q = x.
 
 Theorem sqrt2_irrational : irrational (sqrt 2).
 Proof.

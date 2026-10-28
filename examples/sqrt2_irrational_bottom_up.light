@@ -60,7 +60,7 @@ Qed.
 (** Step 3. A real number is irrational when no rational equals it; [Q2R]
     turns a rational into a real. If [Q2R q = sqrt 2], then [q * q] is
     [sqrt 2 * sqrt 2], which is [2] ([sqrt_sqrt]), contradicting step 2. *)
-Definition irrational (x : R) := ~ exists q : Q, Q2R q = x.
+irrational (x : R) := ~ exists q : Q, Q2R q = x.
 
 Theorem sqrt2_irrational : irrational (sqrt 2).
 Proof.
