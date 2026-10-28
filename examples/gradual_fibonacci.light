@@ -1,0 +1,31 @@
+(** Fibonacci in linear time, with the types inferred, then with the types
+    chosen. The textbook definition is in basic_fibonacci.light. *)
+
+(** Carry the last two numbers along. No types are written: [n] is a
+    [nat] from the patterns ([0], [Succ m]), and [a] and [b] are [nat]s
+    because [+] adds [nat]s. *)
+Recursive fib_loop n a b :=
+  match n with
+  | 0 => a
+  | Succ m => fib_loop m b (a + b)
+  end.
+
+Definition fast_fib n := fib_loop n 0 1.
+
+fast_fib 20.           (* 6765 *)
+
+(** A [nat] is stored in unary, [Succ (Succ ... 0)], so large results are
+    slow and can overflow the stack. Stdlib's [N] is binary, so here the
+    types are written: [n] still counts the steps as a [nat], but the
+    numbers added are [N]s. [%N] in the output marks an [N] literal. *)
+From Stdlib Require Import NArith.
+
+Recursive big_fib_loop (n : nat) (a b : N) : N :=
+  match n with
+  | 0 => a
+  | Succ m => big_fib_loop m b (a + b)
+  end.
+
+Definition big_fib n := big_fib_loop n 0 1.
+
+big_fib 100.           (* 354224848179261915075%N *)

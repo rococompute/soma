@@ -1,0 +1,22 @@
+(** Fibonacci numbers, the textbook definition. The type, [nat -> nat], is
+    inferred from the patterns ([0], [Succ m]) and from [+].
+
+    [Succ] means "one more than", so [Succ (Succ m as p)] matches a number
+    of at least 2 and names its two predecessors [p] (n - 1) and [m]
+    (n - 2). Every recursive call must be on a smaller piece of [n] taken
+    apart by the [match], which is what guarantees that the function
+    terminates.
+
+    Each call makes two more, so this takes exponential time; see
+    gradual_fibonacci.light for a linear one. *)
+Recursive fib n :=
+  match n with
+  | 0 => 0
+  | 1 => 1
+  | Succ (Succ m as p) => fib p + fib m
+  end.
+
+Check fib.
+(* fib : nat -> nat *)
+
+fib 10.                (* 55 *)

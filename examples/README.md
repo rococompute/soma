@@ -11,8 +11,11 @@ _build/install/default/bin/rocq c examples/hello.light
   a `greet` that accepts any of them.
 - `any.light`: a wrong argument is rejected when the program is checked,
   unless the parameter is `Any`; then it fails with `raise` when it runs.
-- `fibonacci.light`: recursion with `Recursive` and `match`, a linear-time
-  version, and Stdlib's binary `N` for large results.
+- `basic_fibonacci.light`: the textbook recursive `fib`, with `Recursive`
+  and `match`.
+- `gradual_fibonacci.light`: a linear-time `fib`, first with its types
+  inferred as `nat`, then with them written as Stdlib's binary `N` for large
+  results.
 - `recursive_countdown.light`: why a recursive call on `n - 1` is rejected,
   and the `Succ m` countdown that is accepted.
 
