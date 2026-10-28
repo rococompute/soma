@@ -2119,19 +2119,36 @@ let check_may_eval env sigma redexp rc =
     | _ -> sigma
   in
   let { Environ.uj_val=c; uj_type=ty; } = Retyping.get_judgment_of env sigma c in
+  let original = c in
   let sigma, c = match redexp with
     | None -> sigma, c
     | Some r ->
       let sigma, r = Redexpr.interp_redexp_no_ltac env sigma r in
       let r, _ = Redexpr.reduction_of_red_expr env r in
+      Gradual.clear_failures ();
       let sigma, c = r env sigma c in
       sigma, c
+  in
+  (* Lightlang: a value with a [raise] in it is a run-time error, said
+     after the value, which is printed as far as it was computed *)
+  let runtime_error, c = match redexp with
+    | Some _ when Gradual.enabled env && GradualErrors.mentions_err env sigma c ->
+      let failures = Gradual.failures () in
+      Some (GradualErrors.runtime_error env sigma ~original ~failures),
+      GradualErrors.partial_strings env sigma c
+    | _ -> None, c
   in
   let pp =
     let evars_of_term c = Evarutil.undefined_evars_of_term sigma c in
     let l = Evar.Set.union (evars_of_term c) (evars_of_term ty) in
     let j = { Environ.uj_val = c; uj_type = Reductionops.nf_betaiota env sigma ty } in
-    Prettyp.print_judgment env sigma j ++
+    (* a partial value, of a type bound to a scope, is printed in it:
+       ["Hello, " ++ raise] rather than [("Hello, " ++ raise)%str] *)
+    let scope = match runtime_error, Notation.compute_type_scope env sigma ty with
+      | Some _, scope :: _ -> Some scope
+      | _ -> None
+    in
+    Prettyp.print_judgment ?scope env sigma j ++
     pr_ne_evar_set (fnl () ++ str "where" ++ fnl ()) (mt ()) sigma l
   in
   let hdr = if Option.has_some redexp then str "     = " else mt() in
@@ -2167,7 +2184,7 @@ let check_may_eval env sigma redexp rc =
              UnivGen.pr_sort_context (Evd.sort_printer sigma) ctx')))
     else mt()
   in
-  hdr ++ pp ++ ppunivs
+  hdr ++ pp ++ ppunivs ++ pr_opt_no_spc (fun e -> fnl () ++ e) runtime_error
 
 let vernac_check_may_eval ~pstate redexp glopt rc =
   let glopt = query_command_selector glopt in

@@ -170,7 +170,8 @@ Print succ_dyn.
 (* succ_dyn = fun x : Any => cast Any nat x + 1 *)
 
 Compute succ_dyn 41.     (* = 42 *)
-Compute succ_dyn true.   (* = raise : nat, a runtime type error *)
+Compute succ_dyn true.   (* = raise : nat, a runtime type error:
+                            Run-time error: expected a nat, but got true : bool. *)
 
 Definition apply3 (g : Any) : nat := g 3.
 (* elaborates to: cast Any nat (cast Any (Any -> Any) g (cast nat Any 3)) *)
@@ -191,6 +192,41 @@ Fail Definition bad : nat := true.  (* still a static error: not consistent *)
 | `cast A B t` | the cast `⟨B ⇐ A⟩ t` |
 | `Set/Unset Gradual Typing` | turns consistency-based elaboration on or off |
 | `Set Gradual Steps n` / `Unset Gradual Steps` | the budget of gradual reduction steps per command, or none |
+
+### Run-time errors
+
+A cast that fails reduces to `raise`, which keeps nothing but its type, and
+`raise` only spreads to what looks inside it: `append "Hello, " raise` is
+the string `"Hello, "` ending in `raise`. A term evaluated (`Compute`,
+`Eval`, a bare term) whose value has a `raise` in it is printed as far as
+it was computed, followed by what went wrong:
+
+```coq
+greet_any (name : Any) := append "Hello, " name.
+greet_any 42.
+(*   = "Hello, " ++ raise
+     : string
+Run-time error: expected a string, but got 42 : nat. *)
+```
+
+The kernel records each cast that fails on its own (rather than on a
+`raise` it was given): the type expected, the type of the value, and the
+value (`Gradual.failures`, `kernel/gradual.ml`), and `vernac/gradualErrors.ml`
+words them:
+
+| What failed | Message |
+|---|---|
+| different types | `expected a string, but got 42 : nat` |
+| a function where data is expected | `expected a nat, but got a function of type nat -> nat` |
+| the same family at other indices | `expected a proof of 1 = 2, but got a proof of 1 = 1`, `expected a Vector.t nat 3, but got a Vector.t nat 2` |
+| a value under a binder | `expected a string, but got a nat` |
+| a `raise` of the program | `raise in safe_div (file.light:12)`: the definitions the term uses that raise |
+
+A string that ends in `raise` prints as `"Hello, " ++ raise` rather than as
+its characters (`Register ... as lightlang.string.append`, in
+`Lightlang.Strings`). `light run` fails when the program's last value is a
+run-time error. Compiled code raises `Gradual_rt.Cast_error` at the cast
+instead.
 
 ## Architecture
 

@@ -35,6 +35,10 @@ Bind Scope lightlang_append_scope with string.
 #[global] Arguments Stdlib.Strings.String.append (_ _)%_str.
 Notation "s ++ t" := (append s t) : lightlang_append_scope.
 
+(* A value that is a string up to a [raise] prints as ["Hello, " ++ raise]
+   (vernac/gradualErrors.ml) *)
+Register Stdlib.Strings.String.append as lightlang.string.append.
+
 (** For proofs about strings built with [++]: it is associative, and [""]
     is its unit. *)
 Lemma append_assoc : forall a b c : string, ((a ++ b) ++ c = a ++ (b ++ c))%str.

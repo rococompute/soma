@@ -7,4 +7,5 @@
 greet_any (name : Any) := append "Hello, " name.
 
 greet_any "world".     (* "Hello, world" *)
-greet_any 42.          (* "Hello, " followed by raise: 42 is not a string *)
+greet_any 42.          (* "Hello, " ++ raise
+                          Run-time error: expected a string, but got 42 : nat. *)

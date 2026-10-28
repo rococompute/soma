@@ -30,8 +30,10 @@ mixed_pair = (cast nat Any 1, cast bool Any true)
      : nat
      = raise
      : nat
+Run-time error: expected a nat, but got true : bool.
      = raise
      : nat
+Run-time error: expected a bool, but got 3 : nat.
      = fun _ : nat => unk
      : nat -> bool
      = S (S unk)

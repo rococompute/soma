@@ -52,6 +52,34 @@ let step k = match !step_limit_ref with
   | None -> ()
   | Some n -> if !steps_left <= 0 then raise (Out_of_steps (k, n)) else decr steps_left
 
+(* Failed casts. A cast that fails reduces to [err], which keeps only the
+   type it stands for; what failed is recorded here, for the error message
+   of a term evaluated to an [err] (vernac/vernacentries.ml). Recording is
+   cheap and bounded: the first few failures since the last
+   [clear_failures]. *)
+type failure_reason = FMismatch | FIndices
+
+type failure = {
+  expected : constr;
+  actual : constr;
+  value : constr;
+  reason : failure_reason;
+}
+
+let max_failures = 8
+let failures_ref = ref []
+let n_failures = ref 0
+
+let clear_failures () = failures_ref := []; n_failures := 0
+
+let failures () = List.rev !failures_ref
+
+let record_failure f =
+  if !n_failures < max_failures then begin
+    failures_ref := f :: !failures_ref;
+    incr n_failures
+  end
+
 let get env k =
   let r = Environ.retroknowledge env in
   match k with
@@ -299,6 +327,11 @@ let reduce_cast env ~whnf a b t t_whnf =
   | Some cast_cst ->
   let cast = mkConstU (cast_cst, UVars.Instance.empty) in
   let err () = mk env GErr [|b|] in
+  (* a cast that fails on its own, rather than on an [err] it was given *)
+  let fail ?(reason=FMismatch) ?(actual=a) () =
+    record_failure { expected = b; actual; value = t; reason };
+    err ()
+  in
   let unknown () = mk env GUnknown [|b|] in
   (* Not a rule of GCIC, but admissible: casts between syntactically equal
      types are the identity. This also makes stuck casts on neutral types
@@ -337,11 +370,11 @@ let reduce_cast env ~whnf a b t t_whnf =
   | HSort s1, HSort s2 ->
     begin match sort_castable env s1 s2 with
       | Some true -> Some t
-      | Some false -> err ()
+      | Some false -> fail ()
       | None -> None
     end
   | HInd ((ind1, u1), args1), HInd ((ind2, u2), args2) ->
-    if not (Ind.CanOrd.equal ind1 ind2) then err ()
+    if not (Ind.CanOrd.equal ind1 ind2) then fail ()
     else
       let mib = Environ.lookup_mind (fst ind1) env in
       let mip = mib.mind_packets.(snd ind1) in
@@ -362,7 +395,9 @@ let reduce_cast env ~whnf a b t t_whnf =
               let target = Array.sub args2 npar mip.mind_nrealargs in
               match check_indices env whnf indices target with
               | IOk -> Some c
-              | IMismatch -> err ()
+              | IMismatch ->
+                let actual = mkApp (mkIndU (ind2, u2), Array.append pars2 indices) in
+                fail ~reason:FIndices ~actual ()
               | IStuck -> None
           end
         | TCast _ | TOther -> None
@@ -373,7 +408,7 @@ let reduce_cast env ~whnf a b t t_whnf =
     None
   | (HProd _ | HSort _ | HInd _ | HPrim _), (HProd _ | HSort _ | HInd _ | HPrim _) ->
     (* head constructor mismatch *)
-    err ()
+    fail ()
   | HOther, _ | _, HOther -> None
 
 let inductive_indices env ci a =

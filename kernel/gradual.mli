@@ -50,6 +50,32 @@ val reset_steps : unit -> unit
 val step_limit : unit -> int option
 val set_step_limit : int option -> unit
 
+(** {6 Failed casts}
+
+    A cast that fails reduces to [err], which only keeps the type it stands
+    for. [reduce_cast] records what failed: the type expected, the type of
+    the value, and the value, for the error message of a term that
+    evaluates to an [err]. A cast of an [err] is not a failure of its own,
+    and is not recorded. Only the first few failures since the last
+    [clear_failures] are kept. *)
+
+type failure_reason =
+  | FMismatch (** the types differ: [nat] and [string], data and a function *)
+  | FIndices (** the same family at other indices: [1 = 1] and [1 = 2] *)
+
+type failure = {
+  expected : constr; (** the type the cast is to, in whnf *)
+  actual : constr; (** the type of the value: with [FIndices], the type its
+                       constructor builds *)
+  value : constr; (** the value, as given to the cast *)
+  reason : failure_reason;
+}
+
+val clear_failures : unit -> unit
+
+(** The recorded failures, oldest first *)
+val failures : unit -> failure list
+
 (** [kind_of env c] tells whether [c] is one of the registered gradual
     primitives. Cheap enough to be called on every constant. *)
 val kind_of : Environ.env -> Constant.t -> kind option

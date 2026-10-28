@@ -493,8 +493,8 @@ let print_name_infos env ref =
 (**** Printing declarations and judgments *)
 (****  Gallina layer                  *****)
 
-let print_typed_value_in_env env sigma (trm,typ) =
-  (pr_leconstr_env ~inctx:true env sigma trm ++ fnl () ++
+let print_typed_value_in_env ?scope env sigma (trm,typ) =
+  (pr_leconstr_env ~inctx:true ?scope env sigma trm ++ fnl () ++
      str "     : " ++ pr_letype_env env sigma typ)
 
 (* To be improved; the type should be used to provide the types in the
@@ -687,8 +687,8 @@ let print_library_node = function
 
 (** Printing part of command [Check] *)
 
-let print_judgment env sigma {uj_val=trm;uj_type=typ} =
-  print_typed_value_in_env env sigma (trm, typ)
+let print_judgment ?scope env sigma {uj_val=trm;uj_type=typ} =
+  print_typed_value_in_env ?scope env sigma (trm, typ)
 
 let print_safe_judgment {Safe_typing.jdg_env=senv; jdg_val=trm; jdg_type=typ} =
   let env = Safe_typing.env_of_safe_env senv in

@@ -1,0 +1,28 @@
+     = raise
+     : string
+Run-time error: expected a string, but got 42 : nat.
+     = raise
+     : nat
+Run-time error: expected a nat, but got a function of type nat -> nat.
+     = raise
+     : 1 = 2
+Run-time error: expected a proof of 1 = 2, but got a proof of 1 = 1.
+     = "Hello, " ++ raise
+     : string
+Run-time error: expected a string, but got 42 : nat.
+     = Succ (Succ (Succ (Succ (Succ (Succ (Succ raise))))))
+     : nat
+Run-time error: expected a string, but got 42 : nat.
+     = [1, 2, raise]
+     : list nat
+Run-time error: expected a nat, but got true : bool.
+     = fun _ : nat => ("x" ++ raise)%str
+     : nat -> string
+Run-time error: expected a string, but got a nat.
+     = raise
+     : nat
+Run-time error: raise in safe_div (output/GradualErrors.v:20).
+     = eq_refl
+     : 1 = 1
+     = 3
+     : nat

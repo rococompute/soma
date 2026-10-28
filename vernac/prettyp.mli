@@ -36,7 +36,9 @@ val print_full_pure_context : Global.indirect_accessor -> env -> Evd.evar_map ->
 
 val print_sec_context : Global.indirect_accessor -> env -> Evd.evar_map -> qualid -> Pp.t
 val print_sec_context_typ : env -> Evd.evar_map -> qualid -> Pp.t
-val print_judgment : env -> Evd.evar_map -> EConstr.unsafe_judgment -> Pp.t
+
+(** [scope]: the value is printed in this notation scope *)
+val print_judgment : ?scope:Notation_term.scope_name -> env -> Evd.evar_map -> EConstr.unsafe_judgment -> Pp.t
 val print_safe_judgment : Safe_typing.judgment -> Pp.t
 
 val print_name : Global.indirect_accessor -> env -> Evd.evar_map

@@ -35,7 +35,8 @@ Commands:
                          rocq c (rocq c --help).
   run FILE [OPTIONS] [-- ARGUMENTS]
                          check a Lightlang program and print the value of
-                         its last bare term; for a program that requires
+                         its last bare term (and fail when it is a
+                         run-time error); for a program that requires
                          Mirage, build its image and run it (solo5-hvt, or
                          solo5-vmnet -- solo5-hvt for one that uses the
                          network), with ARGUMENTS (as --arg=...). Leaves no
@@ -142,8 +143,12 @@ let temp_dir () =
   Unix.mkdir file 0o700;
   file
 
+(* What follows the value of a term that failed at run time *)
+let runtime_error = "Run-time error: "
+
 (* The value of the last bare term in what [rocq c] printed: a line
-   ["     = value"] and the indented lines after it, up to the type *)
+   ["     = value"] and the indented lines after it, up to the type, and
+   the run-time error that the value ends in, if any *)
 let last_value output =
   let rec from_last = function
     | [] -> []
@@ -153,7 +158,8 @@ let last_value output =
       | found -> found
   in
   let rec block = function
-    | l :: rest when l <> "" && (l.[0] = ' ' || l.[0] = '\t') -> l :: block rest
+    | l :: rest when l <> "" && (l.[0] = ' ' || l.[0] = '\t' || starts_with ~prefix:runtime_error l) ->
+      l :: block rest
     | _ -> []
   in
   match from_last (lines output) with
@@ -201,8 +207,14 @@ let run file args image_args =
       prerr_endline "light run: arguments after -- are for a program that requires Mirage";
       finish 2
     end;
-    Option.iter print_endline (last_value output);
-    finish 0
+    let value = last_value output in
+    Option.iter print_endline value;
+    (* a program whose result is a run-time error fails *)
+    let failed = match value with
+      | Some v -> List.exists (starts_with ~prefix:runtime_error) (lines v)
+      | None -> false
+    in
+    finish (if failed then 1 else 0)
 
 let () =
   match List.tl (Array.to_list Sys.argv) with

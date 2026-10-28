@@ -18,7 +18,9 @@ light run examples/hello.light
 - `compile_time_error.light`: a wrong argument is rejected when the program
   is checked, before it runs.
 - `run_time_error.light`: the same mistake with an `Any` parameter is
-  accepted, and fails with `raise` when the program runs.
+  accepted, and fails when the program runs: `light run` prints the value
+  as far as it was computed, `"Hello, " ++ raise`, and the error,
+  `Run-time error: expected a string, but got 42 : nat.`
 - `basic_fibonacci.light`: the textbook recursive `fib`, with `Recursive`
   and `match`.
 - `gradual_fibonacci.light`: a linear-time `fib`, first with its types
