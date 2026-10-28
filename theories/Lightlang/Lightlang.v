@@ -44,6 +44,11 @@ From Stdlib Require Export ZArith QArith Reals Qreals Lra.
     [%Q], as in [(1 # 2)%Q], and reals with [%R], as in [(sqrt 2)%R]. *)
 Close Scope Q_scope.
 
+(** [x != y]: [x] is not equal to [y]. Another spelling of [x <> y], which
+    still works; terms print with [!=]. Like [=], it is a proposition, for
+    statements and proofs; the [bool] test for code is [negb (x =? y)]. *)
+Notation "x != y" := (~ (x = y)) (at level 70, no associativity) : type_scope.
+
 (** ["..."] string literals, [string] and [append] *)
 Require Export Lightlang.Strings.
 

@@ -73,6 +73,7 @@ loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
   makes instance search wait until the type is known.
 - `Succ`, another name for the `nat` constructor `S`, usable in patterns and
   used when printing.
+- `x != y`, another spelling of `x <> y` (not equal), used when printing.
 - Stdlib's `NArith`: the binary natural numbers `N`, their literals and
   arithmetic. `nat` stays the default for number literals.
 - Stdlib's `Arith` (`nat` comparisons such as `=?` and `<?`, `mod`),
