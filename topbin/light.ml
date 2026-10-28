@@ -55,17 +55,38 @@ let usage_error fmt =
 (* [rocq c ARGS], with what it prints on stdout (the values of bare terms,
    Mirage's messages) returned instead of shown; errors and warnings, on
    stderr, are shown *)
+(* The process light is waiting for, to which [pass_signals] passes the
+   signals light receives *)
+let child = ref None
+
+(* [kill] (SIGTERM) and closing the terminal (SIGHUP) stop the process
+   light is waiting for, rather than light: light then exits as it does
+   when the process ends, cleaning up after it *)
+let pass_signals () =
+  let pass = Sys.Signal_handle (fun signal ->
+      Option.iter (fun pid -> try Unix.kill pid signal with Unix.Unix_error _ -> ()) !child) in
+  Sys.set_signal Sys.sigterm pass;
+  Sys.set_signal Sys.sighup pass
+
+let rec wait pid =
+  try snd (Unix.waitpid [] pid)
+  with Unix.Unix_error (Unix.EINTR, _, _) -> wait pid
+
+let exit_code = function
+  | Unix.WEXITED n -> n
+  | Unix.WSIGNALED _ | Unix.WSTOPPED _ -> 1
+
 let compile args =
   let prog = get_worker_path { package = "rocq-runtime"; basename = "rocqworker" } in
   let argv = Array.of_list (prog :: "--kind=compile" :: args) in
   let out_r, out_w = Unix.pipe ~cloexec:true () in
   let pid = Unix.create_process prog argv Unix.stdin out_w Unix.stderr in
+  child := Some pid;
   Unix.close out_w;
   let output = In_channel.input_all (Unix.in_channel_of_descr out_r) in
   Unix.close out_r;
-  let _, status = Unix.waitpid [] pid in
-  let code = match status with
-    | Unix.WEXITED n -> n | Unix.WSIGNALED _ | Unix.WSTOPPED _ -> 1 in
+  let code = exit_code (wait pid) in
+  child := None;
   code, output
 
 (* The output directory: that of [-o FILE.vo], or else the source's *)
@@ -184,7 +205,10 @@ let mirage_command output =
 
 let run file args image_args =
   let dir = temp_dir () in
+  (* the temporary directory holds the program's image: it is removed
+     however the program ends *)
   let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
+  pass_signals ();
   let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
   let code, output = compile (file :: "-o" :: vo :: args) in
   List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
@@ -197,11 +221,12 @@ let run file args image_args =
       | Some s when s <> "" -> s | _ -> "hvf" in
     let argv = "opam" :: "exec" :: ("--switch=" ^ switch) :: "--" :: command @ image_args in
     (* Ctrl-C stops the image, which then exits; light waits for it to
-       remove the temporary directory *)
+       remove the temporary directory. opam exec runs the image in its
+       place, so the signals passed on reach it. *)
     Sys.set_signal Sys.sigint Sys.Signal_ignore;
     let pid = Unix.create_process "opam" (Array.of_list argv) Unix.stdin Unix.stdout Unix.stderr in
-    let _, status = Unix.waitpid [] pid in
-    finish (match status with Unix.WEXITED n -> n | _ -> 1)
+    child := Some pid;
+    finish (exit_code (wait pid))
   | None ->
     if image_args <> [] then begin
       prerr_endline "light run: arguments after -- are for a program that requires Mirage";
