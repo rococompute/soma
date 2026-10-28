@@ -59,7 +59,8 @@ _build/install/default/bin/light run my_file.light
 
 - `light build FILE` checks and builds a program as `rocq c FILE` does, with
   the same options, and prints the names of the files it created instead of
-  the values of the program's bare terms.
+  the values of the program's bare terms; `light build -v FILE` prints those
+  values first.
 - `light run FILE [-- ARGUMENTS]` checks the program in a temporary
   directory, so that it leaves no files, and prints the value of its last
   bare term; a program that requires Mirage is built into an image, which

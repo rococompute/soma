@@ -24,11 +24,14 @@ open Rocqshim
 let usage = {|Usage: light COMMAND [ARGUMENTS]
 
 Commands:
-  build FILE [OPTIONS]   check and build a Lightlang program (FILE.light),
+  build [-v] FILE [OPTIONS]
+                         check and build a Lightlang program (FILE.light),
                          and print the names of the files created: FILE.vo
                          and the others rocq c makes, and FILE.hvt, the
                          MirageOS image, for a program that requires
-                         Mirage. The options are those of rocq c
+                         Mirage. With -v (--verbose), first print what
+                         rocq c prints: the values of the program's bare
+                         terms. The options are those of rocq c
                          (rocq c --help).
   run FILE [OPTIONS] [-- ARGUMENTS]
                          check a Lightlang program and print the value of
@@ -76,14 +79,16 @@ let modification_times dir =
         with Unix.Unix_error _ -> None)
   with Sys_error _ -> []
 
-(* The files of [dir] that are new or changed since [before], but [source] *)
-let created ~before ~source dir =
+(* The files of [dir] that are new since [before], or written since
+   [start], but [source]. Modification times may only count seconds, so a
+   file rewritten in the second it was last written is caught by [start],
+   rounded down. *)
+let created ~before ~start ~source dir =
+  let start = Float.of_int (truncate start) in
   modification_times dir
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
-      match List.assoc_opt name before with
-      | None -> true
-      | Some old -> time > old)
+      (time >= start || not (List.mem_assoc name before)))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare
 
@@ -93,16 +98,19 @@ let starts_with ~prefix s =
   String.length s >= String.length prefix &&
   String.sub s 0 (String.length prefix) = prefix
 
-let build file args =
+let build ~verbose file args =
   let dir = output_dir file args in
   let before = modification_times dir in
+  let start = Unix.gettimeofday () in
   let code, output = compile (file :: args) in
-  (* The values of bare terms are not shown; the notice that the MirageOS
-     project is being set up is, as it takes a while *)
-  List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
-    (lines output);
+  (* Without -v, the values of bare terms are not shown; the notice that
+     the MirageOS project is being set up is, as it takes a while *)
+  if verbose then print_string output
+  else
+    List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
+      (lines output);
   if code <> 0 then exit code;
-  List.iter print_endline (created ~before ~source:file dir)
+  List.iter print_endline (created ~before ~start ~source:file dir)
 
 let rec remove_tree path =
   if Sys.is_directory path then begin
@@ -181,11 +189,17 @@ let run file args image_args =
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
-  | ["build"] -> usage_error "light build: no file given"
-  | "build" :: file :: args ->
-    let opts, args = parse_opts args in
-    let () = init opts (file :: args) in
-    build file args
+  | "build" :: rest ->
+    (* -v is light's (rocq c's -v prints its version), before or after FILE *)
+    let is_verbose a = a = "-v" || a = "--verbose" in
+    let verbose = List.exists is_verbose rest in
+    begin match List.filter (fun a -> not (is_verbose a)) rest with
+      | [] -> usage_error "light build: no file given"
+      | file :: args ->
+        let opts, args = parse_opts args in
+        let () = init opts (file :: args) in
+        build ~verbose file args
+    end
   | ["run"] -> usage_error "light run: no file given"
   | "run" :: file :: rest ->
     let rec split = function

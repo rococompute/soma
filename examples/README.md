@@ -9,7 +9,7 @@ light run examples/hello.light
 ```
 
 `light build` builds one instead, and prints the names of the files it
-created.
+created; `light build -v` first prints the value of each line.
 
 - `hello.light`: hello world.
 - `string_formatting.light`: `to_string` on strings, numbers and lists, and
