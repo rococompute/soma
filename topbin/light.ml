@@ -27,9 +27,8 @@ Commands:
   build [-v] FILE [OPTIONS]
                          check and build a Lightlang program (FILE.light).
                          The files rocq c makes (FILE.vo, FILE.glob,
-                         .FILE.aux) are deleted, each printed as
-                         "Deleted FILE.vo"; the files that are kept are
-                         printed: FILE.hvt, the MirageOS image of a program
+                         .FILE.aux) are deleted; the files that are kept
+                         are printed: FILE.hvt, the MirageOS image of a program
                          that requires Mirage. With -v (--verbose), first
                          print what rocq c prints: the values of the
                          program's bare terms. The options are those of
@@ -122,8 +121,7 @@ let build ~verbose file args =
      image) is kept. *)
   let compiled f = List.exists (Filename.check_suffix f) [".vo"; ".vos"; ".vok"; ".glob"; ".aux"] in
   List.iter (fun f ->
-      if compiled f then begin Sys.remove f; print_endline ("Deleted " ^ f) end
-      else print_endline f)
+      if compiled f then Sys.remove f else print_endline f)
     (created ~before ~start ~source:file dir);
   if code <> 0 then exit code
 

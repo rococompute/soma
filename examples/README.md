@@ -8,8 +8,8 @@ of its last line, or, for a Mirage program, runs its image:
 light run examples/hello.light
 ```
 
-`light build` checks one, deletes the files that checking makes (printing
-`Deleted ...` for each), and keeps the image of a Mirage program;
+`light build` checks one, deletes the files that checking makes, and keeps
+(and prints) the image of a Mirage program;
 `light build -v` first prints the value of each line.
 
 - `hello.light`: hello world.

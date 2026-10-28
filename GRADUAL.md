@@ -59,8 +59,7 @@ _build/install/default/bin/light run my_file.light
 
 - `light build FILE` checks and builds a program as `rocq c FILE` does, with
   the same options, then deletes the files `rocq c` made (`.vo`, `.glob`,
-  `.aux`), printing `Deleted FILE.vo` for each, and prints the names of the
-  files it keeps: the `.hvt` image of a Mirage program. `light build -v FILE`
+  `.aux`), and prints the names of the files it keeps: the `.hvt` image of a Mirage program. `light build -v FILE`
   first prints the values of the program's bare terms. (`rocq c` keeps the
   `.vo`, for files that `Require` the program.)
 - `light run FILE [-- ARGUMENTS]` checks the program in a temporary
