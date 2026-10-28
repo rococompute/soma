@@ -1,0 +1,39 @@
+(** The square root of 2 is irrational: no fraction [p / q] squares to 2.
+    Squaring and multiplying out, there are no whole numbers [p] and
+    [q <> 0] with [p * p = 2 * (q * q)].
+
+    The proof is the classic infinite descent: from a solution, build a
+    smaller one, which cannot go on forever. [lia] and [nia], from the
+    prelude, prove the arithmetic steps. *)
+
+(** If [n * n] is even, so is [n]: [Nat.even (n * n)] is
+    [Nat.even n || Nat.even n]. *)
+Lemma even_square n : Nat.Even (n * n) -> Nat.Even n.
+Proof.
+  intros H. apply Nat.even_spec in H. apply Nat.even_spec.
+  rewrite Nat.even_mul in H. destruct (Nat.even n); auto.
+Qed.
+
+(** By strong induction on [p]: assume no smaller [p] has a solution.
+    1. [p * p = 2 * (q * q)] is even, so [p] is even: [p = 2 * k].
+    2. Then [4 * (k * k) = 2 * (q * q)], so [q * q = 2 * (k * k)]: a
+       solution with [q] in place of [p].
+    3. [q < p], so by the induction hypothesis it cannot exist.
+    The three [nia] goals are step 3's conditions: [q < 2 * k], [k <> 0]
+    and [q * q = 2 * (k * k)]. *)
+Theorem sqrt2_irrational : forall p q, q <> 0 -> p * p <> 2 * (q * q).
+Proof.
+  intro p. induction p as [p IH] using (well_founded_induction lt_wf).
+  intros q Hq Heq.
+  destruct (even_square p) as [k Hk].
+  { exists (q * q). lia. }
+  subst p.
+  apply (IH q) with k.
+  - nia.
+  - nia.
+  - nia.
+Qed.
+
+(** What the theorem depends on beyond Rocq's logic: nothing. *)
+Print Assumptions sqrt2_irrational.
+(* Closed under the global context *)
