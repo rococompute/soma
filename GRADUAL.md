@@ -78,6 +78,11 @@ loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
 - Stdlib's `Arith` (`nat` comparisons such as `=?` and `<?`, `mod`),
   `List` (`map`, `seq`, `filter`, `fold_left`, ..., and `++` and `::` on
   lists) and `Lia` (the `lia` and `nia` tactics).
+- Stdlib's `ZArith`, `QArith`, `Reals`, `Qreals` and `Lra`: integers `Z`,
+  rationals `Q`, reals `R` with `sqrt`, `Q2R` from rationals to reals, and
+  the `lra` tactic. `QArith` opens `Q_scope`, which the prelude closes again,
+  so `3` is still a `nat`; rationals are written `(1 # 2)%Q` and reals
+  `(sqrt 2)%R`. Loading `Reals` takes hello world from 0.12 to 0.15 s.
 
 It also sets `Automatic Generalization` (`vernac/comDefinition.ml`): a type
 that a `Definition` leaves unknown becomes a maximal implicit type parameter,

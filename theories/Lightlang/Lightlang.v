@@ -34,6 +34,16 @@ From Stdlib Require Export Arith List.
 (** Stdlib's [lia] and [nia] tactics, which prove arithmetic facts *)
 From Stdlib Require Export Lia.
 
+(** Stdlib's integers [Z], rationals [Q] ([n # d], with [==] for equality
+    of fractions), real numbers [R] (with [sqrt]), the bridge [Q2R] from
+    rationals to reals, and [lra], [lia] for real numbers *)
+From Stdlib Require Export ZArith QArith Reals Qreals Lra.
+
+(** [QArith] opens [Q_scope], which would make [3] a [Q] and [+] the
+    addition of [Q]s. Numbers stay [nat]s: rationals are written with
+    [%Q], as in [(1 # 2)%Q], and reals with [%R], as in [(sqrt 2)%R]. *)
+Close Scope Q_scope.
+
 (** ["..."] string literals, [string] and [append] *)
 Require Export Lightlang.Strings.
 
