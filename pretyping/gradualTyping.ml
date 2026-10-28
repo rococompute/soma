@@ -59,6 +59,10 @@ let is_unknown env sigma t = is_prim env sigma Gradual.GUnknown t
 
 let is_unknown_type env sigma t = is_unknown env sigma (Reductionops.whd_all env sigma t)
 
+let mentions_unknown env sigma t =
+  let rec aux c = is_unknown env sigma c || EConstr.fold sigma (fun b c -> b || aux c) false c in
+  aux (Evarutil.nf_evar sigma t)
+
 (* Consistency is the congruence closure of conversion where [?_A] is related
    to everything. We approximate it structurally on weak head normal forms,
    which is complete for types that are first-order up to conversion.

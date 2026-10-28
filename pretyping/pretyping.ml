@@ -1055,10 +1055,12 @@ struct
     let nargs_before_bidi =
       if Option.is_empty tycon then length
       (* We apply bidirectionality hints only if an expected type is specified *)
-      else if GradualTyping.enabled !!env then
-        (* GCIC checking. The expected type is unified with the result
-           before the arguments are inferred, and each argument is then
-           checked at the domain that unification produced.
+      else if GradualTyping.enabled !!env
+           && GradualTyping.mentions_unknown !!env sigma (Option.get tycon) then
+        (* GCIC checking, when the expected type mentions [?]. The expected
+           type is unified with the result before the arguments are
+           inferred, and each argument is then checked at the domain that
+           unification produced.
            [cons 1 (cons true nil) : list Any] checks [1] and [true]
            at [Any] instead of rejecting [true] at [nat].
            At [Any] itself, nothing determines the parameters: the
@@ -1070,7 +1072,12 @@ struct
            [@cons Any 1 nil : list nat] elaborates to a cast from
            [list Any], since [@cons nat 1 nil : list nat] is accepted
            (graduality). An implicit type argument is a hole, which
-           stays undetermined until the expected type is unified. *)
+           stays undetermined until the expected type is unified.
+           Without [?] in the expected type, the arguments are inferred
+           first, as in Rocq: a result type that only computes to the
+           expected one once the arguments are known, as in
+           [exact (P_all 3) : True] with [P 3] reducing to [True], or in
+           [lia]'s proofs by reflection, is accepted. *)
         let rec leading_types env typ n =
           if Int.equal n length then n
           else match EConstr.kind sigma (whd_all env sigma typ) with

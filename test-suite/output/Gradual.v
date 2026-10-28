@@ -46,7 +46,7 @@ Constraint j < i.
 Fail Definition bad_univ (T : Type@{i}) : Type@{j} := T.
 
 (* the universe of gradual types: what can be cast, and what cannot *)
-Definition large_list : list Type := cons nat nil.
+Definition large_list : list Type := @cons Type nat nil.
 Definition large_list_dyn : Any := large_list.
 Print large_list_dyn.
 #[universes(polymorphic)] Record Box@{u} := { contents : Type@{u} }.

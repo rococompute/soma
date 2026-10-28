@@ -94,6 +94,17 @@ the function's type `?`, since nothing could determine it. A type class
 instance argument is the exception: its binder never occurs, but instance
 resolution determines it (`pretyping/pretyping.ml`, `erased`).
 
+An application is checked against its expected type first, before its
+arguments, only when that type mentions `?` (`Any` or `unk`,
+`GradualTyping.mentions_unknown`): that is what lets
+`cons 1 (cons true nil) : list Any` check `true` at `Any`. Otherwise the
+arguments come first, as in Rocq, so terms without `Any` elaborate as in
+Rocq. A type that only computes to the expected one once the arguments are
+known, like `lia`'s proofs by reflection, needs that order, and `lia` and
+`nia` work with `Gradual Typing` on (`success/gradual_static_order.v`). The
+check is syntactic: an `Any` hidden behind a definition of the expected type
+does not count.
+
 Pass `-no-lightlang-prelude` for plain Rocq, where each part of the
 Lightlang prelude can be imported on its own (`From Lightlang Require Import
 Strings Lists Show.`), or `-no-prelude` to load no prelude at all, Rocq's
