@@ -9,8 +9,9 @@ _build/install/default/bin/rocq c examples/hello.light
 - `hello.light`: hello world.
 - `string_formatting.light`: `to_string` on strings, numbers and lists, and
   a `greet` that accepts any of them.
-- `any.light`: a wrong argument is rejected when the program is checked,
-  unless the parameter is `Any`; then it fails with `raise` when it runs.
+- `compile_time_vs_run_time_error.light`: a wrong argument is rejected when
+  the program is checked, unless the parameter is `Any`; then it fails with
+  `raise` when it runs.
 - `basic_fibonacci.light`: the textbook recursive `fib`, with `Recursive`
   and `match`.
 - `gradual_fibonacci.light`: a linear-time `fib`, first with its types
