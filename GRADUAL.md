@@ -64,7 +64,9 @@ Every file starts with the Lightlang prelude, `theories/Lightlang/Lightlang.v`,
 loaded right after Rocq's Prelude. It exports `Corelib.Gradual.Gradual`, which
 sets `Gradual Typing`, and makes `"..."` a Stdlib `string` (a list of ascii
 characters) everywhere, with `string` and `append` in scope, so Stdlib's string
-functions apply to literals. Pass `-no-lightlang-prelude` for plain Rocq. The
+functions apply to literals. It also defines `Succ` as another name for the
+`nat` constructor `S`, usable in patterns and used when printing. Pass
+`-no-lightlang-prelude` for plain Rocq. The
 Lightlang prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
 Stdlib and the prelude itself are built as plain CIC. The inherited Rocq
 test-suite runs with `-no-lightlang-prelude`, and the gradual tests import

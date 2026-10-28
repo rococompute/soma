@@ -16,6 +16,11 @@
 
 Require Export Corelib.Gradual.Gradual.
 
+(** [Succ] is another name for [S], the successor constructor of [nat]. It
+    works in patterns too ([Succ m] is any number at least 1, and [m] is one
+    less), and terms built with [S] print with [Succ]. *)
+Abbreviation Succ := S.
+
 (** String literals: ["..."] is a Stdlib [string], a list of ascii
     characters, everywhere, including where an [Any] is expected, so that
     Stdlib's string functions apply to it. Only [string] and [append] are
