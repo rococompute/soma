@@ -226,7 +226,9 @@ A string that ends in `raise` prints as `"Hello, " ++ raise` rather than as
 its characters (`Register ... as lightlang.string.append`, in
 `Lightlang.Strings`). `light run` fails when the program's last value is a
 run-time error. Compiled code raises `Gradual_rt.Cast_error` at the cast
-instead.
+instead, worded the same way from the types it has at run time
+(`expected a bool, but got a nat`, without the value); a Mirage image
+prints it as `Run-time error: ...` and exits.
 
 ## Architecture
 

@@ -121,13 +121,42 @@ and arg_to_string = function
   | Unk -> "?"
   | Error -> "err"
 
+(* A type in an error message, by short names: "nat", "a function",
+   "(vec nat _)" *)
+let rec describe = function
+  | Pi _ -> "a function"
+  | Ind { name; args; _ } ->
+    let short = match String.rindex_opt name '.' with
+      | Some i -> String.sub name (i + 1) (String.length name - i - 1)
+      | None -> name
+    in
+    let args = Array.to_list (Array.map describe_arg args) in
+    "a " ^ String.concat " " (short :: args)
+  | t -> "a " ^ to_string t
+
+and describe_arg = function
+  | Ty (Pi _ as t) -> "(" ^ to_string t ^ ")"
+  | Ty t ->
+    let s = describe t in
+    let s = if String.length s > 2 && String.sub s 0 2 = "a " then String.sub s 2 (String.length s - 2) else s in
+    if String.contains s ' ' then "(" ^ s ^ ")" else s
+  | a -> arg_to_string a
+
+(* "a nat", "an option nat" *)
+let describe t =
+  let s = describe t in
+  if String.length s > 2 && String.sub s 0 2 = "a " && String.contains "aeiou" s.[2] then "an " ^ String.sub s 2 (String.length s - 2)
+  else s
+
 (* [err] at type [b]: a value when [b] is an inductive type that can hold
    it. *)
 let error_at b msg = match b with
   | Ind { data = true; _ } -> make_exc false msg
   | _ -> raise (Cast_error msg)
 
-let fail a b = error_at b ("cannot cast from " ^ to_string a ^ " to " ^ to_string b)
+(* worded as the errors of terms evaluated by Rocq
+   (vernac/gradualErrors.ml) *)
+let fail a b = error_at b ("expected " ^ describe b ^ ", but got " ^ describe a)
 
 let same_value (a : Obj.t) (b : Obj.t) =
   a == b || (try compare a b = 0 with Invalid_argument _ -> false)
@@ -164,7 +193,7 @@ let rec err_term ty : Obj.t = match ty with
   | Unknown -> Obj.repr { dty = Err; dv = dummy }
   | Erased | Sort _ -> dummy
   | Pi (_, b) -> Obj.repr (fun x -> err_term (b x))
-  | Ind _ | Prim _ | Err -> error_at ty ("error at type " ^ to_string ty)
+  | Ind _ | Prim _ | Err -> error_at ty ("raise, at type " ^ to_string ty)
 
 let rec cast a b (v : Obj.t) : Obj.t =
   if equal a b then v
@@ -236,7 +265,7 @@ let check_indices tgt nparams computed v =
     | (Val _ | Error), _ -> false
   in
   if List.for_all Fun.id (List.mapi compatible computed) then v
-  else error_at (Ind tgt) ("index mismatch at type " ^ to_string (Ind tgt))
+  else error_at (Ind tgt) ("expected " ^ describe (Ind tgt) ^ ", but got one at other indices")
 
 (* Builders used by the extracted code. *)
 let unknown_ty = Unknown

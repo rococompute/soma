@@ -145,9 +145,9 @@ let check v =
   else v
 
 let report = function
-  | Stuck what -> Printf.printf "error: the program reached %s\n%!" what
-  | Gradual.Cast_error msg -> Printf.printf "error: a cast failed at run time (raise), %s\n%!" msg
-  | e -> Printf.printf "error: %s\n%!" (Printexc.to_string e)
+  | Stuck what -> Printf.printf "Run-time error: the program reached %s.\n%!" what
+  | Gradual.Cast_error msg -> Printf.printf "Run-time error: %s.\n%!" msg
+  | e -> Printf.printf "Run-time error: %s.\n%!" (Printexc.to_string e)
 
 (* What the network provides; without a network stack, [serve] and [fetch]
    are not reached (a program that uses them gets one) *)
