@@ -2108,6 +2108,16 @@ let check_may_eval env sigma redexp rc =
   let sigma, c = Pretyping.understand_tcc env sigma gc in
   let sigma = Evarconv.solve_unif_constraints_with_heuristics env sigma in
   Evarconv.check_problems_are_solved env sigma;
+  let sigma = match redexp with
+    | Some _ when ComDefinition.automatic_generalization () ->
+      (* Lightlang: a term is only evaluated once every type class instance
+         whose type is known has been found, so [to_string true] without an
+         instance for [bool] is an error rather than a stuck term *)
+      let known ev _ = Evar.Set.is_empty
+          (Evarutil.undefined_evars_of_term sigma (Evd.evar_concl (Evd.find_undefined sigma ev))) in
+      Typeclasses.resolve_typeclasses ~filter:known ~fail:true env sigma
+    | _ -> sigma
+  in
   let { Environ.uj_val=c; uj_type=ty; } = Retyping.get_judgment_of env sigma c in
   let sigma, c = match redexp with
     | None -> sigma, c

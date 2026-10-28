@@ -111,6 +111,74 @@ let interp_definition ~program_mode ~poly env evd impl_env bl red_option c ctypo
   let tyopt = Option.map (fun ty -> EConstr.it_mkProd_or_LetIn ty ctx) tyopt in
   evd, (c, tyopt), imps
 
+(* Lightlang: a type the definition leaves unknown becomes a type parameter.
+   The unknown types become maximal implicit arguments, followed by the type
+   class instances that depend on them, so that
+   [Definition greet name := append "Hello, " (to_string name)] means
+   [Definition greet {A} {H : Show A} (name : A) := ...], like let-
+   generalization in ML. Any other unsolved evar is left for the usual
+   error. *)
+let { Goptions.get = automatic_generalization } =
+  Goptions.declare_bool_option_and_ref
+    ~key:["Automatic"; "Generalization"]
+    ~value:false
+    ()
+
+let generalize_unknown_types env sigma body typ imps =
+  let open EConstr in
+  let evars_of c = Evarutil.undefined_evars_of_term sigma c in
+  let roots = match typ with
+    | None -> evars_of body
+    | Some typ -> Evar.Set.union (evars_of body) (evars_of typ) in
+  (* Also the evars in the types of these, e.g. [?A] in [?H : Show ?A] *)
+  let rec close seen = function
+    | [] -> seen
+    | ev :: todo when Evar.Set.mem ev seen -> close seen todo
+    | ev :: todo ->
+      let concl = Evd.evar_concl (Evd.find_undefined sigma ev) in
+      close (Evar.Set.add ev seen) (Evar.Set.elements (evars_of concl) @ todo) in
+  let evs = close Evar.Set.empty (Evar.Set.elements roots) in
+  let types, classes, others = Evar.Set.fold (fun ev (types, classes, others) ->
+      let concl = Evarutil.nf_evar sigma (Evd.evar_concl (Evd.find_undefined sigma ev)) in
+      if isSort sigma concl then (ev, concl) :: types, classes, others
+      else if Typeclasses.is_class_type env sigma concl then types, ev :: classes, others
+      else types, classes, ev :: others)
+      evs ([], [], []) in
+  if types = [] || others <> [] then None else
+  (* The evars are defined as variables that no evar context can bind, which
+     are then abstracted *)
+  let fresh = let n = ref 0 in fun () ->
+    incr n; Names.Id.of_string_soft ("__lightlang_generalized_" ^ string_of_int !n) in
+  let types = List.rev_map (fun (ev, s) -> ev, fresh (), s) types in
+  let sigma = List.fold_left (fun sigma (ev, id, _) -> Evd.define ev (mkVar id) sigma) sigma types in
+  let classes = List.rev_map (fun ev ->
+      ev, fresh (), Evarutil.nf_evar sigma (Evd.evar_concl (Evd.find_undefined sigma ev)))
+      classes in
+  let sigma = List.fold_left (fun sigma (ev, id, _) -> Evd.define ev (mkVar id) sigma) sigma classes in
+  let ids = List.map (fun (_, id, _) -> id) (types @ classes) in
+  let closed t =
+    Names.Id.Set.subset (Termops.collect_vars sigma t) (Names.Id.Set.of_list ids)
+    && Evar.Set.is_empty (evars_of t) in
+  if not (List.for_all (fun (_, _, t) -> closed t) classes) then None else
+  (* Names shown to users: A, B, ... for types, H for instances *)
+  let avoid = List.fold_left (fun avoid (na, _) -> match na.Context.binder_name with
+      | Names.Name id -> Names.Id.Set.add id avoid | Names.Anonymous -> avoid)
+      Names.Id.Set.empty (fst (decompose_lambda sigma body)) in
+  let name avoid base = let id = Namegen.next_ident_away (Names.Id.of_string base) avoid in
+    id, Names.Id.Set.add id avoid in
+  let avoid, types = List.fold_left_map (fun avoid (_, id, s) ->
+      let nice, avoid = name avoid "A" in avoid, (id, nice, s)) avoid types in
+  let _, classes = List.fold_left_map (fun avoid (_, id, t) ->
+      let nice, avoid = name avoid "H" in avoid, (id, nice, t)) avoid classes in
+  let binders = types @ classes in
+  let abstract mk c = List.fold_right (fun (id, nice, t) c ->
+      mk (Context.make_annot (Names.Name nice) ERelevance.relevant, t, Vars.subst_var sigma id c))
+      binders c in
+  let body = abstract mkLambda (Evarutil.nf_evar sigma body) in
+  let typ = Option.map (fun t -> abstract mkProd (Evarutil.nf_evar sigma t)) typ in
+  let imps = List.map (fun (_, nice, _) -> CAst.make (Some (Names.Name nice, true))) binders @ imps in
+  Some (sigma, body, typ, imps)
+
 let interp_statement ~program_mode env evd ~(flags : Pretyping.inference_flags) ~scope name bl typ  =
   let poly = Pretyping.(flags.poly) in
   let evd, (impls, ((env, ctx), imps, _locs)) = Constrintern.interp_context_evars ~poly ~program_mode env evd bl in
@@ -126,6 +194,12 @@ let do_definition ?loc ?hook ~name ?scope ?clearbody ~poly ?typing_flags ~kind ?
   let evd, udecl = interp_univ_decl_opt env udecl in
   let evd, (body, types), impargs =
     interp_definition ~program_mode ~poly env evd empty_internalization_env bl red_option c ctypopt
+  in
+  let evd, (body, types), impargs =
+    if not (automatic_generalization ()) then evd, (body, types), impargs
+    else match generalize_unknown_types env evd body types impargs with
+      | Some (evd, body, types, impargs) -> evd, (body, types), impargs
+      | None -> evd, (body, types), impargs
   in
   let kind = Decls.IsDefinition kind in
   let cinfo = Declare.CInfo.make ?loc ~name ~impargs ~typ:types () in
