@@ -52,8 +52,12 @@ opam install --switch=. dune ocamlfind zarith
 eval $(opam env --switch=. --set-switch)
 make dunestrap
 dune build rocq-runtime.install coq-core.install rocq-core.install
-_build/install/default/bin/rocq c my_file.light
+_build/install/default/bin/light build my_file.light
 ```
+
+`light` is Lightlang's command line (`topbin/light.ml`): `light build FILE`
+checks and builds a program as `rocq c FILE` does, with the same options,
+and `light help` lists the commands.
 
 Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
@@ -416,9 +420,9 @@ main : io unit :=
     ret (http_response ("You asked for " ++ http_path request))).
 ```
 
-`rocq c prog.light` checks the program and, since it requires `Mirage`,
-builds `prog.hvt` next to `prog.vo` (`toplevel/lightlangMirage.ml`, called
-from `toplevel/ccompile.ml`):
+`light build prog.light` (or `rocq c prog.light`) checks the program and,
+since it requires `Mirage`, builds `prog.hvt` next to `prog.vo`
+(`toplevel/lightlangMirage.ml`, called from `toplevel/ccompile.ml`):
 
 1. `main` must exist and have type `io unit`.
 2. `main` is extracted to `prog.ml` (strings as `char list`, with Stdlib's
@@ -435,7 +439,7 @@ from `toplevel/ccompile.ml`):
 4. The project is built for solo5's `hvt` target in the opam switch
    `$LIGHTLANG_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
    repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
-   `solo5-vmnet`), and `rocq c` says how to run the image.
+   `solo5-vmnet`), and `light build` says how to run the image.
 
 The projects are kept in `$LIGHTLANG_MIRAGE_DIR`, or else
 `~/.cache/lightlang/mirage` (`plain/` and `net/`), so `mirage configure`
@@ -445,9 +449,9 @@ second. Each one's `build.log` has its last build's output.
 `LIGHTLANG_MIRAGE_BUILD=0` skips the image.
 
 ```sh
-rocq c examples/mirage_http_server.light
+light build examples/mirage_http_server.light
 solo5-vmnet -- solo5-hvt -- examples/mirage_http_server.hvt      # prints its IP
-rocq c examples/mirage_fetch.light
+light build examples/mirage_fetch.light
 solo5-vmnet -- solo5-hvt -- examples/mirage_fetch.hvt --arg=<that IP>
 ```
 

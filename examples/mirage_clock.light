@@ -3,7 +3,7 @@
     to end, so an endless loop is an [io] action, run by the image. Stop it
     with Ctrl-C.
 
-        rocq c examples/mirage_clock.light
+        light build examples/mirage_clock.light
         solo5-hvt -- examples/mirage_clock.hvt *)
 Require Import Mirage.
 

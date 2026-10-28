@@ -1,17 +1,19 @@
 # Examples
 
-Small Lightlang programs. Run one with:
+Small Lightlang programs. Run one with `light build` (in
+`_build/install/default/bin` once Lightlang is built):
 
 ```sh
-_build/install/default/bin/rocq c examples/hello.light
+light build examples/hello.light
 ```
 
 - `hello.light`: hello world.
 - `string_formatting.light`: `to_string` on strings, numbers and lists, and
   a `greet` that accepts any of them.
-- `compile_time_vs_run_time_error.light`: a wrong argument is rejected when
-  the program is checked, unless the parameter is `Any`; then it fails with
-  `raise` when it runs.
+- `compile_time_error.light`: a wrong argument is rejected when the program
+  is checked, before it runs.
+- `run_time_error.light`: the same mistake with an `Any` parameter is
+  accepted, and fails with `raise` when the program runs.
 - `basic_fibonacci.light`: the textbook recursive `fib`, with `Recursive`
   and `match`.
 - `gradual_fibonacci.light`: a linear-time `fib`, first with its types
@@ -26,8 +28,10 @@ _build/install/default/bin/rocq c examples/hello.light
 - `sqrt2_irrational_bottom_up.light`: the same proof bottom up, as separate
   named lemmas proved before the theorem that uses them.
 - `mirage_*.light`: MirageOS unikernels. A program that has
-  `Require Import Mirage.` is built into an image, `<name>.hvt`, by `rocq c`,
+  `Require Import Mirage.` is built into an image, `<name>.hvt`, by `light build`,
   which says how to run it (see the Mirage section of GRADUAL.md):
+  - `mirage_minimal.light`: the smallest unikernel, one line printed.
+  - `mirage_minimal_web_server.light`: the smallest web server, one page.
   - `mirage_hello.light`: console output and a countdown with `sleep`.
   - `mirage_clock.light`: the time of day every second, `forever`.
   - `mirage_http_server.light`: an HTTP server, with `serve`, `now` and

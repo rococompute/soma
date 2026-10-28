@@ -3,7 +3,7 @@
     failed, 2 without an address. With mirage_http_server.hvt running at
     192.168.105.46 (it prints its address):
 
-        rocq c examples/mirage_fetch.light
+        light build examples/mirage_fetch.light
         solo5-vmnet -- solo5-hvt -- examples/mirage_fetch.hvt --arg=192.168.105.46
 
     [args] are the [--arg=...] given to the image, in order. *)

@@ -1,0 +1,10 @@
+(** A type error caught when the program is checked, before it runs.
+    run_time_error.light is the same mistake caught while it runs.
+
+    [name] is passed to [append], so its type is inferred as [string], and
+    a [nat] is rejected when the program is checked. [Fail] expects the
+    command to be rejected, so the file still compiles. *)
+greet name := append "Hello, " name.
+
+greet "world".         (* "Hello, world" *)
+Fail greet 42.         (* nat and string differ *)

@@ -19,6 +19,14 @@
  (package rocq-runtime)
  (files (rocq.bc as rocq.byte)))
 
+; light: Lightlang's command line (light build FILE is rocq c FILE)
+(executable
+ (name light)
+ (public_name light)
+ (package rocq-runtime)
+ (modules light)
+ (libraries rocqshim))
+
 (executable
  (name coqtop_bin)
  (public_name coqtop)

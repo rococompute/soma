@@ -1,5 +1,5 @@
 (** A MirageOS unikernel. Requiring [Mirage] makes the program one:
-    [rocq c examples/mirage_hello.light] also builds
+    [light build examples/mirage_hello.light] also builds
     [examples/mirage_hello.hvt], which runs on Apple Silicon with
         solo5-hvt -- examples/mirage_hello.hvt
     (see the Mirage section of GRADUAL.md for the setup).

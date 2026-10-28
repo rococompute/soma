@@ -1,0 +1,10 @@
+(** A type error caught while the program runs. compile_time_error.light is
+    the same mistake caught before it runs.
+
+    [greet_any]'s parameter is declared [Any], so any value is accepted
+    when the program is checked, and [name] is cast to [string] when it
+    runs. *)
+greet_any (name : Any) := append "Hello, " name.
+
+greet_any "world".     (* "Hello, world" *)
+greet_any 42.          (* "Hello, " followed by raise: 42 is not a string *)

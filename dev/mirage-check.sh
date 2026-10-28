@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Build the Mirage examples (examples/mirage_*.light) with rocq c, boot
+# Build the Mirage examples (examples/mirage_*.light) with light build, boot
 # each image on solo5-hvt, and check what it does: its console and its exit
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
 # server unikernel is fetched from by another one.
@@ -14,14 +14,17 @@
 set -u
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-ROCQ="${HERE}/_build/install/default/bin/rocq"
+LIGHT="${HERE}/_build/install/default/bin/light"
 SWITCH="${LIGHTLANG_MIRAGE_SWITCH:-hvf}"
 NETWORK=1
 [ "${1:-}" = "--no-network" ] && NETWORK=0
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
 # the server runs under opam exec and solo5-vmnet: stop solo5-hvt itself
-stop_server() { pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_http_server.hvt"; }
+stop_server() {
+    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_http_server.hvt"
+    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_minimal_web_server.hvt"
+}
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
 FAIL=0
@@ -35,9 +38,9 @@ fail() {
     FAIL=$((FAIL + 1))
 }
 
-# build NAME: rocq c examples/NAME.light, which builds examples/NAME.hvt
+# build NAME: light build examples/NAME.light, which builds examples/NAME.hvt
 build() {
-    if "${ROCQ}" c "${HERE}/examples/$1.light" >"${WORK}/build-$1.log" 2>&1; then
+    if "${LIGHT}" build "${HERE}/examples/$1.light" >"${WORK}/build-$1.log" 2>&1; then
         return 0
     fi
     echo "FAIL build $1"
@@ -74,6 +77,9 @@ run() {
         fail "${case}"
     fi
 }
+
+build mirage_minimal &&
+    run mirage_minimal minimal 0 "^Hello from a unikernel!$" plain
 
 build mirage_hello &&
     run mirage_hello hello 0 "lift off" plain &&
@@ -113,6 +119,20 @@ if [ "${NETWORK}" = 1 ]; then
         fi
         stop_server
         wait "${server}" 2>/dev/null
+        # the minimal web server answers every request with the same page
+        if build mirage_minimal_web_server; then
+            hvf solo5-vmnet -- solo5-hvt --mem=64 -- \
+                "${HERE}/examples/mirage_minimal_web_server.hvt" >"${WORK}/web.log" 2>&1 &
+            ip2=""
+            for _ in $(seq 1 60); do
+                ip2="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/web.log" |
+                    head -1 | awk '{print $4}')"
+                grep -q "stack assembled" "${WORK}/web.log" && [ -n "${ip2}" ] && break
+                sleep 0.25
+            done
+            run mirage_fetch minimal-web-server 0 "^Hello, web!$" net "--arg=${ip2}"
+            pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_minimal_web_server.hvt"
+        fi
         # nothing listens there: the connection fails, and the fetcher exits 1
         run mirage_fetch fetch-refused 1 "the connection failed" \
             net "--arg=${ip:-192.168.105.1}"

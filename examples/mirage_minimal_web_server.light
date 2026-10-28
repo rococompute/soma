@@ -1,0 +1,8 @@
+(** The smallest web server: every request on port 8080 gets the same page.
+
+        light build examples/mirage_minimal_web_server.light
+        solo5-vmnet -- solo5-hvt -- examples/mirage_minimal_web_server.hvt
+        curl http://<the address it prints>:8080/ *)
+Require Import Mirage.
+
+main := serve 8080 (fun _ => ret (http_response "Hello, web!")).

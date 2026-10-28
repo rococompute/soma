@@ -4,7 +4,7 @@
     fetches gets a network stack, so it runs under solo5-vmnet, which gives
     it an address on the Mac's vmnet network (printed when it starts):
 
-        rocq c examples/mirage_http_server.light
+        light build examples/mirage_http_server.light
         solo5-vmnet -- solo5-hvt -- examples/mirage_http_server.hvt
 
     examples/mirage_fetch.light fetches from it. *)
