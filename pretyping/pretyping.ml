@@ -1182,11 +1182,15 @@ struct
              rest of the type of the function (precision erased it:
              [map {A B} (f : Any) (l : Any) : Any]) can never be
              determined, so it is [?]. One that occurs, like [A] in
-             [nil : forall A, list A], is inferred as usual. *)
+             [nil : forall A, list A], is inferred as usual, and so is a
+             type class instance, like [H] in
+             [to_string : forall {A} {H : Show A}, A -> string], which
+             instance resolution determines. *)
           let erased =
             GradualTyping.enabled !!env
             && (match DAst.get c with GHole (GImplicitArg _) -> true | _ -> false)
             && EConstr.Vars.noccurn sigma 1 c2
+            && not (Typeclasses.is_class_type !!env sigma c1)
           in
           let sigma, arg_state, body, arg =
             pretype_arg env sigma arg_state ~trace ~erased body c na.binder_name c1
