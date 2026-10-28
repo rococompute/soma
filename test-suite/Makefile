@@ -185,7 +185,12 @@ FAIL_CHK = >&2 echo 'FAILED    $(patsubst %.v.log,%.chk.log,$@)'
 # These targets can be skipped by doing `make TARGET=`
 COMPLEXITY := $(if $(bogomips),complexity)
 INTERACTIVE := interactive
-UNIT_TESTS := unit-tests
+# The unit tests need the OCaml package ounit2: without it, they are skipped
+HAS_OUNIT := $(shell $(OCAMLFIND) query ounit2 >/dev/null 2>&1 && echo yes)
+ifeq (,$(HAS_OUNIT))
+  $(warning cannot run unit tests (no ounit2 found; install it with: opam install ounit2))
+endif
+UNIT_TESTS := $(if $(HAS_OUNIT),unit-tests)
 
 # targets can be skipped by doing  `make DISABLED_SUBSYSTEMS="target1 target2"`
 DISABLED_SUBSYSTEMS?=
@@ -353,7 +358,7 @@ unit-tests: $(UNIT_LOGFILES)
 # Build executable, run it to generate log file
 unit-tests/%.ml.log: unit-tests/%.ml unit-tests/src/$(UNIT_LINK)
 	$(SHOW) 'TEST      $<'
-	$(HIDE)$(OCAMLBEST) -w -29 -linkpkg -package rocq-runtime.toplevel,ounit2 \
+	$(HIDE)$(OCAMLBEST) -w -29 -linkpkg -package rocq-runtime.toplevel,rocq-runtime.plugins.extraction,ounit2 \
 	     -I unit-tests/src $(UNIT_LINK) $< -o $<.test;
 	$(HIDE)$(call WITH_TIMER,$@,./$<.test)
 	$(HIDE)$(call REPORT_TIMER,$@)
