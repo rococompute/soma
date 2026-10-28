@@ -25,14 +25,15 @@ let usage = {|Usage: light COMMAND [ARGUMENTS]
 
 Commands:
   build [-v] FILE [OPTIONS]
-                         check and build a Lightlang program (FILE.light),
-                         and print the names of the files created: FILE.vo
-                         and the others rocq c makes, and FILE.hvt, the
-                         MirageOS image, for a program that requires
-                         Mirage. With -v (--verbose), first print what
-                         rocq c prints: the values of the program's bare
-                         terms. The options are those of rocq c
-                         (rocq c --help).
+                         check and build a Lightlang program (FILE.light).
+                         The files rocq c makes (FILE.vo, FILE.glob,
+                         .FILE.aux) are deleted, each printed as
+                         "Deleted FILE.vo"; the files that are kept are
+                         printed: FILE.hvt, the MirageOS image of a program
+                         that requires Mirage. With -v (--verbose), first
+                         print what rocq c prints: the values of the
+                         program's bare terms. The options are those of
+                         rocq c (rocq c --help).
   run FILE [OPTIONS] [-- ARGUMENTS]
                          check a Lightlang program and print the value of
                          its last bare term; for a program that requires
@@ -110,7 +111,13 @@ let build ~verbose file args =
     List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
       (lines output);
   if code <> 0 then exit code;
-  List.iter print_endline (created ~before ~start ~source:file dir)
+  (* rocq c's files are of no use to a program once it is checked: they
+     are deleted. The rest (a Mirage image) is kept. *)
+  let compiled f = List.exists (Filename.check_suffix f) [".vo"; ".vos"; ".vok"; ".glob"; ".aux"] in
+  List.iter (fun f ->
+      if compiled f then begin Sys.remove f; print_endline ("Deleted " ^ f) end
+      else print_endline f)
+    (created ~before ~start ~source:file dir)
 
 let rec remove_tree path =
   if Sys.is_directory path then begin
