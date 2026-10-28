@@ -75,6 +75,9 @@ loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
   used when printing.
 - Stdlib's `NArith`: the binary natural numbers `N`, their literals and
   arithmetic. `nat` stays the default for number literals.
+- Stdlib's `Arith` (`nat` comparisons such as `=?` and `<?`, `mod`),
+  `List` (`map`, `seq`, `filter`, `fold_left`, ..., and `++` and `::` on
+  lists) and `Lia` (the `lia` and `nia` tactics).
 
 It also sets `Automatic Generalization` (`vernac/comDefinition.ml`): a type
 that a `Definition` leaves unknown becomes a maximal implicit type parameter,

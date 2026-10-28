@@ -27,6 +27,13 @@ Abbreviation Succ := S.
     unary, so large [nat]s are slow; [N]s are not. *)
 From Stdlib Require Export NArith.
 
+(** Stdlib's [Arith] ([nat] comparisons such as [=?] and [<?], [mod], and
+    their lemmas) and [List] ([map], [seq], [filter], [fold_left], ...) *)
+From Stdlib Require Export Arith List.
+
+(** Stdlib's [lia] and [nia] tactics, which prove arithmetic facts *)
+From Stdlib Require Export Lia.
+
 (** ["..."] string literals, [string] and [append] *)
 Require Export Lightlang.Strings.
 
