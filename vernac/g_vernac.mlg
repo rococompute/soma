@@ -88,7 +88,7 @@ let test_recursive_fixpoint =
     lk_kw "Recursive" >> lk_ident_except ["Extraction"]
   end
 
-(* Lightlang: [x := t.] and [f x y := t.] are definitions *)
+(* Soma: [x := t.] and [f x y := t.] are definitions *)
 let test_implicit_definition =
   let open Procq.Lookahead in
   to_entry "test_implicit_definition" begin
@@ -180,12 +180,12 @@ GRAMMAR EXTEND Gram
 
   noedit_mode:
     [ [ c = query_command -> { VernacSynPure (c None) }
-      (* Lightlang: outside a proof, [f x := t.] is [Definition f x := t.] *)
+      (* Soma: outside a proof, [f x := t.] is [Definition f x := t.] *)
       | test_implicit_definition; id = ident_decl; b = def_body; "." ->
         { let (lid, u) = id in
           VernacSynPure (VernacDefinition ((NoDischarge, Decls.Definition),
                                            (CAst.map (fun s -> Name s) lid, u), b)) }
-      (* Lightlang: outside a proof, a bare term [t.] is [Eval lazy in t.] *)
+      (* Soma: outside a proof, a bare term [t.] is [Eval lazy in t.] *)
       | c = lconstr; "." ->
         { VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, c)) } ] ]
   ;
@@ -496,7 +496,7 @@ GRAMMAR EXTEND Gram
       | IDENT "Structure" -> { Structure }
       | IDENT "Class" -> { Class true } ] ]
   ;
-  (* Lightlang spells Fixpoint as Recursive; Fixpoint stays for Rocq sources *)
+  (* Soma spells Fixpoint as Recursive; Fixpoint stays for Rocq sources *)
   fixpoint_token:
     [ [ "Fixpoint" -> { () }
       | test_recursive_fixpoint; IDENT "Recursive" -> { () } ] ]

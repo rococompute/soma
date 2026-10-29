@@ -128,7 +128,7 @@ let sigref loc = Libnames.qualid_of_string ~loc "Corelib.Init.Specif.sig"
 
 let mk_delim ~loc c d = CAst.make ~loc @@ CDelimiters (fst d, snd d, c)
 
-(* Lightlang: JSX, under [Set JSX Syntax] (see CLexer), for Lightlang's
+(* Soma: JSX, under [Set JSX Syntax] (see CLexer), for Soma's
    Reason library. The lexer produces the keywords [<], [</], [<>] and
    [</>] of JSX, which these entries consume. *)
 let jsx_keyword entry_name kw =
@@ -143,7 +143,7 @@ let jsx_fragment_open = jsx_keyword "jsx_fragment_open" CLexer.jsx_fragment_open
 let jsx_fragment_close = jsx_keyword "jsx_fragment_close" CLexer.jsx_fragment_close
 
 let jsx_ref ~loc name =
-  CAst.make ~loc @@ CRef (qualid_of_string ~loc ("Lightlang.Reason." ^ name), None)
+  CAst.make ~loc @@ CRef (qualid_of_string ~loc ("Soma.Reason." ^ name), None)
 
 let jsx_app ~loc f args = CAst.make ~loc @@ CApp (f, List.map (fun a -> (a, None)) args)
 
@@ -367,7 +367,7 @@ GRAMMAR EXTEND Gram
         }
       | "`("; c = term LEVEL "200"; ")" ->
         { CAst.make ~loc @@ CGeneralization (Explicit, c) }
-      (* Lightlang: JSX, under [Set JSX Syntax] *)
+      (* Soma: JSX, under [Set JSX Syntax] *)
       | jsx_tag_open; tag = IDENT; attrs = LIST0 jsx_attr; e = jsx_tag_end ->
         { jsx_element ~loc tag attrs e }
       | jsx_fragment_open; cs = LIST0 jsx_value; jsx_fragment_close ->

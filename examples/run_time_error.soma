@@ -1,4 +1,4 @@
-(** A type error caught while the program runs. compile_time_error.light is
+(** A type error caught while the program runs. compile_time_error.soma is
     the same mistake caught before it runs.
 
     [greet_any]'s parameter is declared [Any], so any value is accepted

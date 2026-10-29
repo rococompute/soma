@@ -1,5 +1,5 @@
-(* Lightlang: the run-time error of a term that evaluates to a raise *)
-From Lightlang Require Import Lightlang.
+(* Soma: the run-time error of a term that evaluates to a raise *)
+From Soma Require Import Soma.
 
 to_type (A : Type) (x : Any) : A := x.
 

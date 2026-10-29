@@ -1,6 +1,6 @@
 (** The square root of 2 is irrational, bottom up: each result is proved
     before the one that uses it, so the headline, [sqrt2_irrational], comes
-    last. sqrt2_irrational.light proves the same top down. In three steps:
+    last. sqrt2_irrational.soma proves the same top down. In three steps:
     1. [no_whole_solution]: there are no whole numbers [p] and [q != 0]
        with [p * p = 2 * (q * q)], by the classic infinite descent.
     2. [sqrt2_not_rational]: no rational number squares to 2, since a

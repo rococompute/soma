@@ -1,6 +1,6 @@
-# Lightlang
+# Soma
 
-Lightlang is this project. The kernel in this tree is a fork of the Rocq
+Soma is this project. The kernel in this tree is a fork of the Rocq
 Prover (9.3.0) with gradual dependent types, GCIC^G: conservativity and
 graduality are kept, and normalization is sacrificed. See
 [GRADUAL.md](GRADUAL.md).

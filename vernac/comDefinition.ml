@@ -111,7 +111,7 @@ let interp_definition ~program_mode ~poly env evd impl_env bl red_option c ctypo
   let tyopt = Option.map (fun ty -> EConstr.it_mkProd_or_LetIn ty ctx) tyopt in
   evd, (c, tyopt), imps
 
-(* Lightlang: a type the definition leaves unknown becomes a type parameter.
+(* Soma: a type the definition leaves unknown becomes a type parameter.
    The unknown types become maximal implicit arguments, followed by the type
    class instances that depend on them, so that
    [Definition greet name := append "Hello, " (to_string name)] means
@@ -148,7 +148,7 @@ let generalize_unknown_types env sigma body typ imps =
   (* The evars are defined as variables that no evar context can bind, which
      are then abstracted *)
   let fresh = let n = ref 0 in fun () ->
-    incr n; Names.Id.of_string_soft ("__lightlang_generalized_" ^ string_of_int !n) in
+    incr n; Names.Id.of_string_soft ("__soma_generalized_" ^ string_of_int !n) in
   let types = List.rev_map (fun (ev, s) -> ev, fresh (), s) types in
   let sigma = List.fold_left (fun sigma (ev, id, _) -> Evd.define ev (mkVar id) sigma) sigma types in
   let classes = List.rev_map (fun ev ->

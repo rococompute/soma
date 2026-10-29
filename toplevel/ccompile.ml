@@ -21,13 +21,13 @@ let source ldir file = Loc.InFile {
     file = file;
   }
 
-(* Lightlang: the properties of a program FILE.light (its lemmas and
+(* Soma: the properties of a program FILE.soma (its lemmas and
    theorems) are in FILE.proof next to it, which is read after the
    program, in its environment: the proofs see what the program defines
    and imports, and the program is only built once they are checked. *)
 let proof_file f =
-  if Filename.check_suffix f ".light" then
-    let p = Filename.chop_suffix f ".light" ^ ".proof" in
+  if Filename.check_suffix f ".soma" then
+    let p = Filename.chop_suffix f ".soma" ^ ".proof" in
     if Sys.file_exists p then Some p else None
   else None
 
@@ -90,10 +90,10 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = if mode = BuildVo then
           Library.save_library_to ~output_native_objects Library.ProofsTodoNone ldir long_f_dot_out
       in
-      (* Lightlang: a program that requires Mirage is also built as a
+      (* Soma: a program that requires Mirage is also built as a
          MirageOS image, next to the .vo *)
       let () = if mode = BuildVo then
-          LightlangMirage.build ~state ~vo_file:long_f_dot_out
+          SomaMirage.build ~state ~vo_file:long_f_dot_out
       in
       let () = Aux_file.record_in_aux_at "vo_compile_time"
           (Printf.sprintf "%.3f" (wall_clock2 -. wall_clock1))

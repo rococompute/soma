@@ -365,12 +365,12 @@ and ``rocq repl``, unless stated otherwise:
   and ``_darcs`` are excluded.
 :-nois, -noinit: Start from an empty state instead of loading the `Init.Prelude`
   module.
-:-no-lightlang-prelude: Do not load `Lightlang.Lightlang` after the
+:-no-soma-prelude: Do not load `Soma.Soma` after the
   prelude, so `Gradual Typing` stays off and string literals, list literals
-  and `to_string` need `From Lightlang Require Import Strings Lists Show.`
+  and `to_string` need `From Soma Require Import Strings Lists Show.`
   It is not loaded with `-boot` or `-noinit` either.
 :-no-prelude: Load no prelude: both :n:`-noinit` and
-  :n:`-no-lightlang-prelude`, so every import is written in the file.
+  :n:`-no-soma-prelude`, so every import is written in the file.
 :-init-file *file*: Load *file* as the resource file instead of
   loading the default resource file from the standard configuration
   directories.

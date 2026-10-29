@@ -76,7 +76,7 @@ type vo_path = {
 type coqargs_pre = {
   boot        : bool;
   load_init   : bool;
-  load_lightlang : bool;
+  load_soma : bool;
   load_rcfile : bool;
 
   ml_includes : CUnix.physical_path list;

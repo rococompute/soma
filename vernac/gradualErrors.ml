@@ -32,7 +32,7 @@ let rec mentions_err env sigma c =
    constructors, which the string notation cannot print *)
 let partial_strings env sigma c =
   match Rocqlib.lib_ref_opt "core.string.string", Rocqlib.lib_ref_opt "core.string.empty",
-        Rocqlib.lib_ref_opt "lightlang.string.append" with
+        Rocqlib.lib_ref_opt "soma.string.append" with
   | Some (GlobRef.ConstructRef str), Some (GlobRef.ConstructRef empty),
     Some (GlobRef.ConstRef append) ->
     let is_constructor r c = match kind sigma c with

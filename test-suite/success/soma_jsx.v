@@ -1,10 +1,10 @@
-(* Lightlang's Reason library: JSX under [Set JSX Syntax] *)
+(* Soma's Reason library: JSX under [Set JSX Syntax] *)
 
 (* Without JSX, [<] directly followed by a letter is a comparison *)
 Check (fun x y : nat => x<y).
 
-(* as in a Lightlang program: the prelude, then Reason *)
-From Lightlang Require Import Lightlang Reason.
+(* as in a Soma program: the prelude, then Reason *)
+From Soma Require Import Soma Reason.
 
 (* With JSX: a comparison needs a space, or a non-letter, after [<] *)
 Check (fun x y : nat => x < y).

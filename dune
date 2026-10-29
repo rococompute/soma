@@ -77,7 +77,7 @@
    (run tools/dune_rule_gen/gen_rules.exe Ltac2 theories/Ltac2 -noinit -split %{env:COQ_DUNE_EXTRA_OPT=}))))
 
 ; Stdlib (theories/Stdlib, vendored at V9.2.0, flags of its _CoqProject)
-; and the Lightlang prelude built on it
+; and the Soma prelude built on it
 
 (rule
  (targets stdlib_dune)
@@ -98,22 +98,22 @@
    (run tools/dune_rule_gen/gen_rules.exe Stdlib theories/Stdlib -implicit -arg -w -arg -notation-for-abbreviation -arg -w -arg -ltac2-notation-for-abbreviation -arg -w -arg -implicit-create-hint-db -arg -w -arg -implicit-create-rewrite-hint-db -arg -w -arg -register-all -arg -w -arg -scheme-rewriting -arg -w -arg -non-boolean-if -split %{env:COQ_DUNE_EXTRA_OPT=}))))
 
 (rule
- (targets lightlang_dune)
+ (targets soma_dune)
  (deps
   (source_tree plugins)
   (source_tree theories))
  (action
   (with-stdout-to %{targets}
-   (run tools/dune_rule_gen/gen_rules.exe Lightlang theories/Lightlang -dep Stdlib:theories/Stdlib %{env:COQ_DUNE_EXTRA_OPT=}))))
+   (run tools/dune_rule_gen/gen_rules.exe Soma theories/Soma -dep Stdlib:theories/Stdlib %{env:COQ_DUNE_EXTRA_OPT=}))))
 
 (rule
- (targets lightlang_dune_split)
+ (targets soma_dune_split)
  (deps
   (source_tree plugins)
   (source_tree theories))
  (action
   (with-stdout-to %{targets}
-   (run tools/dune_rule_gen/gen_rules.exe Lightlang theories/Lightlang -dep Stdlib:theories/Stdlib -split %{env:COQ_DUNE_EXTRA_OPT=}))))
+   (run tools/dune_rule_gen/gen_rules.exe Soma theories/Soma -dep Stdlib:theories/Stdlib -split %{env:COQ_DUNE_EXTRA_OPT=}))))
 
 ; Use summary.log as the target
 (alias

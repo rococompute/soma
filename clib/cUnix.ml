@@ -74,7 +74,7 @@ let canonical_path_name p =
 let make_suffix name suffix =
   if Filename.check_suffix name suffix then name else (name ^ suffix)
 
-let source_extensions = [".light"; ".v"]
+let source_extensions = [".soma"; ".v"]
 
 let has_source_extension name =
   List.exists (Filename.check_suffix name) source_extensions

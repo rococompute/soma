@@ -623,11 +623,11 @@ let parse_after_qmark ~diff_mode ttree loc bp s =
 (* between_commands is used to parse bullets and { and } differently depending on the context. *)
 let between_commands = ref true
 
-(* Lightlang: JSX. Under [Set JSX Syntax] (set by Lightlang's Reason
+(* Soma: JSX. Under [Set JSX Syntax] (set by Soma's Reason
    library), [<] directly followed by a letter opens a tag and [</]
    directly followed by a letter closes one, so that [x < y] needs a space
    or a non-letter after [<]; [<>] and [</>] open and close a fragment
-   ([!=] is Lightlang's "not equal"). Each is a keyword that source text
+   ([!=] is Soma's "not equal"). Each is a keyword that source text
    cannot produce: it ends with a zero-width space, so that it still prints
    as [<], [</], [<>] and [</>]. *)
 let { Goptions.get = jsx_syntax } =

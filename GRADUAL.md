@@ -1,6 +1,6 @@
-# Lightlang: GCIC^G, the variant that gives up normalization
+# Soma: GCIC^G, the variant that gives up normalization
 
-Lightlang's kernel is this fork of the Rocq Prover (based on 9.3.0). It adds
+Soma's kernel is this fork of the Rocq Prover (based on 9.3.0). It adds
 **gradual dependent types**, following
 
 > Meven Lennon-Bertrand, Kenji Maillard, Nicolas Tabareau, Éric Tanter.
@@ -52,40 +52,40 @@ opam install --switch=. dune ocamlfind zarith
 eval $(opam env --switch=. --set-switch)
 make dunestrap
 dune build rocq-runtime.install coq-core.install rocq-core.install
-_build/install/default/bin/light run my_file.light
+_build/install/default/bin/soma run my_file.soma
 ```
 
-`light` is Lightlang's command line (`topbin/light.ml`):
+`soma` is Soma's command line (`topbin/soma.ml`):
 
-- `light build FILE` checks and builds a program as `rocq c FILE` does, with
+- `soma build FILE` checks and builds a program as `rocq c FILE` does, with
   the same options, then deletes the files `rocq c` made (`.vo`, `.glob`,
-  `.aux`), and prints the names of the files it keeps: the `.hvt` image of a Mirage program. `light build -v FILE`
+  `.aux`), and prints the names of the files it keeps: the `.hvt` image of a Mirage program. `soma build -v FILE`
   first prints the values of the program's bare terms. (`rocq c` keeps the
   `.vo`, for files that `Require` the program.)
-- `light run FILE [-- ARGUMENTS]` checks the program in a temporary
+- `soma run FILE [-- ARGUMENTS]` checks the program in a temporary
   directory, so that it leaves no files, and prints the value of its last
   bare term; a program that requires Mirage is built into an image, which
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
-- `light help` lists the commands.
+- `soma help` lists the commands.
 
-A program `FILE.light` can have its lemmas and theorems in `FILE.proof`,
-next to it. Checking `FILE.light` (`rocq c`, so `light build` and `light
+A program `FILE.soma` can have its lemmas and theorems in `FILE.proof`,
+next to it. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma
 run`) reads the program, then `FILE.proof` in the program's environment
 (`toplevel/ccompile.ml`): the proofs see what it defines and imports, JSX
 included, without importing anything. A proof that does not hold fails the
 build, with its location in `FILE.proof`, and no `.vo` or Mirage image is
-made; the theorems are part of the program's library. `light build
-FILE.proof` and `light run FILE.proof` stand for `FILE.light`.
+made; the theorems are part of the program's library. `soma build
+FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
 `examples/reason_counter.proof` and `examples/reason_components.proof` are
-examples; `test-suite/misc/lightlang_proof.sh` tests it.
+examples; `test-suite/misc/soma_proof.sh` tests it.
 
-Lightlang source files end in `.light`. `rocq c`, `Load`, `-l` and `rocq dep`
+Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
-name without an extension, they look for `.light` first, then `.v`.
+name without an extension, they look for `.soma` first, then `.v`.
 `rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
-Every file starts with the Lightlang prelude, `theories/Lightlang/Lightlang.v`,
-loaded right after Rocq's Prelude. It exports, from `theories/Lightlang`:
+Every file starts with the Soma prelude, `theories/Soma/Soma.v`,
+loaded right after Rocq's Prelude. It exports, from `theories/Soma`:
 
 - `Corelib.Gradual.Gradual`, which sets `Gradual Typing`.
 - `Strings.v`: `"..."` is a Stdlib `string` (a list of ascii characters)
@@ -137,13 +137,13 @@ known, like `lia`'s proofs by reflection, needs that order, and `lia` and
 check is syntactic: an `Any` hidden behind a definition of the expected type
 does not count.
 
-Pass `-no-lightlang-prelude` for plain Rocq, where each part of the
-Lightlang prelude can be imported on its own (`From Lightlang Require Import
+Pass `-no-soma-prelude` for plain Rocq, where each part of the
+Soma prelude can be imported on its own (`From Soma Require Import
 Strings Lists Show.`), or `-no-prelude` to load no prelude at all, Rocq's
-included (`-noinit` and `-no-lightlang-prelude`). The
-Lightlang prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
+included (`-noinit` and `-no-soma-prelude`). The
+Soma prelude is skipped under `-boot` and `-noinit`, so Corelib, Ltac2,
 Stdlib and the prelude itself are built as plain CIC. The inherited Rocq
-test-suite runs with `-no-lightlang-prelude`, and the gradual tests import
+test-suite runs with `-no-soma-prelude`, and the gradual tests import
 `Gradual` explicitly.
 
 Rocq's standard library is vendored in `theories/Stdlib` (V9.2.0, see its
@@ -220,11 +220,11 @@ words them:
 | a function where data is expected | `expected a nat, but got a function of type nat -> nat` |
 | the same family at other indices | `expected a proof of 1 = 2, but got a proof of 1 = 1`, `expected a Vector.t nat 3, but got a Vector.t nat 2` |
 | a value under a binder | `expected a string, but got a nat` |
-| a `raise` of the program | `raise in safe_div (file.light:12)`: the definitions the term uses that raise |
+| a `raise` of the program | `raise in safe_div (file.soma:12)`: the definitions the term uses that raise |
 
 A string that ends in `raise` prints as `"Hello, " ++ raise` rather than as
-its characters (`Register ... as lightlang.string.append`, in
-`Lightlang.Strings`). `light run` fails when the program's last value is a
+its characters (`Register ... as soma.string.append`, in
+`Soma.Strings`). `soma run` fails when the program's last value is a
 run-time error. Compiled code raises `Gradual_rt.Cast_error` at the cast
 instead, worded the same way from the types it has at run time
 (`expected a bool, but got a nat`, without the value); a Mirage image
@@ -447,7 +447,7 @@ Extraction differs from the kernel in these ways:
 
 ## Mirage: programs as unikernels
 
-`theories/Lightlang/Mirage.v` (not in the prelude) makes a program a
+`theories/Soma/Mirage.v` (not in the prelude) makes a program a
 MirageOS unikernel for Apple Silicon. Its `main : io unit` says what the
 unikernel does, as data; building an `io` does nothing, the image runs it.
 
@@ -478,14 +478,14 @@ main : io unit :=
     ret (http_response ("You asked for " ++ http_path request))).
 ```
 
-`light build prog.light` (or `rocq c prog.light`) checks the program and,
+`soma build prog.soma` (or `rocq c prog.soma`) checks the program and,
 since it requires `Mirage`, builds `prog.hvt` next to `prog.vo`
-(`toplevel/lightlangMirage.ml`, called from `toplevel/ccompile.ml`):
+(`toplevel/somaMirage.ml`, called from `toplevel/ccompile.ml`):
 
 1. `main` must exist and have type `io unit`.
 2. `main` is extracted to `prog.ml` (strings as `char list`, with Stdlib's
    `ExtrOcamlString`) into a MirageOS project with a generated `config.ml`,
-   `lightlang_rt.ml`, which runs an `io` with Lwt, and `unikernel.ml`.
+   `soma_rt.ml`, which runs an `io` with Lwt, and `unikernel.ml`.
    `gradual.ml` is the extracted gradual runtime, or a stand-in when the
    program has no casts. A `raise` or `unk` that the image reaches is
    reported and the image exits with 1; in a `serve` handler, it ends that
@@ -495,38 +495,38 @@ since it requires `Mirage`, builds `prog.hvt` next to `prog.vo`
    gives it an address on the Mac's vmnet network (macOS 26 or later, no
    root). The others have no network device.
 4. The project is built for solo5's `hvt` target in the opam switch
-   `$LIGHTLANG_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
+   `$SOMA_MIRAGE_SWITCH` (`hvf` by default: a switch with the hvf-mac
    repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
-   `solo5-vmnet`), and `rocq c` says how to run the image; `light run`
+   `solo5-vmnet`), and `rocq c` says how to run the image; `soma run`
    runs it.
 
-The projects are kept in `$LIGHTLANG_MIRAGE_DIR`, or else
-`~/.cache/lightlang/mirage` (`plain/` and `net/`), so `mirage configure`
+The projects are kept in `$SOMA_MIRAGE_DIR`, or else
+`~/.cache/soma/mirage` (`plain/` and `net/`), so `mirage configure`
 and fetching the dependencies (`make depends`, which needs the network) only
 happen the first time for each, about 15 s; later builds take about a
 second. Each one's `build.log` has its last build's output.
-`LIGHTLANG_MIRAGE_BUILD=0` skips the image.
+`SOMA_MIRAGE_BUILD=0` skips the image.
 
 ```sh
-light run examples/mirage_http_server.light              # prints its IP
-light run examples/mirage_fetch.light -- --arg=<that IP>
+soma run examples/mirage_http_server.soma              # prints its IP
+soma run examples/mirage_fetch.soma -- --arg=<that IP>
 ```
 
-`dev/mirage-check.sh` builds the examples (`examples/mirage_*.light`), boots
+`dev/mirage-check.sh` builds the examples (`examples/mirage_*.soma`), boots
 each image and checks its console and exit code, the network cases with one
 unikernel serving and another fetching from it.
 
-Lightlang's installed libraries can be required by their short name, as
+Soma's installed libraries can be required by their short name, as
 Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Mirage.` finds
-`Lightlang.Mirage`.
+`Soma.Mirage`.
 
 Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
 and key-value stores, and state shared between `serve` handlers.
 
 ## Reason: JSX components and apps
 
-`theories/Lightlang/Reason.v` (not in the prelude) brings ReasonReact's JSX
-to Lightlang, for components and apps that are checked, and can be proved
+`theories/Soma/Reason.v` (not in the prelude) brings ReasonReact's JSX
+to Soma, for components and apps that are checked, and can be proved
 about, but not yet compiled to JavaScript.
 
 ```coq
@@ -565,7 +565,7 @@ type `S`, starts at `init`, changes with `update : A -> S -> S` on each
 action, and shows it with `view : S -> element A`, whose events produce
 actions. `state_after app actions` is the state after a list of actions,
 what a theorem about the app's behavior is about.
-`examples/reason_counter.light` proves that a counter stays within its
+`examples/reason_counter.soma` proves that a counter stays within its
 limit whatever buttons are clicked, with no type annotation outside the
 theorems.
 

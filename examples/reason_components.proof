@@ -1,7 +1,7 @@
-(** What is proved about the components of reason_components.light. This
-    file is read after reason_components.light, in its environment: the
+(** What is proved about the components of reason_components.soma. This
+    file is read after reason_components.soma, in its environment: the
     components and the Reason library are in scope, JSX included. Building
-    or running reason_components.light checks it, and fails if a proof does
+    or running reason_components.soma checks it, and fails if a proof does
     not hold. *)
 
 (** [Greeting] renders a paragraph with the name, escaped, for every name:

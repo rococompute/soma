@@ -4,9 +4,9 @@
     fetches gets a network stack, so it runs under solo5-vmnet, which gives
     it an address on the Mac's vmnet network (printed when it starts):
 
-        light run examples/mirage_http_server.light
+        soma run examples/mirage_http_server.soma
 
-    examples/mirage_fetch.light fetches from it. *)
+    examples/mirage_fetch.soma fetches from it. *)
 Require Import Mirage.
 
 two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.
@@ -19,7 +19,7 @@ answer request : io string :=
   | (hour, minute, second) =>
     print ("request for " ++ http_path request) ;;
     ret (http_response (
-      "Hello from Lightlang! You asked for " ++ http_path request ++ " at " ++
+      "Hello from Soma! You asked for " ++ http_path request ++ " at " ++
       two_digits hour ++ ":" ++ two_digits minute ++ ":" ++ two_digits second ++
       " UTC. Your lucky number is " ++ to_string luck ++ "."))
   end.

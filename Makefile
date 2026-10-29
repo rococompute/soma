@@ -131,8 +131,8 @@ DUNESTRAPOPT=--root .
 # We regenerate always as to correctly track deps, can do better
 # We do a single call to dune as to avoid races and locking
 ifneq ($(COQ_SPLIT),) # avoid depending on local rocq-runtime
-_build/default/corelib_dune_split _build/default/ltac2_dune_split _build/default/stdlib_dune_split _build/default/lightlang_dune_split .dune-stamp: FORCE
-	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune_split ltac2_dune_split stdlib_dune_split lightlang_dune_split
+_build/default/corelib_dune_split _build/default/ltac2_dune_split _build/default/stdlib_dune_split _build/default/soma_dune_split .dune-stamp: FORCE
+	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune_split ltac2_dune_split stdlib_dune_split soma_dune_split
 	touch .dune-stamp
 
 theories/Corelib/dune: .dune-stamp
@@ -144,11 +144,11 @@ theories/Ltac2/dune: .dune-stamp
 theories/Stdlib/dune: .dune-stamp
 	cp -a _build/default/stdlib_dune_split $@ && chmod +w $@
 
-theories/Lightlang/dune: .dune-stamp
-	cp -a _build/default/lightlang_dune_split $@ && chmod +w $@
+theories/Soma/dune: .dune-stamp
+	cp -a _build/default/soma_dune_split $@ && chmod +w $@
 else
-_build/default/corelib_dune _build/default/ltac2_dune _build/default/stdlib_dune _build/default/lightlang_dune .dune-stamp: FORCE
-	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune ltac2_dune stdlib_dune lightlang_dune
+_build/default/corelib_dune _build/default/ltac2_dune _build/default/stdlib_dune _build/default/soma_dune .dune-stamp: FORCE
+	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune ltac2_dune stdlib_dune soma_dune
 	touch .dune-stamp
 
 theories/Corelib/dune: .dune-stamp
@@ -160,13 +160,13 @@ theories/Ltac2/dune: .dune-stamp
 theories/Stdlib/dune: .dune-stamp
 	cp -a _build/default/stdlib_dune $@ && chmod +w $@
 
-theories/Lightlang/dune: .dune-stamp
-	cp -a _build/default/lightlang_dune $@ && chmod +w $@
+theories/Soma/dune: .dune-stamp
+	cp -a _build/default/soma_dune $@ && chmod +w $@
 endif
 
 FORCE: ;
 
-DUNE_FILES=theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune theories/Lightlang/dune
+DUNE_FILES=theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune theories/Soma/dune
 
 dunestrap: $(DUNE_FILES)
 
@@ -235,7 +235,7 @@ ireport:
 	dune build $(DUNEOPT) @install --profile=ireport
 
 clean:
-	rm -f .dune-stamp theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune theories/Lightlang/dune
+	rm -f .dune-stamp theories/Corelib/dune theories/Ltac2/dune theories/Stdlib/dune theories/Soma/dune
 	dune clean
 
 # docgram

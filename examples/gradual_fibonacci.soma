@@ -1,5 +1,5 @@
 (** Fibonacci in linear time, with the types inferred, then with the types
-    chosen. The textbook definition is in basic_fibonacci.light. *)
+    chosen. The textbook definition is in basic_fibonacci.soma. *)
 
 (** Carry the last two numbers along. No types are written: [n] is a
     [nat] from the patterns ([0], [Succ m]), and [a] and [b] are [nat]s

@@ -45,7 +45,7 @@ val check_ident : string -> unit
 val is_ident : string -> bool
 val check_keyword : string -> unit
 
-(** Lightlang: the keywords of JSX, produced under [Set JSX Syntax] for
+(** Soma: the keywords of JSX, produced under [Set JSX Syntax] for
     [<] directly followed by a letter, [</] directly followed by a letter,
     [<>] and [</>]; source text cannot produce them otherwise. *)
 val jsx_tag_open : string

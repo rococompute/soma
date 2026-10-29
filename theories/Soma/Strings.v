@@ -8,7 +8,7 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * String literals, part of the Lightlang prelude
+(** * String literals, part of the Soma prelude
 
     ["..."] is a Stdlib [string], a list of ascii characters, everywhere,
     including where an [Any] is expected, so that Stdlib's string functions
@@ -20,24 +20,24 @@
 From Stdlib Require Strings.String.
 Export Stdlib.Strings.String(string, append).
 
-Declare Scope lightlang_string_scope.
+Declare Scope soma_string_scope.
 String Notation string Stdlib.Strings.String.string_of_list_byte
-  Stdlib.Strings.String.list_byte_of_string : lightlang_string_scope.
-Open Scope lightlang_string_scope.
+  Stdlib.Strings.String.list_byte_of_string : soma_string_scope.
+Open Scope soma_string_scope.
 
 (** [s ++ t]: the string [s] then [t], where a [string] is expected (the
     argument of a function on strings, or a definition given the type
     [string]); elsewhere [++] appends lists. [(s ++ t)%str] is always on
     strings. *)
-Declare Scope lightlang_append_scope.
-Delimit Scope lightlang_append_scope with str.
-Bind Scope lightlang_append_scope with string.
+Declare Scope soma_append_scope.
+Delimit Scope soma_append_scope with str.
+Bind Scope soma_append_scope with string.
 #[global] Arguments Stdlib.Strings.String.append (_ _)%_str.
-Notation "s ++ t" := (append s t) : lightlang_append_scope.
+Notation "s ++ t" := (append s t) : soma_append_scope.
 
 (* A value that is a string up to a [raise] prints as ["Hello, " ++ raise]
    (vernac/gradualErrors.ml) *)
-Register Stdlib.Strings.String.append as lightlang.string.append.
+Register Stdlib.Strings.String.append as soma.string.append.
 
 (** For proofs about strings built with [++]: it is associative, and [""]
     is its unit. *)

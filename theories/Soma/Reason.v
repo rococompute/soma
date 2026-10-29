@@ -8,13 +8,13 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * Reason React components, [Lightlang.Reason]
+(** * Reason React components, [Soma.Reason]
 
     Not part of the prelude. A program that requires it writes JSX, as in
     ReasonReact, for elements and components:
 
         Greeting {name : string} := <div className="greeting"> "Hello, " name </div>.
-        page := <main> <Greeting name="world" /> <Greeting name="Lightlang" /> </main>.
+        page := <main> <Greeting name="world" /> <Greeting name="Soma" /> </main>.
 
     - [<tag attr=value ...> children </tag>] and [<tag ... />], for a tag
       in lowercase, are an HTML element ([node]). Its attributes are
@@ -41,7 +41,7 @@
     sequence of actions, what a theorem about the app's behavior is about. *)
 
 From Stdlib Require Strings.String Strings.Ascii Lists.List.
-Require Import Lightlang.Strings Lightlang.Lists Lightlang.Show.
+Require Import Soma.Strings Soma.Lists Soma.Show.
 
 (** An attribute of an element whose events produce actions of type [A] *)
 Inductive attribute (A : Type) : Type :=

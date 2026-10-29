@@ -7,7 +7,7 @@ commit `8fe222a410`. The latest raw numbers are in
 
 ## The question
 
-Lightlang gives up normalization, so a less precisely typed program is not
+Soma gives up normalization, so a less precisely typed program is not
 promised to be the same proof. What a programmer relies on, as with a Haskell
 compiler, is:
 

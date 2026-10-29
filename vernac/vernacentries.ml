@@ -2110,7 +2110,7 @@ let check_may_eval env sigma redexp rc =
   Evarconv.check_problems_are_solved env sigma;
   let sigma = match redexp with
     | Some _ when ComDefinition.automatic_generalization () ->
-      (* Lightlang: a term is only evaluated once every type class instance
+      (* Soma: a term is only evaluated once every type class instance
          whose type is known has been found, so [to_string true] without an
          instance for [bool] is an error rather than a stuck term *)
       let known ev _ = Evar.Set.is_empty
@@ -2129,7 +2129,7 @@ let check_may_eval env sigma redexp rc =
       let sigma, c = r env sigma c in
       sigma, c
   in
-  (* Lightlang: a value with a [raise] in it is a run-time error, said
+  (* Soma: a value with a [raise] in it is a run-time error, said
      after the value, which is printed as far as it was computed *)
   let runtime_error, c = match redexp with
     | Some _ when Gradual.enabled env && GradualErrors.mentions_err env sigma c ->

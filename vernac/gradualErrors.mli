@@ -18,7 +18,7 @@ val mentions_err : Environ.env -> Evd.evar_map -> constr -> bool
 
 (** The term with its partial strings, ending in something else than
     [EmptyString] (a [raise]), as ["abc" ++ rest] (with
-    [lightlang.string.append], when registered) *)
+    [soma.string.append], when registered) *)
 val partial_strings : Environ.env -> Evd.evar_map -> constr -> constr
 
 (** The message for a term that evaluated to an [err], from the casts that

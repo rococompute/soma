@@ -8,15 +8,15 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * List literals, part of the Lightlang prelude
+(** * List literals, part of the Soma prelude
 
     [[1, 2, 3]] is [cons 1 (cons 2 (cons 3 nil))], and lists print that
     way. Stdlib's [ListNotations] ([[1; 2; 3]]) can still be imported
     alongside. *)
 
-Declare Scope lightlang_list_scope.
-Notation "[ ]" := nil (format "[ ]") : lightlang_list_scope.
-Notation "[ x ]" := (cons x nil) : lightlang_list_scope.
+Declare Scope soma_list_scope.
+Notation "[ ]" := nil (format "[ ]") : soma_list_scope.
+Notation "[ x ]" := (cons x nil) : soma_list_scope.
 Notation "[ x , y , .. , z ]" := (cons x (cons y .. (cons z nil) ..))
-  (format "[ '[' x ,  '/' y ,  '/' .. ,  '/' z ']' ]") : lightlang_list_scope.
-Open Scope lightlang_list_scope.
+  (format "[ '[' x ,  '/' y ,  '/' .. ,  '/' z ']' ]") : soma_list_scope.
+Open Scope soma_list_scope.

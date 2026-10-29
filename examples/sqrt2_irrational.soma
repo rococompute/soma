@@ -1,6 +1,6 @@
 (** The square root of 2 is irrational, top down: the theorem comes first,
     and its proof reduces it to simpler and simpler statements, each proved
-    in turn. sqrt2_irrational_bottom_up.light proves the same bottom up, as
+    in turn. sqrt2_irrational_bottom_up.soma proves the same bottom up, as
     separate named lemmas.
 
     If this file compiles, the theorem is proved: every step is checked, and

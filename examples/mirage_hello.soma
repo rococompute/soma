@@ -1,7 +1,7 @@
 (** A MirageOS unikernel. Requiring [Mirage] makes the program one:
-    [light build examples/mirage_hello.light] builds the image
+    [soma build examples/mirage_hello.soma] builds the image
     [examples/mirage_hello.hvt], and
-        light run examples/mirage_hello.light
+        soma run examples/mirage_hello.soma
     builds it and runs it on Apple Silicon, with solo5-hvt (see the Mirage
     section of GRADUAL.md for the setup).
 

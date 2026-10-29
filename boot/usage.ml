@@ -35,9 +35,9 @@ let print_usage_common co command =
 \n  -boot                  don't bind the `Corelib.` prefix to the default -coqlib dir\
 \n  -noinit                don't load Corelib.Init.Prelude on start\
 \n  -nois                  (idem)\
-\n  -no-lightlang-prelude  don't load Lightlang.Lightlang on start\
+\n  -no-soma-prelude       don't load Soma.Soma on start\
 \n                         (gradual typing, string literals)\
-\n  -no-prelude            -noinit and -no-lightlang-prelude: load no prelude,\
+\n  -no-prelude            -noinit and -no-soma-prelude: load no prelude,\
 \n                         every import is written in the file\
 \n  -compat X.Y            same as -compat-from Corelib RocqXY (or CoqXY when X is 8)\
 \n  -compat-from root lib  same as -require-import-from root lib, except that\

@@ -8,24 +8,24 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(* light: Lightlang's command line, a front end to rocq.
+(* soma: Soma's command line, a front end to rocq.
 
-   [light build FILE [OPTIONS]] checks and builds a Lightlang program, as
+   [soma build FILE [OPTIONS]] checks and builds a Soma program, as
    [rocq c], and prints the names of the files it created (a program that
    requires Mirage is also built into an image).
 
-   [light run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
+   [soma run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
    temporary directory, so that it leaves no files, and prints the value of
    its last bare term; a program that requires Mirage is built into an
    image, which is run, with ARGUMENTS. *)
 
 open Rocqshim
 
-let usage = {|Usage: light COMMAND [ARGUMENTS]
+let usage = {|Usage: soma COMMAND [ARGUMENTS]
 
 Commands:
   build [-v] FILE [OPTIONS]
-                         check and build a Lightlang program (FILE.light).
+                         check and build a Soma program (FILE.soma).
                          The files rocq c makes (FILE.vo, FILE.glob,
                          .FILE.aux) are deleted; the files that are kept
                          are printed: FILE.hvt, the MirageOS image of a program
@@ -34,7 +34,7 @@ Commands:
                          program's bare terms. The options are those of
                          rocq c (rocq c --help).
   run FILE [OPTIONS] [-- ARGUMENTS]
-                         check a Lightlang program and print the value of
+                         check a Soma program and print the value of
                          its last bare term (and fail when it is a
                          run-time error); for a program that requires
                          Mirage, build its image and run it (solo5-hvt, or
@@ -43,10 +43,10 @@ Commands:
                          files.
   help                   this message
 
-A program FILE.light can have its lemmas and theorems in FILE.proof, next
-to it: build and run read FILE.light, then check FILE.proof with the
+A program FILE.soma can have its lemmas and theorems in FILE.proof, next
+to it: build and run read FILE.soma, then check FILE.proof with the
 program's definitions in scope, and fail if a proof does not hold. FILE.proof
-can be given in place of FILE.light.
+can be given in place of FILE.soma.
 |}
 
 let usage_error fmt =
@@ -55,12 +55,12 @@ let usage_error fmt =
 (* [rocq c ARGS], with what it prints on stdout (the values of bare terms,
    Mirage's messages) returned instead of shown; errors and warnings, on
    stderr, are shown *)
-(* The process light is waiting for, to which [pass_signals] passes the
-   signals light receives *)
+(* The process soma is waiting for, to which [pass_signals] passes the
+   signals soma receives *)
 let child = ref None
 
 (* [kill] (SIGTERM) and closing the terminal (SIGHUP) stop the process
-   light is waiting for, rather than light: light then exits as it does
+   soma is waiting for, rather than soma: soma then exits as it does
    when the process ends, cleaning up after it *)
 let pass_signals () =
   let pass = Sys.Signal_handle (fun signal ->
@@ -116,7 +116,7 @@ let created ~before ~start ~source dir =
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
       (* sources are not outputs, even when edited just before *)
-      not (List.exists (Filename.check_suffix name) [".light"; ".v"; ".proof"]) &&
+      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"]) &&
       (time >= start || not (List.mem_assoc name before)))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare
@@ -147,9 +147,9 @@ let build ~verbose file args =
     (created ~before ~start ~source:file dir);
   if code <> 0 then exit code
 
-(* FILE.proof, the properties of FILE.light, stands for the program *)
+(* FILE.proof, the properties of FILE.soma, stands for the program *)
 let program_of file =
-  if Filename.check_suffix file ".proof" then Filename.chop_suffix file ".proof" ^ ".light"
+  if Filename.check_suffix file ".proof" then Filename.chop_suffix file ".proof" ^ ".soma"
   else file
 
 let rec remove_tree path =
@@ -159,7 +159,7 @@ let rec remove_tree path =
   end else Sys.remove path
 
 let temp_dir () =
-  let file = Filename.temp_file "light-run" "" in
+  let file = Filename.temp_file "soma-run" "" in
   Sys.remove file;
   Unix.mkdir file 0o700;
   file
@@ -217,10 +217,10 @@ let run file args image_args =
   match mirage_command output with
   | Some command ->
     (* the image's tools come from the same opam switch as its build *)
-    let switch = match Sys.getenv_opt "LIGHTLANG_MIRAGE_SWITCH" with
+    let switch = match Sys.getenv_opt "SOMA_MIRAGE_SWITCH" with
       | Some s when s <> "" -> s | _ -> "hvf" in
     let argv = "opam" :: "exec" :: ("--switch=" ^ switch) :: "--" :: command @ image_args in
-    (* Ctrl-C stops the image, which then exits; light waits for it to
+    (* Ctrl-C stops the image, which then exits; soma waits for it to
        remove the temporary directory. opam exec runs the image in its
        place, so the signals passed on reach it. *)
     Sys.set_signal Sys.sigint Sys.Signal_ignore;
@@ -229,7 +229,7 @@ let run file args image_args =
     finish (exit_code (wait pid))
   | None ->
     if image_args <> [] then begin
-      prerr_endline "light run: arguments after -- are for a program that requires Mirage";
+      prerr_endline "soma run: arguments after -- are for a program that requires Mirage";
       finish 2
     end;
     let value = last_value output in
@@ -245,17 +245,17 @@ let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
   | "build" :: rest ->
-    (* -v is light's (rocq c's -v prints its version), before or after FILE *)
+    (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in
     let verbose = List.exists is_verbose rest in
     begin match List.filter (fun a -> not (is_verbose a)) rest with
-      | [] -> usage_error "light build: no file given"
+      | [] -> usage_error "soma build: no file given"
       | file :: args ->
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         build ~verbose (program_of file) args
     end
-  | ["run"] -> usage_error "light run: no file given"
+  | ["run"] -> usage_error "soma run: no file given"
   | "run" :: file :: rest ->
     let rec split = function
       | "--" :: image_args -> [], image_args
@@ -266,4 +266,4 @@ let () =
     let opts, args = parse_opts args in
     let () = init opts (file :: args) in
     run (program_of file) args image_args
-  | command :: _ -> usage_error "light: unknown command %s" command
+  | command :: _ -> usage_error "soma: unknown command %s" command

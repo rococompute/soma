@@ -38,7 +38,7 @@ val path_to_list : string -> string list
     [file] does not already end with [suf]. *)
 val make_suffix : string -> string -> string
 
-(** Source file extensions, preferred first: Lightlang's [".light"], then
+(** Source file extensions, preferred first: Soma's [".soma"], then
     Rocq's [".v"]. *)
 val source_extensions : string list
 
@@ -46,7 +46,7 @@ val has_source_extension : string -> bool
 
 (** [source_file ~exists file] is [file] when it already has a source
     extension, otherwise [file] with the first source extension for which
-    [exists] holds, or with [".light"] when none does. *)
+    [exists] holds, or with [".soma"] when none does. *)
 val source_file : exists:(string -> bool) -> string -> string
 
 val file_readable_p : string -> bool

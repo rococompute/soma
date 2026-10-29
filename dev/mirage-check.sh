@@ -1,21 +1,21 @@
 #!/bin/sh
 #
-# Build the Mirage examples (examples/mirage_*.light) with light build, boot
+# Build the Mirage examples (examples/mirage_*.soma) with soma build, boot
 # each image on solo5-hvt, and check what it does: its console and its exit
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
 # server unikernel is fetched from by another one.
 #
 # Usage: dev/mirage-check.sh [--no-network]
 #
-# Needs Lightlang built (_build/install/default) and the opam switch
-# $LIGHTLANG_MIRAGE_SWITCH (hvf by default) with the MirageOS tools for
+# Needs Soma built (_build/install/default) and the opam switch
+# $SOMA_MIRAGE_SWITCH (hvf by default) with the MirageOS tools for
 # Apple Silicon (solo5-mac). Exits non-zero if a case fails.
 #
 set -u
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-LIGHT="${HERE}/_build/install/default/bin/light"
-SWITCH="${LIGHTLANG_MIRAGE_SWITCH:-hvf}"
+SOMA="${HERE}/_build/install/default/bin/soma"
+SWITCH="${SOMA_MIRAGE_SWITCH:-hvf}"
 NETWORK=1
 [ "${1:-}" = "--no-network" ] && NETWORK=0
 
@@ -38,9 +38,9 @@ fail() {
     FAIL=$((FAIL + 1))
 }
 
-# build NAME: light build examples/NAME.light, which builds examples/NAME.hvt
+# build NAME: soma build examples/NAME.soma, which builds examples/NAME.hvt
 build() {
-    if "${LIGHT}" build "${HERE}/examples/$1.light" >"${WORK}/build-$1.log" 2>&1; then
+    if "${SOMA}" build "${HERE}/examples/$1.soma" >"${WORK}/build-$1.log" 2>&1; then
         return 0
     fi
     echo "FAIL build $1"
@@ -108,7 +108,7 @@ if [ "${NETWORK}" = 1 ]; then
             fail http-server
         else
             run mirage_fetch guest-to-guest 0 \
-                "Hello from Lightlang! You asked for /hello at [0-9:]+ UTC" \
+                "Hello from Soma! You asked for /hello at [0-9:]+ UTC" \
                 net "--arg=${ip}"
             if grep -q "request for /hello" "${WORK}/server.log"; then
                 pass http-server

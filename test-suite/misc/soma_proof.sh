@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# A Lightlang program FILE.light has its lemmas and theorems in
+# A Soma program FILE.soma has its lemmas and theorems in
 # FILE.proof, read after it in its environment (toplevel/ccompile.ml):
 # a proof that does not hold fails the build, with its location in
 # FILE.proof.
@@ -14,7 +14,7 @@ trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
 
 # the program imports Arith; the proofs use it without importing it
-cat > double.light <<'EOT'
+cat > double.soma <<'EOT'
 Require Import Stdlib.Arith.Arith.
 Definition double n := n + n.
 EOT
@@ -24,7 +24,7 @@ Theorem double_twice : forall n, double n = 2 * n.
 Proof. intros n. unfold double. simpl. now rewrite Nat.add_0_r. Qed.
 EOT
 
-rocq c -q double.light
+rocq c -q double.soma
 # the theorem is part of the program's library
 cat > use.v <<'EOT'
 Require double.
@@ -38,7 +38,7 @@ Theorem double_one : double 1 = 3.
 Proof. reflexivity. Qed.
 EOT
 rm -f double.vo
-if rocq c -q double.light > out.log 2>&1; then
+if rocq c -q double.soma > out.log 2>&1; then
   echo "a false theorem in double.proof did not fail the build"; exit 1
 fi
 grep -q 'File "./double.proof", line 4' out.log
@@ -46,4 +46,4 @@ grep -q 'File "./double.proof", line 4' out.log
 
 # without a .proof file, nothing more is read
 rm double.proof
-rocq c -q double.light
+rocq c -q double.soma

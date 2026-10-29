@@ -11,8 +11,8 @@
 (** To move  *)
 val get_extension : string -> string list -> string * string
 
-(** [source_file base] is the source file [base.light] or [base.v] that
-    exists, preferring [.light] (see [CUnix.source_file]). *)
+(** [source_file base] is the source file [base.soma] or [base.v] that
+    exists, preferring [.soma] (see [CUnix.source_file]). *)
 val source_file : string -> string
 
 (* Loadpaths *)

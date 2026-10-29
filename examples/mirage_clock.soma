@@ -1,9 +1,9 @@
 (** A unikernel that never stops: every second, it prints the time of day.
-    [forever body] runs [body] again and again; recursion in Lightlang has
+    [forever body] runs [body] again and again; recursion in Soma has
     to end, so an endless loop is an [io] action, run by the image. Stop it
     with Ctrl-C.
 
-        light run examples/mirage_clock.light *)
+        soma run examples/mirage_clock.soma *)
 Require Import Mirage.
 
 two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.

@@ -8,7 +8,7 @@
     terminates.
 
     Each call makes two more, so this takes exponential time; see
-    gradual_fibonacci.light for a linear one. *)
+    gradual_fibonacci.soma for a linear one. *)
 
 Recursive fib n :=
   match n with

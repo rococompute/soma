@@ -8,7 +8,7 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * [to_string], part of the Lightlang prelude
+(** * [to_string], part of the Soma prelude
 
     [to_string] turns a value into a [string]. It is a type class method:
     each type has its own [to_string], an instance of [Show], and the one
@@ -16,7 +16,7 @@
     checked. A new type gets one with
     [#[export] Instance show_t : Show t := { to_string x := ... }.] *)
 
-Require Import Lightlang.Strings.
+Require Import Soma.Strings.
 From Stdlib Require Numbers.DecimalString NArith.BinNatDef ZArith.BinIntDef Lists.List.
 
 Class Show (A : Type) := { to_string : A -> string }.

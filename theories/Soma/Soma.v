@@ -8,12 +8,12 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * The Lightlang prelude, [Lightlang.Lightlang]
+(** * The Soma prelude, [Soma.Soma]
 
-    Loaded after [Corelib.Init.Prelude] in every Lightlang program, unless
-    [-no-lightlang-prelude], [-noinit] or [-boot] is given. It is built
+    Loaded after [Corelib.Init.Prelude] in every Soma program, unless
+    [-no-soma-prelude], [-noinit] or [-boot] is given. It is built
     after Stdlib (theories/Stdlib), which it uses. The rest of the
-    Lightlang library is in the files it exports. *)
+    Soma library is in the files it exports. *)
 
 Require Export Corelib.Gradual.Gradual.
 
@@ -50,13 +50,13 @@ Close Scope Q_scope.
 Notation "x != y" := (~ (x = y)) (at level 70, no associativity) : type_scope.
 
 (** ["..."] string literals, [string] and [append] *)
-Require Export Lightlang.Strings.
+Require Export Soma.Strings.
 
 (** [[1, 2, 3]] list literals *)
-Require Export Lightlang.Lists.
+Require Export Soma.Lists.
 
 (** [to_string] *)
-Require Export Lightlang.Show.
+Require Export Soma.Show.
 
 (** A type a definition leaves unknown becomes a type parameter, so
     [Definition greet name := append "Hello, " (to_string name).] accepts

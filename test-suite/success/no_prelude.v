@@ -1,5 +1,5 @@
 (* -*- coq-prog-args: ("-no-prelude") -*- *)
-(* -no-prelude loads neither Corelib.Init.Prelude nor Lightlang.Lightlang *)
+(* -no-prelude loads neither Corelib.Init.Prelude nor Soma.Soma *)
 Fail Check nat.
 From Corelib Require Import Init.Prelude.
 Check 0.

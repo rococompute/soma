@@ -81,7 +81,7 @@ type vo_path = {
 type coqargs_pre = {
   boot        : bool;
   load_init   : bool;
-  load_lightlang : bool;
+  load_soma : bool;
   load_rcfile : bool;
 
   ml_includes : string list;
@@ -139,7 +139,7 @@ let default_config = {
 let default_pre = {
   boot         = false;
   load_init    = true;
-  load_lightlang = true;
+  load_soma = true;
   load_rcfile  = true;
   ml_includes  = [];
   vo_includes  = [];
@@ -410,8 +410,8 @@ let parse_args ~init arglist : t * string list =
     |"-indices-matter" -> set_logic (fun o -> { o with indices_matter = true }) oval
     |"-m"|"--memory" -> { oval with post = { memory_stat = true }}
     |"-noinit"|"-nois" -> { oval with pre = { oval.pre with load_init = false }}
-    |"-no-lightlang-prelude" -> { oval with pre = { oval.pre with load_lightlang = false }}
-    |"-no-prelude" -> { oval with pre = { oval.pre with load_init = false; load_lightlang = false }}
+    |"-no-soma-prelude" -> { oval with pre = { oval.pre with load_soma = false }}
+    |"-no-prelude" -> { oval with pre = { oval.pre with load_init = false; load_soma = false }}
     |"-boot" -> { oval with pre = { oval.pre with boot = true }}
     |"-profile-ltac" -> add_set_option oval ["Ltac"; "Profiling"] (OptionSet None)
     |"-q" -> { oval with pre = { oval.pre with load_rcfile = false; }}
@@ -457,13 +457,13 @@ let parse_args ~init args =
 (* prelude_data == From Corelib Require Import Prelude. *)
 let prelude_data = RequireInjection { lib = "Prelude"; prefix = Some "Corelib"; export = Some Import; allow_failure = false }
 
-(* lightlang_data == From Lightlang Require Import Lightlang.
-   Not under -boot, so Corelib, Ltac2, Stdlib and the Lightlang prelude
+(* soma_data == From Soma Require Import Soma.
+   Not under -boot, so Corelib, Ltac2, Stdlib and the Soma prelude
    itself are built as plain CIC. *)
-let lightlang_data = RequireInjection { lib = "Lightlang"; prefix = Some "Lightlang"; export = Some Import; allow_failure = false }
+let soma_data = RequireInjection { lib = "Soma"; prefix = Some "Soma"; export = Some Import; allow_failure = false }
 
 let injection_commands opts =
   if not opts.pre.load_init then opts.pre.injections
-  else if opts.pre.load_lightlang && not opts.pre.boot then
-    prelude_data :: lightlang_data :: opts.pre.injections
+  else if opts.pre.load_soma && not opts.pre.boot then
+    prelude_data :: soma_data :: opts.pre.injections
   else prelude_data :: opts.pre.injections

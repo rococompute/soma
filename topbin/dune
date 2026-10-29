@@ -19,12 +19,12 @@
  (package rocq-runtime)
  (files (rocq.bc as rocq.byte)))
 
-; light: Lightlang's command line (light build FILE is rocq c FILE)
+; soma: Soma's command line (soma build FILE is rocq c FILE)
 (executable
- (name light)
- (public_name light)
+ (name soma)
+ (public_name soma)
  (package rocq-runtime)
- (modules light)
+ (modules soma)
  (libraries rocqshim))
 
 (executable

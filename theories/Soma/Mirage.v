@@ -8,10 +8,10 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * MirageOS unikernels, [Lightlang.Mirage]
+(** * MirageOS unikernels, [Soma.Mirage]
 
     Not part of the prelude. A program that requires it is a unikernel:
-    [rocq c prog.light] also builds [prog.hvt], a MirageOS image for
+    [rocq c prog.soma] also builds [prog.hvt], a MirageOS image for
     [solo5-hvt] (Hypervisor.framework on Apple Silicon), whose code is the
     program's [main : io unit] extracted to OCaml (see the [Mirage]
     section of GRADUAL.md).
@@ -26,7 +26,7 @@ From Stdlib Require Strings.String Strings.Ascii.
 From Corelib Require Extraction.
 (* strings and characters as OCaml char lists and chars in the image *)
 From Stdlib Require ExtrOcamlString.
-Require Import Lightlang.Strings Lightlang.Show.
+Require Import Soma.Strings Soma.Show.
 
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
@@ -91,7 +91,7 @@ Definition http_response (body : string) : string :=
 (** an HTTP [GET] request for [path] *)
 Definition http_get (path : string) : string :=
   ("GET " ++ path ++ " HTTP/1.1" ++ crlf ++
-   "Host: lightlang" ++ crlf ++
+   "Host: soma" ++ crlf ++
    "Connection: close" ++ crlf ++ crlf)%str.
 
 Fixpoint drop_through_space (s : string) : string :=

@@ -14,7 +14,7 @@ open Constrexpr
 
 (** {6 Definitions/Let} *)
 
-(** Lightlang: [Automatic Generalization], set by the Lightlang prelude. A
+(** Soma: [Automatic Generalization], set by the Soma prelude. A
     definition's unknown types become implicit type parameters, with the
     type class instances that depend on them. *)
 val automatic_generalization : unit -> bool
