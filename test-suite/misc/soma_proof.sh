@@ -94,3 +94,54 @@ printf 'Definition We := 1.\n' > names.soma
 rocq c -q names.soma
 # nothing is left next to the program by lia or nia
 [ ! -e .lia.cache ] && [ ! -e .nia.cache ]
+
+# cases, induction and blocks, as in the examples
+cat > double.proof <<'EOT'
+Lemma double_even : forall n : nat, Nat.Even (double n).
+Proof.
+  Take n : nat.
+  Choose m := n.
+  We conclude that n + n = 2 * n.
+Qed.
+
+Lemma double_le : forall n m : nat, n <= m -> double n <= double m.
+Proof.
+  Take n : nat.
+  We use induction on n.
+  - Take m : nat.
+    Assume that 0 <= m as m_nonneg.
+    We conclude that 0 + 0 <= m + m.
+  - Take n : nat.
+    Assume that forall m, n <= m -> double n <= double m as IH.
+    Take m : nat.
+    Assume that S n <= m as below.
+    We conclude that S n + S n <= m + m.
+Qed.
+
+Lemma min_le : forall a b : nat, (if a <? b then a else b) <= b.
+Proof.
+  Take a : nat.
+  Take b : nat.
+  We consider whether a < b as smaller.
+  - We conclude that a <= b.
+  - We conclude that b <= b.
+Qed.
+
+Lemma half : forall n : nat, exists k, n = 2 * k \/ n = 2 * k + 1.
+Proof.
+  Take n : nat.
+  We use strong induction on n.
+  Take n : nat.
+  Assume that forall m, m < n -> exists k, m = 2 * k \/ m = 2 * k + 1 as IH.
+  We consider whether n < 2 as small.
+  - Choose k := 0.
+    We conclude that n = 2 * 0 \/ n = 2 * 0 + 1.
+  - We show that exists k, n - 2 = 2 * k \/ n - 2 = 2 * k + 1 as smaller.
+    { By IH (n - 2), we conclude that exists k, n - 2 = 2 * k \/ n - 2 = 2 * k + 1. }
+    Obtain k and k_half from smaller.
+    Choose j := k + 1.
+    We conclude that n = 2 * (k + 1) \/ n = 2 * (k + 1) + 1.
+Qed.
+EOT
+rm -f double.vo
+rocq c -q double.soma

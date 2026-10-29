@@ -106,13 +106,22 @@ Qed.
 | --- | --- |
 | `Take x : T.` | the next variable is a `T`; names it |
 | `Assume that P as H.` | the next hypothesis is `P` (perhaps unfolded); names it |
+| `Here H means that P.` | the hypothesis `H` is `P`, up to computation; shows it as `P` |
 | `We need to show that P.` | the goal is `P`, up to computation; shows it as `P` |
 | `It holds that P as H.` | proves `P` and names it |
 | `It suffices to show that P.` | the goal follows from `P`; `P` is the new goal |
 | `We conclude that P.` | the goal is `P`; proves it |
-| `By t, ...` (the last three) | as above, with the hypothesis or lemma `t` |
+| `By t, ...` (the last three) | as above, with the hypothesis or lemma `t` (applied to arguments, if needed): `t` applied, or rewritten with |
+| `Computing, we need to show that P.`, `Computing, we conclude that P.` | as without `Computing`, after evaluating the goal (`simpl`) |
+| `We show that P as H.` | `P`, proved by the sentences in braces right after, is then `H` |
+| `It suffices to show that P as H.` | the goal, proved from `H : P` by the sentences in braces right after; then `P` is the goal |
 | `Choose x := t.` | proves an `exists x, ...` with `t` |
 | `Obtain a and b from x.` | takes `x` (a pair, `{a \| P a}`, `exists`, `/\`) apart |
+| `We prove each part.` | splits an `A /\ B` goal |
+| `We consider each case of x.` | a case for each constructor of `x` |
+| `We consider whether a < b as H.` (or `<=`, `=`) | for numbers, a case with `H : a < b` and one with its opposite; `a <? b` is then `true` or `false` |
+| `We use induction on x.` | a case for each constructor of `x`, whose arguments and induction hypotheses each case takes and assumes |
+| `We use strong induction on n.` | for a number: proves the goal for `n` assuming it for every smaller number, which is taken and assumed |
 
 "Proves" is `soma_auto`: the hypotheses, computation, equalities,
 `lia`, `ring`, `nia` and propositional logic; `By t` adds `t`, applied
@@ -120,8 +129,20 @@ or rewritten with. A step it cannot take is split into smaller
 sentences. Sentences are tactics, so they mix with any other tactic. In
 a `.proof` file, a tactic acts on one goal at a time (`Default Goal
 Selector "!"`): with several goals open, each is focused with a bullet or
-braces. `examples/macros.proof` and `examples/type_functions.proof` are
-written in sentences.
+braces. Notations in a sentence are read as in a theorem's statement:
+`*` is on `nat`s unless scoped, as in `(sqrt 2 * sqrt 2 = 2)%R`. All the
+example `.proof` files are written in sentences, `sqrt2_irrational.proof`
+(top down, with `It suffices to show that ... as ...` blocks and strong
+induction) and `reason_counter.proof` (cases and induction) among them;
+the tactics they replace are in their history.
+
+Known issue: the kernel does not reduce `cast Any nat (cast nat Any n)`,
+for a variable `n`, when it comes from unfolding a constant. With
+`Definition f (x : Any) : nat := x + 1`, `f n = n + 1` is proved by
+`reflexivity` (the elaborator reduces it), and the proof is then rejected
+at `Qed`. The same cast written out, or from a `fun` applied, is reduced.
+`Computing, ...` (`simpl` first) avoids it; `reason_components.proof`
+does so for `Plus_one`, whose prop is `Any`.
 
 ### Macros: `.lang` files
 

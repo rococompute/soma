@@ -4,30 +4,57 @@
     anything. Building or running reason_counter.soma checks it, and fails
     if a proof does not hold. *)
 
-(** each action keeps the count at most [limit] *)
+(** each action keeps the count at most [limit]; [Increment] adds one only
+    while the count is below [limit] *)
 Lemma step_within_limit : forall action count, count <= limit -> step action count <= limit.
 Proof.
-  intros [] count H; unfold step; try lia.
-  destruct (Nat.ltb_spec count limit); lia.
+  Take a : action.
+  Take count : nat.
+  Assume that count <= limit as below.
+  We consider each case of a.
+  - We need to show that (if count <? limit then count + 1 else count) <= limit.
+    We consider whether count < limit as room.
+    + We conclude that count + 1 <= limit.
+    + We conclude that count <= limit.
+  - We conclude that count - 1 <= limit.
+  - We conclude that 0 <= limit.
 Qed.
 
-(** so does any list of actions, from any count at most [limit] *)
+(** so does any list of actions, from any count at most [limit]: each
+    action keeps the count at most [limit] for the next *)
 Lemma replay_within_limit : forall clicks count,
   count <= limit -> replay step count clicks <= limit.
 Proof.
-  induction clicks as [|action clicks IH]; intros count H; cbn [replay List.fold_left] in *.
-  - exact H.
-  - apply IH, step_within_limit, H.
+  Take clicks : list action.
+  We use induction on clicks.
+  - Take count : nat.
+    Assume that count <= limit as below.
+    We conclude that count <= limit.
+  - Take a : action.
+    Take clicks : list action.
+    Assume that forall count, count <= limit -> replay step count clicks <= limit as IH.
+    Take count : nat.
+    Assume that count <= limit as below.
+    We need to show that replay step (step a count) clicks <= limit.
+    By IH, it suffices to show that step a count <= limit.
+    By step_within_limit, we conclude that step a count <= limit.
 Qed.
 
-(** Whatever the clicks, the count stays at most [limit]. *)
+(** Whatever the clicks, the count stays at most [limit]: the app starts
+    at 0. *)
 Theorem count_within_limit : forall clicks, state_after counter clicks <= limit.
 Proof.
-  intros clicks. exact (replay_within_limit clicks 0 ltac:(unfold limit; lia)).
+  Take clicks : list action.
+  We need to show that replay step 0 clicks <= limit.
+  By replay_within_limit, we conclude that replay step 0 clicks <= limit.
 Qed.
 
-(** Whatever the clicks before it, [Reset] brings the count back to 0. *)
+(** Whatever the clicks before it, [Reset] brings the count back to 0:
+    the last step is [Reset]'s. *)
 Theorem reset_clears : forall clicks, state_after counter (clicks ++ [Reset]) = 0.
 Proof.
-  intros clicks. unfold state_after, replay. rewrite List.fold_left_app. reflexivity.
+  Take clicks : list action.
+  We need to show that List.fold_left (fun s a => step a s) (clicks ++ [Reset]) 0 = 0.
+  By List.fold_left_app,
+    we conclude that List.fold_left (fun s a => step a s) (clicks ++ [Reset]) 0 = 0.
 Qed.

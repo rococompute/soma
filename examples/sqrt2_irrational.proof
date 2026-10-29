@@ -5,44 +5,67 @@
 
 Theorem sqrt2_irrational : irrational (sqrt 2).
 Proof.
-  (** [enough (h : P)] says: the goal follows from [P]. The block after it
-      shows how, using [h]; then [P] itself is the goal. *)
+  (** [It suffices to show that P as h.] says: the goal follows from [P].
+      The block after it shows how, using [h]; then [P] itself is the
+      goal. *)
 
   (** Enough that no rational squares to 2: a rational [q] equal to
-      [sqrt 2] would have [q * q] equal to [sqrt 2 * sqrt 2], which is [2]
-      ([sqrt_sqrt]). [==] is equality of fractions as values. *)
-  enough (no_rational : ~ exists q : Q, (q * q == 2)%Q).
-  { intros [q Hq]. apply no_rational. exists q.
-    apply eqR_Qeq. rewrite Q2R_mult, Hq, sqrt_sqrt by lra.
-    unfold Q2R. simpl. lra. }
+      [sqrt 2] would have [q * q] equal to [sqrt 2 * sqrt 2], which is
+      [2]. [==] is equality of fractions as values. *)
+  It suffices to show that ~ exists q : Q, (q * q == 2)%Q as no_rational.
+  { Assume that exists q : Q, Q2R q = sqrt 2 as equal.
+    Obtain q and q_is_sqrt2 from equal.
+    By no_rational, it suffices to show that exists r : Q, (r * r == 2)%Q.
+    Choose r := q.
+    By eqR_Qeq, it suffices to show that Q2R (q * q) = Q2R 2.
+    By Q2R_mult, it suffices to show that (Q2R q * Q2R q = Q2R 2)%R.
+    By q_is_sqrt2, it suffices to show that (sqrt 2 * sqrt 2 = Q2R 2)%R.
+    By sqrt_sqrt, it suffices to show that (2 = Q2R 2)%R.
+    We conclude that (2 = IZR 2 * / IZR 1)%R. }
 
   (** Enough that there are no whole numbers [p] and [q != 0] with
       [p * p = 2 * (q * q)]: a rational is a fraction [n # d], and
       [q * q == 2] is [n * n = 2 * (d * d)], so [|n|] and [d] would be
       such numbers. *)
-  enough (no_whole : forall p q, q != 0 -> p * p != 2 * (q * q)).
-  { intros [[n d] H]. unfold Qeq, Qmult in H. simpl in H.
-    apply (no_whole (Z.abs_nat n) (Pos.to_nat d)).
-    - lia.
-    - apply Nat2Z.inj. rewrite !Nat2Z.inj_mul, Zabs2Nat.id_abs, positive_nat_Z.
-      nia. }
+  It suffices to show that forall p q, q != 0 -> p * p != 2 * (q * q) as no_whole.
+  { Assume that exists q : Q, (q * q == 2)%Q as square_two.
+    Obtain q and q_square from square_two.
+    Obtain n and d from q.
+    Here q_square means that (n * n * 1 = 2 * Z.pos (d * d))%Z.
+    It holds that Pos.to_nat d != 0 as d_nonzero.
+    It holds that Z.abs_nat n * Z.abs_nat n = 2 * (Pos.to_nat d * Pos.to_nat d) as whole.
+    By no_whole (Z.abs_nat n) (Pos.to_nat d), we conclude that False. }
 
-  (** Enough that if [n * n] is even, so is [n]: then, by strong induction
-      on [p] (no smaller [p] has a solution),
+  (** Enough that if [n * n] is even, so is [n]: then, by strong
+      induction on [p] (no smaller [p] has a solution),
       1. [p * p = 2 * (q * q)] is even, so [p] is even: [p = 2 * k];
       2. then [q * q = 2 * (k * k)], a solution with [q] in place of [p];
-      3. [q < p], so it cannot exist. [nia] proves [q < 2 * k], [k != 0]
-         and [q * q = 2 * (k * k)]. *)
-  enough (even_square : forall n, Nat.Even (n * n) -> Nat.Even n).
-  { intro p. induction p as [p IH] using (well_founded_induction lt_wf).
-    intros q Hq Heq.
-    destruct (even_square p) as [k Hk].
-    { exists (q * q). lia. }
-    subst p.
-    apply (IH q) with k; nia. }
+      3. [q < p], so it cannot exist. *)
+  It suffices to show that forall n, Nat.Even (n * n) -> Nat.Even n as even_square.
+  { Take p : nat.
+    We use strong induction on p.
+    Take p : nat.
+    Assume that forall r, r < p -> forall q, q != 0 -> r * r != 2 * (q * q) as IH.
+    Take q : nat.
+    Assume that q != 0 as q_nonzero.
+    Assume that p * p = 2 * (q * q) as p_square.
+    We show that Nat.Even (p * p) as p_square_even.
+    { Choose m := q * q. We conclude that p * p = 2 * (q * q). }
+    By even_square, it holds that Nat.Even p as p_even.
+    Obtain k and p_double from p_even.
+    It holds that q < p as smaller.
+    It holds that k != 0 as k_nonzero.
+    It holds that q * q = 2 * (k * k) as q_square.
+    By IH q smaller k k_nonzero, we conclude that False. }
 
   (** Finally, if [n * n] is even, so is [n]: [Nat.even (n * n)] is
       [Nat.even n || Nat.even n]. *)
-  intros n H. apply Nat.even_spec in H. apply Nat.even_spec.
-  rewrite Nat.even_mul in H. destruct (Nat.even n); auto.
+  Take n : nat.
+  Assume that Nat.Even (n * n) as square_even.
+  By Nat.even_spec, it holds that Nat.even (n * n) = true as square_even_b.
+  By Nat.even_mul, it holds that (Nat.even n || Nat.even n)%bool = true as either.
+  By Nat.even_spec, it suffices to show that Nat.even n = true.
+  We consider each case of Nat.even n.
+  - We conclude that true = true.
+  - We conclude that false = true.
 Qed.

@@ -20,15 +20,33 @@
     - [Assume that P as H.] names the next hypothesis of the goal, [P].
     - [We need to show that P.] states the goal, [P], perhaps unfolded or
       computed.
+    - [Here H means that P.] states the hypothesis [H], perhaps unfolded
+      or computed, as [P].
     - [It holds that P as H.] proves [P] and names it [H].
     - [It suffices to show that P.] replaces the goal with [P], which
       proves it.
     - [We conclude that P.] states the goal and proves it.
+    - [Computing, we need to show that P.] and [Computing, we conclude
+      that P.] compute the goal ([simpl]) first: for a goal that is [P]
+      once evaluated.
     - [By t, ...] in front of the last three uses [t], a hypothesis or a
-      lemma, to prove the statement.
+      lemma, to prove the statement: [t] applied, or rewritten with.
+    - [We show that P as H.] and [It suffices to show that P as H.] are
+      for a statement that is proved by sentences of its own, in braces
+      right after: [P] for the first, the goal from [H : P] for the
+      second.
     - [Choose x := t.] proves an [exists x, ...] goal with [t].
     - [Obtain a and b from x.] takes [x] (a pair, a [{a | P a}], an
       [exists a, P a], an [A /\ B]) apart into [a] and [b].
+    - [We prove each part.] splits an [A /\ B] goal into [A] and [B].
+    - [We consider each case of x.] is a case for each constructor of
+      [x]; [We consider whether a < b as H.] (or [<=], [=], for numbers)
+      is a case with [H : a < b] and one with its opposite, and in each,
+      [a <? b] is [true] or [false].
+    - [We use induction on x.] is a case for each constructor of [x],
+      with its arguments and induction hypotheses to [Take] and
+      [Assume]; [We use strong induction on n.] (for a number) is one
+      case, for [n], assuming the statement for every smaller number.
 
     "Proves" means: by [soma_auto], which tries, in turn, the hypotheses,
     computation, equalities, linear then non-linear arithmetic ([lia],
@@ -38,7 +56,7 @@
     In a .proof file, a tactic acts on one goal at a time: with several
     goals open, each is focused with a bullet ([-], [+], [*]) or braces. *)
 
-From Stdlib Require Import Arith Lia.
+From Stdlib Require Import Arith Lia Lra.
 
 (** ** What "proves" means *)
 
@@ -53,16 +71,22 @@ Ltac soma_auto :=
         | (simpl; ring)
         | nia
         | (simpl in *; nia)
+        | lra
         | tauto
         | (simpl in *; congruence)
         | easy ].
 
-(** With [t]: [t] itself, [t] applied, or [t] rewritten with *)
+(** With [t]: [t] itself, [t] applied, or [t] rewritten with, in the
+    goal or everywhere, after computing or not; the conditions of [t] are
+    proved too *)
 Ltac soma_by t :=
   solve [ exact t
         | (apply t; soma_auto)
-        | (rewrite t in *; soma_auto)
-        | (rewrite <- t in *; soma_auto)
+        | (rewrite !t by soma_auto; soma_auto)
+        | (rewrite <- !t by soma_auto; soma_auto)
+        | (rewrite !t in * by soma_auto; soma_auto)
+        | (rewrite <- !t in * by soma_auto; soma_auto)
+        | (simpl; rewrite !t by soma_auto; soma_auto)
         | (pose proof t; soma_auto) ].
 
 (** ** Naming what the goal gives *)
@@ -91,7 +115,14 @@ Tactic Notation "We" "conclude" "that" lconstr(P) :=
   soma_goal_is P;
   first [ soma_auto | fail 1 "This does not follow (prove it in smaller steps, or with By):" P ].
 
-Tactic Notation "By" constr(t) "," "we" "conclude" "that" lconstr(P) :=
+Tactic Notation "Computing" "," "we" "need" "to" "show" "that" lconstr(P) :=
+  simpl; soma_goal_is P.
+
+Tactic Notation "Computing" "," "we" "conclude" "that" lconstr(P) :=
+  simpl; soma_goal_is P;
+  first [ soma_auto | fail 1 "This does not follow (prove it in smaller steps, or with By):" P ].
+
+Tactic Notation "By" lconstr(t) "," "we" "conclude" "that" lconstr(P) :=
   soma_goal_is P;
   first [ soma_by t | fail 1 "This does not follow from" t ":" P ].
 
@@ -101,7 +132,7 @@ Tactic Notation "It" "holds" "that" lconstr(P) "as" ident(H) :=
   first [ assert (H : P) by soma_auto
         | fail 1 "This does not follow (prove it in smaller steps, or with By):" P ].
 
-Tactic Notation "By" constr(t) "," "it" "holds" "that" lconstr(P) "as" ident(H) :=
+Tactic Notation "By" lconstr(t) "," "it" "holds" "that" lconstr(P) "as" ident(H) :=
   first [ assert (H : P) by soma_by t | fail 1 "This does not follow from" t ":" P ].
 
 Tactic Notation "It" "suffices" "to" "show" "that" lconstr(P) :=
@@ -109,10 +140,22 @@ Tactic Notation "It" "suffices" "to" "show" "that" lconstr(P) :=
   first [ enough (H : P) by soma_by H
         | fail 1 "The goal does not follow from" P ].
 
-Tactic Notation "By" constr(t) "," "it" "suffices" "to" "show" "that" lconstr(P) :=
+Tactic Notation "By" lconstr(t) "," "it" "suffices" "to" "show" "that" lconstr(P) :=
   let H := fresh "H" in
-  first [ enough (H : P) by (pose proof t; soma_by H)
-        | fail 1 "The goal does not follow from" P "and" t ].
+  first [ enough (H : P) by soma_by t
+        | fail 1 "The goal does not follow from" t "and" P ].
+
+(** Statements proved by sentences of their own, in braces right after *)
+
+Tactic Notation "We" "show" "that" lconstr(P) "as" ident(H) :=
+  assert (H : P).
+
+Tactic Notation "It" "suffices" "to" "show" "that" lconstr(P) "as" ident(H) :=
+  enough (H : P).
+
+Tactic Notation "Here" ident(H) "means" "that" lconstr(P) :=
+  first [ change P in H
+        | let Q := type of H in fail 1 "The hypothesis" H "is" Q "and not" P ].
 
 (** ** Witnesses and parts *)
 
@@ -120,6 +163,34 @@ Tactic Notation "Choose" ident(x) ":=" lconstr(t) := exists t.
 
 Tactic Notation "Obtain" ident(a) "and" ident(b) "from" constr(x) :=
   destruct x as [a b].
+
+Tactic Notation "We" "prove" "each" "part" := split.
+
+(** ** Cases and induction *)
+
+Tactic Notation "We" "consider" "each" "case" "of" lconstr(x) := destruct x.
+
+Ltac soma_whether P H :=
+  lazymatch P with
+  | ?a < ?b => destruct (Nat.ltb_spec a b) as [H|H]
+  | ?a <= ?b => destruct (Nat.leb_spec a b) as [H|H]
+  | ?a = ?b => destruct (Nat.eqb_spec a b) as [H|H]
+  | _ => fail "We can consider whether a < b, a <= b or a = b, for numbers, not" P
+  end.
+
+Tactic Notation "We" "consider" "whether" lconstr(P) "as" ident(H) := soma_whether P H.
+
+(* [x] goes back into the goal, with what depends on it, which each case
+   then takes and assumes again *)
+Tactic Notation "We" "use" "induction" "on" ident(x) :=
+  generalize dependent x; intro x; elim x; clear x.
+
+Tactic Notation "We" "use" "strong" "induction" "on" ident(x) :=
+  generalize dependent x;
+  lazymatch goal with
+  | |- forall y : nat, @?P y => apply (well_founded_ind lt_wf P); cbv beta
+  | _ => fail "Strong induction is on a number"
+  end.
 
 (** ** One goal at a time *)
 
