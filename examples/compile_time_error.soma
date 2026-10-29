@@ -7,4 +7,4 @@
 greet name := append "Hello, " name.
 
 greet "world".         (* "Hello, world" *)
-Fail greet 42.         (* nat and string differ *)
+greet 42.         (* nat and string differ *)
