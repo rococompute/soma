@@ -1,0 +1,30 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Macro name args := body.], in .lang files (vernac/somaMacro.ml) *)
+
+DECLARE GLOBAL PLUGIN
+
+{
+
+open Stdarg
+
+let lconstr = Procq.Constr.lconstr
+
+}
+
+VERNAC ARGUMENT EXTEND macro_body PRINTED BY { Ppconstr.pr_lconstr_expr ~flags:(Ppconstr.current_flags ()) env sigma }
+| [ lconstr(c) ] -> { c }
+END
+
+VERNAC COMMAND EXTEND SomaMacro CLASSIFIED AS SIDEFF
+| [ "Macro" identref(name) identref(args) ":=" macro_body(body) ] ->
+  { SomaMacro.define ?loc:name.CAst.loc ~name ~args body }
+END

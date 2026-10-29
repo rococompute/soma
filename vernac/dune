@@ -24,6 +24,11 @@
  (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))
 
 (rule
+ (targets g_macro.ml)
+ (deps (:mlg g_macro.mlg))
+ (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))
+
+(rule
  (targets g_redexpr.ml)
  (deps (:mlg g_redexpr.mlg))
  (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))

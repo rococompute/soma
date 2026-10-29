@@ -40,6 +40,21 @@ let load_proof_file ~beautify ~check ~state ldir f =
     Fun.protect ~finally:Dumpglob.pop_output (fun () ->
         Vernac.load_vernac ~beautify ~check ~state ~source:(source ldir p) p)
 
+(* Soma: the macros of a program FILE.soma are in FILE.lang next to it,
+   which is loaded before the program, as by [Load "FILE.lang".]: they
+   are in scope in the program and in FILE.proof. A .lang file compiled
+   by itself, for other files to [Require Import], imports the Macro
+   library. (vernac/somaMacro.ml) *)
+let load_lang_file ~state f =
+  if SomaMacro.is_lang_file f then
+    let pa = Procq.Parsable.make (Gramlib.Stream.of_string "Require Import Soma.Macro.") in
+    match Procq.Entry.parse (Pvernac.main_entry None) pa with
+    | Some cmd -> Vernac.process_expr ~state cmd
+    | None -> state
+  else match Load.lang_of_program f with
+  | None -> state
+  | Some l -> Load.load_lang ~state l
+
 (* Compile a vernac file *)
 let compile opts stm_options injections copts ~f_in ~f_out =
   let open Vernac.State in
@@ -80,6 +95,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let wall_clock1 = Unix.gettimeofday () in
       let check = Stm.AsyncOpts.(stm_options.async_proofs_mode = APoff) in
       let source = source ldir long_f_dot_in in
+      let state = load_lang_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
       let fullstate = Stm.finish ~doc:state.doc in
@@ -111,6 +127,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = Load.load_init_vernaculars opts ~state in
       let ldir = Stm.get_ldir ~doc:state.doc in
       let source = source ldir long_f_dot_in in
+      let state = load_lang_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check:false ~source ~state long_f_dot_in in
       let state = load_proof_file ~beautify ~check:false ~state ldir long_f_dot_in in
       let state = Stm.finish ~doc:state.doc in

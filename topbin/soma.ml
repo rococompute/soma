@@ -105,7 +105,7 @@ let created ~before ~start ~source dir =
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
       (* sources are not outputs, even when edited just before *)
-      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"]) &&
+      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"]) &&
       (time >= start || not (List.mem_assoc name before)))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare

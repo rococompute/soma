@@ -455,26 +455,34 @@ let rec synterp ~intern ?loc ~atts v =
 and synterp_load ~intern verbosely fname =
   let fname =
     Envars.expand_path_macros ~warn:(fun x -> Feedback.msg_warning (Pp.str x)) fname in
+  let longfname = Loadpath.locate_source_file fname in
+  let source = Loc.InFile { dirpath=None; file=longfname} in
   let input =
-    let longfname = Loadpath.locate_source_file fname in
     let in_chan = Util.open_utf8_file_in longfname in
-    Procq.Parsable.make ~loc:Loc.(initial (InFile { dirpath=None; file=longfname}))
+    Procq.Parsable.make ~loc:Loc.(initial source)
         (Gramlib.Stream.of_channel in_chan) in
+  (* Soma: a .lang file is loaded in a module of its own, which imports
+     the Macro library (vernac/somaMacro.ml) *)
+  let inputs =
+    if SomaMacro.is_lang_file longfname then
+      let of_string s = Procq.Parsable.make ~loc:Loc.(initial source) (Gramlib.Stream.of_string s) in
+      [of_string (SomaMacro.lang_prologue longfname); input; of_string (SomaMacro.lang_epilogue longfname)]
+    else [input] in
   (* Parsing loop *)
   let v_mod = if verbosely then Flags.verbosely else Flags.silently in
   let parse_sentence proof_mode =
     Procq.Entry.parse (Pvernac.main_entry proof_mode)
   in
   let proof_mode = Some (get_default_proof_mode ()) in
-  let rec load_loop entries =
+  let rec load_loop input entries =
     match parse_sentence proof_mode input with
     | None -> entries
     | Some cmd ->
       let entry = v_mod (synterp_control ~intern) cmd in
       let st = Vernacstate.Synterp.freeze () in
-      (load_loop [@ocaml.tailcall]) ((entry,st)::entries)
+      (load_loop [@ocaml.tailcall]) input ((entry,st)::entries)
   in
-  let entries = List.rev @@ load_loop [] in
+  let entries = List.rev @@ List.fold_left (fun entries input -> load_loop input entries) [] inputs in
   EVernacLoad(verbosely, entries)
 
 and synterp_control ~intern CAst.{ loc; v = cmd } =

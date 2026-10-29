@@ -35,6 +35,9 @@ soma run examples/hello.soma
   cannot ask a type what it is. `type_functions.proof` proves that `j`
   cannot be given an odd number, and that it returns a larger number for
   any number above 1.
+- `macros.soma`: macros, defined in `macros.lang` next to it, which is
+  read first: `pipe` threads a value through functions, `swap` swaps two
+  arguments, and `repeat` builds a string while the program is checked.
 - `sqrt2_irrational.soma`: a proof that the square root of 2 is irrational
   (`irrational (sqrt 2)`), top down: the theorem first, then a proof that
   reduces it with `enough` to the rationals, to whole numbers, and to

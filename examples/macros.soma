@@ -1,0 +1,14 @@
+(** Macros. The ones used here are in macros.lang, next to this file,
+    which is read first: a use of a macro, like [pipe 3 S ...], is
+    replaced by the code the macro returns, then checked as if it had been
+    written here. *)
+
+pipe 3 S (Nat.mul 2) to_string.     (* to_string (Nat.mul 2 (S 3)): "8" *)
+
+swap append "world" "hello, ".      (* append "hello, " "world" *)
+
+repeat "ab" 3.                      (* "ababab" *)
+
+(** [repeat "ab" (1 + 2)] is rejected: [1 + 2] is not a number written
+    out, so the macro returns its error, "repeat takes a string and a
+    number, written out". *)

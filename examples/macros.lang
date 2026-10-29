@@ -1,0 +1,27 @@
+(** The macros of macros.soma. A macro is given the code of its
+    arguments, as [syntax] values, and returns the code it stands for,
+    which is checked where the macro is used. *)
+
+(** [pipe x f g h] is [h (g (f x))]: [x], through each function in turn,
+    for any number of functions *)
+Macro pipe args :=
+  match args with
+  | cons x fs => List.fold_left (fun acc f => App f (cons acc nil)) fs x
+  | nil => MacroError "pipe takes a value, then functions"
+  end.
+
+(** [swap f a b] is [f b a] *)
+Macro swap args :=
+  match args with
+  | cons f (cons a (cons b nil)) => App f (cons b (cons a nil))
+  | _ => MacroError "swap takes a function and two arguments"
+  end.
+
+(** [repeat "ab" 3] is ["ababab"], computed when the program is checked:
+    the macro looks into its arguments, which must be literals *)
+Macro repeat args :=
+  match args with
+  | cons (Str s) (cons (Num n) nil) =>
+    Str ((fix go k := match k with 0 => "" | Succ m => append s (go m) end) n)
+  | _ => MacroError "repeat takes a string and a number, written out"
+  end.

@@ -2446,7 +2446,29 @@ let intern_proj self genv env lvar ?loc expl (qid,us) args1 c args2 =
     if expl then intern env (CAst.make ?loc (CAppExpl ((qid,us), List.map fst args1@c::List.map fst args2)))
     else intern env (CAst.make ?loc (CApp ((CAst.make ?loc:qid.CAst.loc (CRef (qid,us))), args1@(c,None)::args2)))
 
+(* Soma: a reference to a macro in scope (interp/somaMacros.ml) is
+   expanded where it is written, into code that is then internalized in
+   its place; a local variable of the same name hides the macro *)
+let macro_of env qid =
+  if not (SomaMacros.any ()) || qualid_is_ident qid && Id.Set.mem (qualid_basename qid) env.ids then None
+  (* the lookup is done again, with its warnings, if this is no macro *)
+  else match CWarnings.with_warn "-all" Nametab.locate_extended_nowarn qid with
+    | exception Not_found -> None
+    | Globnames.TrueGlobal (GlobRef.ConstRef c) when SomaMacros.is_macro c -> Some c
+    | _ -> None
+
+let expand_macro genv ?loc c args =
+  let args = List.map (fun (a, e) -> match e with
+      | None -> a
+      | Some { CAst.loc } -> user_err ?loc (str "A macro has no implicit arguments."))
+      args in
+  !SomaMacros.expand genv ?loc c args
+
 let ref self genv env lvar ?loc (ref, us) =
+  match macro_of env ref with
+  | Some c when Option.is_empty us ->
+    SomaMacros.nested ?loc c (fun () -> intern self genv env lvar (expand_macro genv ?loc c []))
+  | _ ->
   let intern env = intern self genv env lvar in
   let c,_ =
     intern_applied_reference ~isproj:false intern env (Environ.named_context_val genv)
@@ -2598,9 +2620,14 @@ let app self genv env lvar ?loc (f, args) =
   | CProj (expl, (ref,us), args', c) ->
     intern_proj self genv env lvar ?loc:f.CAst.loc expl (ref,us) args' c args
   | CRef (ref,us) ->
+    begin match macro_of env ref with
+    | Some c when Option.is_empty us ->
+      SomaMacros.nested ?loc c (fun () -> intern env (expand_macro genv ?loc c args))
+    | _ ->
     let f, args = intern_applied_reference ~isproj:false intern env
         (Environ.named_context_val genv) lvar us args ref in
     apply_impargs env loc f args
+    end
   | CNotation (_,ntn,ntnargs) ->
     let c = intern_notation intern env (snd lvar) loc ntn ntnargs in
     apply_impargs env loc c args

@@ -82,9 +82,41 @@ FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
 `examples/reason_counter.proof` and `examples/reason_components.proof` are
 examples; `test-suite/misc/soma_proof.sh` tests it.
 
+### Macros: `.lang` files
+
+Macros are defined in `.lang` files, with `Macro name args := body.`: a
+macro is a function from the code of its arguments (`args : list syntax`)
+to the code it stands for (a `syntax`), in `theories/Soma/Macro.v`. A use
+of a macro in scope, `name a b`, looks like a call: when it is
+internalized (`interp/constrintern.ml`), the code of `a` and `b` is quoted
+into `syntax` values, the macro is evaluated on them, and the `syntax` it
+returns is read back as code and checked in place of `name a b`
+(`vernac/somaMacro.ml`). A local variable of the same name hides the
+macro. `syntax` has names, numbers, strings, applications, `fun`s and
+holes; other code (a `match`, a notation like `a + b`) is `Opaque`, which a
+macro can return but not look into. `MacroError "..."` fails the
+expansion with that message, at the use; so does a run-time error in the
+macro. Expansions nested 1000 deep stop with an error.
+
+Macros are in scope only where they are asked for:
+
+- `FILE.lang`, next to `FILE.soma`, is read before the program, so its
+  macros are in scope in `FILE.soma` and `FILE.proof` (and in `soma repl
+  FILE.soma`).
+- Another `.lang` file is in scope where it is loaded, `Load
+  "other.lang".`, or, compiled by itself (`rocq c other.lang`), where it
+  is imported, `Require Import other.` (not with `Require` alone).
+- `Macro` can only be used in a `.lang` file, and the `Macro` library
+  (`syntax`, `App`, ...) is only in scope there: a `.lang` file is loaded in
+  a module of its own that imports it.
+
+`examples/macros.lang` and `examples/macros.soma` are an example;
+`test-suite/misc/soma_macros.sh` tests it.
+
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
-also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`); given a
-name without an extension, they look for `.soma` first, then `.v`.
+also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
+`.lang`; given a name without an extension, they look for `.soma` first,
+then `.v`, then `.lang`.
 `rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
 Every file starts with the Soma prelude, `theories/Soma/Soma.v`,
