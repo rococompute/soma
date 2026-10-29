@@ -47,3 +47,21 @@ grep -q 'File "./double.proof", line 4' out.log
 # without a .proof file, nothing more is read
 rm double.proof
 rocq c -q double.soma
+
+# proofs are only in .proof files: a .soma (or .lang) file cannot start
+# one, whether with Theorem or with a definition proved interactively
+fails() { # fails FILE: compiling FILE fails, as it starts a proof
+  if rocq c -q "$1" > out.log 2>&1; then
+    echo "$1 was accepted"; exit 1
+  fi
+  grep -q "Proofs go in a .proof file" out.log || { cat out.log; exit 1; }
+}
+printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > theorem.soma
+fails theorem.soma
+printf 'Definition d : nat.\nProof. exact 0. Defined.\n' > interactive.soma
+fails interactive.soma
+printf 'Lemma l : True.\nProof. exact I. Qed.\n' > lemma.lang
+fails lemma.lang
+# Rocq's .v files keep theirs
+printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > theorem.v
+rocq c -q theorem.v

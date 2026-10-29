@@ -71,8 +71,10 @@ _build/install/default/bin/soma run my_file.soma
 - `soma help` lists the commands, and `soma build --help` the options of
   build and run (those of `rocq c`).
 
-A program `FILE.soma` can have its lemmas and theorems in `FILE.proof`,
-next to it. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma
+A program `FILE.soma` has its lemmas and theorems in `FILE.proof`, next
+to it: a `.soma` or `.lang` file cannot start a proof (`Theorem`, `Lemma`,
+a `Definition` proved interactively, ...; `vernac/vernactypes.ml`), while
+Rocq's `.v` files can. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma
 run`) reads the program, then `FILE.proof` in the program's environment
 (`toplevel/ccompile.ml`): the proofs see what it defines and imports, JSX
 included, without importing anything. A proof that does not hold fails the

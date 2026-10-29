@@ -1,0 +1,48 @@
+(** The square root of 2 is irrational, top down: the theorem comes first,
+    and its proof reduces it to simpler and simpler statements, each proved
+    in turn. Read after sqrt2_irrational.soma, where [irrational] is
+    defined. *)
+
+Theorem sqrt2_irrational : irrational (sqrt 2).
+Proof.
+  (** [enough (h : P)] says: the goal follows from [P]. The block after it
+      shows how, using [h]; then [P] itself is the goal. *)
+
+  (** Enough that no rational squares to 2: a rational [q] equal to
+      [sqrt 2] would have [q * q] equal to [sqrt 2 * sqrt 2], which is [2]
+      ([sqrt_sqrt]). [==] is equality of fractions as values. *)
+  enough (no_rational : ~ exists q : Q, (q * q == 2)%Q).
+  { intros [q Hq]. apply no_rational. exists q.
+    apply eqR_Qeq. rewrite Q2R_mult, Hq, sqrt_sqrt by lra.
+    unfold Q2R. simpl. lra. }
+
+  (** Enough that there are no whole numbers [p] and [q != 0] with
+      [p * p = 2 * (q * q)]: a rational is a fraction [n # d], and
+      [q * q == 2] is [n * n = 2 * (d * d)], so [|n|] and [d] would be
+      such numbers. *)
+  enough (no_whole : forall p q, q != 0 -> p * p != 2 * (q * q)).
+  { intros [[n d] H]. unfold Qeq, Qmult in H. simpl in H.
+    apply (no_whole (Z.abs_nat n) (Pos.to_nat d)).
+    - lia.
+    - apply Nat2Z.inj. rewrite !Nat2Z.inj_mul, Zabs2Nat.id_abs, positive_nat_Z.
+      nia. }
+
+  (** Enough that if [n * n] is even, so is [n]: then, by strong induction
+      on [p] (no smaller [p] has a solution),
+      1. [p * p = 2 * (q * q)] is even, so [p] is even: [p = 2 * k];
+      2. then [q * q = 2 * (k * k)], a solution with [q] in place of [p];
+      3. [q < p], so it cannot exist. [nia] proves [q < 2 * k], [k != 0]
+         and [q * q = 2 * (k * k)]. *)
+  enough (even_square : forall n, Nat.Even (n * n) -> Nat.Even n).
+  { intro p. induction p as [p IH] using (well_founded_induction lt_wf).
+    intros q Hq Heq.
+    destruct (even_square p) as [k Hk].
+    { exists (q * q). lia. }
+    subst p.
+    apply (IH q) with k; nia. }
+
+  (** Finally, if [n * n] is even, so is [n]: [Nat.even (n * n)] is
+      [Nat.even n || Nat.even n]. *)
+  intros n H. apply Nat.even_spec in H. apply Nat.even_spec.
+  rewrite Nat.even_mul in H. destruct (Nat.even n); auto.
+Qed.

@@ -38,12 +38,13 @@ soma run examples/hello.soma
 - `macros.soma`: macros, defined in `macros.lang` next to it, which is
   read first: `pipe` threads a value through functions, `swap` swaps two
   arguments, and `repeat` builds a string while the program is checked.
-- `sqrt2_irrational.soma`: a proof that the square root of 2 is irrational
-  (`irrational (sqrt 2)`), top down: the theorem first, then a proof that
-  reduces it with `enough` to the rationals, to whole numbers, and to
-  "`n * n` even means `n` even". `lia`, `nia` and `lra` do the arithmetic.
-- `sqrt2_irrational_bottom_up.soma`: the same proof bottom up, as separate
-  named lemmas proved before the theorem that uses them.
+- `sqrt2_irrational.soma` and `.proof`: a proof that the square root of 2
+  is irrational (`irrational (sqrt 2)`, with `irrational` defined in the
+  `.soma`), top down: the theorem first, then a proof that reduces it with
+  `enough` to the rationals, to whole numbers, and to "`n * n` even means
+  `n` even". `lia`, `nia` and `lra` do the arithmetic.
+- `sqrt2_irrational_bottom_up.soma` and `.proof`: the same proof bottom
+  up, as separate named lemmas proved before the theorem that uses them.
 - `reason_components.soma`: Reason React components with JSX
   (`Require Import Reason.`): typed props, an untyped (`Any`) prop checked
   when the page is built, a fragment, rendered to HTML. What is proved
@@ -52,9 +53,10 @@ soma run examples/hello.soma
   `reason_counter.proof` proves that its count stays within a limit,
   whatever buttons are clicked. Only the theorems have types.
 
-A program's lemmas and theorems can be in `NAME.proof` next to
-`NAME.soma`: building or running the program reads it after the program
-and checks them, and fails if one does not hold.
+A program's lemmas and theorems are in `NAME.proof` next to `NAME.soma`
+(a `.soma` file cannot have proofs): building or running the program
+reads it after the program and checks them, and fails if one does not
+hold.
 - `mirage_*.soma`: MirageOS unikernels. A program that has
   `Require Import Mirage.` is built into an image, `<name>.hvt`, by `soma build`,
   which says how to run it (see the Mirage section of GRADUAL.md):
