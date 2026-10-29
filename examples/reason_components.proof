@@ -28,8 +28,8 @@ Theorem plus_one_html : forall n : nat,
   ("<span>" ++ escape (to_string (n + 1)) ++ "</span>")%str.
 Proof.
   Take n : nat.
-  Computing, we conclude that
-    ("<span>" ++ escape (to_string (n + 1)) ++ "</span>")%str
+  We conclude that
+    render (A := unit) (<Plus_one count=n />)
     = ("<span>" ++ escape (to_string (n + 1)) ++ "</span>")%str.
 Qed.
 

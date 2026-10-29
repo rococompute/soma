@@ -382,3 +382,24 @@ Print Assumptions succ_dyn.
 (** * Gradual typing can be switched off *)
 Unset Gradual Typing.
 Fail Definition succ_static (x : Any) : nat := x + 1.
+
+(** * The kernel reduces casts that come from unfolding a constant
+
+    [succ_dyn (cast nat Any n)] unfolds to
+    [cast Any nat (cast nat Any n) + 1], whose casts the kernel reduces for
+    a variable [n] too (written out here, as gradual typing is off): the cast's argument
+    is then a closure over [succ_dyn]'s body, which says nothing of where
+    [n] is bound (kernel/cClosure.ml, [env_lift]). The elaborator accepted
+    these proofs and the kernel used to reject them at [Qed]. *)
+
+Lemma succ_dyn_var : forall n : nat, succ_dyn (cast nat Any n) = n + 1.
+Proof. intros n. reflexivity. Qed.
+
+Lemma succ_dyn_var_sym : forall n : nat, n + 1 = succ_dyn (cast nat Any n).
+Proof. intros n. reflexivity. Qed.
+
+Definition succ_dyn_term : forall n : nat, succ_dyn (cast nat Any n) = n + 1 :=
+  fun n => eq_refl.
+
+Fail Definition succ_dyn_wrong : forall n : nat, succ_dyn (cast nat Any n) = n + 2 :=
+  fun n => eq_refl.

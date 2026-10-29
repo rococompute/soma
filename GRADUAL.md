@@ -136,14 +136,6 @@ example `.proof` files are written in sentences, `sqrt2_irrational.proof`
 induction) and `reason_counter.proof` (cases and induction) among them;
 the tactics they replace are in their history.
 
-Known issue: the kernel does not reduce `cast Any nat (cast nat Any n)`,
-for a variable `n`, when it comes from unfolding a constant. With
-`Definition f (x : Any) : nat := x + 1`, `f n = n + 1` is proved by
-`reflexivity` (the elaborator reduces it), and the proof is then rejected
-at `Qed`. The same cast written out, or from a `fun` applied, is reduced.
-`Computing, ...` (`simpl` first) avoids it; `reason_components.proof`
-does so for `Plus_one`, whose prop is `Any`.
-
 ### Macros: `.lang` files
 
 Macros are defined in `.lang` files, with `Macro name args := body.`: a

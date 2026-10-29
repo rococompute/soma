@@ -964,7 +964,8 @@ let env_lift args =
   let rec go acc v = match v.term with
     | FFlex (RelKey _) -> Some acc
     | FLIFT (k, v) -> go (acc + k) v
-    | FCLOS (_, e) | FLambda (_, _, _, e) | FFix (_, e) | FCoFix (_, e)
+    | FCLOS (t, e) -> of_term acc t e
+    | FLambda (_, _, _, e) | FFix (_, e) | FCoFix (_, e)
     | FEvar (_, _, e, _) -> of_subs acc e
     | FProd (_, a, _, e) -> begin match go acc a with None -> of_subs acc e | r -> r end
     | FLetIn (_, a, b, _, e) ->
@@ -983,6 +984,27 @@ let env_lift args =
   and first acc = function
     | [] -> None
     | v :: l -> match go acc v with None -> first acc l | r -> r
+  (* The variables of [t] tell, through [e], where the environment is: one
+     substituted by a value, in that value; one beyond [e], by its
+     relocation. [e] alone can mislead: the closure of a constant's body,
+     which has no free variable, is made at no particular depth. *)
+  and of_term acc t e =
+    let found = ref None in
+    let rec scan d c = match !found with
+      | Some _ -> ()
+      | None ->
+        match [@ocaml.warning "-4"] Constr.kind c with
+        | Rel i when i > d ->
+          begin match Esubst.expand_rel (i - d) (fst e) with
+            | Util.Inl (n, Regular v) -> found := go (acc + n) v
+            | Util.Inl (_, HigherOrder (_, v)) -> found := go acc v
+            | Util.Inr (k, Some p) -> found := Some (acc + k - p)
+            | Util.Inr (_, None) -> ()
+          end
+        | _ -> Constr.iter_with_binders succ scan d c
+    in
+    scan 0 t;
+    !found
   in
   let rec first_arg = function
     | [] -> None
