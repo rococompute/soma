@@ -1,0 +1,13 @@
+(** What is proved about macros.soma. This file is read after macros.lang
+    and macros.soma, in their environment: [square], [pow8] and the macros
+    are in scope. Building or running macros.soma checks it, and fails if a
+    proof does not hold. *)
+
+(** [pow8], defined by piping [x] through [square] three times, is [x]
+    to the 8th power. Unfolding [pow8] shows the code [pipe] expanded to,
+    [square (square (square x))]; [simpl] writes [x ^ 8] out as eight
+    [x]s multiplied, and [ring] proves the two products equal. *)
+Theorem pow8_is_pow : forall x : nat, pow8 x = x ^ 8.
+Proof.
+  intros x. unfold pow8, square. simpl. ring.
+Qed.

@@ -5,6 +5,14 @@
 
 pipe 3 S (Nat.mul 2) to_string.     (* to_string (Nat.mul 2 (S 3)): "8" *)
 
+(** A function defined with a macro: [pow8 x] is
+    [square (square (square x))], [((x^2)^2)^2], so [x^8].
+    macros.proof proves that it is [x ^ 8]. *)
+square (n : nat) := n * n.
+pow8 (x : nat) := pipe x square square square.
+
+pow8 2.                             (* 256 *)
+
 swap append "world" "hello, ".      (* append "hello, " "world" *)
 
 repeat "ab" 3.                      (* "ababab" *)

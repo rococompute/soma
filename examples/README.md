@@ -38,6 +38,8 @@ soma run examples/hello.soma
 - `macros.soma`: macros, defined in `macros.lang` next to it, which is
   read first: `pipe` threads a value through functions, `swap` swaps two
   arguments, and `repeat` builds a string while the program is checked.
+  `pow8 x` is defined as `pipe x square square square`, and
+  `macros.proof` proves that it is `x ^ 8`.
 - `sqrt2_irrational.soma` and `.proof`: a proof that the square root of 2
   is irrational (`irrational (sqrt 2)`, with `irrational` defined in the
   `.soma`), top down: the theorem first, then a proof that reduces it with
