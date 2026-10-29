@@ -151,8 +151,8 @@ README) and built and installed with the rest, so `From Stdlib Require ...`
 works without flags.
 
 The unknown type `Any` (`unknown Type`) was called `Dyn` until the commit that
-renamed it; `GROK_*.md`, `gradual-coverage.md` and
-`dev/gradual-lattice/results/` predate that and still say `Dyn`.
+renamed it; `gradual-coverage.md` and `dev/gradual-lattice/results/` predate
+that and still say `Dyn`.
 
 Outside a proof, a bare term `t.` is evaluated and printed as `Eval lazy in t.`,
 so `"Hello, world!".` is a complete program. A sentence that starts with a
