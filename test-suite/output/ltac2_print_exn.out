@@ -3,7 +3,7 @@ The command has indeed failed with message:
 hello
 Backtrace:
 Call foo
-Prim <rocq-runtime.plugins.ltac2:zero>
+Prim <soma-runtime.plugins.ltac2:zero>
 
 File "./output/ltac2_print_exn.v", line 24, characters 0-23:
 The command has indeed failed with message:

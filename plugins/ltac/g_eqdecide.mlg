@@ -21,7 +21,7 @@ open Stdarg
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ltac"
+DECLARE PLUGIN "soma-runtime.plugins.ltac"
 
 TACTIC EXTEND decide_equality
 | [ "decide" "equality" ] -> { decideEqualityGoal }

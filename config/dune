@@ -1,14 +1,14 @@
 (library
  (name config)
  (synopsis "Rocq Configuration Variables")
- (public_name rocq-runtime.config)
+ (public_name soma-runtime.config)
  (modules coq_config)
  (wrapped false))
 
 (library
  (name byte_config)
  (synopsis "Rocq Configuration Variables (for bytecode only)")
- (public_name rocq-runtime.config.byte)
+ (public_name soma-runtime.config.byte)
  (modules coq_byte_config)
  (wrapped false)
  (libraries compiler-libs.toplevel)

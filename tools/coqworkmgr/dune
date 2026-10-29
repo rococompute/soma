@@ -1,6 +1,6 @@
 (library
  (name coqworkmgrApi)
- (public_name rocq-runtime.coqworkmgrapi)
+ (public_name soma-runtime.coqworkmgrapi)
  (modules coqworkmgrApi)
  (wrapped false)
  (libraries str unix))

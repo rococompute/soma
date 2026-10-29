@@ -1,1 +1,1 @@
-Declare ML Module "rocq-runtime.plugins.ltac".
+Declare ML Module "soma-runtime.plugins.ltac".

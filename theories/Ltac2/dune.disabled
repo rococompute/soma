@@ -1,10 +1,10 @@
 (rocq.theory
  (name Ltac2)
- (package rocq-core)
+ (package soma-core)
  (synopsis "Ltac2 tactic language")
  (flags -w -deprecated-native-compiler-option)
  (stdlib no)
  (theories Corelib)
  (plugins
-   rocq-runtime.plugins.ltac2_ltac1
-   rocq-runtime.plugins.ltac2))
+   soma-runtime.plugins.ltac2_ltac1
+   soma-runtime.plugins.ltac2))

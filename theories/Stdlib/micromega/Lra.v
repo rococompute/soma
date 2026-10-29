@@ -22,7 +22,7 @@ From Stdlib Require Import VarMap.
 From Stdlib.micromega Require Tauto.
 From Stdlib Require Import Rregisternames.
 
-Declare ML Module "rocq-runtime.plugins.micromega".
+Declare ML Module "soma-runtime.plugins.micromega".
 
 Ltac rchange :=
   let __wit := fresh "__wit" in

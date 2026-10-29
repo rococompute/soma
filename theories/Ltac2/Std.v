@@ -131,31 +131,31 @@ Ltac2 Type inversion_kind := [
 
 (** Standard, built-in tactics. See Ltac1 for documentation. *)
 
-Ltac2 @ external intros : evar_flag -> intro_pattern list -> unit := "rocq-runtime.plugins.ltac2" "tac_intros".
+Ltac2 @ external intros : evar_flag -> intro_pattern list -> unit := "soma-runtime.plugins.ltac2" "tac_intros".
 
 Ltac2 @ external apply : advanced_flag -> evar_flag ->
-  (unit -> constr_with_bindings) list -> (ident * (intro_pattern option)) option -> unit := "rocq-runtime.plugins.ltac2" "tac_apply".
+  (unit -> constr_with_bindings) list -> (ident * (intro_pattern option)) option -> unit := "soma-runtime.plugins.ltac2" "tac_apply".
 
-Ltac2 @ external elim : evar_flag -> constr_with_bindings -> constr_with_bindings option -> unit := "rocq-runtime.plugins.ltac2" "tac_elim".
-Ltac2 @ external case : evar_flag -> constr_with_bindings -> unit := "rocq-runtime.plugins.ltac2" "tac_case".
+Ltac2 @ external elim : evar_flag -> constr_with_bindings -> constr_with_bindings option -> unit := "soma-runtime.plugins.ltac2" "tac_elim".
+Ltac2 @ external case : evar_flag -> constr_with_bindings -> unit := "soma-runtime.plugins.ltac2" "tac_case".
 
-Ltac2 @ external generalize : (constr * occurrences * ident option) list -> unit := "rocq-runtime.plugins.ltac2" "tac_generalize".
+Ltac2 @ external generalize : (constr * occurrences * ident option) list -> unit := "soma-runtime.plugins.ltac2" "tac_generalize".
 
-Ltac2 @ external assert : assertion -> unit := "rocq-runtime.plugins.ltac2" "tac_assert".
-Ltac2 @ external enough : constr -> (unit -> unit) option option -> intro_pattern option -> unit := "rocq-runtime.plugins.ltac2" "tac_enough".
+Ltac2 @ external assert : assertion -> unit := "soma-runtime.plugins.ltac2" "tac_assert".
+Ltac2 @ external enough : constr -> (unit -> unit) option option -> intro_pattern option -> unit := "soma-runtime.plugins.ltac2" "tac_enough".
 
-Ltac2 @ external pose : ident option -> constr -> unit := "rocq-runtime.plugins.ltac2" "tac_pose".
-Ltac2 @ external set : evar_flag -> (unit -> ident option * constr) -> clause -> unit := "rocq-runtime.plugins.ltac2" "tac_set".
+Ltac2 @ external pose : ident option -> constr -> unit := "soma-runtime.plugins.ltac2" "tac_pose".
+Ltac2 @ external set : evar_flag -> (unit -> ident option * constr) -> clause -> unit := "soma-runtime.plugins.ltac2" "tac_set".
 
-Ltac2 @ external remember : evar_flag -> ident option -> (unit -> constr) -> intro_pattern option -> clause -> unit := "rocq-runtime.plugins.ltac2" "tac_remember".
+Ltac2 @ external remember : evar_flag -> ident option -> (unit -> constr) -> intro_pattern option -> clause -> unit := "soma-runtime.plugins.ltac2" "tac_remember".
 
 Ltac2 @ external destruct : evar_flag -> induction_clause list ->
-  constr_with_bindings option -> unit := "rocq-runtime.plugins.ltac2" "tac_destruct".
+  constr_with_bindings option -> unit := "soma-runtime.plugins.ltac2" "tac_destruct".
 
 Ltac2 @ external induction : evar_flag -> induction_clause list ->
-  constr_with_bindings option -> unit := "rocq-runtime.plugins.ltac2" "tac_induction".
+  constr_with_bindings option -> unit := "soma-runtime.plugins.ltac2" "tac_induction".
 
-Ltac2 @external exfalso : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_exfalso".
+Ltac2 @external exfalso : unit -> unit := "soma-runtime.plugins.ltac2" "tac_exfalso".
 
 
 (** Constructors for reduction/expansion strategies *)
@@ -165,10 +165,10 @@ Module Red.
 
   (** βιζ-reduction of the _head constant_ of a term. Fails if there is no
   reducible head constant. *)
-  Ltac2 @external red : t := "rocq-runtime.plugins.ltac2" "red".
+  Ltac2 @external red : t := "soma-runtime.plugins.ltac2" "red".
 
   (** Full βδιζ-reduction the head of a term. Does not recurse into subterms. *)
-  Ltac2 @external hnf : t := "rocq-runtime.plugins.ltac2" "hnf".
+  Ltac2 @external hnf : t := "soma-runtime.plugins.ltac2" "hnf".
 
   (** Strong normalization except two key differences:
 
@@ -185,13 +185,13 @@ Module Red.
   it will be treated as such.
 
   Only the following [red_flags] are relevant: [head], [delta]. *)
-  Ltac2 @external simpl : red_flags -> (pattern * occurrences) option -> t := "rocq-runtime.plugins.ltac2" "simpl".
+  Ltac2 @external simpl : red_flags -> (pattern * occurrences) option -> t := "soma-runtime.plugins.ltac2" "simpl".
 
   (** Full normalization using provided reduction flags by first evaluating the
   head of the expression into weak-head normal form in _call-by-value_ order.
   Once a weak-head normal form is obtained, subterms are recursively reduced
   using the same strategy. *)
-  Ltac2 @external cbv : red_flags -> t := "rocq-runtime.plugins.ltac2" "cbv".
+  Ltac2 @external cbv : red_flags -> t := "soma-runtime.plugins.ltac2" "cbv".
 
   (** [cbn] was intended to be a more principled, faster and more predictable
   replacement for [simpl]. The main difference is that cbn may unfold constants
@@ -199,22 +199,22 @@ Module Red.
   not treated the same. See the respective Ltac1 tactic documentation for more
   details. Setting [Debug "RAKAM"] makes [cbn] print various debugging
   information.. *)
-  Ltac2 @external cbn : red_flags -> t := "rocq-runtime.plugins.ltac2" "cbn".
+  Ltac2 @external cbn : red_flags -> t := "soma-runtime.plugins.ltac2" "cbn".
 
   (** Full normalization using provided reduction flags by first evaluating the
   head of the expression into weak-head normal form in _call-by-need_ order.
   Once a weak-head normal form is obtained, subterms are recursively reduced
   using the same strategy. *)
-  Ltac2 @external lazy : red_flags -> t := "rocq-runtime.plugins.ltac2" "lazy".
+  Ltac2 @external lazy : red_flags -> t := "soma-runtime.plugins.ltac2" "lazy".
 
   (** Applies delta-reduction to the constants specified by each [reference *
   occurrences] and then reduces to βιζ-normal form. Use the general reductions
   if you want to only apply the δ rule, for example [cbv] with [delta]. *)
-  Ltac2 @external unfold : (reference * occurrences) list -> t := "rocq-runtime.plugins.ltac2" "unfold".
+  Ltac2 @external unfold : (reference * occurrences) list -> t := "soma-runtime.plugins.ltac2" "unfold".
 
   (** First, reduces each [constr] using [red]. Then, every occurrence of the
   resulting terms will be replaced by its associated [constr]. *)
-  Ltac2 @external fold : constr list -> t := "rocq-runtime.plugins.ltac2" "fold".
+  Ltac2 @external fold : constr list -> t := "soma-runtime.plugins.ltac2" "fold".
 
   (** Performs beta-expansion (the inverse of beta-reduction). The [constr]s
   must be free subterms in the subject of reduction. The expansion is done by:
@@ -225,25 +225,25 @@ Module Red.
   2. Abstracting these variables
 
   3. Applying the abstracted term to the [constr]s *)
-  Ltac2 @external pattern : (constr * occurrences) list -> t := "rocq-runtime.plugins.ltac2" "pattern".
+  Ltac2 @external pattern : (constr * occurrences) list -> t := "soma-runtime.plugins.ltac2" "pattern".
 
   (** Optimized _call-by-value_ evaluation on a bytecode-based virtual machine.
   This algorithm is dramatically more efficient than the algorithm used for
   [cbv], but it cannot be fine-tuned. It is especially useful for full
   evaluation of algebraic objects. This includes the case of reflection-based
   tactics. *)
-  Ltac2 @external vm : (pattern * occurrences) option -> t := "rocq-runtime.plugins.ltac2" "vm".
+  Ltac2 @external vm : (pattern * occurrences) option -> t := "soma-runtime.plugins.ltac2" "vm".
 
   (** Evaluates the goal by compilation to OCaml. Depending on the
   configuration, it can either default to [vm], recompile dependencies or fail
   due to some missing precompiled dependencies. See the [native-compiler] option
   for details. *)
-  Ltac2 @external native : (pattern * occurrences) option -> t := "rocq-runtime.plugins.ltac2" "native".
+  Ltac2 @external native : (pattern * occurrences) option -> t := "soma-runtime.plugins.ltac2" "native".
 End Red.
 
 (** Reduction/expansion tactics *)
 
-Ltac2 @external eval_in : Red.t -> clause -> unit := "rocq-runtime.plugins.ltac2" "reduce_in".
+Ltac2 @external eval_in : Red.t -> clause -> unit := "soma-runtime.plugins.ltac2" "reduce_in".
 
 Ltac2 red (c : clause) : unit := eval_in Red.red c.
 
@@ -269,7 +269,7 @@ Ltac2 native (ctx : (pattern * occurrences) option) (c : clause) : unit := eval_
 
 (** Constr reduction/expansion functions *)
 
-Ltac2 @external eval : Red.t -> constr -> constr := "rocq-runtime.plugins.ltac2" "reduce_constr".
+Ltac2 @external eval : Red.t -> constr -> constr := "soma-runtime.plugins.ltac2" "reduce_constr".
 
 Ltac2 eval_red (c : constr) : constr := eval Red.red c.
 
@@ -294,77 +294,77 @@ Ltac2 eval_vm (ctx : (pattern * occurrences) option) (c : constr) : constr := ev
 Ltac2 eval_native (ctx : (pattern * occurrences) option) (c : constr) : constr := eval (Red.native ctx) c.
 
 
-Ltac2 @ external change : pattern option -> (constr array -> constr) -> clause -> unit := "rocq-runtime.plugins.ltac2" "tac_change".
+Ltac2 @ external change : pattern option -> (constr array -> constr) -> clause -> unit := "soma-runtime.plugins.ltac2" "tac_change".
 
-Ltac2 @ external rewrite : evar_flag -> rewriting list -> clause -> (unit -> unit) option -> unit := "rocq-runtime.plugins.ltac2" "tac_rewrite".
+Ltac2 @ external rewrite : evar_flag -> rewriting list -> clause -> (unit -> unit) option -> unit := "soma-runtime.plugins.ltac2" "tac_rewrite".
 
-Ltac2 @ external setoid_rewrite : orientation -> (unit -> constr_with_bindings) -> occurrences -> ident option -> unit := "rocq-runtime.plugins.ltac2" "tac_setoid_rewrite".
+Ltac2 @ external setoid_rewrite : orientation -> (unit -> constr_with_bindings) -> occurrences -> ident option -> unit := "soma-runtime.plugins.ltac2" "tac_setoid_rewrite".
 
-Ltac2 @ external reflexivity : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_reflexivity".
+Ltac2 @ external reflexivity : unit -> unit := "soma-runtime.plugins.ltac2" "tac_reflexivity".
 
-Ltac2 @ external assumption : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_assumption".
-Ltac2 @ external eassumption : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_eassumption".
+Ltac2 @ external assumption : unit -> unit := "soma-runtime.plugins.ltac2" "tac_assumption".
+Ltac2 @ external eassumption : unit -> unit := "soma-runtime.plugins.ltac2" "tac_eassumption".
 
-Ltac2 @ external transitivity : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_transitivity".
+Ltac2 @ external transitivity : constr -> unit := "soma-runtime.plugins.ltac2" "tac_transitivity".
 
-Ltac2 @ external etransitivity : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_etransitivity".
+Ltac2 @ external etransitivity : unit -> unit := "soma-runtime.plugins.ltac2" "tac_etransitivity".
 
-Ltac2 @ external cut : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_cut".
+Ltac2 @ external cut : constr -> unit := "soma-runtime.plugins.ltac2" "tac_cut".
 
-Ltac2 @ external left : evar_flag -> bindings -> unit := "rocq-runtime.plugins.ltac2" "tac_left".
-Ltac2 @ external right : evar_flag -> bindings -> unit := "rocq-runtime.plugins.ltac2" "tac_right".
+Ltac2 @ external left : evar_flag -> bindings -> unit := "soma-runtime.plugins.ltac2" "tac_left".
+Ltac2 @ external right : evar_flag -> bindings -> unit := "soma-runtime.plugins.ltac2" "tac_right".
 
-Ltac2 @ external constructor : evar_flag -> unit := "rocq-runtime.plugins.ltac2" "tac_constructor".
-Ltac2 @ external split : evar_flag -> bindings -> unit := "rocq-runtime.plugins.ltac2" "tac_split".
+Ltac2 @ external constructor : evar_flag -> unit := "soma-runtime.plugins.ltac2" "tac_constructor".
+Ltac2 @ external split : evar_flag -> bindings -> unit := "soma-runtime.plugins.ltac2" "tac_split".
 
-Ltac2 @ external constructor_n : evar_flag -> int -> bindings -> unit := "rocq-runtime.plugins.ltac2" "tac_constructorn".
+Ltac2 @ external constructor_n : evar_flag -> int -> bindings -> unit := "soma-runtime.plugins.ltac2" "tac_constructorn".
 
-Ltac2 @ external intros_until : hypothesis -> unit := "rocq-runtime.plugins.ltac2" "tac_introsuntil".
+Ltac2 @ external intros_until : hypothesis -> unit := "soma-runtime.plugins.ltac2" "tac_introsuntil".
 
-Ltac2 @ external symmetry : clause -> unit := "rocq-runtime.plugins.ltac2" "tac_symmetry".
+Ltac2 @ external symmetry : clause -> unit := "soma-runtime.plugins.ltac2" "tac_symmetry".
 
-Ltac2 @ external rename : (ident * ident) list -> unit := "rocq-runtime.plugins.ltac2" "tac_rename".
+Ltac2 @ external rename : (ident * ident) list -> unit := "soma-runtime.plugins.ltac2" "tac_rename".
 
-Ltac2 @ external revert : ident list -> unit := "rocq-runtime.plugins.ltac2" "tac_revert".
+Ltac2 @ external revert : ident list -> unit := "soma-runtime.plugins.ltac2" "tac_revert".
 
-Ltac2 @ external admit : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_admit".
+Ltac2 @ external admit : unit -> unit := "soma-runtime.plugins.ltac2" "tac_admit".
 
-Ltac2 @ external fix_ : ident -> int -> unit := "rocq-runtime.plugins.ltac2" "tac_fix".
-Ltac2 @ external cofix_ : ident -> unit := "rocq-runtime.plugins.ltac2" "tac_cofix".
+Ltac2 @ external fix_ : ident -> int -> unit := "soma-runtime.plugins.ltac2" "tac_fix".
+Ltac2 @ external cofix_ : ident -> unit := "soma-runtime.plugins.ltac2" "tac_cofix".
 
-Ltac2 @ external clear : ident list -> unit := "rocq-runtime.plugins.ltac2" "tac_clear".
-Ltac2 @ external keep : ident list -> unit := "rocq-runtime.plugins.ltac2" "tac_keep".
+Ltac2 @ external clear : ident list -> unit := "soma-runtime.plugins.ltac2" "tac_clear".
+Ltac2 @ external keep : ident list -> unit := "soma-runtime.plugins.ltac2" "tac_keep".
 
-Ltac2 @ external clearbody : ident list -> unit := "rocq-runtime.plugins.ltac2" "tac_clearbody".
+Ltac2 @ external clearbody : ident list -> unit := "soma-runtime.plugins.ltac2" "tac_clearbody".
 
-Ltac2 @ external exact_no_check : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_exactnocheck".
-Ltac2 @ external vm_cast_no_check : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_vmcastnocheck".
-Ltac2 @ external native_cast_no_check : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_nativecastnocheck".
+Ltac2 @ external exact_no_check : constr -> unit := "soma-runtime.plugins.ltac2" "tac_exactnocheck".
+Ltac2 @ external vm_cast_no_check : constr -> unit := "soma-runtime.plugins.ltac2" "tac_vmcastnocheck".
+Ltac2 @ external native_cast_no_check : constr -> unit := "soma-runtime.plugins.ltac2" "tac_nativecastnocheck".
 
-Ltac2 @ external inversion : inversion_kind -> destruction_arg -> intro_pattern option -> ident list option -> unit := "rocq-runtime.plugins.ltac2" "tac_inversion".
+Ltac2 @ external inversion : inversion_kind -> destruction_arg -> intro_pattern option -> ident list option -> unit := "soma-runtime.plugins.ltac2" "tac_inversion".
 
 (** coretactics *)
 
-Ltac2 @ external move : ident -> move_location -> unit := "rocq-runtime.plugins.ltac2" "tac_move".
+Ltac2 @ external move : ident -> move_location -> unit := "soma-runtime.plugins.ltac2" "tac_move".
 
-Ltac2 @ external intro : ident option -> move_location option -> unit := "rocq-runtime.plugins.ltac2" "tac_intro".
+Ltac2 @ external intro : ident option -> move_location option -> unit := "soma-runtime.plugins.ltac2" "tac_intro".
 
-Ltac2 @ external specialize : constr_with_bindings -> intro_pattern option -> unit := "rocq-runtime.plugins.ltac2" "tac_specialize".
+Ltac2 @ external specialize : constr_with_bindings -> intro_pattern option -> unit := "soma-runtime.plugins.ltac2" "tac_specialize".
 
 (** extratactics *)
 
-Ltac2 @ external discriminate : evar_flag -> destruction_arg option -> unit := "rocq-runtime.plugins.ltac2" "tac_discriminate".
-Ltac2 @ external injection : evar_flag -> intro_pattern list option -> destruction_arg option -> unit := "rocq-runtime.plugins.ltac2" "tac_injection".
+Ltac2 @ external discriminate : evar_flag -> destruction_arg option -> unit := "soma-runtime.plugins.ltac2" "tac_discriminate".
+Ltac2 @ external injection : evar_flag -> intro_pattern list option -> destruction_arg option -> unit := "soma-runtime.plugins.ltac2" "tac_injection".
 
-Ltac2 @ external absurd : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_absurd".
-Ltac2 @ external contradiction : constr_with_bindings option -> unit := "rocq-runtime.plugins.ltac2" "tac_contradiction".
+Ltac2 @ external absurd : constr -> unit := "soma-runtime.plugins.ltac2" "tac_absurd".
+Ltac2 @ external contradiction : constr_with_bindings option -> unit := "soma-runtime.plugins.ltac2" "tac_contradiction".
 
-Ltac2 @ external autorewrite : bool -> (unit -> unit) option -> ident list -> clause -> unit := "rocq-runtime.plugins.ltac2" "tac_autorewrite".
+Ltac2 @ external autorewrite : bool -> (unit -> unit) option -> ident list -> clause -> unit := "soma-runtime.plugins.ltac2" "tac_autorewrite".
 
-Ltac2 @ external autorewrite_backward : bool -> (unit -> unit) option -> ident list -> clause -> unit := "rocq-runtime.plugins.ltac2" "tac_autorewrite_backward".
+Ltac2 @ external autorewrite_backward : bool -> (unit -> unit) option -> ident list -> clause -> unit := "soma-runtime.plugins.ltac2" "tac_autorewrite_backward".
 
-Ltac2 @ external subst : ident list -> unit := "rocq-runtime.plugins.ltac2" "tac_subst".
-Ltac2 @ external subst_all : unit -> unit := "rocq-runtime.plugins.ltac2" "tac_substall".
+Ltac2 @ external subst : ident list -> unit := "soma-runtime.plugins.ltac2" "tac_subst".
+Ltac2 @ external subst_all : unit -> unit := "soma-runtime.plugins.ltac2" "tac_substall".
 
 (** auto *)
 
@@ -372,27 +372,27 @@ Ltac2 Type debug := [ Off | Info | Debug ].
 
 Ltac2 Type strategy := [ BFS | DFS ].
 
-Ltac2 @ external trivial : debug -> reference list -> ident list option -> unit := "rocq-runtime.plugins.ltac2" "tac_trivial".
+Ltac2 @ external trivial : debug -> reference list -> ident list option -> unit := "soma-runtime.plugins.ltac2" "tac_trivial".
 
-Ltac2 @ external auto : debug -> int option -> reference list -> ident list option -> unit := "rocq-runtime.plugins.ltac2" "tac_auto".
+Ltac2 @ external auto : debug -> int option -> reference list -> ident list option -> unit := "soma-runtime.plugins.ltac2" "tac_auto".
 
-Ltac2 @ external eauto : debug -> int option -> reference list -> ident list option -> unit := "rocq-runtime.plugins.ltac2" "tac_eauto".
+Ltac2 @ external eauto : debug -> int option -> reference list -> ident list option -> unit := "soma-runtime.plugins.ltac2" "tac_eauto".
 
-Ltac2 @ external typeclasses_eauto : strategy option -> int option -> ident list option -> unit := "rocq-runtime.plugins.ltac2" "tac_typeclasses_eauto".
+Ltac2 @ external typeclasses_eauto : strategy option -> int option -> ident list option -> unit := "soma-runtime.plugins.ltac2" "tac_typeclasses_eauto".
 
-Ltac2 @ external resolve_tc : constr -> unit := "rocq-runtime.plugins.ltac2" "tac_resolve_tc".
+Ltac2 @ external resolve_tc : constr -> unit := "soma-runtime.plugins.ltac2" "tac_resolve_tc".
 (** Resolve the existential variables appearing in the constr
     whose types are typeclasses.
     Fail if any of them cannot be resolved.
     Does not focus. *)
 
-Ltac2 @ external unify : constr -> constr -> unit := "rocq-runtime.plugins.ltac2" "tac_unify".
+Ltac2 @ external unify : constr -> constr -> unit := "soma-runtime.plugins.ltac2" "tac_unify".
 
 Ltac2 @ external congruence : int option -> constr list option -> unit :=
-  "rocq-runtime.plugins.ltac2" "congruence".
+  "soma-runtime.plugins.ltac2" "congruence".
 
 Ltac2 @ external simple_congruence : int option -> constr list option -> unit :=
-  "rocq-runtime.plugins.ltac2" "simple_congruence".
+  "soma-runtime.plugins.ltac2" "simple_congruence".
 
 Ltac2 @external f_equal : unit -> unit :=
-  "rocq-runtime.plugins.ltac2" "f_equal".
+  "soma-runtime.plugins.ltac2" "f_equal".

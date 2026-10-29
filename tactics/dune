@@ -1,7 +1,7 @@
 (library
  (name tactics)
  (synopsis "Rocq's Core Tactics [ML implementation]")
- (public_name rocq-runtime.tactics)
+ (public_name soma-runtime.tactics)
  (wrapped false)
  (modules_without_implementation genredexpr)
  ; until ocaml/dune#4892 fixed

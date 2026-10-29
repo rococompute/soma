@@ -5,8 +5,10 @@ Prover (9.3.0) with gradual dependent types, GCIC^G: conservativity and
 graduality are kept, and normalization is sacrificed. See
 [GRADUAL.md](GRADUAL.md).
 
-Binaries, opam packages, and library names stay `rocq`. Those are the kernel
-you build.
+The opam packages are `soma-runtime` (the kernel, the tools, and the `soma`
+command) and `soma-core` (Corelib, Stdlib, and Soma's libraries). Behind
+`soma`, the binaries (`rocq`, `rocqchk`) and the library names (`Corelib`,
+`Stdlib`) stay Rocq's.
 
 ## The kernel
 

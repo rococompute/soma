@@ -83,7 +83,7 @@ to the generated `*.ml` file.  Comments in OCaml code are preserved.
 ### DECLARE PLUGIN
 
 `DECLARE PLUGIN "plugin"` - associates the file with a specific
-plugin, for example "rocq-runtime.plugins.ltac". The string is the
+plugin, for example "soma-runtime.plugins.ltac". The string is the
 plugin's ocamlfind name (also used to load it in the `.v` file with
 `Declare ML Module`).
 

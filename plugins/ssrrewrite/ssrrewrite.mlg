@@ -30,7 +30,7 @@ let warn_deprecated_rewrite ?loc () =
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ssreflect_rewrite"
+DECLARE PLUGIN "soma-runtime.plugins.ssreflect_rewrite"
 
 (* The user is supposed to Require Import ssreflect or Require ssreflect   *)
 (* and Import ssreflect.SsrSyntax to obtain these keywords and as a        *)

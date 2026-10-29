@@ -17,7 +17,7 @@ open Tac2extffi
 open Tac2expr
 open Proofview.Notations
 
-let ltac2_plugin = "rocq-runtime.plugins.ltac2"
+let ltac2_plugin = "soma-runtime.plugins.ltac2"
 
 let constr_flags =
   let open Pretyping in

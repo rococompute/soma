@@ -1,9 +1,9 @@
 (library
  (name ssreflect_rewrite_plugin)
- (public_name rocq-runtime.plugins.ssreflect_rewrite)
+ (public_name soma-runtime.plugins.ssreflect_rewrite)
  (synopsis "Rocq's ssreflect plugin for rewrite compatibility")
  (flags :standard -open Gramlib)
- (libraries rocq-runtime.plugins.ssrmatching rocq-runtime.plugins.ssreflect))
+ (libraries soma-runtime.plugins.ssrmatching soma-runtime.plugins.ssreflect))
 
 (rule
  (targets ssrrewrite.ml)

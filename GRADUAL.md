@@ -51,7 +51,7 @@ opam switch create ./ ocaml-base-compiler.4.14.2 --no-install
 opam install --switch=. dune ocamlfind zarith
 eval $(opam env --switch=. --set-switch)
 make dunestrap
-dune build rocq-runtime.install rocq-core.install
+dune build soma-runtime.install soma-core.install
 _build/install/default/bin/soma run my_file.soma
 ```
 

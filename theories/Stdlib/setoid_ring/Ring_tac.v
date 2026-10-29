@@ -12,7 +12,7 @@ Set Implicit Arguments.
 From Stdlib Require Import Ring_polynom.
 From Stdlib Require Export ListTactics.
 From Stdlib Require Import InitialRing.
-Declare ML Module "rocq-runtime.plugins.ring".
+Declare ML Module "soma-runtime.plugins.ring".
 
 (* adds a definition t' on the normal form of t and an hypothesis id
    stating that t = t' (tries to produces a proof as small as possible) *)

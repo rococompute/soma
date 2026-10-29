@@ -1,12 +1,12 @@
 (install
  (section lib)
- (package rocq-runtime)
+ (package soma-runtime)
  (files
   (CoqMakefile.in as tools/CoqMakefile.in)))
 
 (install
  (section libexec)
- (package rocq-runtime)
+ (package soma-runtime)
  (files
   (TimeFileMaker.py as tools/TimeFileMaker.py)
   (make-one-time-file.py as tools/make-one-time-file.py)
@@ -16,13 +16,13 @@
 (library
  (name rocqmakefile)
  (modules rocqmakefile)
- (libraries rocq-runtime.boot rocq-runtime.lib))
+ (libraries soma-runtime.boot soma-runtime.lib))
 
 ; Bare-bones mllib/mlpack parser
 (executable
  (name ocamllibdep)
  (public_name ocamllibdep)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules ocamllibdep)
  (libraries unix))
 

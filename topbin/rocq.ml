@@ -10,7 +10,7 @@
 
 let fatal_error fmt = Printf.kfprintf (fun _ -> exit 1) stderr (fmt^^"%!")
 
-let with_worker_gen opts ?(package="rocq-runtime") basename args =
+let with_worker_gen opts ?(package="soma-runtime") basename args =
   Rocqshim.init opts args;
   let prog = Rocqshim.get_worker_path { package; basename } in
   let () = if opts.debug_shim then Printf.eprintf "Using %s\n%!" prog in

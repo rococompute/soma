@@ -28,4 +28,4 @@ let () =
   Mltop.(declare_cache_obj_full @@ interp_only_obj @@ fun () ->
          Vernacentries.DefAttributes.Observer.activate print_hook;
          Vernacentries.DefAttributes.Observer.activate error_hook)
-    "rocq-test-suite.attribute"
+    "soma-test-suite.attribute"

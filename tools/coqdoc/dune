@@ -1,6 +1,6 @@
 (install
  (section lib)
- (package rocq-runtime)
+ (package soma-runtime)
  (files
   (coqdoc.css as tools/coqdoc/coqdoc.css)
   (coqdoc.sty as tools/coqdoc/coqdoc.sty)))
@@ -8,12 +8,12 @@
 ; File needs to be here too.
 (install
  (section share_root)
- (package rocq-runtime)
+ (package soma-runtime)
  (files
   (coqdoc.sty as texmf/tex/latex/misc/coqdoc.sty)))
 
 (library
  (name coqdoclib)
- (libraries str rocq-runtime.boot rocq-runtime.config rocq-runtime.clib rocq-runtime.lib))
+ (libraries str soma-runtime.boot soma-runtime.config soma-runtime.clib soma-runtime.lib))
 
 (ocamllex cpretty)

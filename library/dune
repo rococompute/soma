@@ -1,6 +1,6 @@
 (library
  (name library)
  (synopsis "Rocq's Loadable Libraries (vo) Support")
- (public_name rocq-runtime.library)
+ (public_name soma-runtime.library)
  (wrapped false)
  (libraries kernel))

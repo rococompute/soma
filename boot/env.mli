@@ -35,7 +35,7 @@ but we may do so in the future. Rules for "coqlib" are:
 - if none of the above succeeds, the initialization will fail
 
 - The [ROCQRUNTIMELIB] env variable is also used if set, if not, the location
-  of the rocq-runtime files will be assumed to be [ROCQLIB/../rocq-runtime], except
+  of the soma-runtime files will be assumed to be [ROCQLIB/../soma-runtime], except
   if [ROCQLIB/plugins] exists [as in some developers layouts], in which case
   we will set [ROCQRUNTIMELIB:=ROCQLIB].
 
@@ -124,7 +124,7 @@ val native_cmi : t -> string -> Path.t
 (** The location of the revision file *)
 val revision : t -> Path.t
 
-(** rocq-runtime/lib directory, not sure if to keep this *)
+(** soma-runtime/lib directory, not sure if to keep this *)
 val runtimelib : t -> Path.t
 
 (** coq/lib directory, not sure if to keep this *)

@@ -54,7 +54,7 @@ let query_packages pkgs =
   let pkgs = Fl_package_base.requires_deeply ~preds:[] pkgs in
   let static_libs =
     let preds = ["native"] in
-    Fl_package_base.requires_deeply ~preds ["rocq-runtime.toplevel"]
+    Fl_package_base.requires_deeply ~preds ["soma-runtime.toplevel"]
   in
   let pkgs = List.filter (fun p -> not (List.mem p static_libs)) pkgs in
   let query pkg =

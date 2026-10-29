@@ -1,9 +1,9 @@
 (library
  (name ltac2_plugin)
- (public_name rocq-runtime.plugins.ltac2)
+ (public_name soma-runtime.plugins.ltac2)
  (synopsis "Ltac2 plugin")
  (modules_without_implementation tac2expr tac2qexpr tac2types)
- (libraries vernac rocq-runtime.plugins.cc_core))
+ (libraries vernac soma-runtime.plugins.cc_core))
 
 (rule
  (targets g_ltac2.ml)

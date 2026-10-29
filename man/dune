@@ -1,5 +1,5 @@
 (install
  (section man)
- (package rocq-runtime)
+ (package soma-runtime)
  (files rocq.1 rocqchk.1))
 

@@ -22,18 +22,18 @@
 (version dev)
 (maintenance_intent "(any)")
 
-; Note that we use rocq-runtime.opam.template to have dune add the correct opam
+; Note that we use soma-runtime.opam.template to have dune add the correct opam
 ; prefix for configure
 (package
- (name rocq-runtime)
+ (name soma-runtime)
  (depends
   (ocaml (>= 4.14.0))
   (ocamlfind (and (>= 1.9.1) (or (>= 1.9.8) (<> :os-family "windows"))))
   (zarith (>= 1.11))
   (conf-linux-libc-dev (= :os "linux")))
- (conflicts
-  (coq (< 8.17))
-  (coq-core (< 8.21)))
+ ; soma-runtime and soma-core install Rocq's binaries (rocq, rocqchk) and
+ ; Corelib under the same names as Rocq does
+ (conflicts rocq-runtime rocq-core coq-core coq)
  (depopts rocq-native (memprof-limits (>= 0.3.0)) memtrace)
  (synopsis "The Rocq Prover -- Core Binaries and Tools")
  (description "The Rocq Prover is an interactive theorem prover, or proof assistant. It provides
@@ -52,12 +52,12 @@ not the vernacular standard library.
 
 Note that in this setup, Rocq needs to be started with the -boot and
 -noinit options, as will otherwise fail to find the regular Rocq
-prelude, now living in the rocq-core package."))
+prelude, now living in the soma-core package."))
 
 (package
- (name rocq-core)
+ (name soma-core)
  (depends
-  (rocq-runtime (= :version)))
+  (soma-runtime (= :version)))
  (synopsis "The Rocq Prover with its prelude")
  (description "The Rocq Prover is an interactive theorem prover, or proof assistant. It provides
 a formal language to write mathematical definitions, executable
@@ -75,10 +75,10 @@ by Rocq in every .v file, as well as other modules bound to the
 Corelib.* and Ltac2.* namespaces."))
 
 (package
- (name rocq-test-suite)
+ (name soma-test-suite)
  (allow_empty)
  (depends
-  (rocq-core (= :version))
+  (soma-core (= :version))
   ounit2
   conf-python-3
   conf-time)

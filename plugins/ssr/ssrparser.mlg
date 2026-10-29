@@ -43,7 +43,7 @@ open Libobject
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ssreflect"
+DECLARE PLUGIN "soma-runtime.plugins.ssreflect"
 
 (* The user is supposed to Require Import ssreflect or Require ssreflect   *)
 (* and Import ssreflect.SsrSyntax to obtain these keywords and as a        *)
@@ -53,7 +53,7 @@ IGNORE KEYWORDS
 {
 
 let ssrtac_name name = {
-  mltac_plugin = "rocq-runtime.plugins.ssreflect";
+  mltac_plugin = "soma-runtime.plugins.ssreflect";
   mltac_tactic = "ssr" ^ name;
 }
 
@@ -93,7 +93,7 @@ let register_ssrtac name f prods =
   } in
   let obj () =
     Lib.add_leaf (inSsrGrammar (key, body, parule)) in
-  Mltop.(declare_cache_obj_full (interp_only_obj obj) "rocq-runtime.plugins.ssreflect");
+  Mltop.(declare_cache_obj_full (interp_only_obj obj) "soma-runtime.plugins.ssreflect");
   key
 
 let cast_arg wit v = Taccoerce.Value.cast (Genarg.topwit wit) v

@@ -1,8 +1,8 @@
 (library
  (name derive_plugin)
- (public_name rocq-runtime.plugins.derive)
+ (public_name soma-runtime.plugins.derive)
  (synopsis "Rocq's derive plugin")
- (libraries rocq-runtime.vernac))
+ (libraries soma-runtime.vernac))
 
 (rule
  (targets g_derive.ml)

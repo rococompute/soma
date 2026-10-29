@@ -22,49 +22,49 @@ End Notations.
 
 (** Test equality of module names. *)
 Ltac2 @external equal : t -> t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_equal".
+  := "soma-runtime.plugins.ltac2" "module_equal".
 
 (** Print a module name. *)
 Ltac2 @external to_message : t -> message
-  := "rocq-runtime.plugins.ltac2" "module_to_message".
+  := "soma-runtime.plugins.ltac2" "module_to_message".
 
 (** This returns [true] for both module types and module type functors. *)
 Ltac2 @external is_modtype : t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_is_modtype".
+  := "soma-runtime.plugins.ltac2" "module_is_modtype".
 
 (** This returns [true] for both module functors and module type functors. *)
 Ltac2 @external is_functor : t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_is_functor".
+  := "soma-runtime.plugins.ltac2" "module_is_functor".
 
 (** This returns [true] for modules which are arguments of a currently open functor
     ([false] for submodules of bound modules). *)
 Ltac2 @external is_bound_module : t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_is_bound_module".
+  := "soma-runtime.plugins.ltac2" "module_is_bound_module".
 
 (** This returns [true] for modules which are libraries (i.e. files). *)
 Ltac2 @external is_library : t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_is_library".
+  := "soma-runtime.plugins.ltac2" "module_is_library".
 
 (** This returns [true] if the argument refers to a currently open
     interactive module (or module type or functor). *)
 Ltac2 @external is_open : t -> bool
-  := "rocq-runtime.plugins.ltac2" "module_is_open".
+  := "soma-runtime.plugins.ltac2" "module_is_open".
 
 (** Return the parent module, ie [A] for [A.B].
     Toplevel modules (libraries) and bound modules (functor arguments) return [None]. *)
 Ltac2 @external parent_module : t -> t option
-  := "rocq-runtime.plugins.ltac2" "module_parent_module".
+  := "soma-runtime.plugins.ltac2" "module_parent_module".
 
 (** Throws on [VarRef]. *)
 Ltac2 @external module_of_reference : Std.reference -> t
-  := "rocq-runtime.plugins.ltac2" "module_of_reference".
+  := "soma-runtime.plugins.ltac2" "module_of_reference".
 
 (** Returns a reference to the current innermost open interactive module. *)
 Ltac2 @external current_module : unit -> t
-  := "rocq-runtime.plugins.ltac2" "current_module".
+  := "soma-runtime.plugins.ltac2" "current_module".
 
 Ltac2 @external loaded_libraries : unit -> t list
-  := "rocq-runtime.plugins.ltac2" "module_loaded_libraries".
+  := "soma-runtime.plugins.ltac2" "module_loaded_libraries".
 
 Module Field.
   (** This API is written using a record of functions to implement
@@ -94,7 +94,7 @@ Module Field.
 
   (** Execute a case analysis. *)
   Ltac2 @external handle : t -> 'a handler -> 'a
-    := "rocq-runtime.plugins.ltac2" "module_field_handle".
+    := "soma-runtime.plugins.ltac2" "module_field_handle".
 
   (** Test whether a module field is a submodule (or sub-module type or sub-functor). *)
   Ltac2 is_submodule (f:t) : Module.t option :=
@@ -109,7 +109,7 @@ End Field.
 (** Return the contents of the given module. [None] on closed functors and module types.
     Inductives are represented only by the first inductive of each mutual block (and no constructors). *)
 Ltac2 @external module_contents : t -> Field.t list option
-  := "rocq-runtime.plugins.ltac2" "module_contents".
+  := "soma-runtime.plugins.ltac2" "module_contents".
 
 (** Deeply fold over references in the given module
     (e.g. if [mod] is [M] and contains submodule [M.N]

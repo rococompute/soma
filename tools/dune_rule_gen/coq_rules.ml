@@ -24,7 +24,7 @@ module FlagUtil = struct
   (* Native flag *)
   let findlib_native_dir () =
     try
-      Findlib.package_directory ("rocq-runtime.kernel") |> Path.make
+      Findlib.package_directory ("soma-runtime.kernel") |> Path.make
     with
       Fl_package_base.No_such_package (p,_) ->
       raise (Invalid_argument ("failed to locate Coq kernel package in split build mode: " ^ p))
@@ -144,7 +144,7 @@ module Context = struct
     ; rule : Coq_module.Rule_type.t (* rule kind *)
     ; boot : Boot_type.t        (* type of library *)
     ; dep_info : Dep_info.t
-    ; worker_deps : string list  (* we always need rocqworker and thus rocq-runtime *)
+    ; worker_deps : string list  (* we always need rocqworker and thus soma-runtime *)
     ; root_lvl : int
     }
 
@@ -180,7 +180,7 @@ module Context = struct
       { Flags.user = user_flags; common; loadpath; native_common; native_coqc }
     in
 
-    let worker_deps = ["(package rocq-runtime)"] in
+    let worker_deps = ["(package soma-runtime)"] in
 
     (* coqdep and dep info *)
     let coqdep_args = flags.loadpath in
@@ -306,7 +306,7 @@ let install_rule ~(cctx : Context.t) coq_module =
     Coq_module.install_files ~tname ~rule coq_module
     |> List.map (fun (src,dst) -> src, Filename.concat dst_base dst) in
   (* May need to woraround invalid empty `(install )` stanza if that happens *)
-  Dune_file.Install.{ section = "lib_root"; package = "rocq-core"; files }
+  Dune_file.Install.{ section = "lib_root"; package = "soma-core"; files }
 
 let install_rules ~dir_info ~cctx = gen_rules ~dir_info ~cctx ~f:install_rule
 
@@ -320,6 +320,6 @@ let package_install_rule ~(cctx : Context.t) coq_module =
     Coq_module.install_files ~tname ~rule coq_module
     |> List.map (fun (src,dst) -> src, Filename.concat dst_base dst) in
   (* May need to woraround invalid empty `(install )` stanza if that happens *)
-  Dune_file.Install.{ section = "lib"; package = "rocq-core"; files }
+  Dune_file.Install.{ section = "lib"; package = "soma-core"; files }
 
 let package_install_rules ~dir_info ~cctx = gen_rules ~dir_info ~cctx ~f:package_install_rule

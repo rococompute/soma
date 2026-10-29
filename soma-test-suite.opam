@@ -25,7 +25,7 @@ doc: "https://rocq-prover.org/docs/"
 bug-reports: "https://github.com/rocq-prover/rocq/issues"
 depends: [
   "dune" {>= "3.21"}
-  "rocq-core" {= version}
+  "soma-core" {= version}
   "ounit2"
   "conf-python-3"
   "conf-time"

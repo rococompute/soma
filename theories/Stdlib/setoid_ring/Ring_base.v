@@ -12,7 +12,7 @@
    ring tactic. Abstract rings need more theory, depending on
    BinInt. *)
 
-Declare ML Module "rocq-runtime.plugins.ring".
+Declare ML Module "soma-runtime.plugins.ring".
 From Stdlib Require Export Ring_theory.
 From Stdlib Require Export Ring_tac.
 From Stdlib Require Import InitialRing.

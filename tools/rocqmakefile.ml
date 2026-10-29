@@ -233,7 +233,7 @@ let generate_legacy_meta_file p proj =
       let meta : _ format = {|
 %spackage "plugin" (
   directory = "."
-  requires = "rocq-runtime.plugins.ltac"
+  requires = "soma-runtime.plugins.ltac"
   archive(byte) = "%s.cma"
   archive(native) = "%s.cmxa"
   plugin(byte) = "%s.cma"
@@ -268,7 +268,7 @@ let generate_rocq_package_meta_file p pkg =
   let plugin_meta = match plugin with
     | None -> ""
     | Some (_, cmname) ->
-        let requires = meta_requires_field ("rocq-runtime.plugins.ltac" :: p.packages) in
+        let requires = meta_requires_field ("soma-runtime.plugins.ltac" :: p.packages) in
         sprintf {|
 package "plugin" (
   directory = "."

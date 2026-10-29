@@ -1,17 +1,17 @@
 (library
  (name nsatz_core_plugin)
- (public_name rocq-runtime.plugins.nsatz_core)
+ (public_name soma-runtime.plugins.nsatz_core)
  (synopsis "Rocq's nsatz solver plugin")
  (modules (:standard \ g_nsatz))
- (libraries rocq-runtime.tactics))
+ (libraries soma-runtime.tactics))
 
 (library
  (name nsatz_plugin)
- (public_name rocq-runtime.plugins.nsatz)
+ (public_name soma-runtime.plugins.nsatz)
  (synopsis "Rocq's nsatz solver plugin (Ltac1 syntax)")
  (modules g_nsatz)
  (flags :standard -open Nsatz_core_plugin)
- (libraries rocq-runtime.plugins.nsatz_core rocq-runtime.plugins.ltac))
+ (libraries soma-runtime.plugins.nsatz_core soma-runtime.plugins.ltac))
 
 (rule
  (targets g_nsatz.ml)

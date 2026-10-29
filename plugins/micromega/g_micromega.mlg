@@ -24,7 +24,7 @@ open Tacarg
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.micromega"
+DECLARE PLUGIN "soma-runtime.plugins.micromega"
 
 TACTIC EXTEND Lra_Q
 | [ "xlra_Q"  tactic(t) ] -> { Coq_micromega.xlra_Q (Tacinterp.tactic_of_value ist t) }

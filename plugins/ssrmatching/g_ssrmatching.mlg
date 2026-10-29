@@ -19,7 +19,7 @@ open Ssrmatching.Internal
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ssrmatching"
+DECLARE PLUGIN "soma-runtime.plugins.ssrmatching"
 
 (* The user is supposed to Require Import ssreflect or Require ssreflect   *)
 (* and Import ssreflect.SsrSyntax to obtain these keywords and as a        *)

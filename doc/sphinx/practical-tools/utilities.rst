@@ -1199,7 +1199,7 @@ syntax for `Declare ML Module`, see example below:
         (name equations_plugin)
         (public_name equations.plugin)
         (flags :standard -warn-error -3-9-27-32-33-50)
-        (libraries rocq-runtime.plugins.cc rocq-runtime.plugins.extraction))
+        (libraries soma-runtime.plugins.cc soma-runtime.plugins.extraction))
 
        (rocq.pp (modules g_equations))
 
@@ -1211,7 +1211,7 @@ syntax for `Declare ML Module`, see example below:
         (name Equations) ; -R flag
         (package equations)
         (synopsis "Equations Plugin")
-        (libraries rocq-runtime.plugins.extraction equations.plugin)
+        (libraries soma-runtime.plugins.extraction equations.plugin)
         (modules :standard \ IdDec NoCycle)) ; exclude some modules that don't build
 
        (include_subdirs qualified)
@@ -1281,7 +1281,7 @@ The preferred method is to use ``dune``:
 
    (executable
     (name my_toplevel)
-    (libraries rocq-runtime.toplevel))
+    (libraries soma-runtime.toplevel))
 
 in a directory with `my_toplevel.ml` containing the main loop entry
 point `Coqc.main()` or `Coqtop.(start_coq coqtop_toplevel)` (depending
@@ -1293,7 +1293,7 @@ For example, to statically link |Ltac|, you can do:
 
    (executable
     (name my_toplevel)
-    (libraries rocq-runtime.toplevel rocq-runtime.plugins.ltac))
+    (libraries soma-runtime.toplevel soma-runtime.plugins.ltac))
 
 and similarly for other plugins.
 

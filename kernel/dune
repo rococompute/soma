@@ -1,7 +1,7 @@
 (library
  (name kernel)
  (synopsis "The Rocq Kernel")
- (public_name rocq-runtime.kernel)
+ (public_name soma-runtime.kernel)
  (wrapped false)
  (modules_without_implementation values declarations entries)
  (modules (:standard \ genOpcodeFiles uint63_31 uint63_63 float64_31 float64_63))
@@ -30,7 +30,7 @@
  (action (copy# %{gen-file} %{targets})))
 
 (documentation
- (package rocq-runtime))
+ (package soma-runtime))
 
 ; In dev profile, we check the kernel against a more strict set of
 ; warnings.

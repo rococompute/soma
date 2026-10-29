@@ -28,9 +28,9 @@ Delimit Scope trunc_scope with trunc.
 Global Open Scope trunc_scope.
 Global Open Scope type_scope.
 
-Declare ML Module "rocq-runtime.plugins.ltac".
+Declare ML Module "soma-runtime.plugins.ltac".
 
-Declare ML Module "rocq-runtime.plugins.number_string_notation".
+Declare ML Module "soma-runtime.plugins.number_string_notation".
 
 Global Set Default Proof Mode "Classic".
 

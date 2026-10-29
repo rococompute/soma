@@ -18,7 +18,7 @@
 
 Require Import Datatypes Specif.
 
-Declare ML Module "rocq-runtime.plugins.number_string_notation".
+Declare ML Module "soma-runtime.plugins.number_string_notation".
 
 (** Unsigned integers are just lists of digits.
     For instance, ten is (D1 (D0 Nil)) *)

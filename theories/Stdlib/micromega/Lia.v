@@ -16,8 +16,8 @@
 
 From Stdlib Require Import BinInt.
 From Stdlib.micromega Require Import Tauto VarMap ZMicromega Zify.
-Declare ML Module "rocq-runtime.plugins.micromega_core".
-Declare ML Module "rocq-runtime.plugins.micromega".
+Declare ML Module "soma-runtime.plugins.micromega_core".
+Declare ML Module "soma-runtime.plugins.micromega".
 
 Ltac zchecker :=
   let __wit := fresh "__wit" in

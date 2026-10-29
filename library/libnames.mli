@@ -107,7 +107,7 @@ val idset_mem_qualid : qualid -> Id.Set.t -> bool
 
 (** {6 ... } *)
 
-(** This is the root of the rocq-core library *)
+(** This is the root of the soma-core library *)
 val rocq_init_root : Id.t (* "Corelib" *)
 val rocq_init_string : string (* "Corelib" *)
 

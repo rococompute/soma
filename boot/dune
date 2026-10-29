@@ -2,8 +2,8 @@
 ; dependency for most Rocq command line tools.
 (library
  (name boot)
- (public_name rocq-runtime.boot)
+ (public_name soma-runtime.boot)
  (synopsis "Rocq Enviroment and Paths facilities")
  ; until ocaml/dune#4892 fixed
  ; (private_modules util)
- (libraries rocq-runtime.config rocq-runtime.clib))
+ (libraries soma-runtime.config soma-runtime.clib))

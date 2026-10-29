@@ -1,35 +1,35 @@
 ; For now we use coq_dune to generate the rules here
 (rocq.theory
  (name Corelib)
- (package rocq-core)
+ (package soma-core)
  (synopsis "Rocq's Core Library")
  ; Uncomment this to have dune compile native files in release mode
  ; (mode native)
  (boot)
  (plugins
-   rocq-runtime.plugins.ltac
-   rocq-runtime.plugins.tauto
+   soma-runtime.plugins.ltac
+   soma-runtime.plugins.tauto
 
-   rocq-runtime.plugins.cc
-   rocq-runtime.plugins.firstorder
+   soma-runtime.plugins.cc
+   soma-runtime.plugins.firstorder
 
-   rocq-runtime.plugins.number_string_notation
+   soma-runtime.plugins.number_string_notation
 
-   rocq-runtime.plugins.btauto
-   rocq-runtime.plugins.rtauto
+   soma-runtime.plugins.btauto
+   soma-runtime.plugins.rtauto
 
-   rocq-runtime.plugins.ring
-   rocq-runtime.plugins.nsatz
+   soma-runtime.plugins.ring
+   soma-runtime.plugins.nsatz
 
-   rocq-runtime.plugins.zify
-   rocq-runtime.plugins.micromega
+   soma-runtime.plugins.zify
+   soma-runtime.plugins.micromega
 
-   rocq-runtime.plugins.funind
+   soma-runtime.plugins.funind
 
-   rocq-runtime.plugins.ssreflect
-   rocq-runtime.plugins.derive))
+   soma-runtime.plugins.ssreflect
+   soma-runtime.plugins.derive))
 
 (include_subdirs qualified)
 
 (documentation
- (package rocq-core))
+ (package soma-core))

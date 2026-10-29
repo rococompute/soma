@@ -1,8 +1,8 @@
 (library
  (name ring_plugin)
- (public_name rocq-runtime.plugins.ring)
+ (public_name soma-runtime.plugins.ring)
  (synopsis "Rocq's ring plugin")
- (libraries rocq-runtime.plugins.ltac))
+ (libraries soma-runtime.plugins.ltac))
 
 (rule
  (targets g_ring.ml)

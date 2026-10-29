@@ -1,7 +1,7 @@
 (library
  (name tuto0_plugin)
- (public_name rocq-runtime.plugins.tutorial.p0)
- (libraries rocq-runtime.plugins.ltac))
+ (public_name soma-runtime.plugins.tutorial.p0)
+ (libraries soma-runtime.plugins.ltac))
 
 (rule
  (targets g_tuto0.ml)

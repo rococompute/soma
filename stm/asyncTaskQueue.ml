@@ -110,7 +110,7 @@ module Make(T : Task) () = struct
   let uid = ref 0
 
   let get_toplevel_path top =
-    let dir = Findlib.package_directory "rocq-runtime" in
+    let dir = Findlib.package_directory "soma-runtime" in
     let exe = if Sys.(os_type = "Win32" || os_type = "Cygwin") then ".exe" else "" in
     Filename.concat dir (top^exe)
 

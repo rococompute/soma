@@ -15,7 +15,7 @@
 module PluginSpec : sig
 
   (** A plugin is identified by its canonical library name,
-      such as [rocq-runtime.plugins.ltac] *)
+      such as [soma-runtime.plugins.ltac] *)
   type t
 
   (** [to_package p] returns the findlib name of the package *)

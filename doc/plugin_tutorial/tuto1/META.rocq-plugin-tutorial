@@ -11,10 +11,10 @@ package "tuto1" (
     description = "A tuto1 plugin"
 
     # we define ltac1 tactics so we depend on ltac
-    # otherwise we would depend only on rocq-runtime.vernac
+    # otherwise we would depend only on soma-runtime.vernac
     # (it contains the APIs for declaring new commands)
     # (ltac depends on vernac so if we depend on ltac, vernac is also implicitly depended on)
-    requires = "rocq-runtime.plugins.ltac"
+    requires = "soma-runtime.plugins.ltac"
 
     # the compiled plugin files (rocq makefile bases these filenames on the .mlpack filename)
     # (only the "plugin" keys are used by rocq,

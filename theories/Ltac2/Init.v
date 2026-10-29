@@ -10,8 +10,8 @@
 
 Require Corelib.Init.Ltac.
 
-Declare ML Module "rocq-runtime.plugins.ltac2".
-Declare ML Module "rocq-runtime.plugins.ltac2_ltac1".
+Declare ML Module "soma-runtime.plugins.ltac2".
+Declare ML Module "soma-runtime.plugins.ltac2_ltac1".
 
 #[export] Set Default Proof Mode "Ltac2".
 

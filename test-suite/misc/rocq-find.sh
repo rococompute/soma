@@ -8,7 +8,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 LIB="$TMP/lib"
-mkdir -p "$LIB/foo" "$LIB/bar" "$LIB/rocq-runtime"
+mkdir -p "$LIB/foo" "$LIB/bar" "$LIB/soma-runtime"
 
 cat > "$LIB/foo/META" <<'EOT'
 directory = "."
@@ -27,7 +27,7 @@ EOT
 
 # rocq find filters out static toplevel libraries, so provide the package
 # queried by the implementation while keeping the test findlib root isolated.
-cat > "$LIB/rocq-runtime/META" <<'EOT'
+cat > "$LIB/soma-runtime/META" <<'EOT'
 directory = "."
 
 package "toplevel" (

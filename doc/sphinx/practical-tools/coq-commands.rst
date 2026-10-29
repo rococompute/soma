@@ -178,7 +178,7 @@ Let `$runtimelib` be
 
 - otherwise, if the deprecated `COQCORELIB` environment variable is defined, its value
 
-- otherwise, `$libdir/../rocq-runtime`
+- otherwise, `$libdir/../soma-runtime`
 
 .. exn:: The path for Rocq plugins is wrong.
 
@@ -192,11 +192,11 @@ If `-boot` was not passed and no `-nI` argument was passed, Rocq will
 also add an implicit `-nI $runtimelib/kernel` for :tacn:`native_compute`
 (so if you use `-boot` and native compute you must use `-nI`).
 
-Then, regardless of `-boot`, Rocq will search for OCamlfind package `rocq-runtime`.
+Then, regardless of `-boot`, Rocq will search for OCamlfind package `soma-runtime`.
 
-.. exn:: Could not find package rocq-runtime.
+.. exn:: Could not find package soma-runtime.
 
-   Rocq fails with this error if OCamlfind package `rocq-runtime` could not be found.
+   Rocq fails with this error if OCamlfind package `soma-runtime` could not be found.
 
 Customization at launch time
 ---------------------------------

@@ -1,33 +1,33 @@
 (library
  (name micromega_core_plugin)
- (public_name rocq-runtime.plugins.micromega_core)
+ (public_name soma-runtime.plugins.micromega_core)
  (modules micromega numCompat mutils sos_types sos_lib sos)
  (synopsis "Rocq's micromega core plugin")
- (libraries zarith rocq-runtime.clib))
+ (libraries zarith soma-runtime.clib))
 
 (library
  (name micromega_plugin)
- (public_name rocq-runtime.plugins.micromega)
+ (public_name soma-runtime.plugins.micromega)
  ; be careful not to link the executable to the plugin!
  (modules (:standard \ micromega numCompat mutils sos_types sos_lib sos csdpcert g_zify zify))
  (flags :standard -open Micromega_core_plugin)
  (synopsis "Rocq's micromega plugin")
- (libraries rocq-runtime.plugins.ltac rocq-runtime.plugins.micromega_core))
+ (libraries soma-runtime.plugins.ltac soma-runtime.plugins.micromega_core))
 
 (executable
  (name csdpcert)
  (public_name csdpcert)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules csdpcert)
  (flags :standard -open Micromega_core_plugin)
- (libraries rocq-runtime.plugins.micromega_core))
+ (libraries soma-runtime.plugins.micromega_core))
 
 (library
  (name zify_plugin)
- (public_name rocq-runtime.plugins.zify)
+ (public_name soma-runtime.plugins.zify)
  (modules g_zify zify)
  (synopsis "Rocq's zify plugin")
- (libraries rocq-runtime.plugins.ltac))
+ (libraries soma-runtime.plugins.ltac))
 
 (rule
  (targets g_micromega.ml)

@@ -258,7 +258,7 @@ Here is a list of permissible options:
   - ``abort``: Send an ``Abort All`` command after running this block (leaves all pending proofs if any)
   - ``extra-foo``: if environment variable 'ROCQRST_EXTRA' is set to `all`
     or to a `,`-separated list containing `foo` this is ignored, otherwise behaves as ``fail``
-    This is typically used to showcase examples of things outside coq-core or rocq-core.
+    This is typically used to showcase examples of things outside coq-core or soma-core.
     `foo` should be the name of the external requirement, e.g. `stdlib` or `mathcomp`.
 
 ``rocqtop``\ 's state is preserved across consecutive ``.. rocqtop::`` blocks

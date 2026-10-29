@@ -1,8 +1,8 @@
 (library
  (name funind_plugin)
- (public_name rocq-runtime.plugins.funind)
+ (public_name soma-runtime.plugins.funind)
  (synopsis "Rocq's functional induction plugin")
- (libraries rocq-runtime.plugins.ltac rocq-runtime.plugins.extraction))
+ (libraries soma-runtime.plugins.ltac soma-runtime.plugins.extraction))
 
 (rule
  (targets g_indfun.ml)

@@ -438,7 +438,7 @@ let ml_toplevel_include_ran = ref false
 (* Initialises the Ocaml toplevel before launching it, so that it can
    find the "include" file in the *source* directory *)
 let init_ocaml_path () =
-  let corelib = Findlib.package_directory "rocq-runtime" in
+  let corelib = Findlib.package_directory "soma-runtime" in
   let add_subdir dl = Mltop.add_ml_dir (Filename.concat corelib dl) in
   List.iter add_subdir ("dev" :: Coq_config.all_src_dirs)
 

@@ -9,7 +9,7 @@
 (************************************************************************)
 
 Require Export ssreflect_rw.
-Declare ML Module "rocq-runtime.plugins.ssreflect_rewrite".
+Declare ML Module "soma-runtime.plugins.ssreflect_rewrite".
 
 Module SsrIsSyntax.
 

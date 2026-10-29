@@ -1,4 +1,4 @@
 (library
  (name tuto4_plugin)
- (public_name rocq-runtime.plugins.tutorial.p4)
- (libraries rocq-runtime.plugins.ltac2))
+ (public_name soma-runtime.plugins.tutorial.p4)
+ (libraries soma-runtime.plugins.ltac2))

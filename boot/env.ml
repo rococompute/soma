@@ -18,7 +18,7 @@ module Path = struct
 
 end
 
-(* For now just a pointer to coq/lib (for .vo) and rocq-runtime/lib (for plugins)  *)
+(* For now just a pointer to coq/lib (for .vo) and soma-runtime/lib (for plugins)  *)
 type t =
   { runtimelib: Path.t
   ; coqlib : Path.t
@@ -78,8 +78,8 @@ let rocqroot =
       if Sys.file_exists (Filename.concat path "bin") then path
       else search rest
   in
-  (* we can be "bin/rocq" or "lib/rocq-runtime/rocqworker"
-     so rocqbin can be "bin/" or "lib/rocq-runtime/" *)
+  (* we can be "bin/rocq" or "lib/soma-runtime/rocqworker"
+     so rocqbin can be "bin/" or "lib/soma-runtime/" *)
   let dirname = Filename.dirname in
   search [ dirname rocqbin; dirname @@ dirname rocqbin ]
 
@@ -113,13 +113,13 @@ let guess_coqcorelib lib =
   | None ->
     if Sys.file_exists (Path.relative lib plugins_dir)
     then lib
-    else Path.relative lib "../rocq-runtime"
+    else Path.relative lib "../soma-runtime"
 
 let fail_lib lib =
   let open Printf in
   eprintf "File not found: %s\n" lib;
   eprintf "The path for Rocq libraries is wrong.\n";
-  eprintf "Rocq prelude is shipped in the rocq-core package.\n";
+  eprintf "Rocq prelude is shipped in the soma-core package.\n";
   eprintf "Please check the ROCQLIB env variable or the -coqlib option.\n";
   exit 1
 
@@ -127,7 +127,7 @@ let fail_core plugin =
   let open Printf in
   eprintf "File not found: %s\n" plugin;
   eprintf "The path for Rocq plugins is wrong.\n";
-  eprintf "Rocq plugins are shipped in the rocq-runtime package.\n";
+  eprintf "Rocq plugins are shipped in the soma-runtime package.\n";
   eprintf "Please check the ROCQRUNTIMELIB env variable.\n";
   exit 1
 

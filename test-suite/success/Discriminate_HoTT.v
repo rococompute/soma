@@ -11,7 +11,7 @@ Set Universe Polymorphism.
 
 Require Import Equality.
 
-Declare ML Module "rocq-runtime.plugins.ltac".
+Declare ML Module "soma-runtime.plugins.ltac".
 
 Global Set Default Proof Mode "Classic".
 

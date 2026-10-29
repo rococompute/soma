@@ -36,7 +36,7 @@ Ltac2 Type conv_flag := [
     - TransparentState.t which controls which constants get unfolded during conversion
 *)
 Ltac2 @external conv : conv_flag -> TransparentState.t -> constr -> constr -> bool
-  := "rocq-runtime.plugins.ltac2" "infer_conv".
+  := "soma-runtime.plugins.ltac2" "infer_conv".
 
 (** It only unfolds constants that are transparent in the current state *)
 Ltac2 conv_current : constr -> constr -> bool := fun c1 c2 => conv CONV (TransparentState.current ()) c1 c2.
@@ -51,7 +51,7 @@ Ltac2 conv_full : constr -> constr -> bool := fun c1 c2 => conv CONV Transparent
     may have the effect of instantiating evars. If the [c1] and [c2] cannot be
     unified, an [Internal] exception is raised. *)
 Ltac2 @ external unify : TransparentState.t -> constr -> constr -> unit :=
-  "rocq-runtime.plugins.ltac2" "evarconv_unify".
+  "soma-runtime.plugins.ltac2" "evarconv_unify".
 
 (** [unify_with_full_ts] is like [unify TransparentState.full]. *)
 Ltac2 unify_with_full_ts : constr -> constr -> unit := fun c1 c2 =>
@@ -63,4 +63,4 @@ Ltac2 unify_with_current_ts : constr -> constr -> unit := fun c1 c2 =>
 
 (** [solve_constraints ()] solves any delayed unification constraints. *)
 Ltac2 @external solve_constraints : unit -> unit
-  := "rocq-runtime.plugins.ltac2" "solve_constraints".
+  := "soma-runtime.plugins.ltac2" "solve_constraints".

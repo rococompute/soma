@@ -38,34 +38,34 @@ Require Ltac2.Message.
     starting at [0]. *)
 
 (** The empty array. *)
-Ltac2 @external empty : 'a array := "rocq-runtime.plugins.ltac2" "array_empty".
+Ltac2 @external empty : 'a array := "soma-runtime.plugins.ltac2" "array_empty".
 
 (** [make n x] creates an array of length [n], with all elements set to [x]. *)
-Ltac2 @external make : int -> 'a -> 'a array := "rocq-runtime.plugins.ltac2" "array_make".
+Ltac2 @external make : int -> 'a -> 'a array := "soma-runtime.plugins.ltac2" "array_make".
 
 (** Return the length of an array. *)
-Ltac2 @external length : 'a array -> int := "rocq-runtime.plugins.ltac2" "array_length".
+Ltac2 @external length : 'a array -> int := "soma-runtime.plugins.ltac2" "array_length".
 
 (** [get arr i] returns the [i]-th element of [arr]. *)
-Ltac2 @external get : 'a array -> int -> 'a := "rocq-runtime.plugins.ltac2" "array_get".
+Ltac2 @external get : 'a array -> int -> 'a := "soma-runtime.plugins.ltac2" "array_get".
 
 (** [set arr i x] replaces [arr[i]] with [x]. This modifies [arr] in place. *)
-Ltac2 @external set : 'a array -> int -> 'a -> unit := "rocq-runtime.plugins.ltac2" "array_set".
+Ltac2 @external set : 'a array -> int -> 'a -> unit := "soma-runtime.plugins.ltac2" "array_set".
 
 (** [lowlevel_blit from fofs to tofs len] copies [from[fofs...fofs+len-1]] to [to[tofs...tofs+len-1]] (bounds included).
     This modifies [to] in place.
 
     Consider using [blit] for nicer error messages. *)
-Ltac2 @external lowlevel_blit : 'a array -> int -> 'a array -> int -> int -> unit := "rocq-runtime.plugins.ltac2" "array_blit".
+Ltac2 @external lowlevel_blit : 'a array -> int -> 'a array -> int -> int -> unit := "soma-runtime.plugins.ltac2" "array_blit".
 
 (** [lowlevel_fill arr ofs len x] replaces [arr[ofs]], [arr[ofs+1]], ..., [arr[ofs+len-1]] with [x].
     This modifes [arr] in place.
 
     Consider using [fill] for nicer error messages. *)
-Ltac2 @external lowlevel_fill : 'a array -> int -> int -> 'a -> unit := "rocq-runtime.plugins.ltac2" "array_fill".
+Ltac2 @external lowlevel_fill : 'a array -> int -> int -> 'a -> unit := "soma-runtime.plugins.ltac2" "array_fill".
 
 (** [concat [a1 ; a2 ; ... ; aN]] returns the array [a1 ++ a2 ++ ... ++ an]. *)
-Ltac2 @external concat : ('a array) list -> 'a array := "rocq-runtime.plugins.ltac2" "array_concat".
+Ltac2 @external concat : ('a array) list -> 'a array := "soma-runtime.plugins.ltac2" "array_concat".
 
 (** [lowlevel_sub arr ofs len] returns the subarray [arr[ofs...ofs+len-1]].
     The result is allocated as a new array, i.e. is not aliased with [arr].

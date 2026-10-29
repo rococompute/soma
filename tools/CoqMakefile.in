@@ -138,7 +138,7 @@ COQDEBUG ?=
 
 # Extra packages to be linked in (as in findlib -package)
 CAMLPKGS ?=
-FINDLIBPKGS = -package rocq-runtime.plugins.ltac $(PACKAGE_FLAGS) $(CAMLPKGS)
+FINDLIBPKGS = -package soma-runtime.plugins.ltac $(PACKAGE_FLAGS) $(CAMLPKGS)
 
 # Option for making timing files
 TIMING?=

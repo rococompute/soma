@@ -1,17 +1,17 @@
 (library
  (name cc_core_plugin)
- (public_name rocq-runtime.plugins.cc_core)
+ (public_name soma-runtime.plugins.cc_core)
  (synopsis "Rocq's congruence closure plugin")
  (modules (:standard \ g_congruence))
- (libraries rocq-runtime.tactics))
+ (libraries soma-runtime.tactics))
 
 (library
  (name cc_plugin)
- (public_name rocq-runtime.plugins.cc)
+ (public_name soma-runtime.plugins.cc)
  (synopsis "Rocq's congruence closure plugin (Ltac1 syntax)")
  (modules g_congruence)
  (flags :standard -open Cc_core_plugin)
- (libraries rocq-runtime.plugins.ltac rocq-runtime.plugins.cc_core))
+ (libraries soma-runtime.plugins.ltac soma-runtime.plugins.cc_core))
 
 (rule
  (targets g_congruence.ml)

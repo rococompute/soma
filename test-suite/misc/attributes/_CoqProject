@@ -1,4 +1,4 @@
-src/META.rocq-test-suite.plugins.attribute_plugin
+src/META.soma-test-suite.plugins.attribute_plugin
 -Q theories Attributes
 -I src
 

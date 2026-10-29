@@ -8,7 +8,7 @@ export PATH="$COQBIN:$PATH"
 export LC_ALL=C
 
 # tools
-TTOOLSDIR="$COQPREFIX/lib/rocq-runtime/tools"
+TTOOLSDIR="$COQPREFIX/lib/soma-runtime/tools"
 
 export make_both_time_files="$TTOOLSDIR"/make-both-time-files.py
 export make_one_time_file="$TTOOLSDIR"/make-one-time-file.py

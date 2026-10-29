@@ -11,7 +11,7 @@ if [ "$DOWNLOAD_ONLY" ]; then exit 0; fi
 
 if [ -n "${GITLAB_CI}" ]; then
   export ROCQLIB="$PWD/_install_ci/lib/coq"
-  export ROCQRUNTIMELIB="$PWD/_install_ci/lib/rocq-runtime"
+  export ROCQRUNTIMELIB="$PWD/_install_ci/lib/soma-runtime"
 fi
 
 ( cd "${CI_BUILD_DIR}/rocq_lsp"

@@ -4,17 +4,17 @@
 ; duplicate module names in the whole build.
 (library
  (name coq_checklib)
- (public_name rocq-runtime.checklib)
+ (public_name soma-runtime.checklib)
  (synopsis "Rocq's Standalone Proof Checker")
  (modules :standard \ rocqchk votour)
  (wrapped true)
- (libraries rocq-runtime.boot rocq-runtime.kernel))
+ (libraries soma-runtime.boot soma-runtime.kernel))
 
 (executable
  (name rocqchk)
  (public_name rocqchk)
  (modes exe byte)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules rocqchk)
  (flags :standard -open Coq_checklib)
  (libraries coq_checklib))
@@ -22,7 +22,7 @@
 (executable
  (name votour)
  (public_name votour)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules votour)
  (flags :standard -open Coq_checklib)
  (libraries coq_checklib))

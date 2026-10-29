@@ -40,7 +40,7 @@ then
     export OCAMLPATH="$root/_build/install/default/lib/$OCAMLFINDSEP$OCAMLPATH"
     export COQBIN="$root/_build/install/default/bin"
     export ROCQLIB="$root/_build/install/default/lib/coq"
-    export ROCQRUNTIMELIB="$root/_build/install/default/lib/rocq-runtime"
+    export ROCQRUNTIMELIB="$root/_build/install/default/lib/soma-runtime"
 
     CI_INSTALL_DIR="$root/_build/install/default/"
 

@@ -1,7 +1,7 @@
 (library
  (name coqrun)
  (synopsis "Rocq's Kernel Abstract Reduction Machine [C implementation]")
- (public_name rocq-runtime.vm)
+ (public_name soma-runtime.vm)
  (foreign_stubs
   (language c)
   (names rocq_fix_code rocq_float64 rocq_memory rocq_values rocq_interp)

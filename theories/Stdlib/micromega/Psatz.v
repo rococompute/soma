@@ -27,7 +27,7 @@ From Stdlib Require Lia.
 From Stdlib Require Lra.
 From Stdlib Require Lqa.
 
-Declare ML Module "rocq-runtime.plugins.micromega".
+Declare ML Module "soma-runtime.plugins.micromega".
 
 Ltac lia := Lia.lia.
 

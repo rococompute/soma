@@ -739,7 +739,7 @@ file is a particular case of a module called a *library file*.
 
    Loads OCaml plugins and their dependencies dynamically.  The :n:`@string`
    arguments must be valid `findlib <http://projects.camlcity.org/projects/findlib.html>`_
-   plugin names, for example ``rocq-runtime.plugins.ltac``.
+   plugin names, for example ``soma-runtime.plugins.ltac``.
 
    Effects (such as adding new commands) from the explicitly requested
    plugin are activated, but effects from implicitly loaded
@@ -784,8 +784,8 @@ file is a particular case of a module called a *library file*.
 
       The plugin declaration in some ``.mlg`` file does not match the
       ``findlib`` plugin name. In the example of
-      ``rocq-runtime.plugins.ltac``, one has to write ``DECLARE PLUGIN
-      "rocq-runtime.plugins.ltac"``.
+      ``soma-runtime.plugins.ltac``, one has to write ``DECLARE PLUGIN
+      "soma-runtime.plugins.ltac"``.
 
 .. cmd:: Print ML Modules
 

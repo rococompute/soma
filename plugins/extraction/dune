@@ -1,8 +1,8 @@
 (library
  (name extraction_plugin)
- (public_name rocq-runtime.plugins.extraction)
+ (public_name soma-runtime.plugins.extraction)
  (synopsis "Rocq's extraction plugin")
- (libraries rocq-runtime.vernac))
+ (libraries soma-runtime.vernac))
 
 (rule
  (targets g_extraction.ml)

@@ -74,11 +74,11 @@ Module Export Control.
 
 Import Ltac2.Init.
 
-Ltac2 @ external enter : (unit -> unit) -> unit := "rocq-runtime.plugins.ltac2" "enter".
+Ltac2 @ external enter : (unit -> unit) -> unit := "soma-runtime.plugins.ltac2" "enter".
 
-Ltac2 @ external goal : unit -> constr := "rocq-runtime.plugins.ltac2" "goal".
+Ltac2 @ external goal : unit -> constr := "soma-runtime.plugins.ltac2" "goal".
 
-Ltac2 @ external refine : (unit -> constr) -> unit := "rocq-runtime.plugins.ltac2" "refine".
+Ltac2 @ external refine : (unit -> constr) -> unit := "soma-runtime.plugins.ltac2" "refine".
 Module Export UniMath_DOT_Foundations_DOT_Preamble_WRAPPED.
 Module Export Preamble.
 
@@ -208,13 +208,13 @@ Module Export Pretype.
   Module Export Flags.
     Ltac2 Type t.
 
-    Ltac2 @ external constr_flags : t := "rocq-runtime.plugins.ltac2" "constr_flags".
+    Ltac2 @ external constr_flags : t := "soma-runtime.plugins.ltac2" "constr_flags".
 
     Ltac2 @external set_allow_evars : bool -> t -> t
-      := "rocq-runtime.plugins.ltac2" "pretype_flags_set_allow_evars".
+      := "soma-runtime.plugins.ltac2" "pretype_flags_set_allow_evars".
 
     Ltac2 @external set_nf_evars : bool -> t -> t
-      := "rocq-runtime.plugins.ltac2" "pretype_flags_set_nf_evars".
+      := "soma-runtime.plugins.ltac2" "pretype_flags_set_nf_evars".
 
     Ltac2 Abbreviation open_constr_flags_with_tc :=
       set_nf_evars false (set_allow_evars true constr_flags).
@@ -223,10 +223,10 @@ Module Export Pretype.
   Ltac2 Type expected_type.
 
   Ltac2 @ external expected_oftype : constr -> expected_type
-    := "rocq-runtime.plugins.ltac2" "expected_oftype".
+    := "soma-runtime.plugins.ltac2" "expected_oftype".
 
   Ltac2 @ external pretype : Flags.t -> expected_type -> preterm -> constr
-    := "rocq-runtime.plugins.ltac2" "constr_pretype".
+    := "soma-runtime.plugins.ltac2" "constr_pretype".
 
 Definition hProp := total2 (λ X : UU, isaprop X).
 Definition hProptoType := @pr1 _ _ : hProp -> UU.

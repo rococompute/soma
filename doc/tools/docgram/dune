@@ -1,6 +1,6 @@
 (executable
  (name doc_grammar)
- (libraries rocq-runtime.clib coqpp))
+ (libraries soma-runtime.clib coqpp))
 
 (env (_ (binaries doc_grammar.exe)))
 

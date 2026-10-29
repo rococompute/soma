@@ -1128,7 +1128,7 @@ let ltac2_interp e =
   let tac = Tac2interp.interp Tac2interp.empty_environment e in
   Proofview.tclIGNORE tac
 
-let ComTactic.Interpreter ltac2_interp = ComTactic.register_tactic_interpreter "rocq-runtime.plugins.ltac2" ltac2_interp
+let ComTactic.Interpreter ltac2_interp = ComTactic.register_tactic_interpreter "soma-runtime.plugins.ltac2" ltac2_interp
 
 let call ~pstate g ~with_end_tac tac =
   let g = Option.default (Goal_select.get_default_goal_selector()) g in
@@ -1175,4 +1175,4 @@ let () =
        ("::", [GTypVar 0; GTypRef (Other t_list, [GTypVar 0])]);
      ];
   in
-  Mltop.(declare_cache_obj_full (interp_only_obj obj) "rocq-runtime.plugins.ltac2")
+  Mltop.(declare_cache_obj_full (interp_only_obj obj) "soma-runtime.plugins.ltac2")

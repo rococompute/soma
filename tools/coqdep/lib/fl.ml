@@ -73,7 +73,7 @@ let findlib_resolve ~package =
   (meta_file, cmxs_file)
 
 let static_libs () =
-  let packages = Findlib.package_deep_ancestors coqc_predicates ["rocq-runtime.toplevel"] in
+  let packages = Findlib.package_deep_ancestors coqc_predicates ["soma-runtime.toplevel"] in
   CString.Set.of_list packages
 
 let static_libs = Lazy.from_fun static_libs
@@ -98,7 +98,7 @@ let findlib_deep_resolve ~file ~package =
 module Internal = struct
   let get_worker_path () =
     let top = "rocqworker" in
-    let dir = Findlib.package_directory "rocq-runtime" in
+    let dir = Findlib.package_directory "soma-runtime" in
     let exe = if Sys.(os_type = "Win32" || os_type = "Cygwin") then ".exe" else "" in
     let file = Filename.concat dir (top^exe) in
     relative_if_dune file

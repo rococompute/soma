@@ -98,7 +98,7 @@ type ty_ml = TyML : bool (* deprecated *) * ('r, 's) ty_sig * 'r * 's option -> 
 
     Commands added without providing [plugin] cannot be removed from
     the grammar or modified. Not passing [plugin] is possible for
-    non-plugin rocq-runtime commands and deprecated for all other callers.
+    non-plugin soma-runtime commands and deprecated for all other callers.
 *)
 val static_vernac_extend :
   plugin:string option ->

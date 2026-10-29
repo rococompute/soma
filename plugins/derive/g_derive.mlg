@@ -14,14 +14,14 @@ open Stdarg
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.derive"
+DECLARE PLUGIN "soma-runtime.plugins.derive"
 
 {
 
 let classify_derive_command _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
 
 let () =
-   Mltop.add_init_function "rocq-runtime.plugins.derive" (fun () ->
+   Mltop.add_init_function "soma-runtime.plugins.derive" (fun () ->
      Procq.modify_keyword_state (fun kw -> CLexer.add_keyword_tok kw (Tok.PKEYWORD "SuchThat")))
 
 let warn_deprecated_derive_suchthat =

@@ -1,17 +1,17 @@
 (library
  (name ltac_plugin)
- (public_name rocq-runtime.plugins.ltac)
+ (public_name soma-runtime.plugins.ltac)
  (synopsis "Rocq's LTAC tactic language")
  (modules :standard \ tauto)
  (modules_without_implementation tacexpr)
- (libraries rocq-runtime.vernac))
+ (libraries soma-runtime.vernac))
 
 (library
  (name tauto_plugin)
- (public_name rocq-runtime.plugins.tauto)
+ (public_name soma-runtime.plugins.tauto)
  (synopsis "Rocq's tauto tactic")
  (modules tauto)
- (libraries rocq-runtime.plugins.ltac))
+ (libraries soma-runtime.plugins.ltac))
 
 (rule
  (targets extratactics.ml)

@@ -14,7 +14,7 @@ From Stdlib Require Export List.
 From Stdlib Require Export Bintree.
 From Stdlib Require Import Bool BinPos.
 
-Declare ML Module "rocq-runtime.plugins.rtauto".
+Declare ML Module "soma-runtime.plugins.rtauto".
 
 Ltac clean:=try (simpl;congruence).
 

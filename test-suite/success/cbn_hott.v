@@ -11,7 +11,7 @@ Inductive False : Prop := .
 Axiom proof_admitted : False.
 Tactic Notation "admit" := abstract case proof_admitted.
 
-Declare ML Module "rocq-runtime.plugins.ltac".
+Declare ML Module "soma-runtime.plugins.ltac".
 
 Global Set Default Proof Mode "Classic".
 

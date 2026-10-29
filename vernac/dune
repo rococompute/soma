@@ -1,7 +1,7 @@
 (library
  (name vernac)
  (synopsis "Rocq's Vernacular Language")
- (public_name rocq-runtime.vernac)
+ (public_name soma-runtime.vernac)
  (wrapped false)
  (modules_without_implementation vernacexpr)
  ; until ocaml/dune#4892 fixed

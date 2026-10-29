@@ -14,7 +14,7 @@ open Procq.Prim
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.extraction"
+DECLARE PLUGIN "soma-runtime.plugins.extraction"
 
 {
 

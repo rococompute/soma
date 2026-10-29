@@ -22,7 +22,7 @@ EOT
 
 cp $BIN/rocq .
 mkdir -p overridden/tools/
-cp $ROCQLIB/../rocq-runtime/tools/CoqMakefile.in overridden/tools/
+cp $ROCQLIB/../soma-runtime/tools/CoqMakefile.in overridden/tools/
 
 set +e
 

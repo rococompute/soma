@@ -51,7 +51,7 @@
   "Setup `compile-command' for Rocq development."
   (let ((dir (coqdev-default-directory)))
     (when dir (setq-local compile-command (concat "cd " (shell-quote-argument dir) "
-dune build @check # rocq-runtime.install")))))
+dune build @check # soma-runtime.install")))))
 (add-hook 'hack-local-variables-hook #'coqdev-setup-compile-command)
 
 (defvar camldebug-command-name) ; from camldebug.el (caml package)

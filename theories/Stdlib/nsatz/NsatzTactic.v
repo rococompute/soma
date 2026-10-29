@@ -23,8 +23,8 @@ From Stdlib Require Import BinPos BinNat BinInt Nnat.
 From Stdlib Require Export Bool.
 From Stdlib Require Export Integral_domain.
 
-Declare ML Module "rocq-runtime.plugins.nsatz_core".
-Declare ML Module "rocq-runtime.plugins.nsatz".
+Declare ML Module "soma-runtime.plugins.nsatz_core".
+Declare ML Module "soma-runtime.plugins.nsatz".
 
 Section nsatz1.
 

@@ -15,7 +15,7 @@ Require Import Ltac.
 Require Import Datatypes.
 Require Import Logic.
 
-Declare ML Module "rocq-runtime.plugins.tauto".
+Declare ML Module "soma-runtime.plugins.tauto".
 
 Local Ltac not_dep_intros :=
   repeat match goal with

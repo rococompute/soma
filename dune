@@ -22,15 +22,15 @@
 
 (alias
  (name default)
- (deps rocq-runtime.install rocq-core.install))
+ (deps soma-runtime.install soma-core.install))
 
 (alias
  (name runtime)
- (deps rocq-runtime.install))
+ (deps soma-runtime.install))
 
 (install
  (section lib)
- (package rocq-runtime)
+ (package soma-runtime)
  (files revision))
 
 (rule
@@ -118,7 +118,7 @@
 ; Use summary.log as the target
 (alias
  (name runtest)
- (package rocq-test-suite)
+ (package soma-test-suite)
  (deps test-suite/summary.log))
 
 ; For make compat

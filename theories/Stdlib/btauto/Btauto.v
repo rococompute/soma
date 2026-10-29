@@ -1,3 +1,3 @@
 From Stdlib Require Import Algebra Reflect.
 
-Declare ML Module "rocq-runtime.plugins.btauto".
+Declare ML Module "soma-runtime.plugins.btauto".

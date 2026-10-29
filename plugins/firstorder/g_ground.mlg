@@ -22,7 +22,7 @@ open Procq.Prim
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.firstorder"
+DECLARE PLUGIN "soma-runtime.plugins.firstorder"
 
 (* declaring search depth as a global option *)
 

@@ -1,9 +1,9 @@
 (library
  (name parsing)
- (public_name rocq-runtime.parsing)
+ (public_name soma-runtime.parsing)
  (wrapped false)
  (modules_without_implementation notation_gram)
- (libraries rocq-runtime.gramlib interp))
+ (libraries soma-runtime.gramlib interp))
 
 (rule
  (targets g_prim.ml)

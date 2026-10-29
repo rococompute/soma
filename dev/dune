@@ -1,21 +1,21 @@
 (library
  (name dev)
- (public_name rocq-runtime.dev)
+ (public_name soma-runtime.dev)
  (synopsis "Rocq's Debug Printers")
  (wrapped false)
  (modules top_printers vm_printers)
  ; NB currently we have no "install_printer" using ltac2,
  ; but we still want to load_printer ltac2
  ; so that its genarg printers are present in the debugger's printer process
- (libraries rocq-runtime.vernac rocq-runtime.plugins.ltac rocq-runtime.plugins.ltac2))
+ (libraries soma-runtime.vernac soma-runtime.plugins.ltac soma-runtime.plugins.ltac2))
 
 (library
  (name debugger_support)
- (public_name rocq-runtime.debugger_support)
+ (public_name soma-runtime.debugger_support)
  (synopsis "Rocq Support for ocamldebug")
  (wrapped false)
  (modules debugger_support)
- (libraries rocq-runtime.dev))
+ (libraries soma-runtime.dev))
 
 (rule
   (targets dune-dbg)
@@ -27,28 +27,28 @@
     ; We require all the OCaml libs to be in place and searchable
     ; by OCamlfind, this is a bit of a hack but until Dune gets
     ; proper ocamldebug support we have to live with that.
-    %{lib:rocq-runtime.config:config.cma}
-    %{lib:rocq-runtime.clib:clib.cma}
-    %{lib:rocq-runtime.lib:lib.cma}
-    %{lib:rocq-runtime.kernel:kernel.cma}
-    %{lib:rocq-runtime.vm:coqrun.cma}
-    %{lib:rocq-runtime.vm:../../stublibs/dllcoqrun_stubs.so}
-    %{lib:rocq-runtime.library:library.cma}
-    %{lib:rocq-runtime.engine:engine.cma}
-    %{lib:rocq-runtime.pretyping:pretyping.cma}
-    %{lib:rocq-runtime.gramlib:gramlib.cma}
-    %{lib:rocq-runtime.interp:interp.cma}
-    %{lib:rocq-runtime.proofs:proofs.cma}
-    %{lib:rocq-runtime.parsing:parsing.cma}
-    %{lib:rocq-runtime.printing:printing.cma}
-    %{lib:rocq-runtime.tactics:tactics.cma}
-    %{lib:rocq-runtime.vernac:vernac.cma}
-    %{lib:rocq-runtime.plugins.ltac:ltac_plugin.cma}
-    %{lib:rocq-runtime.plugins.ltac2:ltac2_plugin.cma}
-    %{lib:rocq-runtime.dev:dev.cma}
-    %{lib:rocq-runtime.debugger_support:debugger_support.cmi}
-    %{lib:rocq-runtime.debugger_support:debugger_support.cma}
-    %{lib:rocq-runtime.debugger_support:../META})
+    %{lib:soma-runtime.config:config.cma}
+    %{lib:soma-runtime.clib:clib.cma}
+    %{lib:soma-runtime.lib:lib.cma}
+    %{lib:soma-runtime.kernel:kernel.cma}
+    %{lib:soma-runtime.vm:coqrun.cma}
+    %{lib:soma-runtime.vm:../../stublibs/dllcoqrun_stubs.so}
+    %{lib:soma-runtime.library:library.cma}
+    %{lib:soma-runtime.engine:engine.cma}
+    %{lib:soma-runtime.pretyping:pretyping.cma}
+    %{lib:soma-runtime.gramlib:gramlib.cma}
+    %{lib:soma-runtime.interp:interp.cma}
+    %{lib:soma-runtime.proofs:proofs.cma}
+    %{lib:soma-runtime.parsing:parsing.cma}
+    %{lib:soma-runtime.printing:printing.cma}
+    %{lib:soma-runtime.tactics:tactics.cma}
+    %{lib:soma-runtime.vernac:vernac.cma}
+    %{lib:soma-runtime.plugins.ltac:ltac_plugin.cma}
+    %{lib:soma-runtime.plugins.ltac2:ltac2_plugin.cma}
+    %{lib:soma-runtime.dev:dev.cma}
+    %{lib:soma-runtime.debugger_support:debugger_support.cmi}
+    %{lib:soma-runtime.debugger_support:debugger_support.cma}
+    %{lib:soma-runtime.debugger_support:../META})
   (action (copy dune-dbg.in dune-dbg)))
 
 (alias
@@ -57,5 +57,5 @@
 
 (install
  (section lib)
- (package rocq-runtime)
+ (package soma-runtime)
  (files (glob_files (ml_toplevel/** with_prefix dev/ml_toplevel))))

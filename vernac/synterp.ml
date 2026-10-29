@@ -262,7 +262,7 @@ let warn_deprecated_from_Coq =
 let deprecated_Coq from qidl =
   let coq_id = Id.of_string "Coq" in
   let stdlib_id =
-    (* temporary hack to enable HoTT and UniMath to compile with rocq-core *)
+    (* temporary hack to enable HoTT and UniMath to compile with soma-core *)
     let qidl =
       let qid2idl qid =
         let p, id = Libnames.repr_qualid qid in

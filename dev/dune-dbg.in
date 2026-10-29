@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
         coqchk)
             shift
             exe=_build/default/checker/coqchk.bc
-            opts+=($(ocamlfind query -recursive -i-format rocq-runtime.checklib))
+            opts+=($(ocamlfind query -recursive -i-format soma-runtime.checklib))
             break
             ;;
         coqc)
@@ -43,7 +43,7 @@ done
 
 export ROCQLIB=$PWD/_build/install/default/lib/coq
 ocamldebug "${opts[@]}" \
-           $(ocamlfind query -recursive -i-format rocq-runtime.dev) \
-           $(ocamlfind query -recursive -i-format rocq-runtime.coqargs) \
-           $(ocamlfind query -i-format -descendants rocq-runtime.vernac) \
+           $(ocamlfind query -recursive -i-format soma-runtime.dev) \
+           $(ocamlfind query -recursive -i-format soma-runtime.coqargs) \
+           $(ocamlfind query -i-format -descendants soma-runtime.vernac) \
            -I +threads -I dev $exe "$@"

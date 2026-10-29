@@ -10,7 +10,7 @@
 (rule
  (targets test_suite_config.inc)
  (mode (promote (until-clean)))
- (deps (package rocq-runtime))
+ (deps (package soma-runtime))
  (action (with-stdout-to %{targets} (run tools/coq_config_to_make.exe rocq))))
 
 (rule
@@ -26,8 +26,8 @@
    ; For the changelog test
    ../config/coq_config.py
    (source_tree doc/changelog)
-   (package rocq-runtime)
-   (package rocq-core)
+   (package soma-runtime)
+   (package soma-core)
    (source_tree .))
    ; Finer-grained dependencies would look like this and be generated
    ; by coqdep; that would allow tests to be run incrementally.

@@ -8,7 +8,7 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-DECLARE PLUGIN "rocq-runtime.plugins.number_string_notation"
+DECLARE PLUGIN "soma-runtime.plugins.number_string_notation"
 
 {
 

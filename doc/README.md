@@ -150,7 +150,7 @@ environment variables to determine the locale; see the
 
 ### Libraries
 
-Most of the refman compiles with only the rocq-core package.
+Most of the refman compiles with only the soma-core package.
 However, in order to showcase some nice advertising
 examples with some external libraries included in Coq CI, a few code
 blocks in the refman depend on those libraries. These blocks are
@@ -205,5 +205,5 @@ The produced documents are stored in the described directories above,
 you can install them just by copying the contents to the desired
 directory.
 
-In the future, the `rocq-doc` and `rocq-core` opam packages will
+In the future, the `rocq-doc` and `soma-core` opam packages will
 install the documentation automatically.

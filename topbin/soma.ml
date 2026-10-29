@@ -65,7 +65,7 @@ let exit_code = function
   | Unix.WSIGNALED _ | Unix.WSTOPPED _ -> 1
 
 let compile args =
-  let prog = get_worker_path { package = "rocq-runtime"; basename = "rocqworker" } in
+  let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
   let argv = Array.of_list (prog :: "--kind=compile" :: args) in
   let out_r, out_w = Unix.pipe ~cloexec:true () in
   let pid = Unix.create_process prog argv Unix.stdin out_w Unix.stderr in

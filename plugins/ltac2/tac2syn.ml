@@ -109,7 +109,7 @@ let declare_default_scope () =
   Lib.add_leaf (inDefaultScope sc)
 
 let () =
-  Mltop.(declare_cache_obj_full (interp_only_obj declare_default_scope) "rocq-runtime.plugins.ltac2")
+  Mltop.(declare_cache_obj_full (interp_only_obj declare_default_scope) "soma-runtime.plugins.ltac2")
 
 let default_scope () = match !default_scope with
   | Some v -> v

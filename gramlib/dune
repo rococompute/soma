@@ -1,5 +1,5 @@
 (library
  (name gramlib)
- (public_name rocq-runtime.gramlib)
+ (public_name soma-runtime.gramlib)
  (modules_without_implementation plexing)
- (libraries rocq-runtime.lib))
+ (libraries soma-runtime.lib))

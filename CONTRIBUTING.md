@@ -939,7 +939,7 @@ changes in the core team membership (until we get a more formal
 joining and leaving process).
 
 The core developers are the members of the **@rocq-prover/core** team ([member
-list][rocq-core] only visible to the Rocq organization members because
+list][soma-core] only visible to the Rocq organization members because
 of a limitation of GitHub). They are also listed on the
 [Rocq Team page][rocq-team].
 
@@ -1316,7 +1316,7 @@ can be found [on the wiki][wiki-CUDW].
 [rocq-community-maintainer-wanted]: https://github.com/rocq-community/manifesto/issues?q=is%3Aissue+is%3Aopen+label%3Amaintainer-wanted
 [rocq-community-manifesto]: https://github.com/rocq-community/manifesto
 [rocq-community-wiki]: https://github.com/rocq-community/manifesto/wiki
-[rocq-core]: https://github.com/orgs/rocq-prover/teams/core/members
+[soma-core]: https://github.com/orgs/rocq-prover/teams/core/members
 [rocqdoc-documentation]: https://rocq-prover.org/refman/using/tools/coqdoc.html
 [Rocq-books]: https://rocq-prover.org/books
 [Rocq-issue-tracker]: https://github.com/rocq-prover/rocq/issues

@@ -12,10 +12,10 @@ Require Import Ltac2.Init.
 
 Ltac2 Type t := ident.
 
-Ltac2 @ external equal : t -> t -> bool := "rocq-runtime.plugins.ltac2" "ident_equal".
+Ltac2 @ external equal : t -> t -> bool := "soma-runtime.plugins.ltac2" "ident_equal".
 
-Ltac2 @ external of_string : string -> t option := "rocq-runtime.plugins.ltac2" "ident_of_string".
+Ltac2 @ external of_string : string -> t option := "soma-runtime.plugins.ltac2" "ident_of_string".
 
-Ltac2 @ external to_string : t -> string := "rocq-runtime.plugins.ltac2" "ident_to_string".
+Ltac2 @ external to_string : t -> string := "soma-runtime.plugins.ltac2" "ident_to_string".
 
-Ltac2 @external print : ident -> message := "rocq-runtime.plugins.ltac2" "message_of_ident".
+Ltac2 @external print : ident -> message := "soma-runtime.plugins.ltac2" "message_of_ident".

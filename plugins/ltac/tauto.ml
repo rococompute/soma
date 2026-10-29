@@ -22,7 +22,7 @@ open Proofview.Notations
 
 module NamedDecl = Context.Named.Declaration
 
-let tauto_plugin = "rocq-runtime.plugins.tauto"
+let tauto_plugin = "soma-runtime.plugins.tauto"
 
 let assoc_var s ist =
   let v = Id.Map.find (Names.Id.of_string s) ist.lfun in

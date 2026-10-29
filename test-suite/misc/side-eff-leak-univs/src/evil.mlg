@@ -1,4 +1,4 @@
-DECLARE PLUGIN "rocq-runtime.plugins.evil"
+DECLARE PLUGIN "soma-runtime.plugins.evil"
 
 {
 open Ltac_plugin

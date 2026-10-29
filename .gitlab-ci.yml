@@ -84,7 +84,7 @@ before_script:
   script:
     - cp dev/ci/dune-workspace.ci dune-workspace
 
-    - PKGS=rocq-runtime,rocq-core
+    - PKGS=soma-runtime,soma-core
     - dev/ci/gitlab-section.sh start coq.clean coq.clean
     - make clean # ensure that `make clean` works on a fresh clone
     - dev/ci/gitlab-section.sh end coq.clean
@@ -243,12 +243,12 @@ before_script:
   # OPAM will build out-of-tree so no point in importing artifacts
   script:
     - if [ "$ROCQ_CI_NATIVE" = true ]; then opam install -y rocq-native; fi
-    - opam pin add --kind=path rocq-runtime.dev .
-    - opam pin add --kind=path rocq-core.dev .
+    - opam pin add --kind=path soma-runtime.dev .
+    - opam pin add --kind=path soma-core.dev .
     - if [ "$ROCQ_CI_NATIVE" = true ]; then echo "Definition f x := x + x." > test_native.v; fi
     - if [ "$ROCQ_CI_NATIVE" = true ]; then rocq c test_native.v; fi
     - if [ "$ROCQ_CI_NATIVE" = true ]; then test -f .coq-native/Ntest_native.cmxs; fi
-    - opam pin add --kind=path rocq-test-suite.dev . -v
+    - opam pin add --kind=path soma-test-suite.dev . -v
   after_script:
     - eval $(opam env)
     - du -ha "$(coqc -where)" > files.listing
@@ -343,7 +343,7 @@ build:base:dev:dune:
   script:
     - cp theories/Corelib/dune.disabled theories/Corelib/dune
     - cp theories/Ltac2/dune.disabled theories/Ltac2/dune
-    - dune build -p rocq-runtime,rocq-core
+    - dune build -p soma-runtime,soma-core
     - ls _build/install/default/lib/coq/theories/Init/Prelude.vo
     - ls _build/install/default/lib/coq/user-contrib/Ltac2/Ltac2.vo
   only: *full-ci

@@ -85,7 +85,7 @@ dev-targets:
 	@echo "files that world will build. We provide some useful subtargets here:"
 	@echo ""
 	@echo "  - theories-foo: for each directory theories/Corelib/Foo, build the vo files for it and set them up in _build/install/default."
-	@echo "    For instance the init target builds the prelude, combined with rocq-runtime.install it produces a fully functional layout in _build/install/default."
+	@echo "    For instance the init target builds the prelude, combined with soma-runtime.install it produces a fully functional layout in _build/install/default."
 
 help-install:
 	@echo ""
@@ -93,13 +93,13 @@ help-install:
 	@echo "documentation for more details. A quick install of Rocq alone can be done with"
 	@echo ""
 	@echo " $$ make dunestrap"
-	@echo " $$ dune build -p rocq-runtime,rocq-core"
-	@echo " $$ dune install --prefix=<install_prefix> rocq-runtime rocq-core"
+	@echo " $$ dune build -p soma-runtime,soma-core"
+	@echo " $$ dune install --prefix=<install_prefix> soma-runtime soma-core"
 	@echo ""
 	@echo " Provided opam/dune packages are:"
 	@echo ""
-	@echo "  - rocq-runtime: base Rocq package, toplevel compilers, plugins, tools, no corelib, no stdlib, no GTK"
-	@echo "  - rocq-core: Rocq's prelude and corelib"
+	@echo "  - soma-runtime: base Rocq package, toplevel compilers, plugins, tools, no corelib, no stdlib, no GTK"
+	@echo "  - soma-core: Rocq's prelude and corelib"
 	@echo ""
 	@echo " To build a package, you can use:"
 	@echo ""
@@ -126,7 +126,7 @@ DUNESTRAPOPT=--root .
 
 # We regenerate always as to correctly track deps, can do better
 # We do a single call to dune as to avoid races and locking
-ifneq ($(COQ_SPLIT),) # avoid depending on local rocq-runtime
+ifneq ($(COQ_SPLIT),) # avoid depending on local soma-runtime
 _build/default/corelib_dune_split _build/default/ltac2_dune_split _build/default/stdlib_dune_split _build/default/soma_dune_split .dune-stamp: FORCE
 	dune build $(DUNEOPT) $(DUNESTRAPOPT) corelib_dune_split ltac2_dune_split stdlib_dune_split soma_dune_split
 	touch .dune-stamp
@@ -169,7 +169,7 @@ dunestrap: $(DUNE_FILES)
 states: world
 	echo "'make states' is an alias for 'make world'"
 
-MAIN_TARGETS:=rocq-runtime.install rocq-core.install
+MAIN_TARGETS:=soma-runtime.install soma-core.install
 
 world: dunestrap
 	+$(WITHJOBS) dune build $(DUNEOPT) $(MAIN_TARGETS)
@@ -291,7 +291,7 @@ $(foreach subdir,$(wildcard theories/Corelib/*/),$(eval $(call subtarget,$(subdi
 
 # Other common dev targets:
 #
-# dune build rocq-runtime.install
+# dune build soma-runtime.install
 # dune build coq.install
 #
 # Packaging / OPAM targets:

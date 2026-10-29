@@ -13,7 +13,7 @@
 (** #<style> .doc { font-family: monospace; white-space: pre; } </style># **)
 
 Require Import ssrmatching.
-Declare ML Module "rocq-runtime.plugins.ssreflect".
+Declare ML Module "soma-runtime.plugins.ssreflect".
 
 (**
  This file is the Gallina part of the ssreflect plugin implementation.

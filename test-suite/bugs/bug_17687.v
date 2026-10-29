@@ -1,6 +1,6 @@
 (* -*- coq-prog-args: ("-noinit"); -*- *)
 
-Declare ML Module "rocq-runtime.plugins.ltac".
+Declare ML Module "soma-runtime.plugins.ltac".
 Global Set Default Proof Mode "Classic".
 
 Inductive paths {A : Type} (a : A) : forall _:A, Type := idpath : paths a a.

@@ -1582,14 +1582,14 @@ let () =
       let v = Id.Map.find (Names.Id.of_string "pattern") ist.lfun in
       Value.cast (topwit wit_ssrpatternarg) v in
     ssrpatterntac arg in
-  let name = { mltac_plugin = "rocq-runtime.plugins.ssrmatching"; mltac_tactic = "ssrpattern"; } in
+  let name = { mltac_plugin = "soma-runtime.plugins.ssrmatching"; mltac_tactic = "ssrpattern"; } in
   let () = Tacenv.register_ml_tactic name [|mltac|] in
   let tac =
     CAst.make (TacFun ([Name (Id.of_string "pattern")],
       CAst.make (TacML ({ mltac_name = name; mltac_index = 0 }, [])))) in
   let obj () =
     Tacenv.register_ltac true false (Id.of_string "ssrpattern") tac in
-  Mltop.(declare_cache_obj_full (interp_only_obj obj) "rocq-runtime.plugins.ssrmatching")
+  Mltop.(declare_cache_obj_full (interp_only_obj obj) "soma-runtime.plugins.ssrmatching")
 
 let ssrinstancesof arg =
   Proofview.Goal.enter begin fun gl ->

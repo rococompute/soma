@@ -32,7 +32,7 @@ open Ssrcommon
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ssreflect"
+DECLARE PLUGIN "soma-runtime.plugins.ssreflect"
 
 (* The user is supposed to Require Import ssreflect or Require ssreflect   *)
 (* and Import ssreflect.SsrSyntax to obtain these keywords and as a        *)

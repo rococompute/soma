@@ -20,7 +20,7 @@ open Hints
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ltac"
+DECLARE PLUGIN "soma-runtime.plugins.ltac"
 
 (* Hint bases *)
 

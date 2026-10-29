@@ -1,4 +1,4 @@
-Declare ML Module "rocq-test-suite.attribute".
+Declare ML Module "soma-test-suite.attribute".
 
 #[print]
 Definition foo : True := I.

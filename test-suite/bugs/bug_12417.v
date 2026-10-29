@@ -1,4 +1,4 @@
-Declare ML Module "rocq-runtime.plugins.funind".
+Declare ML Module "soma-runtime.plugins.funind".
 
 Inductive tm :=
 | E: nat -> tm

@@ -1,6 +1,6 @@
 (library
  (name printing)
  (synopsis "Rocq's Term Pretty Printing Library")
- (public_name rocq-runtime.printing)
+ (public_name soma-runtime.printing)
  (wrapped false)
  (libraries parsing proofs))

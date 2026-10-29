@@ -8,4 +8,4 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-Declare ML Module "rocq-runtime.plugins.extraction".
+Declare ML Module "soma-runtime.plugins.extraction".

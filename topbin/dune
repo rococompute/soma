@@ -1,6 +1,6 @@
 (library
  (name rocqshim)
- (public_name rocq-runtime.rocqshim)
+ (public_name soma-runtime.rocqshim)
  (synopsis "Rocq support for finding and exec-ing subcommands")
  (wrapped false) ; no point repeating the Rocqshim name
  (modules rocqshim)
@@ -8,7 +8,7 @@
 
 (executable
  (public_name rocq)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules rocq)
  (modes exe byte)
  ; we statically link the "small" subcommands instead of having separate binaries
@@ -16,21 +16,21 @@
 
 (install
  (section bin)
- (package rocq-runtime)
+ (package soma-runtime)
  (files (rocq.bc as rocq.byte)))
 
 ; soma: Soma's command line (soma build FILE is rocq c FILE)
 (executable
  (name soma)
  (public_name soma)
- (package rocq-runtime)
+ (package soma-runtime)
  (modules soma)
  (libraries rocqshim))
 
 (executable
  (name rocqnative)
  (modules rocqnative)
- (libraries rocq-runtime.kernel)
+ (libraries soma-runtime.kernel)
  (modes exe byte) ; NB byte not installed, just exists for debugger
  (link_flags -linkall))
 
@@ -39,7 +39,7 @@
  (name rocqworker)
  (modules rocqworker)
  (modes exe byte)
- (libraries rocq-runtime.toplevel))
+ (libraries soma-runtime.toplevel))
  ; Adding -ccopt -flto to links options could be interesting, however,
  ; it doesn't work on Windows
 
@@ -47,11 +47,11 @@
  (name rocqworker_with_drop)
  (modules rocqworker_with_drop)
  (modes byte)
- (libraries compiler-libs.toplevel rocq-runtime.config.byte rocq-runtime.toplevel rocq-runtime.dev findlib.top))
+ (libraries compiler-libs.toplevel soma-runtime.config.byte soma-runtime.toplevel soma-runtime.dev findlib.top))
 
 (install
  (section libexec)
- (package rocq-runtime)
+ (package soma-runtime)
  (files
   (rocqworker.exe as rocqworker)
   (rocqworker.bc as rocqworker.byte)

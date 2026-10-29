@@ -16,7 +16,7 @@ open Classes
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.ltac"
+DECLARE PLUGIN "soma-runtime.plugins.ltac"
 
 (** Options: depth, debug and transparency settings. *)
 
@@ -106,7 +106,7 @@ let head_of_constr id c =
   let c = Option.get @@ Tacinterp.Value.to_constr c in
   Class_tactics.head_of_constr id c
 
-let () = Tacentries.ml_tactic_extend ~plugin:"rocq-runtime.plugins.ltac" ~name:"head_of_constr"
+let () = Tacentries.ml_tactic_extend ~plugin:"soma-runtime.plugins.ltac" ~name:"head_of_constr"
   ~local:true (MLTyArg (MLTyArg MLTyNil)) head_of_constr
 
 }

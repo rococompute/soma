@@ -27,15 +27,15 @@ doc: "https://rocq-prover.org/docs/"
 bug-reports: "https://github.com/rocq-prover/rocq/issues"
 depends: [
   "dune" {>= "3.21"}
-  "rocq-runtime" {= version}
+  "soma-runtime" {= version}
   "odoc" {with-doc}
 ]
 dev-repo: "git+https://github.com/rocq-prover/rocq.git"
 x-maintenance-intent: ["(any)"]
 build: [
   ["dune" "subst"] {dev}
-  # We tell dunestrap to use coq-config from rocq-runtime
-  [ make "dunestrap" "COQ_SPLIT=1" "DUNESTRAPOPT=-p rocq-core"]
+  # We tell dunestrap to use coq-config from soma-runtime
+  [ make "dunestrap" "COQ_SPLIT=1" "DUNESTRAPOPT=-p soma-core"]
   [
     "dune"
     "build"

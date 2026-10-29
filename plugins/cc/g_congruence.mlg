@@ -16,7 +16,7 @@ open Stdarg
 
 }
 
-DECLARE PLUGIN "rocq-runtime.plugins.cc"
+DECLARE PLUGIN "soma-runtime.plugins.cc"
 
 (* Tactic registration *)
 

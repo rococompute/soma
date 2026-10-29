@@ -19,7 +19,7 @@ not the vernacular standard library.
 
 Note that in this setup, Rocq needs to be started with the -boot and
 -noinit options, as will otherwise fail to find the regular Rocq
-prelude, now living in the rocq-core package."""
+prelude, now living in the soma-core package."""
 maintainer: [
   "The Rocq development team <rocq+rocq-development@discoursemail.com>"
 ]
@@ -41,10 +41,7 @@ depopts: [
   "memprof-limits" {>= "0.3.0"}
   "memtrace"
 ]
-conflicts: [
-  "coq" {< "8.17"}
-  "coq-core" {< "8.21"}
-]
+conflicts: ["rocq-runtime" "rocq-core" "coq-core" "coq"]
 dev-repo: "git+https://github.com/rocq-prover/rocq.git"
 x-maintenance-intent: ["(any)"]
 build: [

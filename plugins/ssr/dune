@@ -1,10 +1,10 @@
 (library
  (name ssreflect_plugin)
- (public_name rocq-runtime.plugins.ssreflect)
+ (public_name soma-runtime.plugins.ssreflect)
  (synopsis "Rocq's ssreflect plugin")
  (modules_without_implementation ssrast)
  (flags :standard -open Gramlib)
- (libraries rocq-runtime.plugins.ssrmatching))
+ (libraries soma-runtime.plugins.ssrmatching))
 
 (rule
  (targets ssrvernac.ml)
