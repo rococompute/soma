@@ -623,7 +623,7 @@ let parse_after_qmark ~diff_mode ttree loc bp s =
 (* between_commands is used to parse bullets and { and } differently depending on the context. *)
 let between_commands = ref true
 
-(* Soma: JSX. Under [Set JSX Syntax] (set by Soma's Reason
+(* Soma: JSX. Under [Set JSX Syntax] (set by Soma's JSX
    library), [<] directly followed by a letter opens a tag and [</]
    directly followed by a letter closes one, so that [x < y] needs a space
    or a non-letter after [<]; [<>] and [</>] open and close a fragment

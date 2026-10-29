@@ -1,6 +1,6 @@
 (** What is proved about the counter of reason_counter.soma. This file is
     read after reason_counter.soma, in its environment: [step], [limit],
-    [counter] and the Reason library are in scope, without importing
+    [counter] and the JSX library are in scope, without importing
     anything. Building or running reason_counter.soma checks it, and fails
     if a proof does not hold. *)
 

@@ -129,7 +129,7 @@ let sigref loc = Libnames.qualid_of_string ~loc "Corelib.Init.Specif.sig"
 let mk_delim ~loc c d = CAst.make ~loc @@ CDelimiters (fst d, snd d, c)
 
 (* Soma: JSX, under [Set JSX Syntax] (see CLexer), for Soma's
-   Reason library. The lexer produces the keywords [<], [</], [<>] and
+   JSX library. The lexer produces the keywords [<], [</], [<>] and
    [</>] of JSX, which these entries consume. *)
 let jsx_keyword entry_name kw =
   Procq.Entry.(of_parser entry_name { parser_fun = fun kwstate strm ->
@@ -143,7 +143,7 @@ let jsx_fragment_open = jsx_keyword "jsx_fragment_open" CLexer.jsx_fragment_open
 let jsx_fragment_close = jsx_keyword "jsx_fragment_close" CLexer.jsx_fragment_close
 
 let jsx_ref ~loc name =
-  CAst.make ~loc @@ CRef (qualid_of_string ~loc ("Soma.Reason." ^ name), None)
+  CAst.make ~loc @@ CRef (qualid_of_string ~loc ("Soma.JSX." ^ name), None)
 
 let jsx_app ~loc f args = CAst.make ~loc @@ CApp (f, List.map (fun a -> (a, None)) args)
 

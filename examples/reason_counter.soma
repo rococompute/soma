@@ -11,7 +11,7 @@
     this file checks those proofs too, for every list of clicks, not some.
 
         soma run examples/reason_counter.soma *)
-Require Import Reason.
+Require Import JSX.
 
 Inductive action := Increment | Decrement | Reset.
 

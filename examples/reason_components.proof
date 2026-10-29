@@ -1,6 +1,6 @@
 (** What is proved about the components of reason_components.soma. This
     file is read after reason_components.soma, in its environment: the
-    components and the Reason library are in scope, JSX included. Building
+    components and the JSX library are in scope, JSX included. Building
     or running reason_components.soma checks it, and fails if a proof does
     not hold. *)
 

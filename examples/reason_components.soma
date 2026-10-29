@@ -1,4 +1,4 @@
-(** Reason React components in Soma. [Require Import Reason.] turns on
+(** React components in Soma. [Require Import JSX.] turns on
     JSX, as in ReasonReact: [<div className="x"> ... </div>] is an HTML
     element, [<Greeting name="world" />] calls the component [Greeting]
     with the prop [name], and [<> ... </>] is a fragment. Running the
@@ -12,7 +12,7 @@
 
     With JSX on, [<] directly followed by a letter opens a tag: a comparison
     is written [x < y], and "not equal" is [!=]. *)
-Require Import Reason.
+Require Import JSX.
 
 (** A component's props are its arguments in braces. [name] is a [string]:
     [<Greeting name=42 />] is rejected when the program is checked, and so

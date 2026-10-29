@@ -8,7 +8,7 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * Reason React components, [Soma.Reason]
+(** * React components with JSX, [Soma.JSX]
 
     Not part of the prelude. A program that requires it writes JSX, as in
     ReasonReact, for elements and components:

@@ -560,14 +560,14 @@ Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
 Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
 and key-value stores, and state shared between `serve` handlers.
 
-## Reason: JSX components and apps
+## JSX: components and apps
 
-`theories/Soma/Reason.v` (not in the prelude) brings ReasonReact's JSX
+`theories/Soma/JSX.v` (not in the prelude) brings ReasonReact's JSX
 to Soma, for components and apps that are checked, and can be proved
 about, but not yet compiled to JavaScript.
 
 ```coq
-Require Import Reason.
+Require Import JSX.
 
 Greeting {name : string} := <p> "Hello, " name "!" </p>.
 page := <main> <Greeting name="world" /> <> <i> "a" </i> <b> "b" </b> </> </main>.
@@ -589,7 +589,7 @@ render page.   (* "<main><p>Hello, world!</p><i>a</i><b>b</b></main>" *)
   `{to_string count}`; a string child is a text element (a coercion).
 - `render` turns an element into HTML, leaving events out.
 
-JSX is read by the lexer under `Set JSX Syntax`, which `Reason.v` exports
+JSX is read by the lexer under `Set JSX Syntax`, which `JSX.v` exports
 (`parsing/cLexer.ml`, `parsing/g_constr.mlg`). With it, `<` directly
 followed by a letter opens a tag and `</` directly followed by a letter
 closes one, so a comparison is written `x < y` (`x<10` and `<=` are

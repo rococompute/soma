@@ -47,8 +47,8 @@ soma run examples/hello.soma
   `n` even". `lia`, `nia` and `lra` do the arithmetic.
 - `sqrt2_irrational_bottom_up.soma` and `.proof`: the same proof bottom
   up, as separate named lemmas proved before the theorem that uses them.
-- `reason_components.soma`: Reason React components with JSX
-  (`Require Import Reason.`): typed props, an untyped (`Any`) prop checked
+- `reason_components.soma`: React components with JSX
+  (`Require Import JSX.`): typed props, an untyped (`Any`) prop checked
   when the page is built, a fragment, rendered to HTML. What is proved
   about them (`Greeting` escapes any name) is in `reason_components.proof`.
 - `reason_counter.soma`: a counter app (state, actions, a view);
