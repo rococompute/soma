@@ -32,7 +32,9 @@ soma run examples/hello.soma
   ints and strings, `g` turns ints into even ints (a number with a proof
   that it is even), and `h` and `j` take arguments of the types they
   compute. The types are passed as codes (`Int`, `Str`), since a function
-  cannot ask a type what it is.
+  cannot ask a type what it is. `type_functions.proof` proves that `j`
+  cannot be given an odd number, and that it returns a larger number for
+  any number above 1.
 - `sqrt2_irrational.soma`: a proof that the square root of 2 is irrational
   (`irrational (sqrt 2)`), top down: the theorem first, then a proof that
   reduces it with `enough` to the rationals, to whole numbers, and to
