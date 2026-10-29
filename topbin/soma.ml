@@ -27,13 +27,14 @@ let usage = {|Usage:
 Commands:
   build                       Check a program and keep its MirageOS image, if any.
   run                         Check a program and print its result, or run its image.
+  repl                        Start an interactive session, with FILE loaded if given.
   help                        Show help.
 
 Options:
   -v, --verbose               (build) Print the value of each bare term.
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
 
-Other options are rocq c's (rocq c --help). Proofs about FILE.soma go in
+soma build --help lists the other options. Proofs about FILE.soma go in
 FILE.proof, which build and run also check.
 |}
 
@@ -229,9 +230,52 @@ let run file args image_args =
     in
     finish (if failed then 1 else 0)
 
+let is_help a = a = "-h" || a = "-help" || a = "--help"
+
+(* the arguments of soma, not those after -- for a Mirage image *)
+let rec before_image_args = function
+  | "--" :: _ | [] -> []
+  | a :: rest -> a :: before_image_args rest
+
+(* The options of build and run are rocq c's, whose list is reworded for
+   soma *)
+let options_help command =
+  let opts, _ = parse_opts [] in
+  init opts [];
+  (* rocq c prints them on stderr *)
+  let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
+  let out_r, out_w = Unix.pipe ~cloexec:true () in
+  let pid = Unix.create_process prog [| prog; "--kind=compile"; "--help" |] Unix.stdin out_w out_w in
+  Unix.close out_w;
+  let output = In_channel.input_all (Unix.in_channel_of_descr out_r) in
+  Unix.close out_r;
+  let code = exit_code (wait pid) in
+  let reword l =
+    if starts_with ~prefix:"Usage: rocq compile" l then "Usage: soma " ^ command ^ " FILE [options]"
+    else if l = "Rocq options are:" then "Options:"
+    else if l = "rocq compile specific options:" then "Output options:"
+    else l
+  in
+  print_string (String.concat "\n" (List.map reword (lines output)));
+  exit code
+
+(* Rocq's read-eval-print loop, with FILE's definitions loaded first *)
+let repl args =
+  let opts, args = parse_opts args in
+  init opts args;
+  let args = match args with
+    | file :: rest when file <> "" && file.[0] <> '-' -> "-l" :: file :: rest
+    | args -> args
+  in
+  let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
+  exec_or_create_process prog (Array.of_list (prog :: "--kind=repl" :: args))
+
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
+  | ("build" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
+    options_help command
+  | "repl" :: args -> repl args
   | "build" :: rest ->
     (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in

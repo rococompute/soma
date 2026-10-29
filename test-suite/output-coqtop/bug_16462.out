@@ -1,12 +1,12 @@
 
-Rocq < foo is defined
+Soma < foo is defined
 
-Rocq < bar is defined
+Soma < bar is defined
 
-Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < baz is defined
+Soma < Soma < Soma < Soma < Soma < Soma < Soma < baz is defined
 
-Rocq < 
-Rocq < 1 goal
+Soma < 
+Soma < 1 goal
   
   ============================
   True

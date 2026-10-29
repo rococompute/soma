@@ -1,57 +1,57 @@
 
-Rocq < 
-Rocq < 
-Rocq < 
-Rocq < 
-Rocq < Rocq < T is defined
+Soma < 
+Soma < 
+Soma < 
+Soma < 
+Soma < Soma < T is defined
 T_rect is defined
 T_ind is defined
 T_rec is defined
 T_sind is defined
 
-Rocq < Parsing is defined
+Soma < Parsing is defined
 Parsing_rect is defined
 Parsing_ind is defined
 Parsing_rec is defined
 Parsing_sind is defined
 
-Rocq < Rocq < 
-Rocq < Rocq < Identifier 'op22' now a keyword
+Soma < Soma < 
+Soma < Soma < Identifier 'op22' now a keyword
 
-Rocq < Identifier 'op12' now a keyword
+Soma < Identifier 'op12' now a keyword
 
-Rocq < Identifier 'op10' now a keyword
+Soma < Identifier 'op10' now a keyword
 
-Rocq < Rocq < Setting notation at level 0.
+Soma < Soma < Setting notation at level 0.
 
-Rocq < Setting notation at level 0.
+Soma < Setting notation at level 0.
 
-Rocq < Setting notation at level 0.
+Soma < Setting notation at level 0.
 
-Rocq < Setting notation at level 0.
+Soma < Setting notation at level 0.
 
-Rocq < Rocq < Identifier 'atom3' now a keyword
+Soma < Soma < Identifier 'atom3' now a keyword
 
-Rocq < Identifier 'atom2' now a keyword
+Soma < Identifier 'atom2' now a keyword
 
-Rocq < Identifier 'atom1' now a keyword
+Soma < Identifier 'atom1' now a keyword
 
-Rocq < 
-Rocq < Rocq < Identifier 'pre22' now a keyword
+Soma < 
+Soma < Soma < Identifier 'pre22' now a keyword
 
-Rocq < Identifier 'pre21' now a keyword
+Soma < Identifier 'pre21' now a keyword
 
-Rocq < Identifier 'pre11' now a keyword
+Soma < Identifier 'pre11' now a keyword
 
-Rocq < Identifier 'pre10' now a keyword
+Soma < Identifier 'pre10' now a keyword
 
-Rocq < 
-Rocq < 
-Rocq < Rocq < Identifier 'post12' now a keyword
+Soma < 
+Soma < 
+Soma < Soma < Identifier 'post12' now a keyword
 
-Rocq < Identifier 'post11' now a keyword
+Soma < Identifier 'post11' now a keyword
 
-Rocq < Rocq < Entry custom:Top.expr is
+Soma < Soma < Entry custom:Top.expr is
 [ "3" RIGHTA
   [ SELF; "op22"; NEXT
   | "atom3" ]
@@ -73,7 +73,7 @@ Rocq < Rocq < Entry custom:Top.expr is
   | IDENT "atom0" ] ]
 
 
-Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Rocq < Toplevel input, characters 496-503:
+Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Soma < Toplevel input, characters 496-503:
 > Check Reject 10 [2 atom3 ].
 >                    ^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -82,10 +82,10 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 11 E
+Soma < Accept 11 E
      : Parsing
 
-Rocq < Toplevel input, characters 19-26:
+Soma < Toplevel input, characters 19-26:
 > Check Reject 12 [1 atom2 ].
 >                    ^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -94,10 +94,10 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 13 E
+Soma < Accept 13 E
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 20 [2 pre22 atom3 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -106,10 +106,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 21 (F E)
+Soma < Accept 21 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-32:
+Soma < Toplevel input, characters 19-32:
 > Check Reject 22 [1 pre22 atom2 ].
 >                    ^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -118,7 +118,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 30 [2 pre21 atom2 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -127,10 +127,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 31 (F E)
+Soma < Accept 31 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-32:
+Soma < Toplevel input, characters 19-32:
 > Check Reject 32 [1 pre21 atom1 ].
 >                    ^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -139,7 +139,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 40 [2 pre11 atom2 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -148,7 +148,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 25-30:
+Soma < Toplevel input, characters 25-30:
 > Check Reject 41 [1 pre11 atom2 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -157,10 +157,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 42 (F E)
+Soma < Accept 42 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-32:
+Soma < Toplevel input, characters 19-32:
 > Check Reject 43 [0 pre11 atom1 ].
 >                    ^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -169,7 +169,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 50 [1 pre10 atom1 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -178,10 +178,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 51 (F E)
+Soma < Accept 51 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-32:
+Soma < Toplevel input, characters 19-32:
 > Check Reject 52 [0 pre10 atom0 ].
 >                    ^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -190,7 +190,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 60 [1 pre00 atom1 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -199,7 +199,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 25-30:
+Soma < Toplevel input, characters 25-30:
 > Check Reject 61 [0 pre00 atom1 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -208,10 +208,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 62 (F E)
+Soma < Accept 62 (F E)
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 26-31:
+Soma < Soma < Toplevel input, characters 26-31:
 > Check Reject 70 [0 pre0x atom0 ].
 >                          ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -220,7 +220,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 20-25:
+Soma < Soma < Toplevel input, characters 20-25:
 > Check Reject 80 [2 atom3 post12 ].
 >                    ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -229,7 +229,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 19-24:
+Soma < Toplevel input, characters 19-24:
 > Check Reject 81 [2 atom2 post12 ].
 >                    ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -239,10 +239,10 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 82 (F E)
+Soma < Accept 82 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-31:
+Soma < Toplevel input, characters 19-31:
 > Check Reject 83 [1 atom1 post12 ].
 >                    ^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -254,7 +254,7 @@ Quickfix:
 Replace Toplevel input, characters 3154-3154 with (
 Replace Toplevel input, characters 3166-3166 with )
 
-Rocq < Rocq < Toplevel input, characters 20-25:
+Soma < Soma < Toplevel input, characters 20-25:
 > Check Reject 90 [2 atom2 post11 ].
 >                    ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -263,13 +263,13 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 91 (F E)
+Soma < Accept 91 (F E)
      : Parsing
 
-Rocq < Accept 92 (F E)
+Soma < Accept 92 (F E)
      : Parsing
 
-Rocq < Toplevel input, characters 19-33:
+Soma < Toplevel input, characters 19-33:
 > Check Reject 93 [0 atom1 post11 ].
 >                    ^^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -278,7 +278,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 21-26:
+Soma < Soma < Toplevel input, characters 21-26:
 > Check Reject 100 [3 atom3 op22 atom2 ].
 >                     ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -288,7 +288,7 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 101 [3 atom2 op22 atom3 ].
 >                                ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -297,10 +297,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 102 (G E E)
+Soma < Accept 102 (G E E)
      : Parsing
 
-Rocq < Toplevel input, characters 20-36:
+Soma < Toplevel input, characters 20-36:
 > Check Reject 103 [2 atom2 op22 atom2 ].
 >                     ^^^^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -312,7 +312,7 @@ Quickfix:
 Replace Toplevel input, characters 3452-3452 with (
 Replace Toplevel input, characters 3468-3468 with )
 
-Rocq < Rocq < Toplevel input, characters 21-26:
+Soma < Soma < Toplevel input, characters 21-26:
 > Check Reject 110 [2 atom2 op12 atom2 ].
 >                     ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -322,7 +322,7 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 111 [2 atom1 op12 atom3 ].
 >                                ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -331,10 +331,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 112 (G E E)
+Soma < Accept 112 (G E E)
      : Parsing
 
-Rocq < Toplevel input, characters 20-36:
+Soma < Toplevel input, characters 20-36:
 > Check Reject 113 [1 atom1 op12 atom2 ].
 >                     ^^^^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -346,7 +346,7 @@ Quickfix:
 Replace Toplevel input, characters 3613-3613 with (
 Replace Toplevel input, characters 3629-3629 with )
 
-Rocq < Rocq < Toplevel input, characters 21-26:
+Soma < Soma < Toplevel input, characters 21-26:
 > Check Reject 120 [1 atom2 op10 atom0].
 >                     ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -355,7 +355,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 121 [1 atom1 op10 atom1].
 >                                ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -364,10 +364,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 122 (G E E)
+Soma < Accept 122 (G E E)
      : Parsing
 
-Rocq < Toplevel input, characters 20-37:
+Soma < Toplevel input, characters 20-37:
 > Check Reject 123 [0 atom1 op10 atom0].
 >                     ^^^^^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -376,7 +376,7 @@ Insert parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Toplevel input, characters 27-32:
+Soma < Soma < Toplevel input, characters 27-32:
 > Check Reject 130 [2 pre22 atom2 op12 atom2 ].
 >                           ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -386,7 +386,7 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 20-31:
+Soma < Toplevel input, characters 20-31:
 > Check Reject 131 [2 pre21 atom1 op12 atom2 ].
 >                     ^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -396,10 +396,10 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 132 (F (G E E))
+Soma < Accept 132 (F (G E E))
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 21-33:
+Soma < Soma < Toplevel input, characters 21-33:
 > Check Reject 140 [2 atom2 post12 op12 atom2 ].
 >                     ^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -409,7 +409,7 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 20-32:
+Soma < Toplevel input, characters 20-32:
 > Check Reject 141 [2 atom1 post12 op12 atom2 ].
 >                     ^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -419,13 +419,13 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 142 (G (F E) E)
+Soma < Accept 142 (G (F E) E)
      : Parsing
 
-Rocq < Rocq < Accept 150 (G E (F E))
+Soma < Soma < Accept 150 (G E (F E))
      : Parsing
 
-Rocq < Toplevel input, characters 37-42:
+Soma < Toplevel input, characters 37-42:
 > Check Reject 151 [2 atom1 op12 pre21 atom2 ].
 >                                      ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -434,10 +434,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 152 (G E (F E))
+Soma < Accept 152 (G E (F E))
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 32-37:
+Soma < Soma < Toplevel input, characters 32-37:
 > Check Reject 160 [2 atom1 op12 atom2 post12 ].
 >                                ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -447,10 +447,10 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 161 (G E (F E))
+Soma < Accept 161 (G E (F E))
      : Parsing
 
-Rocq < Toplevel input, characters 31-43:
+Soma < Toplevel input, characters 31-43:
 > Check Reject 162 [2 atom1 op10 atom1 post12 ].
 >                                ^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -459,13 +459,13 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 163 (F (G E E))
+Soma < Accept 163 (F (G E E))
      : Parsing
 
-Rocq < Rocq < Accept 170 (F (G E E))
+Soma < Soma < Accept 170 (F (G E E))
      : Parsing
 
-Rocq < Toplevel input, characters 26-42:
+Soma < Toplevel input, characters 26-42:
 > Check Reject 171 [1 pre10 atom1 op10 atom0 ].
 >                           ^^^^^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -474,10 +474,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 172 (G (F E) E)
+Soma < Accept 172 (G (F E) E)
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 21-33:
+Soma < Soma < Toplevel input, characters 21-33:
 > Check Reject 180 [1 atom1 post12 op10 atom0 ].
 >                     ^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -486,10 +486,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 181 (G (F E) E)
+Soma < Accept 181 (G (F E) E)
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 32-43:
+Soma < Soma < Toplevel input, characters 32-43:
 > Check Reject 190 [1 atom1 op10 pre11 atom0 ].
 >                                ^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -498,7 +498,7 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Toplevel input, characters 31-42:
+Soma < Toplevel input, characters 31-42:
 > Check Reject 191 [1 atom1 op10 pre10 atom0 ].
 >                                ^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -507,10 +507,10 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Rocq < Accept 200 (F (G E E))
+Soma < Soma < Accept 200 (F (G E E))
      : Parsing
 
-Rocq < Toplevel input, characters 20-43:
+Soma < Toplevel input, characters 20-43:
 > Check Reject 201 [1 atom1 op10 atom0 post12 ].
 >                     ^^^^^^^^^^^^^^^^^^^^^^^
 Error: In term, tolerating this expression at a higher level than expected by
@@ -522,10 +522,10 @@ Quickfix:
 Replace Toplevel input, characters 4794-4794 with (
 Replace Toplevel input, characters 4817-4817 with )
 
-Rocq < Accept 202 (F (G E E))
+Soma < Accept 202 (F (G E E))
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 32-37:
+Soma < Soma < Toplevel input, characters 32-37:
 > Check Reject 210 [2 atom1 op12 atom2 op12 atom2 ].
 >                                ^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -535,10 +535,10 @@ parentheses or try to lower the level at which the top symbol of this
 expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 211 (G E (G E E))
+Soma < Accept 211 (G E (G E E))
      : Parsing
 
-Rocq < Rocq < Toplevel input, characters 32-48:
+Soma < Soma < Toplevel input, characters 32-48:
 > Check Reject 220 [1 atom1 op10 atom1 op10 atom0 ].
 >                                ^^^^^^^^^^^^^^^^
 Error: In custom:Top.expr, tolerating this expression at a higher level than
@@ -547,22 +547,22 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 221 (G (G E E) E)
+Soma < Accept 221 (G (G E E) E)
      : Parsing
 
-Rocq < Rocq < 
-Rocq < Rocq < 
-Rocq < 
-Rocq < 
-Rocq < 
-Rocq < 
-Rocq < Rocq < 
-Rocq < 
-Rocq < 
-Rocq < 
-Rocq < Rocq < 
-Rocq < 
-Rocq < Rocq < Entry ltac_expr is
+Soma < Soma < 
+Soma < Soma < 
+Soma < 
+Soma < 
+Soma < 
+Soma < 
+Soma < Soma < 
+Soma < 
+Soma < 
+Soma < 
+Soma < Soma < 
+Soma < 
+Soma < Soma < Entry ltac_expr is
 [ "5" RIGHTA
   [ IDENT "atom5" ]
 | "4" LEFTA
@@ -946,7 +946,7 @@ Entry tactic_value is
   | constr_eval ] ]
 
 
-Rocq < Rocq < Toplevel input, characters 24-29:
+Soma < Soma < Toplevel input, characters 24-29:
 > Check Reject 230 ltac:(atom5 ; atom3).
 >                        ^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -958,58 +958,58 @@ Quickfix:
 Replace Toplevel input, characters 5725-5725 with (
 Replace Toplevel input, characters 5730-5730 with )
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 231 ltac:(atom4 ; atom4).
 >                                ^^^^^
 Error: The reference atom4 was not found in the current environment.
 
-Rocq < Accept 232 ?Goal
+Soma < Accept 232 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Accept 233 ?Goal
+Soma < Accept 233 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Rocq < Toplevel input, characters 30-35:
+Soma < Soma < Toplevel input, characters 30-35:
 > Check Reject 240 ltac:(pre43 atom4 ; atom3).
 >                              ^^^^^
 Error: The reference atom4 was not found in the current environment.
 
-Rocq < Accept 241 ?Goal
+Soma < Accept 241 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Toplevel input, characters 29-34:
+Soma < Toplevel input, characters 29-34:
 > Check Reject 242 ltac:(pre44 atom4 ; atom3).
 >                              ^^^^^
 Error: The reference atom4 was not found in the current environment.
 
-Rocq < Accept 243 ?Goal
+Soma < Accept 243 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Rocq < Accept 250 ?Goal
+Soma < Soma < Accept 250 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Accept 251 ?Goal
+Soma < Accept 251 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Rocq < Toplevel input, characters 24-29:
+Soma < Soma < Toplevel input, characters 24-29:
 > Check Reject 260 ltac:(atom2 + atom2).
 >                        ^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1022,7 +1022,7 @@ Quickfix:
 Replace Toplevel input, characters 6164-6164 with (
 Replace Toplevel input, characters 6169-6169 with )
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 261 ltac:(atom1 + atom3).
 >                                ^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1031,19 +1031,19 @@ eventually removed. Insert parentheses or try to lower the level at which the
 top symbol of this expression is parsed.
 [level-tolerance,deprecated-since-9.2,deprecated,parsing,default]
 
-Rocq < Accept 262 ?Goal
+Soma < Accept 262 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Accept 263 ?Goal
+Soma < Accept 263 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Rocq < Toplevel input, characters 30-35:
+Soma < Soma < Toplevel input, characters 30-35:
 > Check Reject 270 ltac:(pre22 atom2 + atom2).
 >                              ^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1056,7 +1056,7 @@ Quickfix:
 Replace Toplevel input, characters 6335-6335 with (
 Replace Toplevel input, characters 6340-6340 with )
 
-Rocq < Toplevel input, characters 23-34:
+Soma < Toplevel input, characters 23-34:
 > Check Reject 271 ltac:(pre21 atom1 + atom2).
 >                        ^^^^^^^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1069,19 +1069,19 @@ Quickfix:
 Replace Toplevel input, characters 6374-6374 with (
 Replace Toplevel input, characters 6385-6385 with )
 
-Rocq < Accept 272 ?Goal
+Soma < Accept 272 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Accept 273 ?Goal
+Soma < Accept 273 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < Rocq < Toplevel input, characters 24-36:
+Soma < Soma < Toplevel input, characters 24-36:
 > Check Reject 280 ltac:(atom1 post12 + atom2).
 >                        ^^^^^^^^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1094,7 +1094,7 @@ Quickfix:
 Replace Toplevel input, characters 6510-6510 with (
 Replace Toplevel input, characters 6522-6522 with )
 
-Rocq < Toplevel input, characters 31-36:
+Soma < Toplevel input, characters 31-36:
 > Check Reject 281 ltac:(atom1 + atom2 post12).
 >                                ^^^^^
 Error: In ltac_expr, tolerating this expression at a higher level than
@@ -1107,10 +1107,10 @@ Quickfix:
 Replace Toplevel input, characters 6564-6564 with (
 Replace Toplevel input, characters 6569-6569 with )
 
-Rocq < Accept 282 ?Goal
+Soma < Accept 282 ?Goal
      : Parsing
 where
 ?A : [ |- Type]
 ?Goal : [ |- ?A]
 
-Rocq < 
+Soma < 

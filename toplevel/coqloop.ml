@@ -195,14 +195,14 @@ let print_toplevel_parse_error (e, info) buf =
 *)
 end
 
-(*s The Rocq prompt is the name of the focused proof, if any, and "Rocq"
+(*s The prompt is the name of the focused proof, if any, and "Soma"
     otherwise. We trap all exceptions to prevent the error message printing
     from cycling. *)
 let make_prompt () =
   try
     (Names.Id.to_string (Vernacstate.Declare.get_current_proof_name ())) ^ " < "
   with Vernacstate.Declare.NoCurrentProof ->
-    "Rocq < "
+    "Soma < "
   [@@ocaml.warning "-3"]
 
 (* the rocq prompt added to the default one when in emacs mode

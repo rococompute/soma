@@ -1,5 +1,5 @@
 
-Rocq < Rocq < 1 goal
+Soma < Soma < 1 goal
   
   ============================
   [1mforall[0m n m : nat, n[37m =[0m m
@@ -37,4 +37,4 @@ Unnamed_thm < goal foo (?foo) is:
   [48;2;0;91;0mn[37m =[39m m[0m
 
 Unnamed_thm < Unnamed_thm < 
-Rocq < 
+Soma < 

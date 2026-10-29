@@ -66,7 +66,10 @@ _build/install/default/bin/soma run my_file.soma
   directory, so that it leaves no files, and prints the value of its last
   bare term; a program that requires Mirage is built into an image, which
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
-- `soma help` lists the commands.
+- `soma repl [FILE]` is an interactive session (`rocq repl`, prompt
+  `Soma <`), with FILE's definitions loaded first (`-l FILE`).
+- `soma help` lists the commands, and `soma build --help` the options of
+  build and run (those of `rocq c`).
 
 A program `FILE.soma` can have its lemmas and theorems in `FILE.proof`,
 next to it. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma

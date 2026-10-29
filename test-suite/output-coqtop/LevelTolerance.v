@@ -36,12 +36,12 @@ Print Custom Grammar expr.
 
 (* The following sed script prints the first line with a wrong result:
 
-     sed -En '/Accept/{/^(Rocq < )+Accept/!bf};/Reject/{/^> Check Reject/!bf};b;:f;p;q1' \
+     sed -En '/Accept/{/^(Soma < )+Accept/!bf};/Reject/{/^> Check Reject/!bf};b;:f;p;q1' \
        test-suite/output-coqtop/LevelTolerance.out
 
    The script checks that:
    - Each line containing "Reject" starts with "> Check Reject"
-   - Each line containing "Accept" starts with one or more "Rocq < " followed by "Accept"
+   - Each line containing "Accept" starts with one or more "Soma < " followed by "Accept"
 
    In case of failure, it prints the line containing "Reject" or "Accept". *)
 

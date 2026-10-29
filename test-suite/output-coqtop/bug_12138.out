@@ -1,11 +1,11 @@
 
-Rocq < Rocq < Rocq < Toplevel input, characters 11-12:
+Soma < Soma < Soma < Toplevel input, characters 11-12:
 > Comments.
 >         ^
 Error:
 Syntax error: '&' or ':' or '|' or '}' expected after [term level 99] (in [term]).
 
-Rocq < Rocq < Rocq < Toplevel input, characters 58-59:
+Soma < Soma < Soma < Toplevel input, characters 58-59:
 > }
 > ^
 Error: Syntax error: illegal begin of toplevel:vernac_toplevel.
