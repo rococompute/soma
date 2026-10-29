@@ -170,8 +170,7 @@ dunestrap: $(DUNE_FILES)
 states: world
 	echo "'make states' is an alias for 'make world'"
 
-MAIN_TARGETS:=rocq-runtime.install coq-core.install rocq-core.install \
-  rocq-devtools.install
+MAIN_TARGETS:=rocq-runtime.install coq-core.install rocq-core.install
 
 world: dunestrap
 	+$(WITHJOBS) dune build $(DUNEOPT) $(MAIN_TARGETS)

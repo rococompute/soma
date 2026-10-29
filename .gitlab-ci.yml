@@ -18,7 +18,6 @@ include:
     rules:
       - if: $TAGGED_RUNNERS == null
 
-  - local: '/dev/bench/gitlab-bench.yml'
 
 stages:
   - docker
@@ -85,7 +84,7 @@ before_script:
   script:
     - cp dev/ci/dune-workspace.ci dune-workspace
 
-    - PKGS=rocq-runtime,coq-core,rocq-core,rocq-devtools
+    - PKGS=rocq-runtime,coq-core,rocq-core
     - dev/ci/gitlab-section.sh start coq.clean coq.clean
     - make clean # ensure that `make clean` works on a fresh clone
     - dev/ci/gitlab-section.sh end coq.clean
@@ -249,7 +248,6 @@ before_script:
     - if [ "$ROCQ_CI_NATIVE" = true ]; then echo "Definition f x := x + x." > test_native.v; fi
     - if [ "$ROCQ_CI_NATIVE" = true ]; then rocq c test_native.v; fi
     - if [ "$ROCQ_CI_NATIVE" = true ]; then test -f .coq-native/Ntest_native.cmxs; fi
-    - opam pin add --kind=path rocq-devtools .
     - opam pin add --kind=path rocq-test-suite.dev . -v
     - if command -v coqc; then exit 1; fi # coq-core didn't get autoinstalled
     - opam pin add --kind=path coq-core.dev .

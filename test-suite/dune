@@ -29,7 +29,6 @@
    (package rocq-runtime)
    (package coq-core)
    (package rocq-core)
-   (package rocq-devtools) ; For bench-render
    (source_tree .))
    ; Finer-grained dependencies would look like this and be generated
    ; by coqdep; that would allow tests to be run incrementally.

@@ -41,8 +41,6 @@ stdenv.mkDerivation rec {
   buildInputs = [
     hostname
     python312
-    ocamlPackages.yojson
-    ocamlPackages.camlzip
     # coq-makefile timing tools
     time
     dune_3

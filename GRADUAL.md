@@ -626,8 +626,8 @@ from the gradual tests below. The last full run was at `d011c4b1cf`:
 2751 tests passed and 3 failed, on macOS. All three failures are
 environmental and also fail on the unmodified base:
 `coq-makefile/latex1` (LaTeX), `coq-makefile/timing-per-file` (GNU
-`time` output) and `misc/bench-render` (`rocq-devtools` not built). The
-unit tests need `ounit2`.
+`time` output) and `misc/bench-render` (since removed, with
+`rocq-devtools`). The unit tests need `ounit2`.
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/success/gradual_vec.v`: indexed families (`vec`, `Fin`, `eq`): index checks, stuck casts on neutral indices, `match` on `?`

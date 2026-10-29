@@ -971,20 +971,6 @@ line timing data:
           Chars 69 - 162 [Definition~foo0~:=~Eval~comp~i...] 0.153 secs (0.136u,0.019s)
           Chars 163 - 208 [Definition~foo1~:=~Eval~comp~i...] 0.239 secs (0.236u,0.s)
 
-+ ``rocq timelog2html``
-    ::
-
-       rocq timelog2html file.v file.v.time1 [file.v.time2 [file.v.time3]] > file.v.html
-
-    this command produces a HTML file displaying the original `file.v`
-    with highlights for each command indicating how much time the
-    command used according to the given timing files. It supports
-    between 1 and 3 timing files.
-
-    `rocq timelog2html` requires the `rocq-devtools` package.
-
-    There is currently no `rocq makefile` target that automatically invokes this tool.
-
 + ``print-pretty-single-time-diff``
     ::
 

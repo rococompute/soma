@@ -41,7 +41,6 @@ type subcommand =
   | Workmgr
   | Tex
   | Makefile
-  | Timelog2Html
 
 let subcommands = [
   ("compile", "Compile a Rocq source file", Compile);
@@ -62,7 +61,6 @@ let subcommands = [
   ("workmgr", "Control the number of parallel workers used by Rocq", Workmgr);
   ("tex", "Process Rocq code in a Latex document", Tex);
   ("makefile", "Generate a Makefile to compile a Rocq project", Makefile);
-  ("timelog2html", "Combine timing information and a Rocq source file", Timelog2Html);
 ]
 
 let print_usage fmt () =
@@ -102,7 +100,6 @@ let run_subcommand opts args = function
   | Workmgr -> Rocqworkmgr.main ~prog:(Sys.argv.(0) ^ " workmgr") args
   | Tex -> Rocqtex.main ~prog:(Sys.argv.(0) ^ " tex") args
   | Makefile -> Rocqmakefile.main ~prog:[Sys.argv.(0); "makefile"] args
-  | Timelog2Html -> with_worker_gen opts ~package:"rocq-devtools" "timelog2html" args
 
 let () =
   if Array.length Sys.argv < 2 then error_usage ();
