@@ -96,12 +96,6 @@ LICENSE                     @rocq-prover/contributing-process-maintainers
 /engine/univ*     @rocq-prover/universes-maintainers
 /engine/uState.*  @rocq-prover/universes-maintainers
 
-########## CoqIDE ##########
-
-/ide/             @rocq-prover/coqide-maintainers
-/ide/protocol/    @rocq-prover/stm-maintainers
-/test-suite/ide/  @rocq-prover/stm-maintainers
-
 ########## Desugaring ##########
 
 /interp/          @rocq-prover/extensible-syntax-maintainers

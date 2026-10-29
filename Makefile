@@ -10,7 +10,7 @@
 
 # Dune Makefile for Rocq
 
-.PHONY: help help-install states world rocqide watch check    # Main developer targets
+.PHONY: help help-install states world watch check    # Main developer targets
 .PHONY: refman-html refman-pdf refman-indices corelib-html apidoc     # Documentation targets
 .PHONY: test-suite dev-targets
 .PHONY: fmt ocheck obuild ireport clean               # Maintenance targets
@@ -42,9 +42,8 @@ help:
 	@echo "make help-install for installation instructions. Common developer targets are:"
 	@echo ""
 	@echo "  - states: build a minimal functional rocq repl"
-	@echo "  - world:  build main public binaries and libraries in developer mode (no rocqide)"
+	@echo "  - world:  build main public binaries and libraries in developer mode"
 	@echo "  - watch:  build main public binaries and libraries [continuous build]"
-	@echo "  - rocqide: build rocqide binary in developer mode"
 	@echo "  - check:  build all ML files as fast as possible"
 	@echo "  - test-suite: run Rocq's test suite [env NJOBS=N to set job parallelism]"
 	@echo "  - dunestrap: Generate the dune rules for vo files"
@@ -102,8 +101,6 @@ help-install:
 	@echo "  - rocq-runtime: base Rocq package, toplevel compilers, plugins, tools, no corelib, no stdlib, no GTK"
 	@echo "  - coq-core: compat binaries (coqc instead of rocq compile, etc)"
 	@echo "  - rocq-core: Rocq's prelude and corelib"
-	@echo "  - coqide-server: XML protocol language server"
-	@echo "  - rocqide: RocqIDE gtk application"
 	@echo ""
 	@echo " To build a package, you can use:"
 	@echo ""
@@ -174,13 +171,10 @@ states: world
 	echo "'make states' is an alias for 'make world'"
 
 MAIN_TARGETS:=rocq-runtime.install coq-core.install rocq-core.install \
-  coqide-server.install rocq-devtools.install
+  rocq-devtools.install
 
 world: dunestrap
 	+$(WITHJOBS) dune build $(DUNEOPT) $(MAIN_TARGETS)
-
-rocqide:
-	dune build $(DUNEOPT) rocqide.install
 
 watch:
 	dune build $(DUNEOPT) $(MAIN_TARGETS) -w
@@ -301,9 +295,7 @@ $(foreach subdir,$(wildcard theories/Corelib/*/),$(eval $(call subtarget,$(subdi
 #
 # dune build rocq-runtime.install
 # dune build coq.install
-# dune build rocqide.install
 #
 # Packaging / OPAM targets:
 #
 # dune -p coq @install
-# dune -p rocqide @install

@@ -29,7 +29,6 @@
    (package rocq-runtime)
    (package coq-core)
    (package rocq-core)
-   (package coqide-server) ; For fake_ide
    (package rocq-devtools) ; For bench-render
    (source_tree .))
    ; Finer-grained dependencies would look like this and be generated
@@ -38,7 +37,6 @@
    ; ../theories/Init/Prelude.vo
    ; %{bin:coqc}
    ; %{bin:coq_makefile}
-   ; %{bin:fake_ide}
  (action
   (progn
    (bash "make -j %{env:NJOBS=2} PRINT_LOGS=1 UNIT_TESTS=%{env:COQ_UNIT_TEST=unit-tests}"))))

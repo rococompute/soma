@@ -1,7 +1,7 @@
 # How to use?
 
 # If you have Nix installed, you can get in an environment with everything
-# needed to compile Rocq and RocqIDE by running:
+# needed to compile Rocq by running:
 # $ nix-shell
 # at the root of the Rocq repository.
 
@@ -9,7 +9,7 @@
 
 # nix-shell supports the --arg option (see Nix doc) that allows you for
 # instance to do this:
-# $ nix-shell --arg ocamlPackages "(import <nixpkgs> {}).ocaml-ng.ocamlPackages_4_14" --arg buildIde false
+# $ nix-shell --arg ocamlPackages "(import <nixpkgs> {}).ocaml-ng.ocamlPackages_4_14"
 
 # You can also compile Rocq and "install" it by running:
 # $ make clean # (only needed if you have left-over compilation files)
@@ -23,7 +23,6 @@
 
 { pkgs ? import ./dev/nixpkgs.nix {}
 , ocamlPackages ? pkgs.ocaml-ng.ocamlPackages_4_14
-, buildIde ? true
 , buildDoc ? true
 , doInstallCheck ? true
 , shell ? false
@@ -47,12 +46,6 @@ stdenv.mkDerivation rec {
     # coq-makefile timing tools
     time
     dune_3
-  ]
-  ++ optionals buildIde [
-    ocamlPackages.lablgtk3-sourceview3
-    glib
-    (pkgs.adwaita-icon-theme or gnome.adwaita-icon-theme)
-    (pkgs.wrapGAppsHook3 or wrapGAppsHook)
   ]
   ++ optionals buildDoc [
     # Sphinx doc dependencies
@@ -113,7 +106,7 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  buildFlags = [ "world" ] ++ optional buildIde "rocqide";
+  buildFlags = [ "world" ];
 
   # TODO, building of documentation package when not in dev mode
   # https://github.com/rocq-prover/rocq/issues/16198
@@ -122,7 +115,7 @@ stdenv.mkDerivation rec {
   # From https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/ocaml/dune.nix
   installPhase = ''
     runHook preInstall
-    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR rocq-runtime coq-core rocq-core coqide-server ${optionalString buildIde "rocqide"}
+    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR rocq-runtime coq-core rocq-core
     runHook postInstall
   '';
 

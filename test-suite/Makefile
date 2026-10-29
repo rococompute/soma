@@ -102,7 +102,6 @@ coqchk := $(BIN)rocqchk -R prerequisite TestSuite
 coqdoc := $(BIN)rocq doc
 coqtop := $(BIN)rocq repl -q -no-soma-prelude -test-mode -R prerequisite TestSuite
 
-coqidetop := $(BIN)coqidetop
 
 # async proofs off because the output order ends up different with and without async
 coqc_interactive := $(coqc) -test-mode -async-proofs off
@@ -200,7 +199,7 @@ VSUBSYSTEMS := prerequisite success failure bugs bugs-nocoqchk output output-coq
   coqdoc ssr $(wildcard primitive/*) ltac2 coqchk
 
 # All subsystems
-SUBSYSTEMS := $(filter-out $(DISABLED_SUBSYSTEMS),$(VSUBSYSTEMS) misc ide ide coqchk output-coqchk coqwc coq-makefile precomputed-time-tests tools $(UNIT_TESTS))
+SUBSYSTEMS := $(filter-out $(DISABLED_SUBSYSTEMS),$(VSUBSYSTEMS) misc coqchk output-coqchk coqwc coq-makefile precomputed-time-tests tools $(UNIT_TESTS))
 
 # EJGA: This seems dangerous as first target...
 .csdp.cache: .csdp.cache.test-suite
@@ -293,7 +292,6 @@ summary:
 	  $(call summary_dir, "Primitive tests", primitive); \
 	  $(call summary_dir, "STM tests", stm); \
 	  $(call summary_dir, "SSR tests", ssr); \
-	  $(call summary_dir, "IDE tests", ide); \
 	  $(call summary_dir, "Coqchk tests", coqchk); \
 	  $(call summary_dir, "Output tests with coqchk", output-coqchk); \
 	  $(call summary_dir, "Coqwc tests", coqwc); \
@@ -690,30 +688,6 @@ $(patsubst %.sh,%.log,$(wildcard misc/*.sh)): %.log: %.sh $(PREREQUISITELOG)
 	  export coqdep="eval $(coqdep)"; \
 	  $(call WITH_TIMER,$@,"$<" 2>&1); R=$$?; times; \
 	  if [ $$R = 0 ]; then \
-	    echo $(log_success); \
-	    echo "    $< ... Ok"; \
-	  else \
-	    echo $(log_failure); \
-	    echo "    $< ... Error!"; \
-	    $(FAIL); \
-	  fi; \
-	} > "$@"
-	$(HIDE)$(call REPORT_TIMER,$@)
-
-# IDE : some tests of backtracking for coqtop -ideslave
-
-ide : $(patsubst %.fake,%.fake.log,$(wildcard ide/*.fake))
-
-ide/fake_ide.exe : ide/fake_ide.ml
-	$(SHOW) 'OCAMLC  $<'
-	$(HIDE)$(OCAMLBEST) -linkpkg -package coqide-server.protocol -package coqide-server.core $< -o $@
-
-%.fake.log : %.fake ide/fake_ide.exe
-	$(SHOW) "TEST      $<"
-	$(HIDE){ \
-	  echo $(call log_intro,$<); \
-	  $(call WITH_TIMER,$@,ide/fake_ide.exe $(coqidetop) "$<" "-q -async-proofs on -async-proofs-tactic-error-resilience off -async-proofs-command-error-resilience off $(call get_coq_prog_args,"$<")" 2>&1); \
-	  if [ $$? = 0 ]; then \
 	    echo $(log_success); \
 	    echo "    $< ... Ok"; \
 	  else \

@@ -57,7 +57,6 @@ config/coq_config.ml
 config/coq_byte_config.ml
 config/coq_config.py
 config/dune.c_flags
-ide/coqide/config.ml
 dev/ocamldebug-coq
 coqdoc.sty
 coqdoc.css
@@ -91,7 +90,6 @@ test-suite/output*/*.out.real
 test-suite/oUnit-anon.cache
 test-suite/redirect_test.out
 test-suite/unit-tests/**/*.test
-test-suite/ide/fake_ide.exe
 test-suite/Datatypes.ml
 test-suite/Datatypes.mli
 test-suite/bug_10796.ml
@@ -132,9 +130,6 @@ doc/tools/docgram/updated_rsts
 
 # other auto-generated files
 
-ide/coqide/default.bindings
-ide/coqide/default_bindings_src.exe
-ide/coqide/index_urls.txt
 .lia.cache
 .nia.cache
 .nra.cache
@@ -152,7 +147,6 @@ ide/coqide/index_urls.txt
 .*.sw*
 .#*
 
-ide/coqide/coqide.keys
 .dune.lock
 
 # bin compat directory, should be eventually be phased out
