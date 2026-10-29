@@ -12,11 +12,11 @@
 
    [soma build FILE [OPTIONS]] checks and builds a Soma program, as
    [rocq c], and prints the names of the files it created (a program that
-   requires Mirage is also built into an image).
+   requires Sandbox is also built into an image).
 
    [soma run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
    temporary directory, so that it leaves no files, and prints the value of
-   its last bare term; a program that requires Mirage is built into an
+   its last bare term; a program that requires Sandbox is built into an
    image, which is run, with ARGUMENTS. *)
 
 open Rocqshim
@@ -128,7 +128,7 @@ let build ~verbose file args =
     List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l then print_endline l)
       (lines output);
   (* rocq c's files are of no use to a program once it is checked: they
-     are deleted, also when checking failed partway. The rest (a Mirage
+     are deleted, also when checking failed partway. The rest (a MirageOS
      image) is kept. *)
   let compiled f = List.exists (Filename.check_suffix f) [".vo"; ".vos"; ".vok"; ".glob"; ".aux"] in
   List.iter (fun f ->
@@ -218,7 +218,7 @@ let run file args image_args =
     finish (exit_code (wait pid))
   | None ->
     if image_args <> [] then begin
-      prerr_endline "soma run: arguments after -- are for a program that requires Mirage";
+      prerr_endline "soma run: arguments after -- are for a program that requires Sandbox";
       finish 2
     end;
     let value = last_value output in
@@ -232,7 +232,7 @@ let run file args image_args =
 
 let is_help a = a = "-h" || a = "-help" || a = "--help"
 
-(* the arguments of soma, not those after -- for a Mirage image *)
+(* the arguments of soma, not those after -- for a MirageOS image *)
 let rec before_image_args = function
   | "--" :: _ | [] -> []
   | a :: rest -> a :: before_image_args rest

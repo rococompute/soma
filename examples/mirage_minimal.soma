@@ -1,6 +1,6 @@
 (** The smallest unikernel: it prints a line and exits.
 
         soma run examples/mirage_minimal.soma *)
-Require Import Mirage.
+Require Import Sandbox.
 
 main := print "Hello from a unikernel!".

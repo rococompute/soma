@@ -1,5 +1,5 @@
 (* The runtime of casts in extracted code (plugins/extraction/gradual_rt.ml),
-   which Soma's Mirage images run: casts that succeed, and the words
+   which Soma's MirageOS images run: casts that succeed, and the words
    of those that fail *)
 
 open Utest

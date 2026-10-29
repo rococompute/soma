@@ -8,12 +8,12 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * MirageOS unikernels, [Soma.Mirage]
+(** * MirageOS unikernels, [Soma.Sandbox]
 
     Not part of the prelude. A program that requires it is a unikernel:
     [rocq c prog.soma] also builds [prog.hvt], a MirageOS image for
     [solo5-hvt] (Hypervisor.framework on Apple Silicon), whose code is the
-    program's [main : io unit] extracted to OCaml (see the [Mirage]
+    program's [main : io unit] extracted to OCaml (see the [Sandbox]
     section of GRADUAL.md).
 
     [io A] describes what the unikernel does, as data: printing, sleeping,

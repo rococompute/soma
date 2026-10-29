@@ -2,6 +2,6 @@
 
         soma run examples/mirage_minimal_web_server.soma
         curl http://<the address it prints>:8080/ *)
-Require Import Mirage.
+Require Import Sandbox.
 
 main := serve 8080 (fun _ => ret (http_response "Hello, web!")).

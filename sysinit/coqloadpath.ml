@@ -48,7 +48,7 @@ let init_load_path ~coqenv =
   let corelib = Boot.Env.corelib coqenv |> Boot.Path.to_string in
   let contrib_vo = build_userlib_path ~unix_path:user_contrib in
   (* Soma: its libraries can be required by their short name, as
-     Corelib's are: [Require Import Mirage.] for [Soma.Mirage] *)
+     Corelib's are: [Require Import Sandbox.] for [Soma.Sandbox] *)
   let soma_vo =
     let unix_path = Filename.concat user_contrib "Soma" in
     if Sys.file_exists unix_path then

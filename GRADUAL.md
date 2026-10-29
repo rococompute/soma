@@ -59,12 +59,12 @@ _build/install/default/bin/soma run my_file.soma
 
 - `soma build FILE` checks and builds a program as `rocq c FILE` does, with
   the same options, then deletes the files `rocq c` made (`.vo`, `.glob`,
-  `.aux`), and prints the names of the files it keeps: the `.hvt` image of a Mirage program. `soma build -v FILE`
+  `.aux`), and prints the names of the files it keeps: the `.hvt` image of a Sandbox program. `soma build -v FILE`
   first prints the values of the program's bare terms. (`rocq c` keeps the
   `.vo`, for files that `Require` the program.)
 - `soma run FILE [-- ARGUMENTS]` checks the program in a temporary
   directory, so that it leaves no files, and prints the value of its last
-  bare term; a program that requires Mirage is built into an image, which
+  bare term; a program that requires Sandbox is built into an image, which
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
 - `soma repl [FILE]` is an interactive session (`rocq repl`, prompt
   `Soma <`), with FILE's definitions loaded first (`-l FILE`).
@@ -78,7 +78,7 @@ Rocq's `.v` files can. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma
 run`) reads the program, then `FILE.proof` in the program's environment
 (`toplevel/ccompile.ml`): the proofs see what it defines and imports, JSX
 included, without importing anything. A proof that does not hold fails the
-build, with its location in `FILE.proof`, and no `.vo` or Mirage image is
+build, with its location in `FILE.proof`, and no `.vo` or MirageOS image is
 made; the theorems are part of the program's library. `soma build
 FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
 `examples/reason_counter.proof` and `examples/reason_components.proof` are
@@ -264,7 +264,7 @@ its characters (`Register ... as soma.string.append`, in
 `Soma.Strings`). `soma run` fails when the program's last value is a
 run-time error. Compiled code raises `Gradual_rt.Cast_error` at the cast
 instead, worded the same way from the types it has at run time
-(`expected a bool, but got a nat`, without the value); a Mirage image
+(`expected a bool, but got a nat`, without the value); a MirageOS image
 prints it as `Run-time error: ...` and exits.
 
 ## Architecture
@@ -482,9 +482,9 @@ Extraction differs from the kernel in these ways:
   `Cast_error`; the kernel leaves them stuck.
 - Only OCaml is supported. Haskell and Scheme extraction print an error.
 
-## Mirage: programs as unikernels
+## Sandbox: programs as unikernels
 
-`theories/Soma/Mirage.v` (not in the prelude) makes a program a
+`theories/Soma/Sandbox.v` (not in the prelude) makes a program a
 MirageOS unikernel for Apple Silicon. Its `main : io unit` says what the
 unikernel does, as data; building an `io` does nothing, the image runs it.
 
@@ -507,7 +507,7 @@ and read HTTP. `++` appends strings wherever a `string` is expected (see
 `Strings.v`).
 
 ```coq
-Require Import Mirage.
+Require Import Sandbox.
 
 main : io unit :=
   print "serving HTTP on port 8080" ;;
@@ -516,7 +516,7 @@ main : io unit :=
 ```
 
 `soma build prog.soma` (or `rocq c prog.soma`) checks the program and,
-since it requires `Mirage`, builds `prog.hvt` next to `prog.vo`
+since it requires `Sandbox`, builds `prog.hvt` next to `prog.vo`
 (`toplevel/somaMirage.ml`, called from `toplevel/ccompile.ml`):
 
 1. `main` must exist and have type `io unit`.
@@ -554,8 +554,8 @@ each image and checks its console and exit code, the network cases with one
 unikernel serving and another fetching from it.
 
 Soma's installed libraries can be required by their short name, as
-Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Mirage.` finds
-`Soma.Mirage`.
+Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
+`Soma.Sandbox`.
 
 Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
 and key-value stores, and state shared between `serve` handlers.

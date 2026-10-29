@@ -7,7 +7,7 @@
         soma run examples/mirage_http_server.soma
 
     examples/mirage_fetch.soma fetches from it. *)
-Require Import Mirage.
+Require Import Sandbox.
 
 two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.
 

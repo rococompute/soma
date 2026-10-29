@@ -6,7 +6,7 @@
         soma run examples/mirage_fetch.soma -- --arg=192.168.105.46
 
     [args] are the [--arg=...] given to the image, in order. *)
-Require Import Mirage.
+Require Import Sandbox.
 
 main : io unit :=
   a <- args ;;

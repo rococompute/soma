@@ -2,14 +2,14 @@
 
 Small Soma programs. Run one with `soma run` (in
 `_build/install/default/bin` once Soma is built), which prints the value
-of its last line, or, for a Mirage program, runs its image:
+of its last line, or, for a Sandbox program, runs its image:
 
 ```sh
 soma run examples/hello.soma
 ```
 
 `soma build` checks one, deletes the files that checking makes, and keeps
-(and prints) the image of a Mirage program;
+(and prints) the image of a Sandbox program;
 `soma build -v` first prints the value of each line.
 
 - `hello.soma`: hello world.
@@ -60,8 +60,8 @@ A program's lemmas and theorems are in `NAME.proof` next to `NAME.soma`
 reads it after the program and checks them, and fails if one does not
 hold.
 - `mirage_*.soma`: MirageOS unikernels. A program that has
-  `Require Import Mirage.` is built into an image, `<name>.hvt`, by `soma build`,
-  which says how to run it (see the Mirage section of GRADUAL.md):
+  `Require Import Sandbox.` is built into an image, `<name>.hvt`, by `soma build`,
+  which says how to run it (see the Sandbox section of GRADUAL.md):
   - `mirage_minimal.soma`: the smallest unikernel, one line printed.
   - `mirage_minimal_web_server.soma`: the smallest web server, one page.
   - `mirage_hello.soma`: console output and a countdown with `sleep`.

@@ -8,7 +8,7 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(* Soma: a program that requires [Soma.Mirage] is a MirageOS
+(* Soma: a program that requires [Soma.Sandbox] is a MirageOS
    unikernel. After [rocq c prog.soma] has checked it, its
    [main : io unit] is extracted to OCaml into a MirageOS project, which is
    built for solo5's hvt target into [prog.hvt], next to [prog.vo].
@@ -25,7 +25,7 @@
 
 open Names
 
-let mirage_library = DirPath.make (List.rev_map Id.of_string ["Soma"; "Mirage"])
+let mirage_library = DirPath.make (List.rev_map Id.of_string ["Soma"; "Sandbox"])
 
 (* [Library.library_is_loaded] is always true ([find_library] returns an
    option, it does not raise), so the list of loaded libraries is used *)
@@ -72,12 +72,12 @@ let error msg = CErrors.user_err Pp.(str "Mirage: " ++ msg)
 let check_main () =
   let main = Libnames.qualid_of_ident (Id.of_string "main") in
   let gr = try Nametab.locate main with Not_found ->
-    error Pp.(str "a program that requires Mirage defines" ++ spc () ++
+    error Pp.(str "a program that requires Sandbox defines" ++ spc () ++
               str "main : io unit, what the unikernel does.")
   in
   let env = Global.env () in
   let ty, _ = Typeops.type_of_global_in_context env gr in
-  let io = Nametab.global (Libnames.qualid_of_string "Soma.Mirage.io") in
+  let io = Nametab.global (Libnames.qualid_of_string "Soma.Sandbox.io") in
   let unit = Rocqlib.lib_ref "core.unit.type" in
   let is r c = match Constr.kind c with
     | Constr.Ind (i, _) -> GlobRef.CanOrd.equal r (GlobRef.IndRef i)
