@@ -262,20 +262,13 @@ let parse_cl ~prog args =
       (fun s -> files := s :: !files)
       "coq-tex [options] file ..."
 
+(* rocq tex runs in the rocq binary, whose repl preprocesses the file *)
 let find_coqtop () =
-  let prog = Sys.executable_name in
-  try
-    let size = String.length prog in
-    let i = Str.search_backward (Str.regexp_string "coq-tex") prog (size-7) in
-    (String.sub prog 0 i)^"coqtop"^(String.sub prog (i+7) (size-i-7))
-  with Not_found -> begin
-    Printf.printf "Warning: preprocessing with default image \"coqtop\"\n";
-    "coqtop"
-  end
+  Filename.quote Sys.executable_name ^ " repl"
 
 let main ~prog args =
   parse_cl ~prog args;
-  if !image = "" then image := Filename.quote (find_coqtop ());
+  if !image = "" then image := find_coqtop ();
   if Sys.command (!image ^ " -batch -silent") <> 0 then begin
     Printf.printf "Error: ";
     let _ = Sys.command (!image ^ " -batch") in

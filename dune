@@ -22,11 +22,11 @@
 
 (alias
  (name default)
- (deps rocq-runtime.install coq-core.install rocq-core.install))
+ (deps rocq-runtime.install rocq-core.install))
 
 (alias
  (name runtime)
- (deps rocq-runtime.install coq-core.install))
+ (deps rocq-runtime.install))
 
 (install
  (section lib)

@@ -18,13 +18,6 @@
  (modules rocqmakefile)
  (libraries rocq-runtime.boot rocq-runtime.lib))
 
-(executable
- (name coq_makefile)
- (public_name coq_makefile)
- (package coq-core)
- (modules coq_makefile)
- (libraries rocqmakefile))
-
 ; Bare-bones mllib/mlpack parser
 (executable
  (name ocamllibdep)
@@ -40,26 +33,12 @@
  (modules rocqwc)
  (libraries))
 
-(executable
- (name coqwc)
- (public_name coqwc)
- (package coq-core)
- (modules coqwc)
- (libraries rocqwc))
-
 (ocamllex rocqwc)
 
 (library
  (name rocqtex)
  (modules rocqtex)
  (libraries str))
-
-(executables
- (names coq_tex)
- (public_names coq-tex)
- (package coq-core)
- (modules coq_tex)
- (libraries rocqtex))
 
 (library
  (name rocqfind)

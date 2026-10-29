@@ -93,13 +93,12 @@ help-install:
 	@echo "documentation for more details. A quick install of Rocq alone can be done with"
 	@echo ""
 	@echo " $$ make dunestrap"
-	@echo " $$ dune build -p rocq-runtime,coq-core,rocq-core"
-	@echo " $$ dune install --prefix=<install_prefix> rocq-runtime coq-core rocq-core"
+	@echo " $$ dune build -p rocq-runtime,rocq-core"
+	@echo " $$ dune install --prefix=<install_prefix> rocq-runtime rocq-core"
 	@echo ""
 	@echo " Provided opam/dune packages are:"
 	@echo ""
 	@echo "  - rocq-runtime: base Rocq package, toplevel compilers, plugins, tools, no corelib, no stdlib, no GTK"
-	@echo "  - coq-core: compat binaries (coqc instead of rocq compile, etc)"
 	@echo "  - rocq-core: Rocq's prelude and corelib"
 	@echo ""
 	@echo " To build a package, you can use:"
@@ -170,7 +169,7 @@ dunestrap: $(DUNE_FILES)
 states: world
 	echo "'make states' is an alias for 'make world'"
 
-MAIN_TARGETS:=rocq-runtime.install coq-core.install rocq-core.install
+MAIN_TARGETS:=rocq-runtime.install rocq-core.install
 
 world: dunestrap
 	+$(WITHJOBS) dune build $(DUNEOPT) $(MAIN_TARGETS)

@@ -19,7 +19,6 @@ jobs:
             os: macos-latest
             ocaml: 4.14
             test_disabled:
-            # We exclude the coq-core package
             packages: ./rocq*.opam
           - name: Windows
             os: windows-latest

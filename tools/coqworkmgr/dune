@@ -10,9 +10,3 @@
  (modules rocqworkmgr)
  (libraries coqworkmgrApi))
 
-(executable
- (name coqworkmgr)
- (public_name coqworkmgr)
- (package coq-core)
- (modules coqworkmgr)
- (libraries rocqworkmgr))

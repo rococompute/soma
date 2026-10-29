@@ -6,7 +6,7 @@
  (name coq_checklib)
  (public_name rocq-runtime.checklib)
  (synopsis "Rocq's Standalone Proof Checker")
- (modules :standard \ rocqchk coqchk votour)
+ (modules :standard \ rocqchk votour)
  (wrapped true)
  (libraries rocq-runtime.boot rocq-runtime.kernel))
 
@@ -16,15 +16,6 @@
  (modes exe byte)
  (package rocq-runtime)
  (modules rocqchk)
- (flags :standard -open Coq_checklib)
- (libraries coq_checklib))
-
-(executable
- (name coqchk)
- (public_name coqchk)
- (modes exe byte)
- (package coq-core)
- (modules coqchk)
  (flags :standard -open Coq_checklib)
  (libraries coq_checklib))
 

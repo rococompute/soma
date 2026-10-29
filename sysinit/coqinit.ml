@@ -246,7 +246,7 @@ let warn_deprecated_native_compiler =
   CWarnings.create ~name:"deprecated-native-compiler-option" ~category:Deprecation.Version.v8_14
          (fun () ->
           Pp.strbrk "The native-compiler option is deprecated. To compile native \
-          files ahead of time, use the coqnative binary instead.")
+          files ahead of time, use rocq native-precompile instead.")
 
 let interp_set_option (type a) opt (v:string) (k:a Goptions.option_kind) : a =
   let opt = String.concat " " opt in

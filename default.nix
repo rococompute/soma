@@ -113,7 +113,7 @@ stdenv.mkDerivation rec {
   # From https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/ocaml/dune.nix
   installPhase = ''
     runHook preInstall
-    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR rocq-runtime coq-core rocq-core
+    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR rocq-runtime rocq-core
     runHook postInstall
   '';
 
@@ -125,7 +125,7 @@ stdenv.mkDerivation rec {
   createFindlibDestdir = !shell;
 
   postInstall = ''
-    for pkg in rocq-runtime coq-core; do
+    for pkg in rocq-runtime; do
       if [ -e "$out/lib/$pkg" ] && [ ! -e "$OCAMLFIND_DESTDIR/$pkg" ]; then
         ln -s "$out/lib/$pkg" "$OCAMLFIND_DESTDIR/$pkg"
       elif [ -e "$OCAMLFIND_DESTDIR/$pkg" ] && [ ! -e "$out/lib/$pkg" ]; then

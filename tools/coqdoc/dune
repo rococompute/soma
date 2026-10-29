@@ -14,14 +14,6 @@
 
 (library
  (name coqdoclib)
- (modules :standard \ coqdoc)
  (libraries str rocq-runtime.boot rocq-runtime.config rocq-runtime.clib rocq-runtime.lib))
-
-(executable
- (name coqdoc)
- (public_name coqdoc)
- (package coq-core)
- (modules coqdoc)
- (libraries coqdoclib))
 
 (ocamllex cpretty)

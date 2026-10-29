@@ -28,39 +28,11 @@
  (libraries rocqshim))
 
 (executable
- (name coqtop_bin)
- (public_name coqtop)
- (package coq-core)
- (modules coqtop_bin)
- (libraries rocqshim))
-
-(executable
- (name coqtop_byte_bin)
- (public_name coqtop.byte)
- (package coq-core)
- (modules coqtop_byte_bin)
- (libraries rocqshim))
-
-(executable
- (name coqc_bin)
- (public_name coqc)
- (package coq-core)
- (modules coqc_bin)
- (libraries rocqshim))
-
-(executable
  (name rocqnative)
  (modules rocqnative)
  (libraries rocq-runtime.kernel)
  (modes exe byte) ; NB byte not installed, just exists for debugger
  (link_flags -linkall))
-
-(executable
- (name coqnative)
- (public_name coqnative)
- (package coq-core)
- (modules coqnative)
- (libraries rocqshim))
 
 ; Workers
 (executable

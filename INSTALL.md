@@ -77,8 +77,8 @@ for more details.
 To build and install Rocq do:
 
     $ make dunestrap
-    $ dune build -p rocq-runtime,coq-core,rocq-core
-    $ dune install --prefix=<install_prefix> rocq-runtime coq-core rocq-core
+    $ dune build -p rocq-runtime,rocq-core
+    $ dune install --prefix=<install_prefix> rocq-runtime rocq-core
 
 Packagers may want to play with `dune install` options as to tweak
 installation paths, and the `-libdir` argument for `./configure` to tell Rocq
