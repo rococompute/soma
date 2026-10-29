@@ -65,3 +65,32 @@ fails lemma.lang
 # Rocq's .v files keep theirs
 printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > theorem.v
 rocq c -q theorem.v
+
+# .proof files have the proof sentences of theories/Soma/Proof.v, which
+# check what they state
+cat > double.proof <<'EOT'
+Theorem double_bigger : forall n : nat, n > 0 -> double n > n.
+Proof.
+  Take n : nat.
+  Assume that n > 0 as n_pos.
+  We need to show that n + n > n.
+  We conclude that n + n > n.
+Qed.
+EOT
+rm -f double.vo
+rocq c -q double.soma
+claim_fails() { # claim_fails SENTENCE MESSAGE: a proof with SENTENCE fails
+  printf 'Theorem t : forall n : nat, n > 0 -> double n > n.\nProof.\n  Take n : nat.\n  Assume that n > 0 as n_pos.\n  %s\nAdmitted.\n' "$1" > double.proof
+  if rocq c -q double.soma > out.log 2>&1; then
+    echo "$1 was accepted"; exit 1
+  fi
+  grep -q "$2" out.log || { cat out.log; exit 1; }
+}
+claim_fails 'We need to show that n + n > n + 1.' 'The goal is (double n > n) and not (n + n > n + 1)'
+claim_fails 'It holds that n > 1 as n_big.' 'This does not follow'
+claim_fails 'Take m : nat.' 'No product'
+# the sentences are only in .proof files
+printf 'Definition We := 1.\n' > names.soma
+rocq c -q names.soma
+# nothing is left next to the program by lia or nia
+[ ! -e .lia.cache ] && [ ! -e .nia.cache ]

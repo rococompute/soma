@@ -84,6 +84,45 @@ FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
 `examples/reason_counter.proof` and `examples/reason_components.proof` are
 examples; `test-suite/misc/soma_proof.sh` tests it.
 
+### Proof sentences
+
+A `.proof` file imports `theories/Soma/Proof.v` (and only a `.proof`
+file does), so that a proof can be written as sentences that say what
+each step does, for people and agents to read without replaying it.
+Each sentence is checked: one that states the goal or a fact fails
+unless it is the goal or holds, so the text cannot drift from the
+proof.
+
+```coq
+Theorem pow8_is_pow : forall x : nat, pow8 x = x ^ 8.
+Proof.
+  Take x : nat.
+  We need to show that square (square (square x)) = x ^ 8.
+  We conclude that x * x * (x * x) * (x * x * (x * x)) = x ^ 8.
+Qed.
+```
+
+| Sentence | Checks, then does |
+| --- | --- |
+| `Take x : T.` | the next variable is a `T`; names it |
+| `Assume that P as H.` | the next hypothesis is `P` (perhaps unfolded); names it |
+| `We need to show that P.` | the goal is `P`, up to computation; shows it as `P` |
+| `It holds that P as H.` | proves `P` and names it |
+| `It suffices to show that P.` | the goal follows from `P`; `P` is the new goal |
+| `We conclude that P.` | the goal is `P`; proves it |
+| `By t, ...` (the last three) | as above, with the hypothesis or lemma `t` |
+| `Choose x := t.` | proves an `exists x, ...` with `t` |
+| `Obtain a and b from x.` | takes `x` (a pair, `{a \| P a}`, `exists`, `/\`) apart |
+
+"Proves" is `soma_auto`: the hypotheses, computation, equalities,
+`lia`, `ring`, `nia` and propositional logic; `By t` adds `t`, applied
+or rewritten with. A step it cannot take is split into smaller
+sentences. Sentences are tactics, so they mix with any other tactic. In
+a `.proof` file, a tactic acts on one goal at a time (`Default Goal
+Selector "!"`): with several goals open, each is focused with a bullet or
+braces. `examples/macros.proof` and `examples/type_functions.proof` are
+written in sentences.
+
 ### Macros: `.lang` files
 
 Macros are defined in `.lang` files, with `Macro name args := body.`: a

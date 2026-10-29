@@ -31,10 +31,22 @@ let proof_file f =
     if Sys.file_exists p then Some p else None
   else None
 
+(* The commands of [s], run in [state] *)
+let process_string ~state s =
+  let pa = Procq.Parsable.make (Gramlib.Stream.of_string s) in
+  let rec loop state = match Procq.Entry.parse (Pvernac.main_entry None) pa with
+    | Some cmd -> loop (Vernac.process_expr ~state cmd)
+    | None -> state
+  in
+  loop state
+
+(* FILE.proof is written in the proof language of theories/Soma/Proof.v,
+   which is imported for it, and only for it *)
 let load_proof_file ~beautify ~check ~state ldir f =
   match proof_file f with
   | None -> state
   | Some p ->
+    let state = process_string ~state "Require Import Soma.Proof." in
     (* the .glob is the program's: positions in p would not be its *)
     Dumpglob.push_output Dumpglob.NoGlob;
     Fun.protect ~finally:Dumpglob.pop_output (fun () ->
@@ -46,11 +58,7 @@ let load_proof_file ~beautify ~check ~state ldir f =
    by itself, for other files to [Require Import], imports the Macro
    library. (vernac/somaMacro.ml) *)
 let load_lang_file ~state f =
-  if SomaMacro.is_lang_file f then
-    let pa = Procq.Parsable.make (Gramlib.Stream.of_string "Require Import Soma.Macro.") in
-    match Procq.Entry.parse (Pvernac.main_entry None) pa with
-    | Some cmd -> Vernac.process_expr ~state cmd
-    | None -> state
+  if SomaMacro.is_lang_file f then process_string ~state "Require Import Soma.Macro."
   else match Load.lang_of_program f with
   | None -> state
   | Some l -> Load.load_lang ~state l

@@ -58,7 +58,9 @@ soma run examples/hello.soma
 A program's lemmas and theorems are in `NAME.proof` next to `NAME.soma`
 (a `.soma` file cannot have proofs): building or running the program
 reads it after the program and checks them, and fails if one does not
-hold.
+hold. A proof can be written as checked sentences (`Take x : nat.`,
+`We need to show that ...`, `We conclude that ...`; see GRADUAL.md), as
+in `macros.proof` and `type_functions.proof`.
 - `mirage_*.soma`: MirageOS unikernels. A program that has
   `Require Import Sandbox.` is built into an image, `<name>.hvt`, by `soma build`,
   which says how to run it (see the Sandbox section of GRADUAL.md):

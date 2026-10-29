@@ -1,21 +1,31 @@
 (** What is proved about type_functions.soma. This file is read after
     type_functions.soma, in its environment: [g], [j] and the rest are in
     scope, without importing anything. Building or running
-    type_functions.soma checks it, and fails if a proof does not hold. *)
+    type_functions.soma checks it, and fails if a proof does not hold.
+    Proofs are written as checked sentences (theories/Soma/Proof.v). *)
 
 (** [j] cannot be given an odd number: whatever [x : g Int] is, the number
     in it is not an odd [n], as [x] holds a proof that its number is
-    even. *)
+    even. [Nat.odd n] is [negb (Nat.even n)], which the third sentence
+    states. *)
 Theorem j_rejects_odd : forall (n : nat) (x : g Int),
   Nat.odd n = true -> proj1_sig x <> n.
 Proof.
-  intros n [m m_even] n_odd; cbn; intros ->.
-  unfold Nat.odd in n_odd. rewrite m_even in n_odd. discriminate.
+  Take n : nat.
+  Take x : g Int.
+  Assume that negb (Nat.even n) = true as n_odd.
+  Obtain m and m_even from x.
+  We need to show that m <> n.
+  Assume that m = n as same.
+  It holds that Nat.even n = true as n_even.
+  By n_even, we conclude that False.
 Qed.
 
-(** For a number above 1, [j] returns a larger one: [n * n > n]. *)
+(** For a number above 1, [j] returns a larger one: [n ^ 2 > n]. *)
 Theorem j_grows : forall x : g Int, proj1_sig x > 1 -> j x > proj1_sig x.
 Proof.
-  intros [n n_even] n_gt_1; cbn in *.
-  unfold j; cbn. nia.
+  Take x : g Int.
+  Obtain n and n_even from x.
+  Assume that n > 1 as n_gt_1.
+  We conclude that n ^ 2 > n.
 Qed.
