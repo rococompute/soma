@@ -21,32 +21,20 @@
 
 open Rocqshim
 
-let usage = {|Usage: soma COMMAND [ARGUMENTS]
+let usage = {|Usage:
+  soma <command> FILE [options]
 
 Commands:
-  build [-v] FILE [OPTIONS]
-                         check and build a Soma program (FILE.soma).
-                         The files rocq c makes (FILE.vo, FILE.glob,
-                         .FILE.aux) are deleted; the files that are kept
-                         are printed: FILE.hvt, the MirageOS image of a program
-                         that requires Mirage. With -v (--verbose), first
-                         print what rocq c prints: the values of the
-                         program's bare terms. The options are those of
-                         rocq c (rocq c --help).
-  run FILE [OPTIONS] [-- ARGUMENTS]
-                         check a Soma program and print the value of
-                         its last bare term (and fail when it is a
-                         run-time error); for a program that requires
-                         Mirage, build its image and run it (solo5-hvt, or
-                         solo5-vmnet -- solo5-hvt for one that uses the
-                         network), with ARGUMENTS (as --arg=...). Leaves no
-                         files.
-  help                   this message
+  build                       Check a program and keep its MirageOS image, if any.
+  run                         Check a program and print its result, or run its image.
+  help                        Show help.
 
-A program FILE.soma can have its lemmas and theorems in FILE.proof, next
-to it: build and run read FILE.soma, then check FILE.proof with the
-program's definitions in scope, and fail if a proof does not hold. FILE.proof
-can be given in place of FILE.soma.
+Options:
+  -v, --verbose               (build) Print the value of each bare term.
+  -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
+
+Other options are rocq c's (rocq c --help). Proofs about FILE.soma go in
+FILE.proof, which build and run also check.
 |}
 
 let usage_error fmt =
