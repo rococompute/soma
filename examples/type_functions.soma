@@ -1,0 +1,55 @@
+(** Functions that take and return types.
+
+    A function cannot ask a type what it is ("is t a string?"): any type
+    can be passed where a [Type] is expected, and the function has to treat
+    them all alike. So [f] and [g] take a code for a type, a [ty] below,
+    which can be matched on, and return a type. Ints are [nat]s, Soma's
+    numbers. *)
+
+(** The types [f] and [g] can tell apart, and the type each code stands for *)
+Inductive ty := Int | Str.
+
+type_of (t : ty) : Type :=
+  match t with
+  | Int => nat
+  | Str => string
+  end.
+
+(** [f Str] is the type of ints, and [f Int] the type of strings *)
+f (t : ty) : Type :=
+  match t with
+  | Str => nat
+  | Int => string
+  end.
+
+(** [g Int] is the type of even ints: an int with a proof that it is even.
+    Any other type is left as it is. *)
+g (t : ty) : Type :=
+  match t with
+  | Int => {n : nat | Nat.even n = true}
+  | other => type_of other
+  end.
+
+(** [x : f Str] is an int, since [f Str] computes to [nat]. [h "41"] is
+    rejected when the program is checked: [f Str] is not [string]. *)
+h (x : f Str) := x + 1.
+
+h 41.               (* 42 *)
+
+(** An even int is a number and a proof that it is even. [eq_refl]
+    proves [Nat.even n = true] when [Nat.even n] computes to [true]: for 6
+    it does, and [make_even 3 eq_refl] is rejected when the program is
+    checked. *)
+make_even (n : nat) (p : Nat.even n = true) : {m : nat | Nat.even m = true} :=
+  exist _ n p.
+
+six : g Int := make_even 6 eq_refl.
+
+(** [proj1_sig x] is the number in [x]. *)
+j (x : g Int) := proj1_sig x ^ 2.
+
+j six.              (* 36 *)
+
+(** [g] leaves a string a string *)
+greeting : g Str := "hello".
+greeting.           (* "hello" *)

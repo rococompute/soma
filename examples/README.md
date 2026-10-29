@@ -28,6 +28,11 @@ soma run examples/hello.soma
   results.
 - `recursive_countdown.soma`: why a recursive call on `n - 1` is rejected,
   and the `Succ m` countdown that is accepted.
+- `type_functions.soma`: functions from types to types. `f` swaps
+  ints and strings, `g` turns ints into even ints (a number with a proof
+  that it is even), and `h` and `j` take arguments of the types they
+  compute. The types are passed as codes (`Int`, `Str`), since a function
+  cannot ask a type what it is.
 - `sqrt2_irrational.soma`: a proof that the square root of 2 is irrational
   (`irrational (sqrt 2)`), top down: the theorem first, then a proof that
   reduces it with `enough` to the rationals, to whole numbers, and to
