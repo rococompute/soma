@@ -16,14 +16,16 @@ set -u
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 SOMA="${HERE}/_build/install/default/bin/soma"
 SWITCH="${SOMA_MIRAGE_SWITCH:-hvf}"
+# the memory the images run in, as soma run gives them
+MEM="${SOMA_MIRAGE_MEM:-256}"
 NETWORK=1
 [ "${1:-}" = "--no-network" ] && NETWORK=0
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
 # the server runs under opam exec and solo5-vmnet: stop solo5-hvt itself
 stop_server() {
-    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_http_server.hvt"
-    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_http_server.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -60,11 +62,11 @@ run() {
     [ "${expected}" = "timeout" ] && limit=4
     if [ "${kind}" = net ]; then
         timeout "${limit}" opam exec --switch="${SWITCH}" -- solo5-vmnet -- \
-            solo5-hvt --mem=64 -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
+            solo5-hvt --mem=${MEM} -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
             >"${WORK}/${case}.log" 2>&1
     else
         timeout "${limit}" opam exec --switch="${SWITCH}" -- \
-            solo5-hvt --mem=64 -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
+            solo5-hvt --mem=${MEM} -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
             >"${WORK}/${case}.log" 2>&1
     fi
     rc=$?
@@ -93,7 +95,7 @@ if [ "${NETWORK}" = 1 ]; then
     if build mirage_http_server && build mirage_fetch; then
         # without an address, the fetcher says how to use it and exits 2
         run mirage_fetch fetch-usage 2 "usage: --arg=ADDRESS" net
-        hvf solo5-vmnet -- solo5-hvt --mem=64 -- \
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
             "${HERE}/examples/example_files/mirage_http_server.hvt" >"${WORK}/server.log" 2>&1 &
         server=$!
         ip=""
@@ -121,7 +123,7 @@ if [ "${NETWORK}" = 1 ]; then
         wait "${server}" 2>/dev/null
         # the minimal web server answers every request with the same page
         if build mirage_minimal_web_server; then
-            hvf solo5-vmnet -- solo5-hvt --mem=64 -- \
+            hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
                 "${HERE}/examples/example_files/mirage_minimal_web_server.hvt" >"${WORK}/web.log" 2>&1 &
             ip2=""
             for _ in $(seq 1 60); do
@@ -131,7 +133,7 @@ if [ "${NETWORK}" = 1 ]; then
                 sleep 0.25
             done
             run mirage_fetch minimal-web-server 0 "^Hello, web!$" net "--arg=${ip2}"
-            pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
+            pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
         fi
         # nothing listens there: the connection fails, and the fetcher exits 1
         run mirage_fetch fetch-refused 1 "the connection failed" \

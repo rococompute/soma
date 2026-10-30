@@ -20,8 +20,9 @@
    [mirage configure] and fetching the dependencies ([make depends]) only
    happen once. The MirageOS tools come
    from the opam switch [$SOMA_MIRAGE_SWITCH], [hvf] by default (a
-   switch with the hvf-mac repository, see solo5-mac). Setting
-   [SOMA_MIRAGE_BUILD=0] skips the image. *)
+   switch with the hvf-mac repository, see solo5-mac). The image runs in
+   [$SOMA_MIRAGE_MEM] MB of memory, 256 by default (the command to run it
+   says so). Setting [SOMA_MIRAGE_BUILD=0] skips the image. *)
 
 open Names
 
@@ -165,6 +166,25 @@ let args =
   let doc = Cmdliner.Arg.info ~doc:"An argument for the program, in order." [ "arg" ] in
   Mirage_runtime.register_arg Cmdliner.Arg.(value & opt_all string [] doc)
 
+(* --soma-stats: every 2 seconds, what the unikernel holds, for whoever
+   runs it to watch *)
+let stats =
+  let doc = Cmdliner.Arg.info ~doc:"Print what the unikernel holds every 2 seconds." [ "soma-stats" ] in
+  Mirage_runtime.register_arg Cmdliner.Arg.(value & flag doc)
+
+let served = ref 0
+let open_connections = ref 0
+
+(* memory is the unikernel's whole heap, network buffers included (they
+   are outside OCaml's); ocaml_heap is OCaml's part of it *)
+let print_stats () =
+  let g = Gc.quick_stat () in
+  let m = Solo5_os.Memory.stat () in
+  let kb words = words * (Sys.word_size / 8) / 1024 in
+  Printf.printf "soma-stats: requests=%d open=%d memory=%dKB live=%dKB free=%dKB ocaml_heap=%dKB major_collections=%d\n%!"
+    !served !open_connections (kb m.Solo5_os.Memory.heap_words) (kb m.Solo5_os.Memory.live_words)
+    (kb m.Solo5_os.Memory.free_words) (kb g.Gc.heap_words) g.Gc.major_collections
+
 let random bound =
   if bound <= 0 then 0
   else
@@ -207,7 +227,30 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
 
 (* Runs [main]; [serving] is whether the unikernel goes on once [main] has
    ended. *)
+(* Memory is small and bursty: a server's connections leave state that
+   TCP keeps for some seconds, and its strings (lists of characters) are
+   garbage soon. The collector works harder (space_overhead 40, not 120)
+   and the heap is compacted once the requests of a burst are over, so
+   that a burst's memory goes back before the next. *)
+let tune_memory () =
+  Gc.set { (Gc.get ()) with Gc.space_overhead = 40 };
+  let last = ref 0 in
+  Lwt.async (fun () ->
+      let rec loop () =
+        Mirage_sleep.ns (Duration.of_sec 5) >>= fun () ->
+        if !served <> !last && !open_connections = 0 then begin
+          last := !served; Gc.compact ()
+        end;
+        loop () in
+      loop ())
+
 let main ~serving net =
+  tune_memory ();
+  if stats () then
+    Lwt.async (fun () ->
+        let rec loop () =
+          Mirage_sleep.ns (Duration.of_sec 2) >>= fun () -> print_stats (); loop () in
+        loop ());
   Lwt.catch
     (fun () ->
        run net Prog.main >>= fun () ->
@@ -230,6 +273,8 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     let serve port handler =
       incr servers;
       S.TCP.listen (S.tcp s) ~port (fun flow ->
+          incr Soma_rt.open_connections;
+          incr Soma_rt.served;
           (S.TCP.read flow >>= function
             | Ok (`Data b) ->
                 Lwt.catch
@@ -238,7 +283,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
                      S.TCP.write flow (Cstruct.of_string reply) >|= ignore)
                   (fun e -> Soma_rt.report e; Lwt.return_unit)
             | _ -> Lwt.return_unit)
-          >>= fun () -> S.TCP.close flow)
+          >>= fun () -> S.TCP.close flow >|= fun () -> decr Soma_rt.open_connections)
     in
     (* TCP retries a connection for minutes when nothing answers: give up
        after 10 seconds *)
@@ -349,7 +394,12 @@ let build ~state ~vo_file =
                 str (tail_of_file log));
     let hvt = Filename.remove_extension vo_file ^ ".hvt" in
     copy_file ~src:(List.fold_left Filename.concat dir ["dist"; "soma.hvt"]) ~dst:hvt;
-    let run = if network then "solo5-vmnet -- solo5-hvt -- " else "solo5-hvt -- " in
+    (* the memory the image runs in, in MB: $SOMA_MIRAGE_MEM, or 256 *)
+    let mem = match int_of_string_opt (getenv_default "SOMA_MIRAGE_MEM" "") with
+      | Some m when m > 0 -> m
+      | _ -> 256 in
+    let hvt_cmd = Printf.sprintf "solo5-hvt --mem=%d -- " mem in
+    let run = if network then "solo5-vmnet -- " ^ hvt_cmd else hvt_cmd in
     Feedback.msg_notice Pp.(str "Mirage: built " ++ str hvt ++
                             str "; run it with: " ++ str run ++ str hvt)
   end

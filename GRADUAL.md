@@ -623,6 +623,25 @@ happen the first time for each, about 15 s; later builds take about a
 second. Each one's `build.log` has its last build's output.
 `SOMA_MIRAGE_BUILD=0` skips the image.
 
+The image runs in `$SOMA_MIRAGE_MEM` MB of memory, 256 by default, which
+the command to run it states (`solo5-hvt --mem=256 -- prog.hvt`). Memory
+is small and bursty for a server: each closed connection leaves state that
+TCP keeps for some seconds (about 6 KB; 2500 fast connections hold 15 MB
+for under 20 s), and strings, lists of characters, make garbage. So the
+runtime collects more eagerly (`space_overhead` 40) and compacts the heap
+once a burst of requests is over; with these, the HTTP server example
+answers 15000 requests in 64 MB, where it ran out after about 5500
+before, at about 4500 requests per second one at a time and 12000 ten at
+a time. An image given `--soma-stats` prints what it holds every 2
+seconds:
+
+```
+soma-stats: requests=2500 open=0 memory=56648KB live=19120KB free=36503KB ocaml_heap=14577KB major_collections=10
+```
+
+(`memory`, `live` and `free` are the unikernel's whole heap, network
+buffers included; `ocaml_heap` is OCaml's part of it.)
+
 ```sh
 soma run examples/example_files/mirage_http_server.soma              # prints its IP
 soma run examples/example_files/mirage_fetch.soma -- --arg=<that IP>
