@@ -10,7 +10,7 @@
     brings it back to 0. The types are only there. Building or running
     this file checks those proofs too, for every list of clicks, not some.
 
-        soma run examples/reason_counter.soma *)
+        soma run examples/example_files/reason_counter.soma *)
 Require Import JSX.
 
 Inductive action := Increment | Decrement | Reset.

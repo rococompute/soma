@@ -1,7 +1,7 @@
 (** A MirageOS unikernel. Requiring [Sandbox] makes the program one:
-    [soma build examples/mirage_hello.soma] builds the image
-    [examples/mirage_hello.hvt], and
-        soma run examples/mirage_hello.soma
+    [soma build examples/example_files/mirage_hello.soma] builds the image
+    [examples/example_files/mirage_hello.hvt], and
+        soma run examples/example_files/mirage_hello.soma
     builds it and runs it on Apple Silicon, with solo5-hvt (see the Sandbox
     section of GRADUAL.md for the setup).
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Build the Mirage examples (examples/mirage_*.soma) with soma build, boot
+# Build the Mirage examples (examples/example_files/mirage_*.soma) with soma build, boot
 # each image on solo5-hvt, and check what it does: its console and its exit
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
 # server unikernel is fetched from by another one.
@@ -22,8 +22,8 @@ NETWORK=1
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
 # the server runs under opam exec and solo5-vmnet: stop solo5-hvt itself
 stop_server() {
-    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_http_server.hvt"
-    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_minimal_web_server.hvt"
+    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_http_server.hvt"
+    pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -38,9 +38,9 @@ fail() {
     FAIL=$((FAIL + 1))
 }
 
-# build NAME: soma build examples/NAME.soma, which builds examples/NAME.hvt
+# build NAME: soma build examples/example_files/NAME.soma, which builds examples/example_files/NAME.hvt
 build() {
-    if "${SOMA}" build "${HERE}/examples/$1.soma" >"${WORK}/build-$1.log" 2>&1; then
+    if "${SOMA}" build "${HERE}/examples/example_files/$1.soma" >"${WORK}/build-$1.log" 2>&1; then
         return 0
     fi
     echo "FAIL build $1"
@@ -50,7 +50,7 @@ build() {
 }
 
 # run NAME CASE EXPECTED-EXIT PATTERN plain|net [ARGS...]: boot
-# examples/NAME.hvt with ARGS (under solo5-vmnet for net; 60 s at most);
+# examples/example_files/NAME.hvt with ARGS (under solo5-vmnet for net; 60 s at most);
 # pass if it exits with EXPECTED-EXIT (or is stopped, for "timeout") and
 # its console matches the extended regex PATTERN.
 run() {
@@ -60,11 +60,11 @@ run() {
     [ "${expected}" = "timeout" ] && limit=4
     if [ "${kind}" = net ]; then
         timeout "${limit}" opam exec --switch="${SWITCH}" -- solo5-vmnet -- \
-            solo5-hvt --mem=64 -- "${HERE}/examples/${name}.hvt" "$@" \
+            solo5-hvt --mem=64 -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
             >"${WORK}/${case}.log" 2>&1
     else
         timeout "${limit}" opam exec --switch="${SWITCH}" -- \
-            solo5-hvt --mem=64 -- "${HERE}/examples/${name}.hvt" "$@" \
+            solo5-hvt --mem=64 -- "${HERE}/examples/example_files/${name}.hvt" "$@" \
             >"${WORK}/${case}.log" 2>&1
     fi
     rc=$?
@@ -94,7 +94,7 @@ if [ "${NETWORK}" = 1 ]; then
         # without an address, the fetcher says how to use it and exits 2
         run mirage_fetch fetch-usage 2 "usage: --arg=ADDRESS" net
         hvf solo5-vmnet -- solo5-hvt --mem=64 -- \
-            "${HERE}/examples/mirage_http_server.hvt" >"${WORK}/server.log" 2>&1 &
+            "${HERE}/examples/example_files/mirage_http_server.hvt" >"${WORK}/server.log" 2>&1 &
         server=$!
         ip=""
         for _ in $(seq 1 60); do
@@ -122,7 +122,7 @@ if [ "${NETWORK}" = 1 ]; then
         # the minimal web server answers every request with the same page
         if build mirage_minimal_web_server; then
             hvf solo5-vmnet -- solo5-hvt --mem=64 -- \
-                "${HERE}/examples/mirage_minimal_web_server.hvt" >"${WORK}/web.log" 2>&1 &
+                "${HERE}/examples/example_files/mirage_minimal_web_server.hvt" >"${WORK}/web.log" 2>&1 &
             ip2=""
             for _ in $(seq 1 60); do
                 ip2="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/web.log" |
@@ -131,7 +131,7 @@ if [ "${NETWORK}" = 1 ]; then
                 sleep 0.25
             done
             run mirage_fetch minimal-web-server 0 "^Hello, web!$" net "--arg=${ip2}"
-            pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/mirage_minimal_web_server.hvt"
+            pkill -f "solo5-hvt --mem=64 -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
         fi
         # nothing listens there: the connection fails, and the fetcher exits 1
         run mirage_fetch fetch-refused 1 "the connection failed" \
@@ -139,7 +139,7 @@ if [ "${NETWORK}" = 1 ]; then
     fi
 fi
 
-rm -f "${HERE}"/examples/mirage_*.vo "${HERE}"/examples/mirage_*.glob \
-    "${HERE}"/examples/.mirage_*.aux
+rm -f "${HERE}"/examples/example_files/mirage_*.vo "${HERE}"/examples/example_files/mirage_*.glob \
+    "${HERE}"/examples/example_files/.mirage_*.aux
 echo "${PASS} passed, ${FAIL} failed"
 [ "${FAIL}" -eq 0 ]

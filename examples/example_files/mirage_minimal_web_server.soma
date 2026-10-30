@@ -1,6 +1,6 @@
 (** The smallest web server: every request on port 8080 gets the same page.
 
-        soma run examples/mirage_minimal_web_server.soma
+        soma run examples/example_files/mirage_minimal_web_server.soma
         curl http://<the address it prints>:8080/ *)
 Require Import Sandbox.
 

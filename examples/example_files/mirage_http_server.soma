@@ -4,9 +4,9 @@
     fetches gets a network stack, so it runs under solo5-vmnet, which gives
     it an address on the Mac's vmnet network (printed when it starts):
 
-        soma run examples/mirage_http_server.soma
+        soma run examples/example_files/mirage_http_server.soma
 
-    examples/mirage_fetch.soma fetches from it. *)
+    examples/example_files/mirage_fetch.soma fetches from it. *)
 Require Import Sandbox.
 
 two_digits n : string := if n <? 10 then "0" ++ to_string n else to_string n.

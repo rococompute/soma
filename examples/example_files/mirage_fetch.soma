@@ -3,7 +3,7 @@
     failed, 2 without an address. With mirage_http_server.hvt running at
     192.168.105.46 (it prints its address):
 
-        soma run examples/mirage_fetch.soma -- --arg=192.168.105.46
+        soma run examples/example_files/mirage_fetch.soma -- --arg=192.168.105.46
 
     [args] are the [--arg=...] given to the image, in order. *)
 Require Import Sandbox.
