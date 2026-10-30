@@ -1,6 +1,7 @@
 (** A unikernel that fetches a page over HTTP from the address it is given,
-    prints it, and exits: 0 when it got a reply, 1 when the connection
-    failed, 2 without an address. With mirage_http_server.hvt running at
+    prints it, and exits: 0 when it got a reply, 1 when there was none
+    (and says why), 2 without an address or with one that is not an IP
+    address. With mirage_http_server.hvt running at
     192.168.105.46 (it prints its address):
 
         soma run examples/example_files/mirage_fetch.soma -- --arg=192.168.105.46
@@ -15,8 +16,10 @@ main : io unit :=
     print ("fetching http://" ++ address ++ ":8080/hello") ;;
     reply <- fetch address 8080 (http_get "/hello") ;;
     match reply with
-    | Some page => print page
-    | None => print "the connection failed" ;; exit 1
+    | Reply page => print page
+    | Refused => print "the connection was refused: nothing listens there" ;; exit 1
+    | TimedOut => print "nothing answered within 10 seconds" ;; exit 1
+    | BadAddress => print (address ++ " is not an IP address") ;; exit 2
     end
   | _ => print "usage: --arg=ADDRESS" ;; exit 2
   end.

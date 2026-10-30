@@ -579,7 +579,7 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |
-| `fetch address port request` | `io (option string)` | connects to the IP address, sends `request`, returns what comes back before the other side closes; `None` if the connection fails or nothing answers within 10 seconds |
+| `fetch address port request` | `io fetched` | connects to the IP address, sends `request`, returns what comes back before the other side closes (`Reply body`), or why there is nothing: `Refused` (nothing listens there), `TimedOut` (nothing answered within 10 seconds), `BadAddress` (not an IP address) |
 
 `http_response body`, `http_get path`, `http_path request` and `crlf` build
 and read HTTP. `++` appends strings wherever a `string` is expected (see

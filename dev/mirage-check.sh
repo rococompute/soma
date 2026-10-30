@@ -135,9 +135,13 @@ if [ "${NETWORK}" = 1 ]; then
             run mirage_fetch minimal-web-server 0 "^Hello, web!$" net "--arg=${ip2}"
             pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
         fi
-        # nothing listens there: the connection fails, and the fetcher exits 1
-        run mirage_fetch fetch-refused 1 "the connection failed" \
+        # nothing listens there: the fetcher says why there is no reply, and
+        # exits 1
+        run mirage_fetch fetch-refused 1 "the connection was refused|nothing answered within 10 seconds" \
             net "--arg=${ip:-192.168.105.1}"
+        # not an IP address: the fetcher says so, and exits 2
+        run mirage_fetch fetch-bad-address 2 "not-an-address is not an IP address" \
+            net "--arg=not-an-address"
     fi
 fi
 

@@ -197,11 +197,16 @@ let report ?(during = "main") e =
    | e -> Printf.printf "Run-time error: %s.\n%!" (Printexc.to_string e));
   event "failure" (("during", S during) :: failure_fields e)
 
+(* What [fetch] gets (Sandbox.fetched): extracted, it has the
+   representation of [fetched_value], with a [char list] for the reply *)
+type fetched = Got of string | Net_refused | Net_timed_out | Net_bad_address
+type fetched_value = Reply of char list | Refused | TimedOut | BadAddress
+
 (* What the network provides; without a network stack, [serve] and [fetch]
    are not reached (a program that uses them gets one) *)
 type net = {
   serve : int -> (string -> string Lwt.t) -> unit;
-  fetch : string -> int -> string -> string option Lwt.t;
+  fetch : string -> int -> string -> fetched Lwt.t;
 }
 
 let no_network =
@@ -271,7 +276,11 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Fetch (address, port, request) ->
       net.fetch (string_of_chars (check address)) (int_of_nat (check port))
         (string_of_chars (check request))
-      >|= fun reply -> Obj.magic (Option.map chars_of_string reply)
+      >|= fun reply -> Obj.magic (match reply with
+          | Got s -> Reply (chars_of_string s)
+          | Net_refused -> Refused
+          | Net_timed_out -> TimedOut
+          | Net_bad_address -> BadAddress)
 
 (* Runs [main]; [serving] is whether the unikernel goes on once [main] has
    ended. *)
@@ -358,23 +367,27 @@ module Main (S : Tcpip.Stack.V4V6) = struct
        after 10 seconds *)
     let connect ip port =
       Lwt.pick [
-        (S.TCP.create_connection (S.tcp s) (ip, port) >|= Result.to_option);
-        (Mirage_sleep.ns (Duration.of_sec 10) >|= fun () -> None);
+        (S.TCP.create_connection (S.tcp s) (ip, port) >|= function
+          | Ok flow -> `Flow flow
+          | Error `Refused -> `Refused
+          | Error `Timeout -> `Timeout);
+        (Mirage_sleep.ns (Duration.of_sec 10) >|= fun () -> `Timeout);
       ]
     in
     let fetch address port request =
       match Ipaddr.of_string address with
-      | Error _ -> Lwt.return None
+      | Error _ -> Lwt.return Soma_rt.Net_bad_address
       | Ok ip ->
           connect ip port >>= function
-          | None -> Lwt.return None
-          | Some flow ->
+          | `Refused -> Lwt.return Soma_rt.Net_refused
+          | `Timeout -> Lwt.return Soma_rt.Net_timed_out
+          | `Flow flow ->
               S.TCP.write flow (Cstruct.of_string request) >>= fun _ ->
               let reply = Buffer.create 4096 in
               let rec read () =
                 S.TCP.read flow >>= function
                 | Ok (`Data b) -> Buffer.add_string reply (Cstruct.to_string b); read ()
-                | _ -> S.TCP.close flow >|= fun () -> Some (Buffer.contents reply)
+                | _ -> S.TCP.close flow >|= fun () -> Soma_rt.Got (Buffer.contents reply)
               in
               read ()
     in

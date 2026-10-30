@@ -28,6 +28,13 @@ From Corelib Require Extraction.
 From Stdlib Require ExtrOcamlString.
 Require Import Soma.Strings Soma.Show.
 
+(** What [fetch] gets: the reply, or why there is none *)
+Inductive fetched : Type :=
+| Reply (body : string)   (* what the other side sent back before it closed *)
+| Refused                 (* nothing listens at that address and port *)
+| TimedOut                (* nothing answered within 10 seconds *)
+| BadAddress.             (* the address is not an IP address *)
+
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
 (** [bind m k]: run [m], then [k] on its result *)
@@ -53,9 +60,10 @@ Inductive io : Type -> Type :=
 | serve (port : nat) (handler : string -> io string) : io unit
 (** connect to [address] (an IP address, as ["192.168.64.1"]) on [port],
     send [request], and return everything the other side sends back before
-    it closes, or [None] when the connection fails or nothing answers within
-    10 seconds *)
-| fetch (address : string) (port : nat) (request : string) : io (option string).
+    it closes ([Reply]), or why there is nothing: the connection was
+    [Refused], nothing answered within 10 seconds ([TimedOut]), or the
+    address is not an IP address ([BadAddress]) *)
+| fetch (address : string) (port : nat) (request : string) : io fetched.
 
 Arguments ret {A} a.
 Arguments bind {A B} m k.
