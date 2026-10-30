@@ -55,18 +55,28 @@ Definition box_dyn : Any := box.
 Print box_dyn.
 Fail Definition set_dyn : Any := Set.
 
-(* proofs that rely on the gradual primitives in a way their statement
-   does not account for are reported; the others are silent *)
+(* proofs whose evidence is a gradual primitive (unk, raise, a cast to the
+   statement), in the proof or in what it uses, are reported; theorems
+   about gradual programs, whose casts are their subject, are not *)
 Lemma about_program : succ_dyn 41 = 42. Proof. reflexivity. Qed.
+Lemma about_program_var : forall n : nat, succ_dyn n = n + 1. Proof. intros n. reflexivity. Qed.
 Lemma plain : forall n : nat, 0 + n = n. Proof. reflexivity. Qed.
 Lemma by_unknown : False. Proof. exact unk. Qed.
 Lemma by_error : forall n : nat, n = 0. Proof. intros; exact raise. Qed.
 Lemma by_cast : 0 = 1. Proof. exact (cast (0 = 0) (0 = 1) eq_refl). Qed.
+(* a statement about a gradual program does not make unk evidence *)
+Lemma about_program_faked : forall n : nat, succ_dyn n = n + 2.
+Proof. intros n. exact (eq_trans unk eq_refl). Qed.
+(* nor does hiding it in a definition, or in data *)
+Definition hidden : 1 = 2 := raise.
+Lemma by_hidden : 1 = 2. Proof. exact hidden. Qed.
+Definition even_three : {n : nat | Nat.even n = true} := exist _ 3 raise.
+Lemma by_data : Nat.even 3 = true. Proof. exact (proj2_sig even_three). Qed.
 
 (* after backtracking, a name may denote a different constant *)
 Set Warnings "-undo-batch-mode".
-Definition helper : nat := 0.
-Lemma before_reset : 0 = 0. Proof. exact (f_equal (fun _ : nat => 0) (eq_refl helper)). Qed.
+Definition helper : 0 = 0 := eq_refl.
+Lemma before_reset : 0 = 0. Proof. exact helper. Qed.
 Reset helper.
-Definition helper : nat := cast bool nat true.
-Lemma after_reset : 0 = 0. Proof. exact (f_equal (fun _ : nat => 0) (eq_refl helper)). Qed.
+Definition helper : 0 = 0 := raise.
+Lemma after_reset : 0 = 0. Proof. exact helper. Qed.

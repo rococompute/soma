@@ -402,24 +402,85 @@ and const_uses env cst =
     uses_cache := Names.Cmap_env.add cst l !uses_cache;
     l
 
-let rec strip_lambdas c = match Constr.kind c with
-  | Constr.Lambda (_, _, c) | Constr.LetIn (_, _, _, c) -> strip_lambdas c
-  | Constr.Cast (c, _, _) -> strip_lambdas c
-  | _ -> c
+(* Fake evidence: a gradual primitive whose result is a proof, [unknown P],
+   [err P] or [cast A P v] for a proposition [P]. It inhabits any statement,
+   so a proof built with it proves nothing. The same primitives at other
+   types ([cast nat Any n], [Any] itself) are the gradual program a theorem
+   is about, and are not evidence. *)
+type fake = { kind : Gradual.kind; env : Environ.env; prop : Constr.t; within : Names.Constant.t option }
 
-let proof_uses_gradual env ~typ ~body =
-  if not (Gradual.enabled env) then None
-  else
-    let head = match Constr.kind (strip_lambdas body) with
-      | Constr.App (f, _) -> f
-      | _ -> strip_lambdas body
+let is_proposition env t =
+  try
+    let s = Retyping.get_sort_of env Evd.empty (EConstr.of_constr t) in
+    let s = EConstr.ESorts.kind Evd.empty s in
+    Sorts.is_prop s || Sorts.is_sprop s
+  with e when CErrors.noncritical e -> false
+
+(* The proposition a gradual primitive applied to [args] stands for, when it
+   is one *)
+let evidence_for env kind args =
+  let target = match kind, args with
+    | (Gradual.GUnknown | Gradual.GErr), a :: _ -> Some a
+    | Gradual.GCast, _ :: b :: _ :: _ -> Some b
+    | _ -> None
+  in
+  match target with
+  | Some p when is_proposition env p ->
+    (* as it reads: [Nat.even 3 = true], not [(fun n => Nat.even n = true) 3] *)
+    Some (EConstr.Unsafe.to_constr (Reductionops.nf_beta env Evd.empty (EConstr.of_constr p)))
+  | _ -> None
+
+let fake_cache = Summary.ref ~name:"gradual-fake-cache" Names.Cmap_env.empty
+
+(* The first fake evidence in [c], under [env]: in [c] itself, and in the
+   transparent bodies of the constants it mentions that use gradual
+   primitives at all. [allowed] is what may be talked about: a fake that
+   occurs in it is the subject of a theorem, not its evidence. *)
+let rec find_fake env ~allowed c =
+  let allowed_here c = match allowed with
+    | Some typ -> Termops.dependent Evd.empty (EConstr.of_constr c) (EConstr.of_constr typ)
+    | None -> false
+  in
+  let found = ref None in
+  let rec visit env c =
+    if Option.is_empty !found then
+      match Constr.kind c with
+      | Constr.App (f, args) when (match Constr.kind f with
+          | Constr.Const (k, _) -> Option.has_some (Gradual.kind_of env k) | _ -> false) ->
+        let k = match Constr.kind f with Constr.Const (k, _) -> k | _ -> assert false in
+        let kind = Option.get (Gradual.kind_of env k) in
+        (match evidence_for env kind (Array.to_list args) with
+         | Some prop when not (allowed_here c) ->
+           found := Some { kind; env; prop; within = None }
+         | _ -> Array.iter (visit env) args)
+      | Constr.Const (cst, _) when Option.is_empty (Gradual.kind_of env cst) ->
+        if const_uses env cst <> [] && not (allowed_here c) then
+          (match const_fake env cst with
+           | Some fk -> found := Some { fk with within = Some (Option.default cst fk.within) }
+           | None -> ())
+      | _ ->
+        Termops.fold_constr_with_full_binders env Evd.empty
+          (fun d env -> EConstr.push_rel d env)
+          (fun env () c -> visit env (EConstr.Unsafe.to_constr c))
+          env () (EConstr.of_constr c)
+  in
+  visit env c;
+  !found
+
+and const_fake env cst =
+  match Names.Cmap_env.find_opt cst !fake_cache with
+  | Some r -> r
+  | None ->
+    let cb = Environ.lookup_constant cst env in
+    let r = match cb.Declarations.const_body with
+      | Declarations.Def b -> find_fake env ~allowed:None b
+      | _ -> None
     in
-    match Constr.kind head with
-    | Constr.Const (c, _) when Option.has_some (Gradual.kind_of env c)
-                               && not (Option.equal (==) (Gradual.kind_of env c) (Some Gradual.GCast)) ->
-      Some (`Is (Option.get (Gradual.kind_of env c)))
-    | _ ->
-      let in_type = uses env [] typ in
-      match List.filter (fun k -> not (List.mem k in_type)) (uses env [] body) with
-      | [] -> None
-      | l -> Some (`Uses l)
+    fake_cache := Names.Cmap_env.add cst r !fake_cache;
+    r
+
+let proof_fake_evidence env ~typ ~body =
+  if not (Gradual.enabled env) then None
+  (* most proofs reach no gradual primitive at all (cached per constant) *)
+  else if uses env [] body = [] then None
+  else find_fake env ~allowed:(Some typ) body

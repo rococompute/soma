@@ -87,12 +87,16 @@ val coerce_to_product : env -> Evd.evar_map -> constr -> inferred:types ->
 val coerce_to_sort : env -> Evd.evar_map -> constr -> inferred:types ->
   (Evd.evar_map * constr * types) option
 
-(** [proof_uses_gradual env ~typ ~body] tells whether the proof [body] of
-    the statement [typ] relies on gradual primitives in a way that may not
-    hold in Rocq: [`Is k] when the proof is itself [unknown] or [err] (under
-    abstractions), [`Uses l] when it uses primitives [l] that the statement
-    does not (through the types and transparent bodies of the constants it
-    mentions). [None] otherwise, or when no gradual primitive is
-    registered. *)
-val proof_uses_gradual : env -> typ:Constr.types -> body:Constr.constr ->
-  [ `Is of Gradual.kind | `Uses of Gradual.kind list ] option
+(** Fake evidence: [unknown P], [err P] or [cast A P v] for a proposition
+    [P], which inhabits any statement. [env] is where [P] is, and [within]
+    the constant whose transparent body has it, when not the proof itself. *)
+type fake = { kind : Gradual.kind; env : env; prop : Constr.t; within : Names.Constant.t option }
+
+(** [proof_fake_evidence env ~typ ~body] is the first fake evidence of the
+    proof [body] of [typ]: in [body], or in the transparent bodies of the
+    constants it uses, unless it occurs in the statement [typ] itself (a
+    theorem about such a term). Gradual primitives at other types than
+    propositions are what a theorem about a gradual program is about, and
+    are not evidence. [None] when there is none, or when no gradual
+    primitive is registered. *)
+val proof_fake_evidence : env -> typ:Constr.types -> body:Constr.constr -> fake option

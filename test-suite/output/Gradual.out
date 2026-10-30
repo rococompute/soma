@@ -70,20 +70,32 @@ The command has indeed failed with message:
 Cannot cast from "Type" to "Any": "Type@{Set+1}"
 lives above the universe of gradual types
 (Corelib.Gradual.Gradual.gradual), so no cast was inserted.
-File "./output/Gradual.v", line 62, characters 44-48:
-Warning: by_unknown: the proof is the unknown term (unk),
-so it may not hold in Rocq (see Print Assumptions).
+File "./output/Gradual.v", line 64, characters 44-48:
+Warning: by_unknown: unk stands in for a proof of False,
+so the theorem is not proved (see Print Assumptions).
 [gradual-proof,vernacular,default]
-File "./output/Gradual.v", line 63, characters 68-72:
-Warning: by_error: the proof is the error term (raise),
-so it may not hold in Rocq (see Print Assumptions).
+File "./output/Gradual.v", line 65, characters 68-72:
+Warning: by_error: raise stands in for a proof of 
+(n = 0), so the theorem is not proved (see Print Assumptions).
 [gradual-proof,vernacular,default]
-File "./output/Gradual.v", line 64, characters 68-72:
-Warning: by_cast: the proof uses gradual primitives its statement does not
-(cast), so it may not hold in Rocq (see Print Assumptions).
+File "./output/Gradual.v", line 66, characters 68-72:
+Warning: by_cast: a cast stands in for a proof of 
+(0 = 1), so the theorem is not proved (see Print Assumptions).
 [gradual-proof,vernacular,default]
-File "./output/Gradual.v", line 72, characters 87-91:
-Warning: after_reset:
-the proof uses gradual primitives its statement does not (cast),
-so it may not hold in Rocq (see Print Assumptions).
+File "./output/Gradual.v", line 69, characters 47-51:
+Warning: about_program_faked: unk stands in for a proof of
+(succ_dyn (cast nat Any n) = n + 2),
+so the theorem is not proved (see Print Assumptions).
+[gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 72, characters 46-50:
+Warning: by_hidden: raise (in hidden) stands in for a proof of 
+(1 = 2), so the theorem is not proved (see Print Assumptions).
+[gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 74, characters 72-76:
+Warning: by_data: raise (in even_three) stands in for a proof of
+(Nat.even 3 = true), so the theorem is not proved (see Print Assumptions).
+[gradual-proof,vernacular,default]
+File "./output/Gradual.v", line 82, characters 48-52:
+Warning: after_reset: raise (in helper) stands in for a proof of 
+(0 = 0), so the theorem is not proved (see Print Assumptions).
 [gradual-proof,vernacular,default]

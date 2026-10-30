@@ -985,30 +985,33 @@ let interp_mutual_using env cinfo bodies_types using =
       interp_proof_using_gen f env evd cinfos using)
     using
 
-let gradual_prim_name = function
-  | Gradual.GCast -> "cast" | Gradual.GUnknown -> "unknown" | Gradual.GErr -> "err"
-
+(* Under gradual typing, [unk : False]: say when a proof's evidence is a
+   gradual primitive, [unk], [raise] or a cast to the statement it stands
+   for, in the proof or in what it uses (GradualTyping.proof_fake_evidence).
+   A theorem about a gradual program, whose casts are its subject, is not
+   reported. In .proof files, this is an error (theories/Soma/Proof.v).
+   Deferred (asynchronous) proofs are not forced for this. *)
 let warn_gradual_proof =
   CWarnings.create ~name:"gradual-proof" ~category:CWarnings.CoreCategories.vernacular
-    (fun (name, why) ->
-       let why = match why with
-         | `Is Gradual.GErr -> Pp.(str "the proof is the error term (raise)")
-         | `Is _ -> Pp.(str "the proof is the unknown term (unk)")
-         | `Uses l ->
-           Pp.(str "the proof uses gradual primitives its statement does not" ++ spc () ++
-               str "(" ++ prlist_with_sep pr_comma (fun k -> str (gradual_prim_name k)) l ++ str ")")
+    (fun (name, (fake : GradualTyping.fake)) ->
+       let what = match fake.kind with
+         | Gradual.GUnknown -> Pp.str "unk"
+         | Gradual.GErr -> Pp.str "raise"
+         | Gradual.GCast -> Pp.str "a cast"
        in
-       Pp.(Id.print name ++ str ":" ++ spc () ++ why ++ str "," ++ spc () ++
-           str "so it may not hold in Rocq (see Print Assumptions)."))
+       let within = match fake.within with
+         | Some c -> Pp.(str " (in " ++ Printer.pr_constant (Global.env ()) c ++ str ")")
+         | None -> Pp.mt ()
+       in
+       Pp.(Id.print name ++ str ":" ++ spc () ++ what ++ within ++ str " stands in for a proof of" ++ spc () ++
+           Printer.pr_constr_env fake.env Evd.empty fake.prop ++ str "," ++ spc () ++
+           str "so the theorem is not proved (see Print Assumptions)."))
 
-(* Under gradual typing, [unk : False]: say when a proof relies on the
-   gradual primitives in a way its statement does not account for. Deferred
-   (asynchronous) proofs are not forced for this. *)
 let check_gradual_proof ~kind name (entry : proof_entry) =
   match kind, entry.proof_entry_body, entry.proof_entry_type with
   | Decls.IsProof _, Default { body; _ }, Some typ ->
-    begin match GradualTyping.proof_uses_gradual (Global.env ()) ~typ ~body with
-      | Some why -> warn_gradual_proof (name, why)
+    begin match GradualTyping.proof_fake_evidence (Global.env ()) ~typ ~body with
+      | Some fake -> warn_gradual_proof (name, fake)
       | None -> ()
     end
   | _ -> ()

@@ -145,3 +145,30 @@ Qed.
 EOT
 rm -f double.vo
 rocq c -q double.soma
+
+# a theorem whose evidence is a gradual primitive is not proved: an error
+# in .proof files, also about a gradual program, or hidden in a definition;
+# a theorem about a gradual program, or a record with an Any field, is not
+cat > gradual.soma <<'EOT'
+succ_dyn (x : Any) : nat := x + 1.
+cheat : 1 = 2 := raise.
+Record user := { id : nat; others : list (string * Any) }.
+EOT
+fake() { # fake THEOREM: gradual.proof with THEOREM fails, not proved
+  printf '%s\n' "$1" > gradual.proof
+  if rocq c -q gradual.soma > out.log 2>&1; then
+    echo "a fake proof was accepted: $1"; exit 1
+  fi
+  grep -q "stands in for a proof of" out.log || { cat out.log; exit 1; }
+}
+fake 'Theorem t : 1 = 2. Proof. exact unk. Qed.'
+fake 'Theorem t : 1 = 2. Proof. exact (cast nat (1 = 2) 0). Qed.'
+fake 'Theorem t : forall n : nat, succ_dyn n = n + 2. Proof. intros n. exact (eq_trans unk eq_refl). Qed.'
+fake 'Theorem t : 1 = 2. Proof. exact cheat. Qed.'
+cat > gradual.proof <<'EOT'
+Theorem about_program : forall n : nat, succ_dyn n = n + 1.
+Proof. intros n. reflexivity. Qed.
+Theorem about_record : forall u : user, id u = id u.
+Proof. intros u. reflexivity. Qed.
+EOT
+rocq c -q gradual.soma

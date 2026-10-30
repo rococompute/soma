@@ -225,6 +225,11 @@ Tactic Notation "We" "use" "strong" "induction" "on" ident(x) :=
 
 #[export] Set Default Goal Selector "!".
 
+(* A theorem whose evidence is a gradual primitive ([unk], [raise], a cast
+   to its statement) is not proved: an error in .proof files, rather than
+   Rocq's warning (vernac/declare.ml) *)
+#[export] Set Warnings "+gradual-proof".
+
 (* [lia] and [nia] keep no cache files next to the program *)
 #[export] Unset Lia Cache.
 #[export] Unset Nia Cache.
