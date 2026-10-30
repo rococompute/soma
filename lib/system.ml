@@ -143,6 +143,13 @@ let exists_in_dir_respecting_case dir bf =
       (* rescan, there is a new file we don't know about *)
       CString.Set.mem bf (cache_dir dir)
 
+(* Soma: a folder whose listing changed (a file compiled into it by an
+   [Import], vernac/somaImport.ml) is read again *)
+let forget_dir dir =
+  (* also as it is looked up, [dir/.], and the folders in it *)
+  let under k = String.equal k dir || CString.is_prefix (dir ^ "/") k in
+  dirmap := CString.Map.filter (fun k _ -> not (under k)) !dirmap
+
 let file_exists_respecting_case path f =
   (* This function ensures that a file with expected lowercase/uppercase
      is the correct one, even on case-insensitive file systems *)

@@ -194,6 +194,39 @@ Macros are in scope only where they are asked for:
 `examples/example_files/macros.lang` and `examples/example_files/macros.soma` are an example;
 `test-suite/misc/soma_macros.sh` tests it.
 
+### Projects: `Import` compiles what it imports
+
+A program can be several files in a folder, its project. In a Soma file,
+`Import X`, where `X` is no module in scope, is the file `X.soma` (or
+`X.lang`) of the project, and `Import X.Y` is `X/Y.soma`. It is compiled
+into the project's `.soma-cache` (`.soma-cache/X/Y.vo`, the library
+`X.Y`) unless the cache has it up to date, then loaded and opened, as
+`Require Import` would. A name that is no file of the project is a
+library, as before (`Import Sandbox`). One command cannot import both a
+module in scope and a file or library. The project is the folder of the
+program being built, so `soma build` and `soma run` (which keep the cache)
+work from any folder (`vernac/somaImport.ml`, hooked in
+`vernac/synterp.ml`).
+
+A file is compiled by a `rocq c` of its own, which compiles what it
+imports in the same way. Its `.proof` is checked then, and it is not made
+a unikernel. When it succeeds, it writes a stamp next to the `.vo`: the
+hash of the source, its `.proof` and its `.lang`, and the digest of each
+project file it imported, as compiled. A compiled file is used while its
+stamp holds: its sources unchanged, and what it imports up to date and
+unchanged since. So a change to a file compiles it again, and what
+imports it only when its `.vo` changed (a `.vo` keeps locations, so a
+change that moves lines does). Each file is checked once per
+compilation. A failed compilation leaves the cache as it was, and the
+import fails with `Cannot import X.Y: X/Y.soma does not compile (its
+errors are above).`, after its errors. A file that imports itself, through
+others, is `Import cycle: a -> b -> a.`
+
+`examples/example_projects/cached_compilation` is an example;
+`test-suite/misc/soma_import.sh` tests it. Not yet handled: two builds of
+one project at the same time, and `soma run --supervise` of a program
+that imports project files.
+
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
 `.lang`; given a name without an extension, they look for `.soma` first,
@@ -604,7 +637,9 @@ main : io unit :=
 
 `soma build prog.soma` (or `rocq c prog.soma`) checks the program and,
 since it requires `Sandbox`, builds `prog.hvt` next to `prog.vo`
-(`toplevel/somaMirage.ml`, called from `toplevel/ccompile.ml`):
+(`toplevel/somaMirage.ml`, called from `toplevel/ccompile.ml`). Only a
+program is built so, a `.soma` file; a Rocq `.v` file that requires
+`Sandbox` is a library:
 
 1. `main` must exist and have type `io unit`.
 2. `main` is extracted to `prog.ml` (strings as `char list`, with Stdlib's

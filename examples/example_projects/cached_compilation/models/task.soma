@@ -1,0 +1,5 @@
+(** A task: what to do, and whether it is finished. models/task.soma is
+    imported as [models.task]. *)
+Record task := { title : string; finished : bool }.
+
+new_task (t : string) : task := {| title := t; finished := false |}.

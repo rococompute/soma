@@ -415,6 +415,19 @@ let rec synterp ~intern ?loc ~atts v =
       let needed, modrefl = synterp_require ~intern from export qidl in
       EVernacRequire (needed, modrefl, export, qidl)
     | VernacImport (export,qidl) ->
+      (* Soma: in a Soma file, [Import X] of no module in scope is
+         [Require Import X], compiling [X] first when it is a file of the
+         program's project (vernac/somaImport.ml) *)
+      let in_scope (qid, _) = match Nametab.locate_module qid with
+        | _ -> true
+        | exception Not_found -> false in
+      if SomaImport.applies ?loc () && not (List.for_all in_scope qidl) then begin
+        if List.exists in_scope qidl then
+          user_err ?loc Pp.(str "Import modules in scope and libraries or files in separate commands.");
+        ignore (SomaImport.prepare ?loc (List.map fst qidl));
+        let needed, modrefl = synterp_require ~intern None (Some export) qidl in
+        EVernacRequire (needed, modrefl, Some export, qidl)
+      end else
       let export, mpl = synterp_import export qidl in
       EVernacImport (export,mpl)
     | VernacDeclareMLModule l ->

@@ -1,0 +1,4 @@
+(** Tasks as text *)
+Import models.task.
+
+show_task (x : task) : string := (if finished x then "[x] " else "[ ] ") ++ title x.

@@ -1,0 +1,9 @@
+(** A list of tasks: adding one, finishing one, and counting what remains *)
+Import models.task.
+
+add (t : string) (ts : list task) : list task := ts ++ [new_task t].
+
+finish (t : string) (ts : list task) : list task :=
+  map (fun x => if String.eqb (title x) t then {| title := title x; finished := true |} else x) ts.
+
+remaining (ts : list task) : nat := length (filter (fun x => negb (finished x)) ts).

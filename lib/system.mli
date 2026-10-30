@@ -90,6 +90,10 @@ val trust_file_cache : bool ref
 
 val file_exists_respecting_case : string -> string -> bool
 
+(** Soma: forget the listing of a folder read before, for a file put in it
+    since (even with [trust_file_cache]) *)
+val forget_dir : string -> unit
+
 (** {6 I/O functions } *)
 (** Generic input and output functions, parameterized by a magic number
   and a suffix. The intern functions raise the exception [Bad_magic_number]

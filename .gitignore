@@ -162,3 +162,4 @@ bin
 /theories/Soma/dune
 /test-suite/test_suite_config.inc
 *.hvt
+.soma-cache/

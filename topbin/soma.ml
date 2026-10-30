@@ -111,6 +111,9 @@ let created ~before ~start ~source dir =
   modification_times dir
   |> List.filter (fun (name, time) ->
       Filename.concat dir name <> source &&
+      (* the cache of what the program imports (vernac/somaImport.ml) *)
+      name <> ".soma-cache" &&
+      not (Sys.is_directory (Filename.concat dir name)) &&
       (* sources are not outputs, even when edited just before *)
       not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"]) &&
       (time >= start || not (List.mem_assoc name before)))

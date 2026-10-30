@@ -1,0 +1,11 @@
+(** A program of several files. [Import] compiles the files it imports
+    (tasks.soma, text.soma, and models/task.soma, which they import) into
+    .soma-cache, once: building again uses them as they are until one
+    changes. See README.md. *)
+Import tasks.
+Import text.
+
+todo := finish "write the proofs" (add "write the proofs" (add "build a project" nil)).
+
+map show_task todo.     (* ["[ ] build a project", "[x] write the proofs"] *)
+remaining todo.         (* 1 *)

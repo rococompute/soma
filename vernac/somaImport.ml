@@ -1,0 +1,196 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Import] compiles what it imports. In a Soma file (.soma, .proof,
+   .lang), [Import X], where [X] is no module in scope, is the file
+   [X.soma] (or [X.lang]) of the program's project, compiled first when it
+   is not compiled yet or changed since, then loaded and opened as by
+   [Require Import X]; or else a compiled library ([Import Sandbox]), as by
+   [Require Import]. [X.Y] is the file [X/Y.soma].
+
+   The project is the folder of the program being built
+   ($SOMA_PROJECT_ROOT for the compilations it starts). What is compiled
+   goes to its .soma-cache, with a stamp: the hash of the source (with
+   its .proof and .lang) and the digests of what it imports, as compiled.
+   A cached file is used while its stamp holds: its source unchanged, and
+   what it imports up to date and the same as when it was compiled. A
+   file is compiled by a process of its own, which compiles what it
+   imports in the same way. *)
+
+open Names
+
+let cache_name = ".soma-cache"
+
+let root_var = "SOMA_PROJECT_ROOT"
+let stack_var = "SOMA_IMPORT_STACK"
+let stamp_var = "SOMA_IMPORT_STAMP"
+let source_var = "SOMA_IMPORT_SOURCE"
+
+let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".proof"; ".lang"]
+
+let file_of_loc = function
+  | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> Some file
+  | _ -> None
+
+let applies ?loc () = match file_of_loc loc with
+  | Some f -> is_soma_file f
+  | None -> false
+
+let absolute f = if Filename.is_relative f then Filename.concat (Sys.getcwd ()) f else f
+
+(* as the load path has it: absolute, without "." *)
+let project_root ?loc () =
+  match Sys.getenv_opt root_var with
+  | Some r when r <> "" -> r
+  | _ -> CUnix.canonical_path_name (match file_of_loc loc with
+    | Some f -> Filename.dirname (absolute f)
+    | None -> Sys.getcwd ())
+
+let cache root = Filename.concat root cache_name
+
+(* [X.Y] as a path in the project: X/Y *)
+let path_of_qualid qid =
+  let dir, id = Libnames.repr_qualid qid in
+  String.concat "/" (List.rev_map Id.to_string (DirPath.repr dir) @ [Id.to_string id])
+
+let source_of root path =
+  List.find_map (fun ext ->
+      let f = Filename.concat root (path ^ ext) in
+      if Sys.file_exists f then Some f else None) [".soma"; ".lang"]
+
+let vo_of root path = Filename.concat (cache root) (path ^ ".vo")
+let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
+
+(* What a compilation reads of a program: its source, .proof and .lang *)
+let source_hash src =
+  let base = Filename.remove_extension src in
+  let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
+  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"])))
+
+let digest f = Digest.to_hex (Digest.file f)
+
+(* A stamp: "source HASH", then "import PATH DIGEST" for each import *)
+let read_stamp file =
+  try
+    let lines = String.split_on_char '\n' (In_channel.with_open_bin file In_channel.input_all) in
+    let source = ref None and imports = ref [] in
+    List.iter (fun l -> match String.split_on_char ' ' l with
+        | ["source"; h] -> source := Some h
+        | ["import"; p; d] -> imports := (p, d) :: !imports
+        | _ -> ()) lines;
+    Option.map (fun h -> h, List.rev !imports) !source
+  with Sys_error _ -> None
+
+let rec mkdir_p d =
+  if not (Sys.file_exists d) then begin
+    mkdir_p (Filename.dirname d);
+    try Unix.mkdir d 0o755 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+  end
+
+(* What this compilation imported from its project, for its stamp *)
+let imported : (string * string) list ref = ref []
+
+(* Files of the project checked to be up to date by this compilation *)
+let ensured : (string, unit) Hashtbl.t = Hashtbl.create 17
+
+(* The files being compiled, each importing the next: from the program
+   being built (when it is in the project) to the one at [loc] *)
+let stack ?loc root = match Sys.getenv_opt stack_var with
+  | Some s when s <> "" -> String.split_on_char ':' s
+  | _ ->
+    match file_of_loc loc with
+    | Some f ->
+      let f = Filename.concat (CUnix.canonical_path_name (Filename.dirname (absolute f)))
+          (Filename.remove_extension (Filename.basename f)) in
+      if CString.is_prefix (root ^ "/") f
+      then [String.sub f (String.length root + 1) (String.length f - String.length root - 1)]
+      else []
+    | None -> []
+
+let add_cache_to_loadpath root =
+  Loadpath.add_vo_path { Loadpath.unix_path = cache root; coq_path = DirPath.empty;
+                         implicit = false; recursive = true; installed = false }
+
+let compile ?loc root path src =
+  let vo = vo_of root path in
+  mkdir_p (Filename.dirname vo);
+  Printf.eprintf "Compiling %s (into %s)\n%!" (path ^ Filename.extension src) cache_name;
+  let env = Array.of_list (
+      List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
+                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"]))
+        (Array.to_list (Unix.environment ()))
+      @ [ root_var ^ "=" ^ root;
+          stack_var ^ "=" ^ String.concat ":" (stack ?loc root @ [path]);
+          stamp_var ^ "=" ^ stamp_of root path;
+          source_var ^ "=" ^ src;
+          (* what a program imports is not a unikernel of its own *)
+          "SOMA_MIRAGE_BUILD=0" ]) in
+  let prog = Sys.executable_name in
+  (* the cache in the load path names the library by its place there:
+     .soma-cache/models/task.vo is models.task *)
+  let argv = [| prog; "--kind=compile"; src; "-o"; vo; "-Q"; cache root; "" |] in
+  let null = Unix.openfile "/dev/null" [Unix.O_WRONLY] 0 in
+  let pid = Unix.create_process_env prog argv env Unix.stdin null Unix.stderr in
+  Unix.close null;
+  let rec wait () = try snd (Unix.waitpid [] pid)
+    with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
+  match wait () with
+  | Unix.WEXITED 0 ->
+    (* the folder's listing, if read before, does not have the new file *)
+    System.forget_dir (cache root)
+  | _ ->
+    CErrors.user_err ?loc Pp.(str "Cannot import " ++ str (String.map (function '/' -> '.' | c -> c) path) ++
+                              str ": " ++ str (path ^ Filename.extension src) ++
+                              str " does not compile (its errors are above).")
+
+(* [path] (whose source is [src]) compiled and up to date in the cache *)
+let rec ensure ?loc root path src =
+  if not (Hashtbl.mem ensured path) then begin
+    let stack = stack ?loc root in
+    if List.mem path stack then
+      CErrors.user_err ?loc Pp.(str "Import cycle: " ++
+                                str (String.concat " -> " (stack @ [path])) ++ str ".");
+    let vo = vo_of root path in
+    let fresh = Sys.file_exists vo && match read_stamp (stamp_of root path) with
+      | None -> false
+      | Some (hash, imports) ->
+        hash = source_hash src &&
+        List.for_all (fun (p, d) -> match source_of root p with
+            | None -> false
+            | Some s -> ensure ?loc root p s; digest (vo_of root p) = d) imports
+    in
+    if not fresh then compile ?loc root path src;
+    Hashtbl.replace ensured path ()
+  end
+
+(* [Import] of these names, which are no modules in scope: those that are
+   files of the project are compiled when needed. True when any is. *)
+let prepare ?loc qids =
+  let root = project_root ?loc () in
+  let any = List.fold_left (fun any qid ->
+      let path = path_of_qualid qid in
+      match source_of root path with
+      | Some src ->
+        ensure ?loc root path src;
+        if not (List.mem_assoc path !imported) then
+          imported := (path, vo_of root path) :: !imported;
+        true
+      | None -> any) false qids in
+  if any then add_cache_to_loadpath root;
+  any
+
+(* A compilation started by [compile] writes its stamp once it succeeded *)
+let write_stamp () =
+  match Sys.getenv_opt stamp_var, Sys.getenv_opt source_var with
+  | Some stamp, Some src when stamp <> "" ->
+    let lines = ("source " ^ source_hash src) ::
+                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ digest vo) !imported in
+    Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"))
+  | _ -> ()

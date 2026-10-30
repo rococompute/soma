@@ -1,0 +1,31 @@
+(** What is proved about tasks.soma: checked when tasks.soma is compiled,
+    so once, and not again while it is unchanged. *)
+
+(** Adding a task adds one to what remains. *)
+Theorem add_remaining : forall t ts, remaining (add t ts) = remaining ts + 1.
+Proof.
+  Take t : string.
+  Take ts : list task.
+  We need to show that
+    length (filter (fun x => negb (finished x)) (ts ++ [new_task t]))
+    = length (filter (fun x => negb (finished x)) ts) + 1.
+  By filter_app, it suffices to show that
+    length (filter (fun x => negb (finished x)) ts ++ filter (fun x => negb (finished x)) [new_task t])
+    = length (filter (fun x => negb (finished x)) ts) + 1.
+  By length_app, we conclude that
+    length (filter (fun x => negb (finished x)) ts ++ filter (fun x => negb (finished x)) [new_task t])
+    = length (filter (fun x => negb (finished x)) ts) + 1.
+Qed.
+
+(** Finishing a task keeps every task. *)
+Theorem finish_keeps_all : forall t ts, length (finish t ts) = length ts.
+Proof.
+  Take t : string.
+  Take ts : list task.
+  We need to show that
+    length (map (fun x => if String.eqb (title x) t then {| title := title x; finished := true |} else x) ts)
+    = length ts.
+  By length_map, we conclude that
+    length (map (fun x => if String.eqb (title x) t then {| title := title x; finished := true |} else x) ts)
+    = length ts.
+Qed.
