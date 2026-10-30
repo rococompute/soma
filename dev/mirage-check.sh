@@ -141,6 +141,30 @@ if [ "${NETWORK}" = 1 ]; then
     fi
 fi
 
+# soma run says what a run came to, from the image's events
+# (toplevel/somaMirage.ml): diagnose CASE PROGRAM PATTERN runs PROGRAM (the
+# text of a Soma program) and checks soma run's diagnosis on stderr
+diagnose() {
+    case="$1"
+    printf '%s\n' "$2" > "${WORK}/${case}.soma"
+    "${SOMA}" run --events "${WORK}/${case}.soma" >"${WORK}/${case}.log" 2>"${WORK}/${case}.err"
+    cat "${WORK}/${case}.err" >> "${WORK}/${case}.log"
+    if grep -qE "$3" "${WORK}/${case}.log"; then pass "${case}"; else fail "${case}"; fi
+}
+diagnose exits 'Require Import Sandbox.
+main : io unit := exit 3.' \
+    'the program exited with code 3'
+diagnose cast_failure 'Require Import Sandbox.
+bad (x : Any) : string := x.
+main : io unit := print (bad 42).' \
+    'soma-outcome \{"outcome":"failed","kind":"cast".*"expected":"a string","actual":"a nat"'
+diagnose stack_overflow 'Require Import Sandbox.
+main : io unit := print (to_string (length (repeat 0 (N.to_nat 3000000)))).' \
+    'the program stopped on a stack overflow'
+SOMA_MIRAGE_MEM=64 diagnose out_of_memory 'Require Import Sandbox.
+main : io unit := print (match Pos.iter (cons 0) nil 3000000%positive with nil => "empty" | _ => "built" end).' \
+    'the image ran out of memory'
+
 rm -f "${HERE}"/examples/example_files/mirage_*.vo "${HERE}"/examples/example_files/mirage_*.glob \
     "${HERE}"/examples/example_files/.mirage_*.aux
 echo "${PASS} passed, ${FAIL} failed"

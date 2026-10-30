@@ -36,6 +36,8 @@ Options:
   --fill                      (build) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
+  --events                    (run) Show the image's events, and what its run came
+                              to, as JSON lines (soma-event, soma-outcome).
 
 soma build --help lists the other options. Proofs about FILE.soma go in
 FILE.proof, which build and run also check.
@@ -267,7 +269,182 @@ let mirage_command output =
       else None)
     (lines output)
 
-let run file args image_args =
+(* Running an image: its console, with the events of its runtime
+   (toplevel/somaMirage.ml, "soma-event {...}" lines) read rather than
+   shown, and what the run came to said at its end *)
+
+(* The fields of an event: a flat JSON object of strings, numbers and
+   booleans, as the runtime writes them *)
+let event_fields line =
+  let n = String.length line in
+  let rec skip i = if i < n && (line.[i] = ' ' || line.[i] = ',' || line.[i] = '{') then skip (i + 1) else i in
+  let string_at i =
+    let b = Buffer.create 16 in
+    let rec go i =
+      if i >= n then i
+      else match line.[i] with
+        | '"' -> i + 1
+        | '\\' when i + 1 < n ->
+          (match line.[i + 1] with
+           | 'n' -> Buffer.add_char b '\n'
+           | 'u' when i + 5 < n ->
+             Buffer.add_char b (Char.chr (int_of_string ("0x" ^ String.sub line (i + 2) 4) land 255));
+             ignore (go (i + 6))
+           | c -> Buffer.add_char b c);
+          if line.[i + 1] = 'u' then go (i + 6) else go (i + 2)
+        | c -> Buffer.add_char b c; go (i + 1)
+    in
+    let stop = go (i + 1) in
+    Buffer.contents b, stop
+  in
+  let rec fields i acc =
+    let i = skip i in
+    if i >= n || line.[i] = '}' || line.[i] <> '"' then List.rev acc
+    else
+      let key, i = string_at i in
+      let i = if i < n && line.[i] = ':' then i + 1 else i in
+      if i < n && line.[i] = '"' then
+        let v, i = string_at i in fields i ((key, v) :: acc)
+      else
+        let j = ref i in
+        while !j < n && line.[!j] <> ',' && line.[!j] <> '}' do incr j done;
+        fields !j ((key, String.sub line i (!j - i)) :: acc)
+  in
+  fields 0 []
+
+let event_prefix = "soma-event "
+
+(* What a run came to *)
+type failure = { kind : string; message : string option; expected : string option; actual : string option }
+
+type outcome =
+  | Finished
+  | Exited of int                              (* the program's [exit n] *)
+  | Failed of failure                          (* a run-time error in [main]: the image stopped *)
+  | Out_of_memory of { memory_kb : int option; live_kb : int option }
+  | Aborted of { code : int; last_line : string option }   (* stopped, saying nothing of why *)
+  | Signaled of int
+
+let failure_of fields =
+  let get k = List.assoc_opt k fields in
+  { kind = (match get "kind" with Some k -> k | None -> "unknown"); message = get "message";
+    expected = get "expected"; actual = get "actual" }
+
+let describe_failure f = match f.kind, f.message with
+  | "cast", Some m -> "a run-time error: " ^ m
+  | "raise", _ -> "a run-time error: the program reached raise"
+  | "stack_overflow", _ -> "a stack overflow (a recursion too deep for the image's stack)"
+  | "unknown", _ -> "a run-time error: the program reached unk"
+  | _, Some m -> "an exception: " ^ m
+  | k, None -> k
+
+let diagnosis = function
+  | Finished -> None
+  | Exited 0 -> None
+  | Exited n -> Some (Printf.sprintf "the program exited with code %d." n)
+  | Failed f -> Some ("the program stopped on " ^ describe_failure f ^ ".")
+  | Out_of_memory { memory_kb; live_kb } ->
+    let mb kb = (kb + 512) / 1024 in
+    Some (Printf.sprintf "the image ran out of memory%s%s."
+            (match memory_kb with Some m -> Printf.sprintf " (%d MB of heap" (mb m) | None -> "")
+            (match memory_kb, live_kb with
+             | Some _, Some l -> Printf.sprintf "; %d MB live at the last report)" (mb l)
+             | Some _, None -> ")" | None, _ -> ""))
+  | Aborted { code; last_line } ->
+    Some (Printf.sprintf "the image stopped without saying why (exit code %d)%s" code
+            (match last_line with Some l -> "; its last line: " ^ l | None -> "."))
+  | Signaled _ -> Some "the image was stopped."
+
+let json_of_outcome o =
+  let str s = "\"" ^ String.concat "\\\"" (String.split_on_char '"' s) ^ "\"" in
+  let opt k = function Some v -> Printf.sprintf ",%s:%s" (str k) v | None -> "" in
+  match o with
+  | Finished -> "{\"outcome\":\"finished\"}"
+  | Exited n -> Printf.sprintf "{\"outcome\":\"exited\",\"code\":%d}" n
+  | Failed f ->
+    Printf.sprintf "{\"outcome\":\"failed\",\"kind\":%s%s%s%s}" (str f.kind)
+      (opt "message" (Option.map str f.message)) (opt "expected" (Option.map str f.expected))
+      (opt "actual" (Option.map str f.actual))
+  | Out_of_memory { memory_kb; live_kb } ->
+    Printf.sprintf "{\"outcome\":\"out_of_memory\"%s%s}"
+      (opt "memory_kb" (Option.map string_of_int memory_kb)) (opt "live_kb" (Option.map string_of_int live_kb))
+  | Aborted { code; last_line } ->
+    Printf.sprintf "{\"outcome\":\"aborted\",\"code\":%d%s}" code (opt "last_line" (Option.map str last_line))
+  | Signaled n -> Printf.sprintf "{\"outcome\":\"signaled\",\"signal\":%d}" n
+
+(* Runs the image, showing its console (and, with [events], its events),
+   and says what the run came to *)
+let run_image ~events argv =
+  let out_r, out_w = Unix.pipe ~cloexec:true () in
+  let pid = Unix.create_process "opam" (Array.of_list argv) Unix.stdin out_w out_w in
+  child := Some pid;
+  Unix.close out_w;
+  let ic = Unix.in_channel_of_descr out_r in
+  let memory_kb = ref None and live_kb = ref None and ended = ref None
+  and in_main = ref None and request_failures = ref 0 and last_request_failure = ref None
+  and last_line = ref None and out_of_memory = ref false and signal = ref None in
+  let int_field fields k = Option.bind (List.assoc_opt k fields) int_of_string_opt in
+  let rec read () =
+    match In_channel.input_line ic with
+    | None -> ()
+    | Some l ->
+      if starts_with ~prefix:event_prefix l then begin
+        if events then print_endline l;
+        let fields = event_fields (String.sub l (String.length event_prefix) (String.length l - String.length event_prefix)) in
+        (match List.assoc_opt "event" fields with
+         | Some "start" -> memory_kb := int_field fields "memory_kb"
+         | Some ("alive" | "memory_pressure") ->
+           (match int_field fields "live_kb" with Some k -> live_kb := Some k | None -> ())
+         | Some "failure" ->
+           if List.assoc_opt "during" fields = Some "request" then begin
+             incr request_failures; last_request_failure := Some (failure_of fields)
+           end else in_main := Some (failure_of fields)
+         | Some "exit" -> ended := Some fields
+         | _ -> ())
+      end else begin
+        print_endline l;
+        if String.trim l <> "" && not (starts_with ~prefix:"Solo5:" l) then last_line := Some l;
+        (* the allocator gives up: OCaml's "allocation failure" or
+           Out_of_memory, before the unikernel aborts *)
+        let has sub = let n = String.length sub in
+          let rec at i = i + n <= String.length l && (String.sub l i n = sub || at (i + 1)) in at 0 in
+        if has "allocation failure" || has "Out_of_memory" || has "out of memory" then out_of_memory := true;
+        (* solo5-hvt, stopped (kill, Ctrl-C), says so and exits 1 *)
+        let stopped = "solo5-hvt: Exiting on signal " in
+        if starts_with ~prefix:stopped l then
+          signal := int_of_string_opt (String.trim (String.sub l (String.length stopped) (String.length l - String.length stopped)))
+      end;
+      read ()
+  in
+  read ();
+  close_in ic;
+  let status = wait pid in
+  let out_of_memory = !out_of_memory ||
+    (match !in_main with Some { kind = "out_of_memory"; _ } -> true | _ -> false) in
+  let outcome = match !ended, status with
+    | _, _ when out_of_memory -> Out_of_memory { memory_kb = !memory_kb; live_kb = !live_kb }
+    | Some fields, _ ->
+      (match List.assoc_opt "reason" fields, int_field fields "code" with
+       | Some "finished", _ -> Finished
+       | Some "program", Some n -> Exited n
+       | _, _ -> (match !in_main with Some f -> Failed f | None -> Aborted { code = exit_code status; last_line = !last_line }))
+    | None, Unix.WSIGNALED n -> Signaled n
+    | None, _ when Option.has_some !signal -> Signaled (Option.get !signal)
+    | None, _ ->
+      (match !in_main with
+       | Some f -> Failed f
+       | None when exit_code status = 0 -> Finished
+       | None -> Aborted { code = exit_code status; last_line = !last_line })
+  in
+  if !request_failures > 0 then
+    Printf.eprintf "soma run: %s with a run-time error, the server going on; the last: %s.\n%!"
+      (if !request_failures = 1 then "1 request failed" else string_of_int !request_failures ^ " requests failed")
+      (match !last_request_failure with Some f -> describe_failure f | None -> "");
+  Option.iter (fun d -> Printf.eprintf "soma run: %s\n%!" d) (diagnosis outcome);
+  if events then Printf.printf "soma-outcome %s\n%!" (json_of_outcome outcome);
+  exit_code status
+
+let run ~events file args image_args =
   let dir = temp_dir () in
   (* the temporary directory holds the program's image: it is removed
      however the program ends *)
@@ -288,9 +465,7 @@ let run file args image_args =
        remove the temporary directory. opam exec runs the image in its
        place, so the signals passed on reach it. *)
     Sys.set_signal Sys.sigint Sys.Signal_ignore;
-    let pid = Unix.create_process "opam" (Array.of_list argv) Unix.stdin Unix.stdout Unix.stderr in
-    child := Some pid;
-    finish (exit_code (wait pid))
+    finish (run_image ~events argv)
   | None ->
     if image_args <> [] then begin
       prerr_endline "soma run: arguments after -- are for a program that requires Sandbox";
@@ -345,6 +520,20 @@ let repl args =
   let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
   exec_or_create_process prog (Array.of_list (prog :: "--kind=repl" :: args))
 
+(* soma run FILE [OPTIONS] [-- ARGUMENTS], --events taken out *)
+let run_command ~events = function
+  | [] -> usage_error "soma run: no file given"
+  | file :: rest ->
+    let rec split = function
+      | "--" :: image_args -> [], image_args
+      | a :: rest -> let args, image_args = split rest in a :: args, image_args
+      | [] -> [], []
+    in
+    let args, image_args = split rest in
+    let opts, args = parse_opts args in
+    let () = init opts (file :: args) in
+    run ~events (program_of file) args image_args
+
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
@@ -364,15 +553,12 @@ let () =
         let () = init opts (file :: args) in
         build ~verbose ~fill (program_of file) args
     end
-  | ["run"] -> usage_error "soma run: no file given"
-  | "run" :: file :: rest ->
-    let rec split = function
-      | "--" :: image_args -> [], image_args
-      | a :: rest -> let args, image_args = split rest in a :: args, image_args
-      | [] -> [], []
-    in
-    let args, image_args = split rest in
-    let opts, args = parse_opts args in
-    let () = init opts (file :: args) in
-    run (program_of file) args image_args
+  | "run" :: rest ->
+    (* --events is soma's, anywhere before -- *)
+    let rec drop = function
+      | "--events" :: l -> drop l
+      | "--" :: _ as l -> l
+      | a :: l -> a :: drop l
+      | [] -> [] in
+    run_command ~events:(List.mem "--events" (before_image_args rest)) (drop rest)
   | command :: _ -> usage_error "soma: unknown command %s" command

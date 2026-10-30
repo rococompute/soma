@@ -145,10 +145,57 @@ let check v =
   else if Gradual.is_error v then raise (Stuck "raise")
   else v
 
-let report = function
-  | Stuck what -> Printf.printf "Run-time error: the program reached %s.\n%!" what
-  | Gradual.Cast_error msg -> Printf.printf "Run-time error: %s.\n%!" msg
-  | e -> Printf.printf "Run-time error: %s.\n%!" (Printexc.to_string e)
+(* Events: what happens to the unikernel, one JSON object a line after
+   "soma-event ", for whoever runs it (soma run, an orchestrator) to read
+   rather than parse the console. Running out of memory has none: the
+   unikernel aborts before it can say anything. *)
+type field = S of string | I of int | B of bool
+
+let json_string s =
+  let b = Buffer.create (String.length s + 2) in
+  Buffer.add_char b '"';
+  String.iter (fun c -> match c with
+      | '"' -> Buffer.add_string b "\\\""
+      | '\\' -> Buffer.add_string b "\\\\"
+      | '\n' -> Buffer.add_string b "\\n"
+      | c when Char.code c < 32 -> Buffer.add_string b (Printf.sprintf "\\u%04x" (Char.code c))
+      | c -> Buffer.add_char b c) s;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
+let event name fields =
+  let value = function S s -> json_string s | I i -> string_of_int i | B b -> string_of_bool b in
+  Printf.printf "soma-event {\"event\":%s%s}\n%!" (json_string name)
+    (String.concat "" (List.map (fun (k, v) -> "," ^ json_string k ^ ":" ^ value v) fields))
+
+(* A failure, as fields: a failed cast says what was expected and what
+   was there (its message is "expected X, but got Y") *)
+let failure_fields = function
+  | Stuck what -> ["kind", S (if what = "unk" then "unknown" else "raise")]
+  | Gradual.Cast_error msg ->
+    let sep = ", but got " in
+    let rec find i =
+      if i + String.length sep > String.length msg then None
+      else if String.sub msg i (String.length sep) = sep then Some i else find (i + 1) in
+    let parts = match find 0 with
+      | Some i when String.length msg > 9 && String.sub msg 0 9 = "expected " ->
+        let after = i + String.length sep in
+        ["expected", S (String.sub msg 9 (i - 9));
+         "actual", S (String.sub msg after (String.length msg - after))]
+      | _ -> [] in
+    ("kind", S "cast") :: ("message", S msg) :: parts
+  | Stack_overflow -> ["kind", S "stack_overflow"]
+  | Out_of_memory -> ["kind", S "out_of_memory"]
+  | e -> ["kind", S "exception"; "message", S (Printexc.to_string e)]
+
+(* [during] is "main", or "request" for an error answering a request, which
+   the server goes on after *)
+let report ?(during = "main") e =
+  (match e with
+   | Stuck what -> Printf.printf "Run-time error: the program reached %s.\n%!" what
+   | Gradual.Cast_error msg -> Printf.printf "Run-time error: %s.\n%!" msg
+   | e -> Printf.printf "Run-time error: %s.\n%!" (Printexc.to_string e));
+  event "failure" (("during", S during) :: failure_fields e)
 
 (* What the network provides; without a network stack, [serve] and [fetch]
    are not reached (a program that uses them gets one) *)
@@ -175,12 +222,13 @@ let stats =
 let served = ref 0
 let open_connections = ref 0
 
+let kb words = words * (Sys.word_size / 8) / 1024
+
 (* memory is the unikernel's whole heap, network buffers included (they
    are outside OCaml's); ocaml_heap is OCaml's part of it *)
 let print_stats () =
   let g = Gc.quick_stat () in
   let m = Solo5_os.Memory.stat () in
-  let kb words = words * (Sys.word_size / 8) / 1024 in
   Printf.printf "soma-stats: requests=%d open=%d memory=%dKB live=%dKB free=%dKB ocaml_heap=%dKB major_collections=%d\n%!"
     !served !open_connections (kb m.Solo5_os.Memory.heap_words) (kb m.Solo5_os.Memory.live_words)
     (kb m.Solo5_os.Memory.free_words) (kb g.Gc.heap_words) g.Gc.major_collections
@@ -232,19 +280,38 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
    garbage soon. The collector works harder (space_overhead 40, not 120)
    and the heap is compacted once the requests of a burst are over, so
    that a burst's memory goes back before the next. *)
+(* Every 5 seconds: compact after a burst; say when live memory passes 80%
+   of the unikernel's (once, until it is back under 60%); and every 10
+   seconds, say that the unikernel is alive *)
 let tune_memory () =
   Gc.set { (Gc.get ()) with Gc.space_overhead = 40 };
-  let last = ref 0 in
+  let last = ref 0 and pressed = ref false and tick = ref 0 in
   Lwt.async (fun () ->
       let rec loop () =
         Mirage_sleep.ns (Duration.of_sec 5) >>= fun () ->
         if !served <> !last && !open_connections = 0 then begin
           last := !served; Gc.compact ()
         end;
+        let m = Solo5_os.Memory.stat () in
+        let live = m.Solo5_os.Memory.live_words and total = m.Solo5_os.Memory.heap_words in
+        if not !pressed && live * 10 > total * 8 then begin
+          pressed := true;
+          event "memory_pressure" ["live_kb", I (kb live); "memory_kb", I (kb total)]
+        end
+        else if !pressed && live * 10 < total * 6 then pressed := false;
+        incr tick;
+        if !tick mod 2 = 0 then
+          event "alive" ["requests", I !served; "live_kb", I (kb live)];
         loop () in
       loop ())
 
-let main ~serving net =
+let main ~network ~serving net =
+  (* Lwt does not catch Stack_overflow and Out_of_memory: what escapes is
+     reported here, rather than by OCaml's "Fatal error" *)
+  Printexc.set_uncaught_exception_handler (fun e _ ->
+      report e; event "exit" ["code", I 1; "reason", S "failure"]; exit 1);
+  event "start" ["memory_kb", I (kb (Solo5_os.Memory.stat ()).Solo5_os.Memory.heap_words);
+                 "network", B network];
   tune_memory ();
   if stats () then
     Lwt.async (fun () ->
@@ -253,11 +320,12 @@ let main ~serving net =
         loop ());
   Lwt.catch
     (fun () ->
-       run net Prog.main >>= fun () ->
+       run net (Prog.soma_main ()) >>= fun () ->
        if serving () then fst (Lwt.wait ()) else Lwt.return_unit)
     (function
-      | Exit_with code -> exit code
-      | e -> report e; exit 1)
+      | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
+      | e -> report e; event "exit" ["code", I 1; "reason", S "failure"]; exit 1)
+  >|= fun () -> event "exit" ["code", I 0; "reason", S "finished"]
 |soma}
 
 let unikernel_ml ~network =
@@ -272,6 +340,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
        the server goes on. *)
     let serve port handler =
       incr servers;
+      Soma_rt.event "serving" ["port", Soma_rt.I port];
       S.TCP.listen (S.tcp s) ~port (fun flow ->
           incr Soma_rt.open_connections;
           incr Soma_rt.served;
@@ -281,7 +350,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
                   (fun () ->
                      handler (Cstruct.to_string b) >>= fun reply ->
                      S.TCP.write flow (Cstruct.of_string reply) >|= ignore)
-                  (fun e -> Soma_rt.report e; Lwt.return_unit)
+                  (fun e -> Soma_rt.report ~during:"request" e; Lwt.return_unit)
             | _ -> Lwt.return_unit)
           >>= fun () -> S.TCP.close flow >|= fun () -> decr Soma_rt.open_connections)
     in
@@ -309,10 +378,10 @@ module Main (S : Tcpip.Stack.V4V6) = struct
               in
               read ()
     in
-    Soma_rt.main ~serving:(fun () -> !servers > 0) { serve; fetch }
+    Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0) { serve; fetch }
 end
 |soma}
-  else {soma|let start () = Soma_rt.main ~serving:(fun () -> false) Soma_rt.no_network
+  else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
 |soma}
 
 (* gradual.ml: the gradual runtime of prog.ml, which extraction only puts
@@ -338,10 +407,17 @@ let uses_network prog =
 
 (* Extracts [main] into [dir]/prog.ml, by running the extraction commands
    at the end of the program, after its .vo has been saved. *)
+(* [main] is extracted as [soma_main ()], with [main] inlined in it: a
+   value of OCaml is computed when its module starts, before the runtime
+   could report what goes wrong while building it (a cast that fails, in
+   [main := print (f 42)]) *)
 let extract ~state dir =
   let cmds = Filename.concat dir "extract.soma" in
   write_file cmds (Printf.sprintf
-    "Set Extraction Output Directory %S.\nExtraction \"prog\" main.\n" dir);
+    "Set Extraction Output Directory %S.\n\
+     Definition soma_main (_ : unit) := main.\n\
+     Extraction Inline main.\n\
+     Extraction \"prog\" soma_main.\n" dir);
   Dumpglob.push_output Dumpglob.NoGlob;
   Fun.protect ~finally:Dumpglob.pop_output (fun () ->
       ignore (Vernac.load_vernac ~check:true ~state cmds))

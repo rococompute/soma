@@ -642,6 +642,40 @@ soma-stats: requests=2500 open=0 memory=56648KB live=19120KB free=36503KB ocaml_
 (`memory`, `live` and `free` are the unikernel's whole heap, network
 buffers included; `ocaml_heap` is OCaml's part of it.)
 
+### What a run comes to
+
+The runtime says what happens to the image as events, one JSON object a
+line after `soma-event ` on its console, for whoever runs it to read:
+
+| Event | Fields |
+| --- | --- |
+| `start` | `memory_kb`, `network` |
+| `serving` | `port` |
+| `failure` | `during` (`main`, or `request`: the server goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
+| `memory_pressure` | `live_kb`, `memory_kb`: live memory passed 80% |
+| `alive` | `requests`, `live_kb`, every 10 seconds |
+| `exit` | `code`, `reason` (`finished`, `program`: its `exit n`, `failure`) |
+
+`main` is computed by the runtime (it is extracted as a function), so that
+a failure while building it is an event like any other, and so are the
+stack overflows and out-of-memory exceptions that Lwt does not catch. The
+allocator giving up has no event: the image aborts at once.
+
+`soma run` reads the events rather than showing them, and says at the end
+what the run came to: that the program exited with a code, stopped on a
+run-time error (and which), ran out of stack or memory (with its memory
+and the last live memory reported), was stopped, or stopped without saying
+why (with its last line); and how many requests failed, with the last
+failure. `soma run --events` shows the events, and ends with the outcome
+as JSON:
+
+```
+soma-outcome {"outcome":"failed","kind":"cast","message":"expected a string, but got a nat","expected":"a string","actual":"a nat"}
+```
+
+`dev/mirage-check.sh` checks these diagnoses (`exits`, `cast_failure`,
+`stack_overflow`, `out_of_memory`).
+
 ```sh
 soma run examples/example_files/mirage_http_server.soma              # prints its IP
 soma run examples/example_files/mirage_fetch.soma -- --arg=<that IP>
