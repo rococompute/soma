@@ -1,0 +1,16 @@
+(** A supervised server: run with
+
+        soma run --supervise examples/example_files/mirage_supervised.soma
+
+    when the image stops, soma run asks [restart_policy] whether to run it
+    again (theories/Soma/Orchestrate.v). This one is the default policy
+    with its own bounds: at most 5 restarts, never more than 512 MB, and
+    never again what would fail again, which mirage_supervised.proof
+    proves. *)
+Require Import Sandbox Orchestrate.
+
+restart_policy : policy := default_policy 5 512.
+
+main : io unit :=
+  print "serving HTTP on port 8080" ;;
+  serve 8080 (fun request => ret (http_response ("You asked for " ++ http_path request))).

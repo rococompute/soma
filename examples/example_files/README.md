@@ -71,6 +71,9 @@ in `macros.proof` and `type_functions.proof`.
   - `mirage_clock.soma`: the time of day every second, `forever`.
   - `mirage_http_server.soma`: an HTTP server, with `serve`, `now` and
     `random`.
+  - `mirage_supervised.soma`: a server with a restart policy
+    (`soma run --supervise`); `mirage_supervised.proof` proves what the
+    policy does.
   - `mirage_fetch.soma`: fetches a page from the server, with `args`,
     `fetch` and exit codes.
 

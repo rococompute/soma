@@ -168,6 +168,19 @@ main : io unit := print (to_string (length (repeat 0 (N.to_nat 3000000)))).' \
 SOMA_MIRAGE_MEM=64 diagnose out_of_memory 'Require Import Sandbox.
 main : io unit := print (match Pos.iter (cons 0) nil 3000000%positive with nil => "empty" | _ => "built" end).' \
     'the image ran out of memory'
+# soma run --supervise runs the image again when its restart policy
+# (theories/Soma/Orchestrate.v) says so: out of memory in 64 MB, the
+# default policy runs it again with 128, where it finishes
+printf '%s\n' 'Require Import Sandbox.
+main : io unit := print (match Pos.iter (cons 0) nil 3000000%positive with nil => "empty" | _ => "built" end).' \
+    > "${WORK}/supervised.soma"
+SOMA_MIRAGE_MEM=64 "${SOMA}" run --supervise "${WORK}/supervised.soma" >"${WORK}/supervised.log" 2>&1
+if grep -q "restarting with 128 MB" "${WORK}/supervised.log" && grep -q "^built$" "${WORK}/supervised.log" &&
+   grep -q "the restart policy is done, after 1 restart" "${WORK}/supervised.log"; then
+    pass supervised
+else
+    fail supervised
+fi
 
 rm -f "${HERE}"/examples/example_files/mirage_*.vo "${HERE}"/examples/example_files/mirage_*.glob \
     "${HERE}"/examples/example_files/.mirage_*.aux

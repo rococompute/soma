@@ -38,6 +38,8 @@ Options:
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
   --events                    (run) Show the image's events, and what its run came
                               to, as JSON lines (soma-event, soma-outcome).
+  --supervise                 (run) Run the image again when its restart_policy
+                              says so (Orchestrate; default_policy 3 1024).
 
 soma build --help lists the other options. Proofs about FILE.soma go in
 FILE.proof, which build and run also check.
@@ -442,9 +444,73 @@ let run_image ~events argv =
       (match !last_request_failure with Some f -> describe_failure f | None -> "");
   Option.iter (fun d -> Printf.eprintf "soma run: %s\n%!" d) (diagnosis outcome);
   if events then Printf.printf "soma-outcome %s\n%!" (json_of_outcome outcome);
-  exit_code status
+  outcome, exit_code status
 
-let run ~events file args image_args =
+(* Supervision (theories/Soma/Orchestrate.v): the outcome, as a term of
+   Soma, is given to the program's [restart_policy], or to
+   [default_policy 3 1024], which decides whether to run the image again *)
+
+let soma_string s = "\"" ^ String.concat "\"\"" (String.split_on_char '"' s) ^ "\""
+
+let outcome_term ~memory_mb = function
+  | Finished -> "Finished"
+  | Exited n -> Printf.sprintf "(Exited %d)" n
+  | Failed f ->
+    let failure = match f.kind, f.expected, f.actual with
+      | "cast", Some e, Some a -> Printf.sprintf "(CastFailure %s %s)" (soma_string e) (soma_string a)
+      | "raise", _, _ -> "Raised"
+      | "unknown", _, _ -> "Unknown"
+      | "stack_overflow", _, _ -> "StackOverflow"
+      | _ -> Printf.sprintf "(Crashed %s)" (soma_string (describe_failure f)) in
+    "(Failed " ^ failure ^ ")"
+  | Out_of_memory { live_kb; _ } ->
+    Printf.sprintf "(Failed (OutOfMemory %d %d))" memory_mb
+      (match live_kb with Some k -> k / 1024 | None -> 0)
+  | Aborted { last_line; _ } ->
+    Printf.sprintf "(Failed (Crashed %s))"
+      (soma_string (match last_line with Some l -> l | None -> "stopped without saying why"))
+  | Signaled _ -> "Stopped"
+
+type decision = Done | Restart | Restart_with of int
+
+(* What the policy decides, evaluated by checking a file that requires the
+   program's library, compiled to [dir]/[name].vo *)
+let decide ~dir ~name ~memory_mb ~restarts outcome =
+  let evaluate policy imports =
+    let file = Filename.concat dir "soma_decide.soma" in
+    Out_channel.with_open_bin file (fun oc ->
+        Printf.fprintf oc "Require Import Orchestrate%s.\n%s %s %d %d.\n" imports policy
+          (outcome_term ~memory_mb outcome) memory_mb restarts);
+    let previous = Sys.getenv_opt "SOMA_MIRAGE_BUILD" in
+    Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+    let code, output = compile [file; "-Q"; dir; ""; "-o"; Filename.concat dir "soma_decide.vo"] in
+    Unix.putenv "SOMA_MIRAGE_BUILD" (match previous with Some v -> v | None -> "1");
+    if code <> 0 then None
+    else match last_value output with
+      | None -> None
+      | Some v ->
+        let words = List.filter (( <> ) "") (String.split_on_char ' '
+            (String.concat " " (String.split_on_char '\n' v))) in
+        match words with
+        | "=" :: "Done" :: _ -> Some Done
+        | "=" :: "Restart" :: _ -> Some Restart
+        | "=" :: "RestartWith" :: m :: _ -> Option.map (fun m -> Restart_with m) (int_of_string_opt m)
+        | _ -> None
+  in
+  match evaluate "restart_policy" (" " ^ name) with
+  | Some d -> d
+  | None -> match evaluate "default_policy 3 1024" "" with Some d -> d | None -> Done
+
+let with_memory memory_mb command =
+  List.map (fun a -> if starts_with ~prefix:"--mem=" a then "--mem=" ^ string_of_int memory_mb else a) command
+
+let memory_of command =
+  List.fold_left (fun m a ->
+      if starts_with ~prefix:"--mem=" a then
+        (match int_of_string_opt (String.sub a 6 (String.length a - 6)) with Some n -> n | None -> m)
+      else m) 256 command
+
+let run ~events ~supervise file args image_args =
   let dir = temp_dir () in
   (* the temporary directory holds the program's image: it is removed
      however the program ends *)
@@ -465,7 +531,28 @@ let run ~events file args image_args =
        remove the temporary directory. opam exec runs the image in its
        place, so the signals passed on reach it. *)
     Sys.set_signal Sys.sigint Sys.Signal_ignore;
-    finish (run_image ~events argv)
+    if not supervise then finish (snd (run_image ~events argv))
+    else begin
+      let name = Filename.remove_extension (Filename.basename vo) in
+      let rec loop memory_mb restarts =
+        let outcome, code = run_image ~events (with_memory memory_mb argv) in
+        match outcome with
+        | Signaled _ -> finish code   (* stopped from outside: supervision ends too *)
+        | _ ->
+          match decide ~dir ~name ~memory_mb ~restarts outcome with
+          | Done ->
+            if restarts > 0 then
+              Printf.eprintf "soma run: the restart policy is done, after %s.\n%!" (plural restarts "restart");
+            finish code
+          | Restart ->
+            Printf.eprintf "soma run: restarting (restart %d).\n%!" (restarts + 1);
+            loop memory_mb (restarts + 1)
+          | Restart_with m ->
+            Printf.eprintf "soma run: restarting with %d MB (restart %d).\n%!" m (restarts + 1);
+            loop m (restarts + 1)
+      in
+      loop (memory_of command) 0
+    end
   | None ->
     if image_args <> [] then begin
       prerr_endline "soma run: arguments after -- are for a program that requires Sandbox";
@@ -521,7 +608,7 @@ let repl args =
   exec_or_create_process prog (Array.of_list (prog :: "--kind=repl" :: args))
 
 (* soma run FILE [OPTIONS] [-- ARGUMENTS], --events taken out *)
-let run_command ~events = function
+let run_command ~events ~supervise = function
   | [] -> usage_error "soma run: no file given"
   | file :: rest ->
     let rec split = function
@@ -532,7 +619,7 @@ let run_command ~events = function
     let args, image_args = split rest in
     let opts, args = parse_opts args in
     let () = init opts (file :: args) in
-    run ~events (program_of file) args image_args
+    run ~events ~supervise (program_of file) args image_args
 
 let () =
   match List.tl (Array.to_list Sys.argv) with
@@ -554,11 +641,13 @@ let () =
         build ~verbose ~fill (program_of file) args
     end
   | "run" :: rest ->
-    (* --events is soma's, anywhere before -- *)
+    (* --events and --supervise are soma's, anywhere before -- *)
+    let ours a = a = "--events" || a = "--supervise" in
     let rec drop = function
-      | "--events" :: l -> drop l
+      | a :: l when ours a -> drop l
       | "--" :: _ as l -> l
       | a :: l -> a :: drop l
       | [] -> [] in
-    run_command ~events:(List.mem "--events" (before_image_args rest)) (drop rest)
+    let given = before_image_args rest in
+    run_command ~events:(List.mem "--events" given) ~supervise:(List.mem "--supervise" given) (drop rest)
   | command :: _ -> usage_error "soma: unknown command %s" command

@@ -1,0 +1,36 @@
+(** What is proved about the restart policy of mirage_supervised.soma *)
+
+(** A failed cast would fail again: the image is not run again. *)
+Theorem no_rerun_of_a_failed_cast : forall expected actual memory restarts,
+  restart_policy (Failed (CastFailure expected actual)) memory restarts = Done.
+Proof.
+  Take expected : string.
+  Take actual : string.
+  Take memory : nat.
+  Take restarts : nat.
+  By default_never_reruns_deterministic, we conclude that
+    default_policy 5 512 (Failed (CastFailure expected actual)) memory restarts = Done.
+Qed.
+
+(** After 5 restarts, it is done, whatever happened. *)
+Theorem at_most_5_restarts : forall o memory restarts,
+  5 <= restarts -> restart_policy o memory restarts = Done.
+Proof.
+  Take o : outcome.
+  Take memory : nat.
+  Take restarts : nat.
+  Assume that 5 <= restarts as enough.
+  By default_stops_after_limit, we conclude that default_policy 5 512 o memory restarts = Done.
+Qed.
+
+(** It never asks for more than 512 MB. *)
+Theorem at_most_512_mb : forall o memory restarts m,
+  restart_policy o memory restarts = RestartWith m -> m <= 512.
+Proof.
+  Take o : outcome.
+  Take memory : nat.
+  Take restarts : nat.
+  Take m : nat.
+  Assume that default_policy 5 512 o memory restarts = RestartWith m as asked.
+  By default_within_ceiling, we conclude that m <= 512.
+Qed.

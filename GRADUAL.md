@@ -676,6 +676,31 @@ soma-outcome {"outcome":"failed","kind":"cast","message":"expected a string, but
 `dev/mirage-check.sh` checks these diagnoses (`exits`, `cast_failure`,
 `stack_overflow`, `out_of_memory`).
 
+### Supervision
+
+`theories/Soma/Orchestrate.v` (not in the prelude) has what a run comes
+to as types: an `outcome` (`Finished`, `Exited code`, `Failed f`,
+`Stopped`), a `failure` (`CastFailure expected actual`, `Raised`,
+`Unknown`, `StackOverflow`, `OutOfMemory memory_mb live_mb`, `Crashed
+reason`), and a `decision` (`Done`, `Restart`, `RestartWith memory_mb`). A
+`policy` decides from the outcome, the image's memory and how many times
+it was restarted. `default_policy limit ceiling` never runs again what
+would fail again (`deterministic`: a failed cast, `raise`, `unk`, a stack
+overflow), what ended well or was stopped; doubles the memory after
+running out, up to `ceiling` MB; and stops after `limit` restarts. Its
+library proves all three (`default_never_reruns_deterministic`,
+`default_stops_after_limit`, `default_within_ceiling`).
+
+`soma run --supervise FILE` runs the image, and when the run ends asks the
+program's `restart_policy` (or `default_policy 3 1024`) what to do: the
+outcome is given to it as a term of Soma and the decision evaluated by
+Soma, so that what runs is the policy that is proved. A run stopped from
+outside ends supervision. `examples/example_files/mirage_supervised.soma`
+is a server with its own policy, whose `.proof` proves that it never runs
+again a failed cast, stops after 5 restarts and asks for at most 512 MB;
+`dev/mirage-check.sh` checks a run out of memory in 64 MB, run again with
+128 (`supervised`).
+
 ```sh
 soma run examples/example_files/mirage_http_server.soma              # prints its IP
 soma run examples/example_files/mirage_fetch.soma -- --arg=<that IP>

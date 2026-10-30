@@ -96,6 +96,7 @@ Ltac soma_rewrite_all_back t tac := rewrite <- t in * by tac; do 9 (try rewrite 
 Ltac soma_by t :=
   solve [ exact t
         | (apply t; soma_auto)
+        | (eapply t; solve [eassumption | soma_auto])
         | (soma_rewrite t ltac:(soma_auto); soma_auto)
         | (soma_rewrite_back t ltac:(soma_auto); soma_auto)
         | (soma_rewrite_all t ltac:(soma_auto); soma_auto)
