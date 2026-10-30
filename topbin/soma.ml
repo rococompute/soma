@@ -31,7 +31,10 @@ Commands:
   help                        Show help.
 
 Options:
-  -v, --verbose               (build) Print the value of each bare term.
+  -v, --verbose               (build) Print the value of each bare term, and the
+                              proofs that "The rest follows." found.
+  --fill                      (build) Write the proofs that "The rest follows."
+                              found in its place in FILE.proof.
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
 
 soma build --help lists the other options. Proofs about FILE.soma go in
@@ -116,11 +119,74 @@ let starts_with ~prefix s =
   String.length s >= String.length prefix &&
   String.sub s 0 (String.length prefix) = prefix
 
-let build ~verbose file args =
+(* The proofs that [The rest follows.] found (theories/Soma/Proof.v,
+   plugins/soma_proof), in the order of the sentences: rocq c reports each
+   as "The rest follows, by:" and its sentences, one on each line indented
+   by 4 *)
+let rest_follows = "The rest follows."
+
+let found_proofs output =
+  let close current acc = match current with Some c -> List.rev c :: acc | None -> acc in
+  let rec go acc current = function
+    | [] -> List.rev (close current acc)
+    | l :: rest when l = "The rest follows, by:" -> go (close current acc) (Some []) rest
+    | l :: rest ->
+      match current with
+      | Some c when starts_with ~prefix:"    " l ->
+        go acc (Some (String.sub l 4 (String.length l - 4) :: c)) rest
+      | Some _ -> go (close current acc) None (l :: rest)
+      | None -> go acc None rest
+  in
+  go [] None (lines output)
+
+(* Where [The rest follows.] is in a .proof file's text: outside comments
+   and strings *)
+let occurrences text =
+  let n = String.length text in
+  let at i s = i + String.length s <= n && String.sub text i (String.length s) = s in
+  let rec go i depth in_string acc =
+    if i >= n then List.rev acc
+    else if in_string then
+      if at i "\"\"" then go (i + 2) depth true acc
+      else go (i + 1) depth (text.[i] <> '"') acc
+    else if at i "(*" then go (i + 2) (depth + 1) false acc
+    else if depth > 0 && at i "*)" then go (i + 2) (depth - 1) false acc
+    else if depth > 0 then go (i + 1) depth false acc
+    else if text.[i] = '"' then go (i + 1) depth true acc
+    else if at i rest_follows then go (i + String.length rest_follows) depth false (i :: acc)
+    else go (i + 1) depth false acc
+  in
+  go 0 0 false []
+
+(* Write the proofs found in place of the sentences that found them, the
+   first proof for the first sentence, and so on, each sentence of a proof
+   on a line of its own, indented as the sentence was. A build stops at a
+   sentence whose search fails, so the proofs found are those of the first
+   sentences. *)
+let fill_proofs proof_file proofs =
+  let text = In_channel.with_open_bin proof_file In_channel.input_all in
+  let positions = List.filteri (fun i _ -> i < List.length proofs) (occurrences text) in
+  let indent i =
+    let line_start = match String.rindex_from_opt text (i - 1) '\n' with
+      | Some j -> j + 1 | None -> 0 in
+    String.make (i - line_start) ' ' in
+  let text = List.fold_right2 (fun i proof text ->
+      let after = i + String.length rest_follows in
+      String.sub text 0 i ^ String.concat ("\n" ^ indent i) proof
+      ^ String.sub text after (String.length text - after))
+      positions (List.filteri (fun i _ -> i < List.length positions) proofs) text in
+  Out_channel.with_open_bin proof_file (fun oc -> output_string oc text);
+  List.length positions
+
+let plural n word = if n = 1 then "1 " ^ word else string_of_int n ^ " " ^ word ^ "s"
+
+let build ~verbose ~fill file args =
   let dir = output_dir file args in
   let before = modification_times dir in
   let start = Unix.gettimeofday () in
   let code, output = compile (file :: args) in
+  let proofs = found_proofs output in
+  let proof_file = Filename.remove_extension file ^ ".proof" in
   (* Without -v, the values of bare terms are not shown; the notice that
      the MirageOS project is being set up is, as it takes a while *)
   if verbose then print_string output
@@ -134,6 +200,15 @@ let build ~verbose file args =
   List.iter (fun f ->
       if compiled f then Sys.remove f else print_endline f)
     (created ~before ~start ~source:file dir);
+  if proofs <> [] then begin
+    if fill then
+      Printf.printf "%s: %s written in, in place of \"The rest follows.\"\n%!"
+        proof_file (plural (fill_proofs proof_file proofs) "proof")
+    else if not verbose then
+      Printf.printf "%s: %s found by \"The rest follows.\" (soma build -v prints %s, soma build --fill writes %s in)\n%!"
+        proof_file (plural (List.length proofs) "proof")
+        (if List.length proofs = 1 then "it" else "them") (if List.length proofs = 1 then "it" else "them")
+  end;
   if code <> 0 then exit code
 
 (* FILE.proof, the properties of FILE.soma, stands for the program *)
@@ -279,13 +354,15 @@ let () =
   | "build" :: rest ->
     (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in
+    let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
-    begin match List.filter (fun a -> not (is_verbose a)) rest with
+    let fill = List.exists is_fill rest in
+    begin match List.filter (fun a -> not (is_verbose a || is_fill a)) rest with
       | [] -> usage_error "soma build: no file given"
       | file :: args ->
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
-        build ~verbose (program_of file) args
+        build ~verbose ~fill (program_of file) args
     end
   | ["run"] -> usage_error "soma run: no file given"
   | "run" :: file :: rest ->

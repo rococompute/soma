@@ -43,6 +43,11 @@
       [x]; [We consider whether a < b as H.] (or [<=], [=], for numbers)
       is a case with [H : a < b] and one with its opposite, and in each,
       [a <? b] is [true] or [false].
+    - [The rest follows.] searches for the rest of the proof: it takes
+      and assumes what the goal gives, then proves it with [soma_auto], a
+      hypothesis or a lemma of the loaded libraries. It reports the proof
+      it found as sentences (soma build -v prints them, soma build --fill
+      writes them in its place), or what is still to show.
     - [We use induction on x.] is a case for each constructor of [x],
       with its arguments and induction hypotheses to [Take] and
       [Assume]; [We use strong induction on n.] (for a number) is one
@@ -57,6 +62,7 @@
     goals open, each is focused with a bullet ([-], [+], [*]) or braces. *)
 
 From Stdlib Require Import Arith Lia Lra.
+Declare ML Module "soma-runtime.plugins.soma_proof".
 
 (** ** What "proves" means *)
 
@@ -71,10 +77,18 @@ Ltac soma_auto :=
         | (simpl; ring)
         | nia
         | (simpl in *; nia)
+        | (cbn in *; lia)
         | lra
         | tauto
         | (simpl in *; congruence)
         | easy ].
+
+(** Rewriting with [t] at most 10 times: [rewrite !t] does not stop for
+    an equation that applies again after itself, like commutativity *)
+Ltac soma_rewrite t tac := rewrite t by tac; do 9 (try rewrite t by tac).
+Ltac soma_rewrite_back t tac := rewrite <- t by tac; do 9 (try rewrite <- t by tac).
+Ltac soma_rewrite_all t tac := rewrite t in * by tac; do 9 (try rewrite t in * by tac).
+Ltac soma_rewrite_all_back t tac := rewrite <- t in * by tac; do 9 (try rewrite <- t in * by tac).
 
 (** With [t]: [t] itself, [t] applied, or [t] rewritten with, in the
     goal or everywhere, after computing or not; the conditions of [t] are
@@ -82,12 +96,26 @@ Ltac soma_auto :=
 Ltac soma_by t :=
   solve [ exact t
         | (apply t; soma_auto)
-        | (rewrite !t by soma_auto; soma_auto)
-        | (rewrite <- !t by soma_auto; soma_auto)
-        | (rewrite !t in * by soma_auto; soma_auto)
-        | (rewrite <- !t in * by soma_auto; soma_auto)
-        | (simpl; rewrite !t by soma_auto; soma_auto)
+        | (soma_rewrite t ltac:(soma_auto); soma_auto)
+        | (soma_rewrite_back t ltac:(soma_auto); soma_auto)
+        | (soma_rewrite_all t ltac:(soma_auto); soma_auto)
+        | (soma_rewrite_all_back t ltac:(soma_auto); soma_auto)
+        | (simpl; soma_rewrite t ltac:(soma_auto); soma_auto)
         | (pose proof t; soma_auto) ].
+
+(** What the search for [The rest follows.] tries for each lemma: quick,
+    as it tries many. A step it proves this way, [soma_by] proves too. *)
+Ltac soma_quick :=
+  solve [ assumption | reflexivity | discriminate | congruence | lia | lra
+        | (simpl; reflexivity) | (cbn; lia) ].
+
+Ltac soma_by_quick t :=
+  solve [ exact t
+        | (apply t; soma_quick)
+        | (soma_rewrite t ltac:(soma_quick); soma_quick)
+        | (soma_rewrite_back t ltac:(soma_quick); soma_quick) ].
+
+Tactic Notation "The" "rest" "follows" := soma_rest.
 
 (** ** Naming what the goal gives *)
 

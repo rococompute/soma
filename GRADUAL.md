@@ -68,6 +68,8 @@ _build/install/default/bin/soma run my_file.soma
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
 - `soma repl [FILE]` is an interactive session (`rocq repl`, prompt
   `Soma <`), with FILE's definitions loaded first (`-l FILE`).
+- `soma build --fill FILE` writes the proofs that `The rest follows.`
+  found in `FILE.proof` (see Proof sentences).
 - `soma help` lists the commands, and `soma build --help` the options of
   build and run (those of `rocq c`).
 
@@ -122,6 +124,31 @@ Qed.
 | `We consider whether a < b as H.` (or `<=`, `=`) | for numbers, a case with `H : a < b` and one with its opposite; `a <? b` is then `true` or `false` |
 | `We use induction on x.` | a case for each constructor of `x`, whose arguments and induction hypotheses each case takes and assumes |
 | `We use strong induction on n.` | for a number: proves the goal for `n` assuming it for every smaller number, which is taken and assumed |
+| `The rest follows.` | searches for the rest of the proof, and reports it as sentences (below) |
+
+`The rest follows.` searches for the rest of a proof
+(`plugins/soma_proof/soma_rest.ml`): it takes and assumes what the goal
+gives, then tries `soma_auto`, computing, the hypotheses, the program's
+and its projects' lemmas, unfolding their definitions at the top of the
+goal (not Rocq's), and Rocq's lemmas that could prove the goal, for 20
+seconds at most. It reports the proof it found as sentences, each printed
+so that it reads back as what it states. `soma build` says how many proofs
+were found, `soma build -v` prints them, and `soma build --fill` writes
+each in place of its `The rest follows.` in `FILE.proof`, indented as the
+sentence was, so that the proof no longer depends on the search. When the
+search finds nothing, the build fails with what is still to show, as
+sentences to start from:
+
+```
+Error: The rest does not follow. Still to show:
+    Take a : action.
+    Take count : nat.
+    Assume that count <= limit as H.
+    We need to show that step a count <= limit.
+```
+
+`SOMA_REST_TRACE=1` prints the lemmas it tries. `test-suite/misc/soma_rest.sh`
+tests it.
 
 "Proves" is `soma_auto`: the hypotheses, computation, equalities,
 `lia`, `ring`, `nia` and propositional logic; `By t` adds `t`, applied
