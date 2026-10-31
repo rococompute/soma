@@ -1,0 +1,79 @@
+(** The counter as a state machine, explored as TLC explores a TLA+
+    specification (Soma.Explore):
+
+        soma build -v model.soma
+
+    tries every request below (the scope, as in Alloy), then every
+    sequence of clicks of +1 up to three, and says what goes wrong, with
+    the request and the clicks that lead to it. The state is where a page
+    starts, [Start n] or [Rejected value] (web/request.soma); a click is
+    what a browser does with the +1 link: it asks for the link's address,
+    which the server reads as any request. *)
+Import Explore.
+Import pages.pages.
+Import pages.counter.
+Import web.request.
+
+Definition crlf : string := String.String (Ascii.ascii_of_nat 13) (String.String (Ascii.ascii_of_nat 10) String.EmptyString).
+
+(** a request: for an address, and with a cookie or without *)
+Inductive request := Get (path : string) | GetWithCookie (path cookie : string).
+
+text_of (r : request) : string :=
+  match r with
+  | Get path => "GET " ++ path ++ " HTTP/1.1" ++ crlf ++ crlf
+  | GetWithCookie path cookie => "GET " ++ path ++ " HTTP/1.1" ++ crlf ++ "Cookie: " ++ cookie ++ crlf ++ crlf
+  end.
+
+(** a click: the request for the +1 link of the page, if there is one (a
+    400 has none) *)
+click (a : action) (s : start) : start :=
+  match s with
+  | Start n => start_of (text_of (Get (next_link n)))
+  | Rejected v => Rejected v
+  end.
+
+requests : list request := [
+  Get "/", Get "/?count=0", Get "/?count=41", Get "/?count=-1", Get "/?count=1.5",
+  Get "/?count=abc", Get "/?count=", Get "/?count=9998",
+  GetWithCookie "/" "count=7", GetWithCookie "/" "count=x"].
+
+model : Explore.model request start action := {|
+  Explore.inputs := requests;
+  Explore.initial := fun r => start_of (text_of r);
+  Explore.actions := [Increment];
+  Explore.transition := click;
+  Explore.depth := 3;
+  Explore.invariants := [
+    ("a page starts at a count, or rejects what is not one",
+     fun s => match s with
+              | Start _ => true
+              | Rejected v => match parse_count v with None => true | Some _ => false end
+              end)];
+  Explore.steps := [
+    ("each click increases the count",
+     fun before after => match before, after with
+                         | Start x, Start y => (x <? y)%N
+                         | Rejected _, Rejected _ => true
+                         | _, _ => false
+                         end)]
+|}.
+
+Explore model.
+
+(** A property that does not hold, to show how a violation is reported:
+    were the page laid out for four digits, the count would outgrow it,
+    from the request for 9998, after two clicks. *)
+four_digits : Explore.model request start action := {|
+  Explore.inputs := requests;
+  Explore.initial := fun r => start_of (text_of r);
+  Explore.actions := [Increment];
+  Explore.transition := click;
+  Explore.depth := 3;
+  Explore.invariants := [
+    ("the count has four digits at most",
+     fun s => match s with Start n => (n <? 10000)%N | Rejected _ => true end)];
+  Explore.steps := []
+|}.
+
+Fail Explore four_digits.

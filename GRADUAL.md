@@ -455,6 +455,24 @@ is, and so says nothing for those values.
 without its parser, where the warning shows the counter failing for
 every count in a request; `test-suite/misc/soma_may_fail.sh` tests it.
 
+### Exploring a program: `Explore`
+
+`Soma.Explore` (`theories/Soma/Explore.v`, not in the prelude) describes
+a program as a state machine, a `model`: the inputs to try (a scope, as
+in Alloy), the state each starts in, the actions and what each does, a
+depth, invariants of states and properties of steps, each a named
+`bool`-valued function. `Explore model.` (`plugins/soma_explore`) tries
+them as TLC does a TLA+ specification: from each input, each sequence of
+actions up to the depth, breadth first, not exploring again a state
+reached before from the same input. States and properties are evaluated
+as `Eval` evaluates a term, so a run-time error, a cast that failed, is
+found as a violation is, with its message. Each violation is reported
+with its input and the behaviour up to it (the actions and the states
+after them), and the command fails; without one, it says what was
+explored. `examples/example_projects/counter_server/model.soma` and
+`unchecked_counter/model.soma` are examples; `test-suite/misc/soma_explore.sh`
+tests it.
+
 ## Architecture
 
 The kernel stays the CIC kernel. The cast calculus (CastCIC) is encoded with

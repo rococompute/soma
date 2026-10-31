@@ -1,0 +1,39 @@
+(** The unchecked counter as a state machine, explored as TLC explores a
+    TLA+ specification (Soma.Explore):
+
+        soma build model.soma
+
+    tries every request below (the scope, as in Alloy), then every
+    sequence of clicks of +1 up to three, and says what goes wrong, with
+    the request and the clicks that lead to it. The state is the
+    counter's count; the initial state of a request is its start used as
+    an N, as respond does (web/server.soma). *)
+Import Explore.
+Import pages.pages.
+Import pages.counter.
+Import web.request.
+
+Definition crlf : string := String.String (Ascii.ascii_of_nat 13) (String.String (Ascii.ascii_of_nat 10) String.EmptyString).
+
+(** a request: for an address, and with a cookie or without *)
+Inductive request := Get (path : string) | GetWithCookie (path cookie : string).
+
+text_of (r : request) : string :=
+  match r with
+  | Get path => "GET " ++ path ++ " HTTP/1.1" ++ crlf ++ crlf
+  | GetWithCookie path cookie => "GET " ++ path ++ " HTTP/1.1" ++ crlf ++ "Cookie: " ++ cookie ++ crlf ++ crlf
+  end.
+
+model : Explore.model request N action := {|
+  Explore.inputs := [
+    Get "/", Get "/?count=0", Get "/?count=41", Get "/?count=-1", Get "/?count=1.5",
+    Get "/?count=abc", Get "/?count=", GetWithCookie "/" "count=7", GetWithCookie "/" "count=x"];
+  Explore.initial := fun r => (start_of (text_of r) : N);
+  Explore.actions := [Increment];
+  Explore.transition := step;
+  Explore.depth := 3;
+  Explore.invariants := [("the count is a whole number, 0 or more", fun n => (0 <=? n)%N)];
+  Explore.steps := [("each click increases the count", fun before after => (before <? after)%N)]
+|}.
+
+Explore model.

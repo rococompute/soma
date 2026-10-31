@@ -1,0 +1,24 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Explore model.] (theories/Soma/Explore.v), a bounded search of a
+   state machine (soma_explore.ml) *)
+
+{
+
+open Stdarg
+
+}
+
+DECLARE PLUGIN "soma-runtime.plugins.soma_explore"
+
+VERNAC COMMAND EXTEND SomaExplore CLASSIFIED AS QUERY
+| [ "Explore" constr(c) ] -> { Soma_explore.explore c }
+END

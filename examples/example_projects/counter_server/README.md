@@ -8,6 +8,7 @@ state, from whatever start was accepted, strictly increases.
 
 ```
 main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
+model.soma           the counter as a state machine, explored (Explore model.)
 pages/
   pages.lang         the rules of pages/: the language, and the state
   pages.proof        the state, from any start, strictly increases
@@ -70,6 +71,38 @@ carries `n + 1`, which is greater, and which the server accepts.
 The count is binary, an `N`, and not a `nat`: a `nat` is unary in the
 image, so a request for `?count=99999999999999999999` would take that
 much memory. As an `N`, it is 67 bits.
+
+## A bounded search
+
+`model.soma` describes the server as a state machine, for
+`Soma.Explore`: the state is where a page starts, `Start n` or
+`Rejected value`, and a click is what a browser does with the +1 link:
+it asks for the link's address, which the server reads as any request.
+`soma build -v model.soma` tries ten requests, a count of each shape,
+from the address and the cookie, then every sequence of clicks up to
+three, checking that a page starts at a count or rejects what is not
+one, and that each click increases the count:
+
+```
+Explored 10 inputs, 1 action, up to 3 in a row: 30 states (21 distinct), 20 actions taken, 1 invariant and 1 step property checked. No violation.
+```
+
+This goes through the server's own reading of its links, end to end,
+where the proofs are about each part. The file also has a property that
+does not hold, `four_digits`, under `Fail`: were the page laid out for
+four digits, the search finds the request and the clicks that outgrow it:
+
+```
+Violation 1, from input (Get "/?count=9998"):
+  "the count has four digits at most" does not hold
+  The behaviour up to it:
+    0: initial  (Start 9998)
+    1: Increment  (Start 9999)
+    2: Increment  (Start 10000)
+```
+
+A search covers its scope, and a proof every input: the two say
+different things. `unchecked_counter` has the same model, which fails.
 
 ## How a click reaches the server
 

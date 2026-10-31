@@ -6,6 +6,7 @@ wrong, and what Soma says about it, before it runs and when it runs.
 
 ```
 main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
+model.soma           the counter as a state machine, explored (Explore model.)
 pages/               as in counter_server: the language, the state, its proofs
 web/
   request.soma       start_of request : Any, from the address, the cookie, or 0
@@ -66,6 +67,39 @@ that may be a string, so for those requests it says nothing (below).
 The server goes on: a request that fails is that request's. But the
 person asking gets no answer, where `counter_server` says `400` and why;
 and a valid count fails as an invalid one does.
+
+## A bounded search
+
+`model.soma` describes the server as a state machine, for
+`Soma.Explore`: the requests to try (the scope, as in Alloy), the state
+each starts the counter in (its start used as an `N`, as `respond` does),
+the one action, +1, and what should hold: every count is a whole number,
+0 or more, and each click increases it. `soma build model.soma` tries
+every request, then every sequence of clicks up to three, as TLC does for
+a TLA+ specification:
+
+```
+Violation 1, from input (Get "/?count=0"):
+  the initial state is a run-time error: expected an N, but got "0" : string.
+Violation 2, from input (Get "/?count=41"):
+  the initial state is a run-time error: expected an N, but got "41" : string.
+Violation 3, from input (Get "/?count=-1"):
+  the initial state is a run-time error: expected an N, but got "-1" : string.
+...
+Violation 7, from input (GetWithCookie "/" "count=7"):
+  the initial state is a run-time error: expected an N, but got "7" : string.
+Violation 8, from input (GetWithCookie "/" "count=x"):
+  the initial state is a run-time error: expected an N, but got "x" : string.
+Explored 9 inputs, 1 action, up to 3 in a row: 4 states (4 distinct), 3 actions taken, 1 invariant and 1 step property checked.
+8 violations, from 8 of the 9 inputs.
+No violation from: (Get "/").
+```
+
+The warning says what the `Any` may be; the search says which requests
+it is wrong for, and with what value: all of those with a count, `0` and
+`7` as much as `abc`, and only the request without one gets through. The
+build fails, as a model checker's run does when it finds a violation.
+`counter_server` has the same model, which finds none.
 
 ## The proof that still checks
 

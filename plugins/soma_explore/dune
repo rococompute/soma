@@ -1,0 +1,10 @@
+(library
+ (name soma_explore_plugin)
+ (public_name soma-runtime.plugins.soma_explore)
+ (synopsis "Soma's explorer: Explore model, a bounded search of a state machine")
+ (libraries soma-runtime.vernac))
+
+(rule
+ (targets g_soma_explore.ml)
+ (deps (:mlg g_soma_explore.mlg))
+ (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))
