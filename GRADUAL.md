@@ -70,6 +70,8 @@ _build/install/default/bin/soma run my_file.soma
   `Soma <`), with FILE's definitions loaded first (`-l FILE`).
 - `soma build --fill FILE` writes the proofs that `The rest follows.`
   found in `FILE.proof` (see Proof sentences).
+- `soma explore FILE` reviews FILE and the project files it imports (see
+  Exploring a program).
 - `soma help` lists the commands, and `soma build --help` the options of
   build and run (those of `rocq c`).
 
@@ -472,6 +474,25 @@ after them), and the command fails; without one, it says what was
 explored. `examples/example_projects/counter_server/model.soma` and
 `unchecked_counter/model.soma` are examples; `test-suite/misc/soma_explore.sh`
 tests it.
+
+`soma explore FILE` checks FILE in a temporary directory, as `soma run`
+does, without an image, and then reviews it with the project files it
+imports (the command `Review`, in the same plugin):
+
+- Models: every `Soma.Explore.model` defined is explored (its `Explore`
+  commands, during a review, are left to the review).
+- Escape hatches, where static types are given up: each definition whose
+  type has `Any`, what its casts make an `Any` from and use one as, and
+  its `?` and `raise`.
+- Issues, where a guarantee does not hold: the casts that may fail (as
+  `gradual-may-fail` says), a theorem whose statement has one, what is
+  assumed (an `Axiom`, a `Parameter`, an `Admitted` proof) and what rests
+  on it, and a proof whose evidence is a gradual primitive.
+- What `main` does outside the program, for a Sandbox program: `print`,
+  `serve (port 8080)`, `fetch`, ...
+
+It fails when a model has a violation or there is an issue; escape
+hatches alone are gradual code doing what it says.
 
 ## Architecture
 

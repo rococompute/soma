@@ -9,6 +9,7 @@ state, from whatever start was accepted, strictly increases.
 ```
 main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
 model.soma           the counter as a state machine, explored (Explore model.)
+four_digits.soma     a property that does not hold, and how it is reported
 pages/
   pages.lang         the rules of pages/: the language, and the state
   pages.proof        the state, from any start, strictly increases
@@ -88,9 +89,10 @@ Explored 10 inputs, 1 action, up to 3 in a row: 30 states (21 distinct), 20 acti
 ```
 
 This goes through the server's own reading of its links, end to end,
-where the proofs are about each part. The file also has a property that
-does not hold, `four_digits`, under `Fail`: were the page laid out for
-four digits, the search finds the request and the clicks that outgrow it:
+where the proofs are about each part. `four_digits.soma` has a property
+that does not hold, and does not build, on purpose: were the page laid
+out for four digits, the search finds the request and the clicks that
+outgrow it:
 
 ```
 Violation 1, from input (Get "/?count=9998"):
@@ -103,6 +105,32 @@ Violation 1, from input (Get "/?count=9998"):
 
 A search covers its scope, and a proof every input: the two say
 different things. `unchecked_counter` has the same model, which fails.
+
+## A review
+
+`soma explore model.soma` reviews the model and the project files it
+imports: it explores every model, and lists what gives up a static
+guarantee (an `Any`, a cast, `?`, `raise`) and what keeps one from
+holding (a cast that may fail, an assumption, an `Admitted` proof):
+
+```
+Review of model and the 3 project files it imports: 42 definitions, 13 theorems.
+
+Models (Soma.Explore), explored:
+  model.model:
+    Explored 10 inputs, 1 action, up to 3 in a row: 30 states (21 distinct), 20 actions taken, 1 invariant and 1 step property checked. No violation.
+
+Escape hatches, where static types are given up:
+  none.
+
+Issues, where a guarantee does not hold:
+  none.
+
+No issue, and no violation.
+```
+
+`soma explore main.soma` adds what the image does outside the program:
+`print, serve (port 8080)`.
 
 ## How a click reaches the server
 

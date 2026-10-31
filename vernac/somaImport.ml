@@ -150,7 +150,7 @@ let compile ?loc root path src =
   Printf.eprintf "Compiling %s (into %s)\n%!" (path ^ Filename.extension src) cache_name;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"]))
+                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"; "SOMA_REVIEW"]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ root;
           stack_var ^ "=" ^ String.concat ":" (stack ?loc root @ [path]);

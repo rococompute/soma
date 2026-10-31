@@ -22,3 +22,7 @@ DECLARE PLUGIN "soma-runtime.plugins.soma_explore"
 VERNAC COMMAND EXTEND SomaExplore CLASSIFIED AS QUERY
 | [ "Explore" constr(c) ] -> { Soma_explore.explore c }
 END
+
+VERNAC COMMAND EXTEND SomaReview CLASSIFIED AS QUERY STATE opaque_access
+| [ "Review" ] -> { Soma_explore.review }
+END

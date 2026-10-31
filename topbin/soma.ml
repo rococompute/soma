@@ -27,6 +27,8 @@ let usage = {|Usage:
 Commands:
   build                       Check a program and keep its MirageOS image, if any.
   run                         Check a program and print its result, or run its image.
+  explore                     Review a program and the project files it imports: explore
+                              its models, and list its escape hatches and its issues.
   repl                        Start an interactive session, with FILE loaded if given.
   help                        Show help.
 
@@ -513,6 +515,32 @@ let memory_of command =
         (match int_of_string_opt (String.sub a 6 (String.length a - 6)) with Some n -> n | None -> m)
       else m) 256 command
 
+(* [soma explore FILE]: FILE checked in a temporary directory, as by
+   [soma run], without an image, and then reviewed (SOMA_REVIEW, which
+   toplevel/ccompile.ml reads; plugins/soma_explore): its models explored,
+   its escape hatches and its issues listed. It fails when there is a
+   violation or an issue. *)
+let explore file args =
+  let dir = temp_dir () in
+  let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
+  pass_signals ();
+  Unix.putenv "SOMA_REVIEW" "1";
+  Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+  let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
+  (* what the review says, the build does not say again *)
+  let code, output = compile (file :: "-o" :: vo :: "-w" :: "-gradual-may-fail" :: args) in
+  (* the review, and not the values of the program's bare terms *)
+  let rec from_review = function
+    | [] -> []
+    | l :: rest when starts_with ~prefix:"Review of " l -> l :: rest
+    | _ :: rest -> from_review rest in
+  let review = from_review (lines output) in
+  List.iter print_endline review;
+  let clean = match List.rev (List.filter (fun l -> String.trim l <> "") review) with
+    | last :: _ -> String.trim last = "No issue, and no violation."
+    | [] -> false in
+  finish (if code <> 0 then code else if clean then 0 else 1)
+
 let run ~events ~supervise file args image_args =
   let dir = temp_dir () in
   (* the temporary directory holds the program's image: it is removed
@@ -642,6 +670,14 @@ let () =
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         build ~verbose ~fill (program_of file) args
+    end
+  | "explore" :: rest ->
+    begin match rest with
+      | [] -> usage_error "soma explore: no file given"
+      | file :: args ->
+        let opts, args = parse_opts args in
+        let () = init opts (file :: args) in
+        explore (program_of file) args
     end
   | "run" :: rest ->
     (* --events and --supervise are soma's, anywhere before -- *)

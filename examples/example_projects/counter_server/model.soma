@@ -60,20 +60,3 @@ model : Explore.model request start action := {|
 |}.
 
 Explore model.
-
-(** A property that does not hold, to show how a violation is reported:
-    were the page laid out for four digits, the count would outgrow it,
-    from the request for 9998, after two clicks. *)
-four_digits : Explore.model request start action := {|
-  Explore.inputs := requests;
-  Explore.initial := fun r => start_of (text_of r);
-  Explore.actions := [Increment];
-  Explore.transition := click;
-  Explore.depth := 3;
-  Explore.invariants := [
-    ("the count has four digits at most",
-     fun s => match s with Start n => (n <? 10000)%N | Rejected _ => true end)];
-  Explore.steps := []
-|}.
-
-Fail Explore four_digits.

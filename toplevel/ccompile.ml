@@ -117,6 +117,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = load_lang_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
+      (* Soma: soma explore FILE reviews it, last (plugins/soma_explore) *)
+      let state = if Sys.getenv_opt "SOMA_REVIEW" = Some "1"
+        then process_string ~state "Require Soma.Explore. Review." else state in
       let fullstate = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs ~filename:long_f_dot_in fullstate;
       let () = Stm.join ~doc:state.doc in

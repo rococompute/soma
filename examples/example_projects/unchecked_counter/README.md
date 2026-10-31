@@ -101,6 +101,54 @@ it is wrong for, and with what value: all of those with a count, `0` and
 build fails, as a model checker's run does when it finds a violation.
 `counter_server` has the same model, which finds none.
 
+## A review
+
+`soma explore model.soma` puts it together: the model explored, where
+the program gives up a static guarantee, and where one does not hold.
+It fails, as there are issues:
+
+```
+Review of model and the 3 project files it imports: 35 definitions, 4 theorems.
+
+Models (Soma.Explore), explored:
+  model.model:
+    Violation 1, from input (Get "/?count=0"):
+      the initial state is a run-time error: expected an N, but got "0" : string.
+    ...
+    8 violations, from 8 of the 9 inputs.
+    No violation from: (Get "/").
+
+Escape hatches, where static types are given up:
+  model.model
+    uses an Any as an N
+  web.request.start_of
+    its type has Any: (string -> Any)
+    makes an Any from a string, an N
+
+Issues, where a guarantee does not hold:
+  model.model: start_of (text_of r) is an Any that may be a string, used as
+    an N: a run-time error whenever it is one.
+
+1 model with a violation, 1 issue.
+```
+
+`soma explore main.soma` reviews the server instead, with the theorem
+that says nothing:
+
+```
+Issues, where a guarantee does not hold:
+  web.server.respond: request.start_of request is an Any that may be
+    a string, used as an N: a run-time error whenever it is one.
+  web.server.served_state_increases: its statement has
+    request.start_of request, an Any that may be a string, used as an N: for
+    those values, the theorem is about raise, and says nothing.
+
+What main does outside the program:
+  print, serve (port 8080)
+```
+
+`counter_server`'s review has no escape hatch and no issue.
+
 ## The proof that still checks
 
 `server.proof` proves `counter_server`'s theorem: the counter's state,
