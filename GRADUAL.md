@@ -72,6 +72,9 @@ _build/install/default/bin/soma run my_file.soma
   found in `FILE.proof` (see Proof sentences).
 - `soma explore FILE` reviews FILE and the project files it imports (see
   Exploring a program).
+- `soma compile FILE` does both `soma build` and `soma explore`, in one
+  check: it keeps what `soma build` keeps (a Sandbox program's image),
+  then prints the review, and fails when it finds an issue or a violation.
 - `soma help` lists the commands, and `soma build --help` the options of
   build and run (those of `rocq c`).
 

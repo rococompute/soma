@@ -14,6 +14,10 @@
    [rocq c], and prints the names of the files it created (a program that
    requires Sandbox is also built into an image).
 
+   [soma compile FILE [OPTIONS]] does both [soma build] and [soma explore]:
+   it builds FILE as [soma build] does, in the same check reviewing it as
+   [soma explore] does, and fails when the review finds an issue.
+
    [soma run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
    temporary directory, so that it leaves no files, and prints the value of
    its last bare term; a program that requires Sandbox is built into an
@@ -29,13 +33,15 @@ Commands:
   run                         Check a program and print its result, or run its image.
   explore                     Review a program and the project files it imports: explore
                               its models, and list its escape hatches and its issues.
+  compile                     Build, then review: soma build and soma explore, in one
+                              check; fails if the review finds an issue.
   repl                        Start an interactive session, with FILE loaded if given.
   help                        Show help.
 
 Options:
-  -v, --verbose               (build) Print the value of each bare term, and the
+  -v, --verbose               (build, compile) Print the value of each bare term, and the
                               proofs that "The rest follows." found.
-  --fill                      (build) Write the proofs that "The rest follows."
+  --fill                      (build, compile) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
   -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
   --events                    (run) Show the image's events, and what its run came
@@ -189,11 +195,37 @@ let fill_proofs proof_file proofs =
 
 let plural n word = if n = 1 then "1 " ^ word else string_of_int n ^ " " ^ word ^ "s"
 
-let build ~verbose ~fill file args =
+(* The review that [soma explore] and [soma compile] print, from the line
+   it starts with (plugins/soma_explore), and what precedes it *)
+let split_review output =
+  let rec split before = function
+    | [] -> List.rev before, []
+    | l :: rest when starts_with ~prefix:"Review of " l -> List.rev before, l :: rest
+    | l :: rest -> split (l :: before) rest in
+  let program, review = split [] (lines output) in
+  (* the image is built after the review: what Mirage says is the build's *)
+  let mirage l = starts_with ~prefix:"Mirage: " l in
+  program @ List.filter mirage review, List.filter (fun l -> not (mirage l)) review
+
+(* a review that found nothing ends so *)
+let clean_review review =
+  match List.rev (List.filter (fun l -> String.trim l <> "") review) with
+  | last :: _ -> String.trim last = "No issue, and no violation."
+  | [] -> false
+
+(* [soma build FILE]; with [~review], [soma compile FILE]: the same, and
+   then FILE reviewed as by [soma explore] (SOMA_REVIEW), which fails it
+   when the review finds an issue or a violation *)
+let build ?(review=false) ~verbose ~fill file args =
   let dir = output_dir file args in
   let before = modification_times dir in
   let start = Unix.gettimeofday () in
+  if review then Unix.putenv "SOMA_REVIEW" "1";
+  (* what the review says, the build does not say again *)
+  let args = if review then "-w" :: "-gradual-may-fail" :: args else args in
   let code, output = compile (file :: args) in
+  let program_output, review_lines = split_review output in
+  let output = String.concat "" (List.map (fun l -> l ^ "\n") program_output) in
   let proofs = found_proofs output in
   let proof_file = Filename.remove_extension file ^ ".proof" in
   (* Without -v, the values of bare terms are not shown; the notice that
@@ -218,7 +250,12 @@ let build ~verbose ~fill file args =
         proof_file (plural (List.length proofs) "proof")
         (if List.length proofs = 1 then "it" else "them") (if List.length proofs = 1 then "it" else "them")
   end;
-  if code <> 0 then exit code
+  if code <> 0 then exit code;
+  if review then begin
+    if review_lines <> [] then print_newline ();
+    List.iter print_endline review_lines;
+    if not (clean_review review_lines) then exit 1
+  end
 
 (* FILE.proof, the properties of FILE.soma, stands for the program *)
 let program_of file =
@@ -530,16 +567,9 @@ let explore file args =
   (* what the review says, the build does not say again *)
   let code, output = compile (file :: "-o" :: vo :: "-w" :: "-gradual-may-fail" :: args) in
   (* the review, and not the values of the program's bare terms *)
-  let rec from_review = function
-    | [] -> []
-    | l :: rest when starts_with ~prefix:"Review of " l -> l :: rest
-    | _ :: rest -> from_review rest in
-  let review = from_review (lines output) in
+  let _, review = split_review output in
   List.iter print_endline review;
-  let clean = match List.rev (List.filter (fun l -> String.trim l <> "") review) with
-    | last :: _ -> String.trim last = "No issue, and no violation."
-    | [] -> false in
-  finish (if code <> 0 then code else if clean then 0 else 1)
+  finish (if code <> 0 then code else if clean_review review then 0 else 1)
 
 let run ~events ~supervise file args image_args =
   let dir = temp_dir () in
@@ -655,21 +685,21 @@ let run_command ~events ~supervise = function
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
-  | ("build" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
+  | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
-  | "build" :: rest ->
+  | ("build" | "compile" as command) :: rest ->
     (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in
     let is_fill a = a = "--fill" || a = "-fill" in
     let verbose = List.exists is_verbose rest in
     let fill = List.exists is_fill rest in
     begin match List.filter (fun a -> not (is_verbose a || is_fill a)) rest with
-      | [] -> usage_error "soma build: no file given"
+      | [] -> usage_error "soma %s: no file given" command
       | file :: args ->
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
-        build ~verbose ~fill (program_of file) args
+        build ~review:(command = "compile") ~verbose ~fill (program_of file) args
     end
   | "explore" :: rest ->
     begin match rest with

@@ -111,3 +111,12 @@ double (n : nat) : nat := n + n.
 EOT
 soma explore clean.soma > out.log 2>&1
 grep -q 'No issue, and no violation.' out.log
+
+# soma compile FILE: soma build, then the review, in one check; it keeps
+# what soma build keeps, and fails when the review finds something
+soma compile clean.soma > out.log 2>&1
+grep -q 'No issue, and no violation.' out.log
+[ ! -e clean.vo ]
+if soma compile proj/main.soma > out.log 2>&1; then echo "soma compile passed a review with issues"; exit 1; fi
+grep -q '1 model with a violation, 4 issues.' out.log
+[ ! -e proj/main.vo ]
