@@ -870,9 +870,13 @@ let extract_params indl =
       error_differing_params ~kind:"inductive" (ind,params) (ind',p')
 
 let extract_inductive indl =
-  List.map (fun ({CAst.v=indname},_,ar,lc) -> {
+  List.map (fun ({CAst.v=indname; loc},_,ar,lc) -> {
     ind_name = indname;
-    ind_arity_explicit = Option.has_some ar;
+    (* Soma: a type of a program is data, never lowered to Prop as a
+       proposition would be: [Inductive action := Increment.] is as if
+       [: Type] were written, in Soma files (which [: Prop] still makes a
+       proposition) *)
+    ind_arity_explicit = Option.has_some ar || SomaImport.applies ?loc ();
     ind_arity = Option.default (CAst.make @@ CSort Constrexpr_ops.expr_Type_sort) ar;
     ind_lc = List.map (fun (_,({CAst.v=id},t)) -> (id,t)) lc
   }) indl

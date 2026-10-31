@@ -1,0 +1,17 @@
+(** What is proved about the counter, by the theorems of pages/pages.proof,
+    which hold for every app of pages/: its count is the number of clicks,
+    and each click increases it. *)
+
+Theorem counter_counts_clicks : forall clicks, state_after counter clicks = length clicks.
+Proof.
+  Take clicks : list action.
+  By state_is_clicks, we conclude that state_after counter clicks = length clicks.
+Qed.
+
+Theorem counter_increases : forall clicks,
+  state_after counter clicks < state_after counter (clicks ++ [Increment]).
+Proof.
+  Take clicks : list action.
+  By strictly_increasing, we conclude that
+    state_after counter clicks < state_after counter (clicks ++ [Increment]).
+Qed.

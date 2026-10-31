@@ -241,7 +241,9 @@ let rec conclude rounds =
             | GlobRef.IndRef (m, _) | GlobRef.ConstructRef ((m, _), _) -> Some (MutInd.modpath m)
             | GlobRef.VarRef _ -> None in
           match mp with Some mp -> not (rocq_library (ModPath.dp mp)) | None -> true)
-          (candidates env sigma goal) in
+          (* the local names are [hyps], those that are facts: [a : action]
+             is no reason for anything *)
+          (List.filter (fun (_, gr) -> match gr with GlobRef.VarRef _ -> false | _ -> true) (candidates env sigma goal)) in
       let rocq_close, rocq_rest = List.partition (fun (score, _) -> close_fit score) rocq's in
       let unfold () =
         match program_definitions env sigma goal with

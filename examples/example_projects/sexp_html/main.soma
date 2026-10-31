@@ -1,9 +1,10 @@
-(** The site: its pages, as HTML. The s-expression language is the rules
-    of pages/ (pages/pages.lang); main.soma is not under pages/, so it does
-    not have [sexp], and imports JSX for [render]. See README.md. *)
-Import JSX.
-Import pages.home.
+(** The counter of pages/counter.soma, as HTML: before any click, and
+    after three clicks of +1. main.soma is not under pages/, so the
+    language of pages/ (pages/pages.lang) is not given to it: it imports it,
+    for [Increment] and, with JSX, [render]. See README.md. *)
+Import pages.pages.
 Import pages.counter.
 
-("<!DOCTYPE html>" ++ render home)%str.
-render (view 3).
+("<!DOCTYPE html>" ++ render (view counter (state_after counter [])))%str.
+state_after counter [Increment, Increment, Increment].
+render (view counter (state_after counter [Increment, Increment, Increment])).

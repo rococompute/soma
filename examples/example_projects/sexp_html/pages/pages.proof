@@ -1,0 +1,54 @@
+(** What is proved about the state of every app of pages/: checked once,
+    with the rules of pages/, and so for any view, any page. The state is
+    the count of pages.lang, and the only action is +1, so the count is the
+    number of clicks, and every click increases it. *)
+
+(** From any count, the clicks add one each. *)
+Lemma replay_counts : forall clicks count, replay step count clicks = count + length clicks.
+Proof.
+  Take clicks : list action.
+  We use induction on clicks.
+  - Take count : nat.
+    We conclude that replay step count [] = count + 0.
+  - Take a : action.
+    Take clicks : list action.
+    Assume that forall count, replay step count clicks = count + length clicks as IH.
+    Take count : nat.
+    We need to show that replay step (step a count) clicks = count + length (a :: clicks).
+    By IH, it suffices to show that step a count + length clicks = count + length (a :: clicks).
+    We consider each case of a.
+    We conclude that step Increment count + length clicks = count + length (Increment :: clicks).
+Qed.
+
+(** The state of any app of pages/ is the number of clicks. *)
+Theorem state_is_clicks : forall view clicks, state_after (counter_app view) clicks = length clicks.
+Proof.
+  Take view : nat -> element action.
+  Take clicks : list action.
+  We need to show that replay step 0 clicks = length clicks.
+  By replay_counts, we conclude that replay step 0 clicks = length clicks.
+Qed.
+
+(** Every click adds one to the state of any app of pages/. *)
+Theorem click_increases : forall view clicks a,
+  state_after (counter_app view) (clicks ++ [a]) = state_after (counter_app view) clicks + 1.
+Proof.
+  Take view : nat -> element action.
+  Take clicks : list action.
+  Take a : action.
+  By state_is_clicks, it suffices to show that length (clicks ++ [a]) = length clicks + 1.
+  By last_length, we conclude that length (clicks ++ [a]) = length clicks + 1.
+Qed.
+
+(** So the state of any app of pages/ is strictly increasing: there is no
+    click after which it is as it was, or less. *)
+Theorem strictly_increasing : forall view clicks a,
+  state_after (counter_app view) clicks < state_after (counter_app view) (clicks ++ [a]).
+Proof.
+  Take view : nat -> element action.
+  Take clicks : list action.
+  Take a : action.
+  By click_increases, it suffices to show that
+    state_after (counter_app view) clicks < state_after (counter_app view) clicks + 1.
+  We conclude that state_after (counter_app view) clicks < state_after (counter_app view) clicks + 1.
+Qed.

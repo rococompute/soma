@@ -1,12 +1,13 @@
-(** A counter's view, as an s-expression with events: its buttons produce
-    actions, as [onClick] does in JSX. *)
+(** A counter, in the language of pages/ (pages/pages.lang): a page with a
+    +1 button. Its state is the count of pages.lang, from 0, and its only
+    action is [Increment]: this file gives the view, nothing else. *)
 
-Inductive action := Increment | Reset.
-
-view (count : nat) : element action :=
-  let shown := to_string count in
-  sexp
-    (div (attrs (class "counter") (data_id "main"))
-      (p "Count: " shown)
-      (button (attrs (on click Increment)) "+")
-      (button (attrs (on click Reset)) "Reset")).
+counter := app count
+  (html
+    (head
+      (title "Counter")
+      (meta (attrs (charset "utf-8"))))
+    (body
+      (div (attrs (class "counter") (data_id "main"))
+        (h1 "Count: " count)
+        (button (attrs (on click Increment)) "+1")))).

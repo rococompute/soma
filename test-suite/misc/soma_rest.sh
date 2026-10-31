@@ -93,3 +93,23 @@ soma build --fill prog.soma > out.log
 grep -q 'prog.proof: 2 proofs written in' out.log
 grep -q '^  Take A : Type\.$' prog.proof
 soma build prog.soma > out.log
+
+# in a program, a type with one constructor is data, not a proposition
+# (in Rocq's .v files it is lowered to Prop, as True is), and the search
+# does not use a value of it as a fact
+cat > prog.soma <<'EOT'
+Inductive action := Increment.
+step (a : action) (n : nat) : nat := match a with Increment => n + 1 end.
+EOT
+cat > prog.proof <<'EOT'
+Theorem step_adds : forall a n, step a n = n + 1.
+Proof.
+  Take a : action.
+  Take n : nat.
+  We consider each case of a.
+  The rest follows.
+Qed.
+EOT
+printf 'Check (action : Type).\nFail Check (action : Prop).\n' >> prog.soma
+soma build -v prog.soma > out.log
+! grep -q 'By a,' out.log

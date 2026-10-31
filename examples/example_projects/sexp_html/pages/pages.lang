@@ -1,16 +1,24 @@
-(** The rules of pages/: an HTML language of s-expressions. Every file
-    under pages/ has them, as if it started with [Import pages.pages].
+(** The rules of pages/: a language of s-expressions for counter apps.
+    Every file under pages/ has them, as if it started with
+    [Import pages.pages].
+
+    The state of every app of this language is here, and only here: a
+    count, from 0, and one action, [Increment], which adds 1. A page gives
+    the view; [app count (div ...)] is the app whose view is [(div ...)],
+    [count] being the state where it is shown. pages.proof proves what
+    follows for every such app, whatever its view: the state is the number
+    of clicks, and each click increases it.
 
     [sexp (div (h1 "Hello world"))] is the JSX element
     [<div> <h1> "Hello world" </h1> </div>]. The s-expression is code that
-    Soma already reads ([div] applied to [h1 "Hello world"]); the macro
-    [sexp] reads it as a tree and gives the element:
+    Soma already reads ([div] applied to [h1 "Hello world"]); the macros
+    read it as a tree and give the element:
 
     - [(tag child ...)], [tag] in lowercase, is the element [tag];
     - ["text"] and [42] are text;
-    - a name, [title], is its value: an element, or a string;
-    - [(attrs (class "page") (on click Increment))], first among the
-      children, is the attributes: [class="page"], and the event [click];
+    - a name, [count], is its value: an element, a string, or a number;
+    - [(attrs (class "page") (on click Increment))], among the children,
+      is the attributes: [class="page"], and the event [click];
       [data_id] is the attribute [data-id], names having no dashes;
     - [(Greeting "Soma")], in uppercase, calls the component [Greeting];
     - [(br _)] is an element without children ([(br)] is the name [br]).
@@ -18,6 +26,31 @@
     JSX itself is exported, so the pages have [element], [render], and
     JSX notation. *)
 Export JSX.
+
+(** * The state *)
+
+(** The only action: the +1 button's *)
+Inductive action := Increment.
+
+(** what an action does to the count *)
+step (a : action) (count : nat) : nat :=
+  match a with
+  | Increment => count + 1
+  end.
+
+(** the app of a view: its state is the count, from 0, changed by [step] *)
+counter_app (view : nat -> element action) : app nat action := make_app 0 step view.
+
+(** * Children *)
+
+(** What can be a child: an element, a string (its text), a number (its
+    digits) *)
+Class Child (T : Type) := child : T -> element action.
+#[export] Instance child_element : Child (element action) := fun e => e.
+#[export] Instance child_string : Child string := fun s => text s.
+#[export] Instance child_nat : Child nat := fun n => text (to_string n).
+
+(** * From s-expressions to elements *)
 
 (** attribute names are names, which have no dashes: [data_id] is [data-id] *)
 Recursive dashes (s : string) : string :=
@@ -60,8 +93,7 @@ make_node (tag : string) (written elements : list syntax) : syntax :=
     List.map snd (List.filter (fun p => negb (is_attrs (fst p) || is_hole (fst p))) (List.combine written elements)) in
   App (Var "Soma.JSX.node") [Str tag, code_list "Soma.JSX.attr_cons" attributes, code_list "Soma.JSX.jsx_cons" children].
 
-(** an s-expression as an element; text and names as they are, which a
-    string where an element is expected makes text *)
+(** an s-expression as an element *)
 Recursive element_of (s : syntax) : syntax :=
   match s with
   | Num n => Str (to_string n)
@@ -71,12 +103,21 @@ Recursive element_of (s : syntax) : syntax :=
     (* [(br)] is read as the name [br]: say how to write it *)
     if is_void name
     then MacroError ("(" ++ name ++ ") is the name " ++ name ++ "; an element without children is written (" ++ name ++ " _)")
-    else s
+    else App (Var "pages.pages.child") [s]
   | _ => s
   end.
 
+(** [sexp (tag child ...)]: the element *)
 Macro sexp args :=
   match args with
   | cons e nil => element_of e
   | _ => MacroError "sexp takes one element, written (tag child ...)"
+  end.
+
+(** [app count (tag child ...)]: the app whose view is the element, where
+    [count] is the state *)
+Macro app args :=
+  match args with
+  | cons (Var state) (cons e nil) => App (Var "pages.pages.counter_app") [Lam state (element_of e)]
+  | _ => MacroError "app takes the name of the state, then the view: app count (tag child ...)"
   end.

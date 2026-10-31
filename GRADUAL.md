@@ -254,9 +254,16 @@ apply; a warning says so, and `SOMA_PROJECT_ROOT` sets the project. A
 `examples/example_projects/folder_rules` is an example;
 `test-suite/misc/soma_folder_rules.sh` tests it.
 `examples/example_projects/sexp_html` gives a folder a language of its
-own: its rules define a macro, `sexp`, that reads HTML written as
-s-expressions, `(div (h1 "Hello world"))`, into JSX elements, and export
-JSX.
+own: its rules define macros, `sexp` and `app`, that read HTML written as
+s-expressions, `(div (h1 "Hello world"))`, into JSX elements and apps,
+and hold the state of every app of the folder, a count that only +1
+changes. Their proofs show, once and for every app of the folder, that
+the state is the number of clicks and strictly increases.
+
+A type declared in a Soma file is data: `Inductive action := Increment.`
+is a `Type`, where Rocq, in a `.v` file, would make a type of one
+constructor whose arguments are proofs (here, none) a proposition, as
+`True` is (`vernac/comInductive.ml`). `: Prop` makes it one.
 
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
