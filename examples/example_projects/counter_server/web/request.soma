@@ -1,0 +1,109 @@
+(** Where a page starts: the count in the address ([/?count=5]), or else
+    in the cookie [count] the server set, or else 0. A count is accepted
+    only when it is a whole number, 0 or more, written as Soma writes one:
+    request.proof proves that nothing else is. *)
+
+(** * Counts *)
+
+(** the number that digits are, if they are digits (0 if not) *)
+value_of (digits : option Decimal.uint) : N :=
+  match digits with
+  | Some d => N.of_uint d
+  | None => 0%N
+  end.
+
+(** the number that [s] is, if it is digits *)
+candidate (s : string) : N := value_of (DecimalString.NilZero.uint_of_string s).
+
+(** [n], if [s] is how it is written *)
+accept (n : N) (s : string) : option N := if String.eqb (to_string n) s then Some n else None.
+
+(** A count, from its digits: the number they are, but only when they are
+    exactly how [to_string] writes it, so ["5"], and not ["-5"], ["5.0"],
+    ["+5"], ["05"], ["five"] or [""] *)
+parse_count (s : string) : option N := accept (candidate s) s.
+
+(** * Where the count is *)
+
+Definition char (n : nat) : Ascii.ascii := Ascii.ascii_of_nat n.
+
+(** [s] up to the first character in [stops] *)
+Recursive take_until (stops : list Ascii.ascii) (s : string) : string :=
+  match s with
+  | String.EmptyString => String.EmptyString
+  | String.String c rest =>
+    if List.existsb (Ascii.eqb c) stops then String.EmptyString else String.String c (take_until stops rest)
+  end.
+
+(** a value ends at [&] or [;], which separate values, a space, or a line
+    break; a line, at a line break; a word, at a space or a line break *)
+take_value (s : string) : string := take_until [char 38, char 59, char 32, char 13, char 10] s.
+take_line (s : string) : string := take_until [char 13, char 10] s.
+take_word (s : string) : string := take_until [char 32, char 13, char 10] s.
+
+(** the value after the first [key] in [s] *)
+Recursive value_after (key s : string) : option string :=
+  match s with
+  | String.EmptyString => None
+  | String.String _ rest =>
+    if String.prefix key s
+    then Some (take_value (String.substring (String.length key) (String.length s) s))
+    else value_after key rest
+  end.
+
+Recursive after_space (s : string) : string :=
+  match s with
+  | String.EmptyString => String.EmptyString
+  | String.String c rest => if Ascii.eqb c (char 32) then rest else after_space rest
+  end.
+
+(** the address of a request: [/?count=5] in [GET /?count=5 HTTP/1.1 ...] *)
+path_of (request : string) : string := take_word (after_space request).
+
+(** [count] in the query of the address: [/?count=5], [/?a=1&count=5] *)
+url_count (request : string) : option string :=
+  let path := path_of request in
+  match value_after "?count=" path with
+  | Some v => Some v
+  | None => value_after "&count=" path
+  end.
+
+(** the line of the [Cookie] header, from its name on *)
+Recursive cookie_line (s : string) : option string :=
+  match s with
+  | String.EmptyString => None
+  | String.String _ rest =>
+    if String.prefix "Cookie: " s || String.prefix "cookie: " s
+    then Some (take_line (String.substring 8 (String.length s) s))
+    else cookie_line rest
+  end.
+
+(** [count] in the cookies: [Cookie: count=5], [Cookie: a=1; count=5] *)
+cookie_count (request : string) : option string :=
+  match cookie_line request with
+  | Some line =>
+    if String.prefix "count=" line
+    then Some (take_value (String.substring 6 (String.length line) line))
+    else value_after " count=" line
+  | None => None
+  end.
+
+(** * The start *)
+
+(** where a page starts, or the count that is not accepted *)
+Inductive start := Start (n : N) | Rejected (value : string).
+
+(** a count that was found, accepted or not; [otherwise] when none was *)
+start_of_value (value : option string) (otherwise : start) : start :=
+  match value with
+  | Some s =>
+    match parse_count s with
+    | Some n => Start n
+    | None => Rejected s
+    end
+  | None => otherwise
+  end.
+
+(** the address first, then the cookie, then 0 *)
+start_of (request : string) : start :=
+  start_of_value (url_count request) (start_of_value (cookie_count request) (Start 0)).

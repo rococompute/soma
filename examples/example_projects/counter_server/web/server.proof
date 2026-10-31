@@ -1,0 +1,38 @@
+(** What is proved about the counter as served: whatever the start a
+    request is accepted with, a whole number 0 or more (request.proof),
+    the counter's state from it strictly increases (pages/pages.proof);
+    and its +1 link carries a greater count, which the server accepts. *)
+
+(** From the start of any request that is accepted, each click increases
+    the counter's state. *)
+Theorem served_state_increases : forall request n clicks a,
+  start_of request = Start n ->
+  (state_after (counter n) clicks < state_after (counter n) (clicks ++ [a]))%N.
+Proof.
+  Take request : string.
+  Take n : N.
+  Take clicks : list action.
+  Take a : action.
+  Assume that start_of request = Start n as started.
+  By strictly_increasing, we conclude that
+    (state_after (counter n) clicks < state_after (counter n) (clicks ++ [a]))%N.
+Qed.
+
+(** The +1 link of the page at [n] carries the next count, which is
+    greater, and which the server accepts, as itself. *)
+Theorem next_count_is_accepted : forall n,
+  parse_count (to_string (step Increment n)) = Some (step Increment n) /\ (n < step Increment n)%N.
+Proof.
+  Take n : N.
+  We prove each part.
+  - By written_is_accepted, we conclude that
+      parse_count (to_string (step Increment n)) = Some (step Increment n).
+  - By next_link_is_greater, we conclude that (n < step Increment n)%N.
+Qed.
+
+(** For instance: following the +1 link of the page at 41 starts the page
+    at 42. *)
+Theorem follow_41 : start_of (http_get (next_link 41)) = Start 42.
+Proof.
+  We conclude that start_of (http_get (next_link 41)) = Start 42.
+Qed.

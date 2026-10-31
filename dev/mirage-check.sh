@@ -26,6 +26,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/mirage-check.XXXXXX")"
 stop_server() {
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_http_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_minimal_web_server.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_projects/counter_server/main.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -142,6 +143,37 @@ if [ "${NETWORK}" = 1 ]; then
         # not an IP address: the fetcher says so, and exits 2
         run mirage_fetch fetch-bad-address 2 "not-an-address is not an IP address" \
             net "--arg=not-an-address"
+    fi
+    # a project as an image: the counter of examples/example_projects/
+    # counter_server, asked from the Mac with curl. It starts at the count
+    # in the address, or the cookie, or 0; a count that is not a whole
+    # number 0 or more is 400.
+    COUNTER="${HERE}/examples/example_projects/counter_server"
+    if "${SOMA}" build "${COUNTER}/main.soma" >"${WORK}/build-counter.log" 2>&1; then
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- "${COUNTER}/main.hvt" >"${WORK}/counter.log" 2>&1 &
+        ip3=""
+        for _ in $(seq 1 80); do
+            ip3="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/counter.log" | head -1 | awk '{print $4}')"
+            grep -q "serving the counter" "${WORK}/counter.log" && [ -n "${ip3}" ] && break
+            sleep 0.25
+        done
+        jar="${WORK}/cookies"
+        ask() { curl -s -m 5 -i -b "${jar}" -c "${jar}" "$@" | tr -d '\r'; }
+        if [ -n "${ip3}" ] &&
+           ask "http://${ip3}:8080/" | grep -q "<h1>Count: 0</h1>" &&
+           ask "http://${ip3}:8080/?count=41" | grep -q 'href="/?count=42"' &&
+           ask "http://${ip3}:8080/" | grep -q "<h1>Count: 41</h1>" &&
+           ask "http://${ip3}:8080/?count=-1" | grep -q "^HTTP/1.1 400" &&
+           curl -s -m 5 -i -H "Cookie: count=1.5" "http://${ip3}:8080/" | grep -q "^HTTP/1.1 400"; then
+            pass counter-server
+        else
+            cp "${WORK}/counter.log" "${WORK}/counter-server.log"
+            fail counter-server
+        fi
+        pkill -f "solo5-hvt --mem=${MEM} -- ${COUNTER}/main.hvt"
+    else
+        cp "${WORK}/build-counter.log" "${WORK}/counter-server.log"
+        fail counter-server
     fi
 fi
 

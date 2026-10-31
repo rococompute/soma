@@ -199,6 +199,11 @@ Tactic Notation "We" "prove" "each" "part" := split.
 
 Tactic Notation "We" "consider" "each" "case" "of" lconstr(x) := destruct x.
 
+(** [We consider each case of parse s as parsed.]: each case, with what
+    [parse s] is in it as [parsed] ([parsed : parse s = Some n], ...) *)
+Tactic Notation "We" "consider" "each" "case" "of" lconstr(x) "as" ident(H) :=
+  destruct x eqn:H.
+
 Ltac soma_whether P H :=
   lazymatch P with
   | ?a < ?b => destruct (Nat.ltb_spec a b) as [H|H]

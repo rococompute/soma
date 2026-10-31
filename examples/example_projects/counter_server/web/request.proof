@@ -1,0 +1,127 @@
+(** What is proved about where a page starts: a count is accepted only
+    when it is a whole number, 0 or more, so never a negative number, a
+    fraction, or anything but digits; and every count the server writes,
+    in its links and its cookie, is accepted. *)
+From Stdlib Require Numbers.DecimalN Numbers.DecimalPos.
+
+(** * Counts *)
+
+(** A count that is accepted is how Soma writes a whole number, [n]; an
+    [N] is never less than 0. So nothing else is accepted: no sign, no
+    point, no letter, no leading zero, nothing empty. *)
+Theorem accepted_is_written : forall s n, parse_count s = Some n -> s = to_string n.
+Proof.
+  Take s : string.
+  Take n : N.
+  We need to show that
+    (if String.eqb (to_string (candidate s)) s then Some (candidate s) else None) = Some n -> s = to_string n.
+  We consider each case of String.eqb (to_string (candidate s)) s as same.
+  - Assume that Some (candidate s) = Some n as accepted.
+    By String.eqb_eq, it holds that to_string (candidate s) = s as written.
+    It holds that candidate s = n as same_count.
+    We conclude that s = to_string n.
+  - Assume that None = Some n as accepted.
+    We conclude that s = to_string n.
+Qed.
+
+(** Nothing that starts with a minus is accepted: no negative number.
+    Whatever follows the minus, it is no digit, so the candidate is 0,
+    which is written ["0"]. *)
+Theorem no_negative : forall s, parse_count ("-" ++ s) = None.
+Proof.
+  Take s : string.
+  We need to show that
+    accept (value_of (DecimalString.uint_of_char (Ascii.ascii_of_nat 45) (DecimalString.NilEmpty.uint_of_string s))) ("-" ++ s) = None.
+  We consider each case of DecimalString.NilEmpty.uint_of_string s.
+  - We conclude that accept (value_of (DecimalString.uint_of_char (Ascii.ascii_of_nat 45) (Some u))) ("-" ++ s) = None.
+  - We conclude that accept (value_of (DecimalString.uint_of_char (Ascii.ascii_of_nat 45) None)) ("-" ++ s) = None.
+Qed.
+
+(** The digits of a count are never none: 0 is written ["0"]. *)
+Lemma digits_not_empty : forall n, N.to_uint n <> Decimal.Nil.
+Proof.
+  Take n : N.
+  We consider each case of n.
+  - We conclude that N.to_uint 0 <> Decimal.Nil.
+  - By DecimalPos.Unsigned.to_uint_nonnil, we conclude that N.to_uint (Npos p) <> Decimal.Nil.
+Qed.
+
+(** A count, written, has itself for candidate. *)
+Lemma candidate_of_written : forall n, candidate (to_string n) = n.
+Proof.
+  Take n : N.
+  We need to show that
+    value_of (DecimalString.NilZero.uint_of_string (DecimalString.NilZero.string_of_uint (N.to_uint n))) = n.
+  By digits_not_empty, it holds that N.to_uint n <> Decimal.Nil as not_empty.
+  By DecimalString.NilZero.usu, it holds that
+    DecimalString.NilZero.uint_of_string (DecimalString.NilZero.string_of_uint (N.to_uint n)) = Some (N.to_uint n)
+    as read_back.
+  By read_back, it suffices to show that value_of (Some (N.to_uint n)) = n.
+  By DecimalN.Unsigned.of_to, we conclude that value_of (Some (N.to_uint n)) = n.
+Qed.
+
+(** Every count, written, is accepted as itself: the server takes back
+    what it writes in its links and its cookie. *)
+Theorem written_is_accepted : forall n, parse_count (to_string n) = Some n.
+Proof.
+  Take n : N.
+  We need to show that accept (candidate (to_string n)) (to_string n) = Some n.
+  By candidate_of_written, it suffices to show that accept n (to_string n) = Some n.
+  We need to show that (if String.eqb (to_string n) (to_string n) then Some n else None) = Some n.
+  By String.eqb_refl, we conclude that (if String.eqb (to_string n) (to_string n) then Some n else None) = Some n.
+Qed.
+
+(** Some that are not accepted *)
+Theorem not_accepted :
+  parse_count "1.5" = None /\ parse_count "-3" = None /\ parse_count "+3" = None /\
+  parse_count "007" = None /\ parse_count "three" = None /\ parse_count "" = None.
+Proof.
+  We conclude that parse_count "1.5" = None /\ parse_count "-3" = None /\ parse_count "+3" = None /\ parse_count "007" = None /\ parse_count "three" = None /\ parse_count "" = None.
+Qed.
+
+(** * The start *)
+
+(** With no count in the address or the cookie, a page starts at 0. *)
+Theorem nothing_found_starts_at_zero : forall request,
+  url_count request = None -> cookie_count request = None -> start_of request = Start 0.
+Proof.
+  Take request : string.
+  Assume that url_count request = None as no_url.
+  Assume that cookie_count request = None as no_cookie.
+  We need to show that start_of_value (url_count request) (start_of_value (cookie_count request) (Start 0)) = Start 0.
+  By no_url, it suffices to show that start_of_value None (start_of_value (cookie_count request) (Start 0)) = Start 0.
+  By no_cookie, we conclude that start_of_value None (start_of_value (cookie_count request) (Start 0)) = Start 0.
+Qed.
+
+(** A count found and started from is how Soma writes it. *)
+Theorem started_count_was_written : forall v otherwise n,
+  start_of_value (Some v) otherwise = Start n -> v = to_string n.
+Proof.
+  Take v : string.
+  Take otherwise : start.
+  Take n : N.
+  We need to show that
+    match parse_count v with Some m => Start m | None => Rejected v end = Start n -> v = to_string n.
+  We consider each case of parse_count v as parsed.
+  - Assume that Start n0 = Start n as started.
+    It holds that n0 = n as same.
+    By accepted_is_written, we conclude that v = to_string n.
+  - Assume that Rejected v = Start n as started.
+    We conclude that v = to_string n.
+Qed.
+
+(** A count found is rejected only when it is not accepted. *)
+Theorem rejected_is_not_accepted : forall v otherwise w,
+  start_of_value (Some v) otherwise = Rejected w -> parse_count v = None.
+Proof.
+  Take v : string.
+  Take otherwise : start.
+  Take w : string.
+  We need to show that
+    match parse_count v with Some m => Start m | None => Rejected v end = Rejected w -> parse_count v = None.
+  We consider each case of parse_count v as parsed.
+  - Assume that Start n = Rejected w as rejected.
+    We conclude that Some n = None.
+  - Assume that Rejected v = Rejected w as rejected.
+    We conclude that (None : option N) = None.
+Qed.

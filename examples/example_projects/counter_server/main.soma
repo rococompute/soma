@@ -1,0 +1,15 @@
+(** The counter of pages/counter.soma, served by a unikernel. Building
+    this file makes main.hvt, an image whose [main] serves HTTP on port
+    8080 (web/server.soma); running it gives it an address on the Mac's
+    vmnet network, which it prints:
+
+        soma run main.soma
+
+    then open http://ADDRESS:8080/, or http://ADDRESS:8080/?count=41.
+    See README.md. *)
+Import Sandbox.
+Import web.server.
+
+main : io unit :=
+  print "serving the counter on port 8080" ;;
+  serve 8080 answer.

@@ -172,3 +172,21 @@ Theorem about_record : forall u : user, id u = id u.
 Proof. intros u. reflexivity. Qed.
 EOT
 rocq c -q gradual.soma
+
+# [We consider each case of x as H.] names what x is in each case
+cat > cases.soma <<'EOT'
+first_or_zero (o : option nat) : nat := match o with Some n => n | None => 0 end.
+EOT
+cat > cases.proof <<'EOT'
+Theorem nonzero_is_some : forall o, first_or_zero o <> 0 -> exists n, o = Some n.
+Proof.
+  Take o : option nat.
+  We consider each case of o as found.
+  - Assume that first_or_zero (Some n) <> 0 as nonzero.
+    Choose n := n.
+    We conclude that Some n = Some n.
+  - Assume that first_or_zero None <> 0 as nonzero.
+    We conclude that exists n, (None : option nat) = Some n.
+Qed.
+EOT
+rocq c -q cases.soma

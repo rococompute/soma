@@ -121,6 +121,7 @@ Qed.
 | `Obtain a and b from x.` | takes `x` (a pair, `{a \| P a}`, `exists`, `/\`) apart |
 | `We prove each part.` | splits an `A /\ B` goal |
 | `We consider each case of x.` | a case for each constructor of `x` |
+| `We consider each case of x as H.` | the same, with `H : x = ...` in each case: what `x` is there |
 | `We consider whether a < b as H.` (or `<=`, `=`) | for numbers, a case with `H : a < b` and one with its opposite; `a <? b` is then `true` or `false` |
 | `We use induction on x.` | a case for each constructor of `x`, whose arguments and induction hypotheses each case takes and assumes |
 | `We use strong induction on n.` | for a number: proves the goal for `n` assuming it for every smaller number, which is taken and assumed |
@@ -259,6 +260,13 @@ s-expressions, `(div (h1 "Hello world"))`, into JSX elements and apps,
 and hold the state of every app of the folder, a count that only +1
 changes. Their proofs show, once and for every app of the folder, that
 the state is the number of clicks and strictly increases.
+`examples/example_projects/counter_server` serves such a counter from a
+unikernel: a project whose `main.soma` requires Sandbox is built into an
+image like a single file, with what it imports. Each request starts the
+counter at the count in its address or its cookie, or at 0; the proofs
+show that only whole numbers 0 or more are accepted, and that from any
+accepted start the state strictly increases. `dev/mirage-check.sh`
+asks the running image (`counter-server`).
 
 A type declared in a Soma file is data: `Inductive action := Increment.`
 is a `Type`, where Rocq, in a `.v` file, would make a type of one
