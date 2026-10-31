@@ -13,6 +13,15 @@ let step : (Environ.env -> Evd.evar_map -> EConstr.t -> EConstr.t option) ref =
 
 let describe : (Names.Constant.t -> Pp.t option) ref = ref (fun _ -> None)
 
+type image_call = {
+  module_file : string;
+  export : string;
+  params : (string * string) list;
+  result : string * string;
+}
+
+let image : (Names.Constant.t -> image_call option) ref = ref (fun _ -> None)
+
 let evaluate ~reduce env sigma c =
   (* each round computes at least one call: a bound on them, not on time,
      which the gradual step budget and the module's own fuel see to *)

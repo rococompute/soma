@@ -73,6 +73,14 @@ grep -q '= 2.5%float' out.log
 # boom, which it does not declare, is of type Any
 grep -q 'Trapped "unreachable executed"' out.log
 
+# an image calls a module's declared functions; one of type Any, it cannot
+# yet, and says so (refused before the image is built)
+printf 'Import Sandbox.\nImport m.\nmain : io unit := print (to_string ((boom 1 : Z))).\n' > img.soma
+if soma build img.soma > out.log 2>&1; then echo "an image called an export of type Any"; exit 1; fi
+grep -q "main calls m.boom, m.wasm's boom, of type Any," out.log
+grep -q 'declare its type in m.definition' out.log
+rm img.soma
+
 # a module without a definition: its exports are of type Any; what it gives
 # is a Z, which a cast checks; an Any that holds no number is an error
 rm m.definition

@@ -22,6 +22,18 @@ val step : (Environ.env -> Evd.evar_map -> EConstr.t -> EConstr.t option) ref
     add: (i64, i64) -> i64") *)
 val describe : (Names.Constant.t -> Pp.t option) ref
 
+(** What an image needs to call [c], when it is such a function: the
+    module's file, the export's name, and, for each argument and the
+    result, the declared type and the module's ("N", "i64") *)
+type image_call = {
+  module_file : string;
+  export : string;
+  params : (string * string) list;
+  result : string * string;
+}
+
+val image : (Names.Constant.t -> image_call option) ref
+
 (** [evaluate ~reduce env sigma c]: [c], evaluated by [reduce], with its
     foreign calls computed, and evaluated again, until there is none left
     that can be *)

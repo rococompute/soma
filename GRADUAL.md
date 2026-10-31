@@ -304,9 +304,22 @@ for an `N` (`expected an N, but got I64 (-9223372036854775808) :
 i64`), an argument too large for the module (`expected an i64,
 but got 9223372036854775808%N : N`), a trap (`Trapped "unreachable
 executed"`). `soma explore` lists each declared export as an escape
-hatch. An image cannot run a module yet: a Sandbox program whose `main`
-calls one is refused when it is built. Not yet either: several results,
-and imports (WASI).
+hatch. Not yet: several results, and imports (WASI).
+
+A Sandbox program whose `main` calls a module's functions is built into
+an image that runs them (`toplevel/somaMirage.ml`): each declared export
+is extracted as a call of `soma_wasm.ml`, generated in the MirageOS
+project with the modules' bytes, which runs them with the same
+interpreter (the image's project has the opam package `wasm`; a program
+that calls modules has a project of its own, `plain-wasm` or `net-wasm`,
+so that the others do not fetch it) and checks the declared types as
+Soma does when it evaluates, with the same messages: a failure is a
+failed cast (`"kind":"cast"` in the image's events). Floats are OCaml's
+in the image (a generated `float64.ml`, and ExtrOCamlFloats' commands
+for floats). An export of type `Any` cannot be called from an image yet,
+as the image cannot read the numbers an `Any` holds: such a program is
+refused when it is built, saying to declare the export in its
+`.definition`.
 
 An export that the `.definition` does not declare is declared as a
 function of `Any`s, `Any -> Any -> Any`, and a `FILE.wasm` without a

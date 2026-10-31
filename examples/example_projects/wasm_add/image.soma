@@ -1,0 +1,19 @@
+(** add.wasm's functions, called from inside a unikernel: building this
+    file makes image.hvt, a MirageOS image whose main calls them, with the
+    WebAssembly reference interpreter and add.wasm itself in the image.
+
+        soma run image.soma
+
+    Each call is checked as when Soma evaluates it: a sum that wraps
+    around past the largest i64 would stop the image with "expected an
+    N, but got I64 (-9223372036854775808) : i64". *)
+Import Sandbox.
+Import add.
+
+yes_or_no (b : bool) : string := if b then "yes" else "no".
+
+main : io unit :=
+  print ("add 2 3 = " ++ to_string (add 2 3)) ;;
+  print ("fib 50 = " ++ to_string (fib 50)) ;;
+  print ("hypot 3 4 is 5: " ++ yes_or_no (PrimFloat.eqb (hypot 3 4) 5)) ;;
+  print ("half 2.5 is 1.25: " ++ yes_or_no (PrimFloat.eqb (half 2.5) 1.25)).

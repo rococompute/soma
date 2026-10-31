@@ -7,6 +7,7 @@ add.wasm          a module: add and fib, of i64s; hypot and half, of floats (rus
 add.definition    what Soma takes add.wasm to be
 mul.wasm          a module without a .definition: mul and average (rust/mul)
 main.soma         Soma code built on add, fib and mul
+image.soma        a unikernel whose main calls add.wasm
 main.proof        what follows if add adds
 model.soma        does add add? tested on sums small and large
 rust/             the Rust crates; rust/build.sh builds both modules
@@ -161,9 +162,30 @@ Escape hatches, where static types are given up:
     is add.wasm's fib (i64) -> i64, taken to be N -> N, which each call checks
 ```
 
+## Inside a unikernel
+
+`image.soma` is a Sandbox program whose `main` calls `add.wasm`'s
+functions. `soma run image.soma` builds `image.hvt`, a MirageOS image
+with the WebAssembly interpreter and `add.wasm` in it, and runs it:
+
+```
+add 2 3 = 5
+fib 50 = 12586269025
+hypot 3 4 is 5: yes
+half 2.5 is 1.25: yes
+```
+
+Each call is checked against `add.definition` in the image as Soma
+checks it when it evaluates, with the same messages: a sum that wraps
+stops the image with `Run-time error: expected an N, but got I64
+(-9223372036854775808) : i64`, a `"kind":"cast"` failure in its events
+(`soma run --events`), which `soma run --supervise` sees as any other.
+
+An export of type `Any`, such as `mul.wasm`'s, cannot be called from an
+image yet: the build says so, and to declare it in `mul.definition`.
+
 ## Not yet
 
-- An image: a Sandbox program whose `main` calls a module is refused
-  when it is built, until the image has an interpreter.
 - Exports of several results, and modules that import functions (WASI):
   a `.definition` says so when it meets one.
+- An export of type `Any`, in an image.

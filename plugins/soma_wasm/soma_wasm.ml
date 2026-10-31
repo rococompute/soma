@@ -456,6 +456,17 @@ let describe c =
           str (String.concat " -> " (List.map (fun (k, _) -> kind k) (b.params @ [b.result]))) ++
           str ", which each call checks")
 
+let kind_name = function KN -> "N" | KZ -> "Z" | KFloat -> "float" | KAny -> "Any" | KI64 -> "i64" | KI32 -> "i32"
+
+let image c =
+  match Cmap_env.find_opt c !bindings with
+  | None -> None
+  | Some b ->
+    let pair (k, w) = kind_name k, wnum_name w in
+    Some { SomaForeign.module_file = b.file; export = b.export;
+           params = List.map pair b.params; result = pair b.result }
+
 let () =
   SomaForeign.step := step;
-  SomaForeign.describe := describe
+  SomaForeign.describe := describe;
+  SomaForeign.image := image

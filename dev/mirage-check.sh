@@ -177,6 +177,28 @@ if [ "${NETWORK}" = 1 ]; then
     fi
 fi
 
+# WebAssembly modules, called from inside an image: wasm_add's image.soma
+# calls add.wasm, built from Rust, with the interpreter in the image; a
+# call whose result does not fit its declared type is a failed cast
+WASM="${HERE}/examples/example_projects/wasm_add"
+if "${SOMA}" run "${WASM}/image.soma" >"${WORK}/wasm.log" 2>&1 &&
+   grep -q "^add 2 3 = 5$" "${WORK}/wasm.log" && grep -q "^fib 50 = 12586269025$" "${WORK}/wasm.log" &&
+   grep -q "^hypot 3 4 is 5: yes$" "${WORK}/wasm.log" && grep -q "^half 2.5 is 1.25: yes$" "${WORK}/wasm.log"; then
+    pass wasm-image
+else
+    fail wasm-image
+fi
+printf '%s\n' 'Require Import Sandbox.' 'Import add.' 'main : io unit := print (to_string (add 9223372036854775807 1)).' \
+    > "${WASM}/wasm_contract_check.soma"
+"${SOMA}" run --events "${WASM}/wasm_contract_check.soma" >"${WORK}/wasm-contract.log" 2>&1
+rm -f "${WASM}/wasm_contract_check.soma"
+if grep -q '"kind":"cast","message":"expected an N, but got I64 (-9223372036854775808) : i64"' "${WORK}/wasm-contract.log"; then
+    pass wasm-contract
+else
+    fail wasm-contract
+fi
+rm -rf "${WASM}/.soma-cache"
+
 # soma run says what a run came to, from the image's events
 # (toplevel/somaMirage.ml): diagnose CASE PROGRAM PATTERN runs PROGRAM (the
 # text of a Soma program) and checks soma run's diagnosis on stderr
