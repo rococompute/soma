@@ -314,10 +314,22 @@ let rec without_repeats = function
     else a :: without_repeats rest
   | l -> l
 
+(* [t] without the deprecation warnings of the lemmas it tries, which the
+   proof does not use, set back as they were however [t] ends *)
+let quietly t =
+  let lift f = Proofview.tclLIFT (Proofview.NonLogical.make f) in
+  Proofview.tclBIND (lift (fun () ->
+      let flags = CWarnings.get_flags () in
+      CWarnings.set_flags (flags ^ ",-deprecated"); flags)) (fun flags ->
+      let restore = lift (fun () -> CWarnings.set_flags flags) in
+      Proofview.tclORELSE
+        (Proofview.tclBIND t (fun x -> Proofview.tclTHEN restore (Proofview.tclUNIT x)))
+        (fun (e, info) -> Proofview.tclTHEN restore (Proofview.tclZERO ~info e)))
+
 let tac =
   Proofview.tclTHEN (Proofview.tclLIFT (Proofview.NonLogical.make (fun () ->
       deadline := Unix.gettimeofday () +. budget)))
-  @@ Proofview.tclBIND (take_then_conclude []) (fun sentences ->
+  @@ Proofview.tclBIND (quietly (take_then_conclude [])) (fun sentences ->
       let sentences = without_repeats sentences in
       Feedback.msg_notice
         (str "The rest follows, by:" ++ fnl () ++

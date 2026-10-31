@@ -1,0 +1,9 @@
+(** The site: its pages, as HTML. The s-expression language is the rules
+    of pages/ (pages/pages.lang); main.soma is not under pages/, so it does
+    not have [sexp], and imports JSX for [render]. See README.md. *)
+Import JSX.
+Import pages.home.
+Import pages.counter.
+
+("<!DOCTYPE html>" ++ render home)%str.
+render (view 3).

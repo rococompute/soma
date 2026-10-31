@@ -94,14 +94,23 @@ Definition render_attribute {A} (a : attribute A) : string :=
   | on _ _ => String.EmptyString
   end.
 
-(** an element as HTML; events are left out *)
+(** the elements that HTML writes without an end tag, having no children *)
+Definition void_tags : list string :=
+  ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"].
+
+Definition is_void (tag : string) : bool := List.existsb (String.eqb tag) void_tags.
+
+(** an element as HTML; events are left out. [<br />] is [<br>]: an
+    element of [void_tags] without children has no end tag. *)
 Fixpoint render {A} (e : element A) : string :=
   match e with
   | text s => escape s
   | node tag attributes children =>
-    ("<" ++ tag ++ String.concat "" (List.map render_attribute attributes) ++ ">" ++
-     String.concat "" (List.map render children) ++
-     "</" ++ tag ++ ">")%str
+    let start := ("<" ++ tag ++ String.concat "" (List.map render_attribute attributes) ++ ">")%str in
+    match children with
+    | nil => if is_void tag then start else (start ++ "</" ++ tag ++ ">")%str
+    | _ => (start ++ String.concat "" (List.map render children) ++ "</" ++ tag ++ ">")%str
+    end
   | fragment children => String.concat "" (List.map render children)
   end.
 

@@ -82,16 +82,36 @@ let source_hash src =
 
 let digest f = Digest.to_hex (Digest.file f)
 
-(* A stamp: "source HASH", then "import PATH DIGEST" for each import *)
+(* The digests of the files of libraries, each read once *)
+let digests : (string, string) Hashtbl.t = Hashtbl.create 97
+
+let file_digest f = match Hashtbl.find_opt digests f with
+  | Some d -> d
+  | None -> let d = digest f in Hashtbl.add digests f d; d
+
+let library_file dir = match Loadpath.locate_absolute_library dir with
+  | Ok f -> Some f
+  | Error _ -> None
+
+let stamp_format = "soma-stamp 2"
+
+(* A stamp: its format, "source HASH", then "import PATH DIGEST" for each import of
+   the project, and "library NAME DIGEST" for each library from elsewhere
+   (Stdlib, Soma.JSX, ...), whose change, by an upgrade of Soma, makes
+   what was compiled with it inconsistent *)
 let read_stamp file =
   try
     let lines = String.split_on_char '\n' (In_channel.with_open_bin file In_channel.input_all) in
-    let source = ref None and imports = ref [] in
+    let source = ref None and imports = ref [] and libraries = ref [] in
+    (* the first line is the format: an older stamp is out of date *)
+    if List.hd lines <> stamp_format then None else begin
     List.iter (fun l -> match String.split_on_char ' ' l with
         | ["source"; h] -> source := Some h
         | ["import"; p; d] -> imports := (p, d) :: !imports
+        | ["library"; l; d] -> libraries := (l, d) :: !libraries
         | _ -> ()) lines;
-    Option.map (fun h -> h, List.rev !imports) !source
+    Option.map (fun h -> h, List.rev !imports, !libraries) !source
+    end
   with Sys_error _ -> None
 
 let rec mkdir_p d =
@@ -166,8 +186,11 @@ let rec ensure ?loc root path src =
     let vo = vo_of root path in
     let fresh = Sys.file_exists vo && match read_stamp (stamp_of root path) with
       | None -> false
-      | Some (hash, imports) ->
+      | Some (hash, imports, libraries) ->
         hash = source_hash src &&
+        List.for_all (fun (l, d) -> match library_file (Libnames.dirpath_of_string l) with
+            | Some f -> file_digest f = d
+            | None -> false) libraries &&
         List.for_all (fun (p, d) -> match source_of root p with
             | None -> false
             | Some s -> ensure ?loc root p s; digest (vo_of root p) = d) imports
@@ -261,7 +284,13 @@ let folder_rules file =
 let write_stamp () =
   match Sys.getenv_opt stamp_var, Sys.getenv_opt source_var with
   | Some stamp, Some src when stamp <> "" ->
-    let lines = ("source " ^ source_hash src) ::
-                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ digest vo) !imported in
+    let in_cache f = match env_root () with
+      | Some root -> CString.is_prefix (cache root ^ "/") f
+      | None -> false in
+    let libraries = List.filter_map (fun dir -> match library_file dir with
+        | Some f when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+        | _ -> None) (Library.loaded_libraries ()) in
+    let lines = stamp_format :: ("source " ^ source_hash src) ::
+                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ digest vo) !imported @ libraries in
     Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"))
   | _ -> ()

@@ -1,0 +1,82 @@
+(** The rules of pages/: an HTML language of s-expressions. Every file
+    under pages/ has them, as if it started with [Import pages.pages].
+
+    [sexp (div (h1 "Hello world"))] is the JSX element
+    [<div> <h1> "Hello world" </h1> </div>]. The s-expression is code that
+    Soma already reads ([div] applied to [h1 "Hello world"]); the macro
+    [sexp] reads it as a tree and gives the element:
+
+    - [(tag child ...)], [tag] in lowercase, is the element [tag];
+    - ["text"] and [42] are text;
+    - a name, [title], is its value: an element, or a string;
+    - [(attrs (class "page") (on click Increment))], first among the
+      children, is the attributes: [class="page"], and the event [click];
+      [data_id] is the attribute [data-id], names having no dashes;
+    - [(Greeting "Soma")], in uppercase, calls the component [Greeting];
+    - [(br _)] is an element without children ([(br)] is the name [br]).
+
+    JSX itself is exported, so the pages have [element], [render], and
+    JSX notation. *)
+Export JSX.
+
+(** attribute names are names, which have no dashes: [data_id] is [data-id] *)
+Recursive dashes (s : string) : string :=
+  match s with
+  | String.EmptyString => String.EmptyString
+  | String.String c rest =>
+    String.String (if Nat.eqb (Ascii.nat_of_ascii c) 95 then Ascii.ascii_of_nat 45 else c) (dashes rest)
+  end.
+
+(** Components are named in uppercase, as in JSX *)
+is_component (s : string) : bool :=
+  match s with
+  | String.String c _ => let n := Ascii.nat_of_ascii c in (65 <=? n) && (n <=? 90)
+  | String.EmptyString => false
+  end.
+
+(** a list, as code: [cons_name a (cons_name b nil)] *)
+code_list (cons_name : string) (xs : list syntax) : syntax :=
+  List.fold_right (fun x acc => App (Var cons_name) [x, acc]) (Var "nil") xs.
+
+(** an attribute: [(class "page")] is [attr "class" "page"], and
+    [(on click Increment)] is [on "click" Increment] *)
+attribute (a : syntax) : syntax :=
+  match a with
+  | App (Var "on") [Var event, action] => App (Var "Soma.JSX.on") [Str event, action]
+  | App (Var "on") [Str event, action] => App (Var "Soma.JSX.on") [Str event, action]
+  | App (Var name) [Num n] => App (Var "Soma.JSX.attr") [Str (dashes name), Str (to_string n)]
+  | App (Var name) [value] => App (Var "Soma.JSX.attr") [Str (dashes name), value]
+  | _ => MacroError "an attribute is (name value), or (on event action)"
+  end.
+
+is_attrs (a : syntax) : bool := match a with App (Var "attrs") _ => true | _ => false end.
+is_hole (a : syntax) : bool := match a with Hole => true | _ => false end.
+
+(** the element [tag], from its children as written and as elements *)
+make_node (tag : string) (written elements : list syntax) : syntax :=
+  let attributes :=
+    List.flat_map (fun a => match a with App (Var "attrs") xs => List.map attribute xs | _ => nil end) written in
+  let children :=
+    List.map snd (List.filter (fun p => negb (is_attrs (fst p) || is_hole (fst p))) (List.combine written elements)) in
+  App (Var "Soma.JSX.node") [Str tag, code_list "Soma.JSX.attr_cons" attributes, code_list "Soma.JSX.jsx_cons" children].
+
+(** an s-expression as an element; text and names as they are, which a
+    string where an element is expected makes text *)
+Recursive element_of (s : syntax) : syntax :=
+  match s with
+  | Num n => Str (to_string n)
+  | App (Var tag) children =>
+    if is_component tag then s else make_node tag children (List.map element_of children)
+  | Var name =>
+    (* [(br)] is read as the name [br]: say how to write it *)
+    if is_void name
+    then MacroError ("(" ++ name ++ ") is the name " ++ name ++ "; an element without children is written (" ++ name ++ " _)")
+    else s
+  | _ => s
+  end.
+
+Macro sexp args :=
+  match args with
+  | cons e nil => element_of e
+  | _ => MacroError "sexp takes one element, written (tag child ...)"
+  end.

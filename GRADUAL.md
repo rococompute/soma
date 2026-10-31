@@ -211,10 +211,14 @@ work from any folder (`vernac/somaImport.ml`, hooked in
 A file is compiled by a `rocq c` of its own, which compiles what it
 imports in the same way. Its `.proof` is checked then, and it is not made
 a unikernel. When it succeeds, it writes a stamp next to the `.vo`: the
-hash of the source, its `.proof` and its `.lang`, and the digest of each
-project file it imported, as compiled. A compiled file is used while its
-stamp holds: its sources unchanged, and what it imports up to date and
-unchanged since. So a change to a file compiles it again, and what
+hash of the source, its `.proof` and its `.lang`, the digest of each
+project file it imported, as compiled, and the digest of each library from
+elsewhere it was compiled with (Stdlib, `Soma.JSX`, ...). A compiled file
+is used while its stamp holds: its sources unchanged, what it imports up
+to date and unchanged since, and the libraries the same, so that an
+upgrade of Soma compiles the project again rather than failing on a
+library compiled with the old one. A stamp of an older format is out of
+date. So a change to a file compiles it again, and what
 imports it only when its `.vo` changed (a `.vo` keeps locations, so a
 change that moves lines does). Each file is checked once per
 compilation. A failed compilation leaves the cache as it was, and the
@@ -249,6 +253,10 @@ apply; a warning says so, and `SOMA_PROJECT_ROOT` sets the project. A
 
 `examples/example_projects/folder_rules` is an example;
 `test-suite/misc/soma_folder_rules.sh` tests it.
+`examples/example_projects/sexp_html` gives a folder a language of its
+own: its rules define a macro, `sexp`, that reads HTML written as
+s-expressions, `(div (h1 "Hello world"))`, into JSX elements, and export
+JSX.
 
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
@@ -810,7 +818,10 @@ render page.   (* "<main><p>Hello, world!</p><i>a</i><b>b</b></main>" *)
 - `<> children </>` is a fragment.
 - An attribute value or a child is an atom or a term in braces,
   `{to_string count}`; a string child is a text element (a coercion).
-- `render` turns an element into HTML, leaving events out.
+- `render` turns an element into HTML, leaving events out. An element
+  that HTML writes without an end tag (`void_tags`: `br`, `hr`, `img`,
+  `input`, `meta`, ...) has none when it has no children: `<br />` is
+  `<br>`.
 
 JSX is read by the lexer under `Set JSX Syntax`, which `JSX.v` exports
 (`parsing/cLexer.ml`, `parsing/g_constr.mlg`). With it, `<` directly
