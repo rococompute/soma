@@ -304,7 +304,15 @@ but got 9223372036854775808%N : N`), a trap (`Trapped "unreachable
 executed"`). `soma explore` lists each declared export as an escape
 hatch. An image cannot run a module yet: a Sandbox program whose `main`
 calls one is refused when it is built. Not yet either: `f32` and `f64`,
-several results, imports (WASI), and a `.wasm` without a `.definition`.
+several results, and imports (WASI).
+
+An export that the `.definition` does not declare is declared as a
+function of `Any`s, `Any -> Any -> Any`, and a `FILE.wasm` without a
+`.definition` is imported so, as if its `.definition` were empty (which
+`Import` writes in the cache): gradual types make a module usable as it
+is. Numbers go in as `Any`s, and what it gives back is the number it is,
+its `i64` or `i32` as a `Z`; an `Any` holding no number is an error
+(`expected a Wasm.i64, but got "two" : string`).
 `examples/example_projects/wasm_add` uses a module built from Rust;
 `test-suite/misc/soma_wasm.sh` tests it.
 

@@ -64,6 +64,30 @@ check 'add : nat -> nat -> nat.' 'a declared type is N, Z, Any, i64 or i32'
 check 'half : N -> N.' 'Soma only gives and takes i32 and i64 yet'
 check 'x := 1.' 'defines nothing: x is a definition'
 
+# a module without a definition: its exports are of type Any; what it gives
+# is a Z, which a cast checks; an Any that holds no number is an error
+rm m.definition
+rm -rf .soma-cache
+cat > prog.soma <<'EOT'
+Import m.
+Check add.
+(add 2 3 : Z).
+(add 2 3 : N).
+add "two" 3.
+EOT
+soma build -v prog.soma > out.log 2>&1
+grep -q 'Any -> Any -> Any' out.log
+grep -q '= 5%Z' out.log
+grep -q 'expected an N, but got 5%Z : Z' out.log
+grep -q 'expected a Wasm.i64, but got "two" : string' out.log
+# an export a definition does not declare is of type Any too
+printf 'add : N -> N -> N.\n' > m.definition
+rm -rf .soma-cache
+printf 'Import m.\nCheck boom.\n' > prog.soma
+soma build -v prog.soma > out.log 2>&1
+grep -q 'Any -> Any' out.log
+printf 'Import m.\n' > prog.soma
+
 # soma explore lists the module's functions as escape hatches
 printf 'add : N -> N -> N.\n' > m.definition
 rm -rf .soma-cache

@@ -82,7 +82,10 @@ let load_definition_prologue ~state f =
 
 let load_definition_epilogue ~state f =
   if not (is_definition_file f) then state else
-  let wasm = Filename.chop_suffix f ".definition" ^ ".wasm" in
+  (* next to it, or, for a module without one, where Import says *)
+  let wasm = match Sys.getenv_opt "SOMA_WASM_FILE" with
+    | Some w when w <> "" -> w
+    | _ -> Filename.chop_suffix f ".definition" ^ ".wasm" in
   let wasm = if Filename.is_relative wasm then Filename.concat (Sys.getcwd ()) wasm else wasm in
   if not (Sys.file_exists wasm) then
     CErrors.user_err Pp.(str (Filename.basename f) ++ str " declares what " ++

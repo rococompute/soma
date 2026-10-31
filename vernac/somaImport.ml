@@ -66,10 +66,12 @@ let path_of_qualid qid =
   let dir, id = Libnames.repr_qualid qid in
   String.concat "/" (List.rev_map Id.to_string (DirPath.repr dir) @ [Id.to_string id])
 
+(* FILE.wasm alone, without FILE.definition, is a module whose exports are
+   all of type Any: compiled from an empty definition (see [compile]) *)
 let source_of root path =
   List.find_map (fun ext ->
       let f = Filename.concat root (path ^ ext) in
-      if Sys.file_exists f then Some f else None) [".soma"; ".lang"; ".definition"]
+      if Sys.file_exists f then Some f else None) [".soma"; ".lang"; ".definition"; ".wasm"]
 
 let vo_of root path = Filename.concat (cache root) (path ^ ".vo")
 let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
@@ -148,21 +150,31 @@ let add_cache_to_loadpath root =
 let compile ?loc root path src =
   let vo = vo_of root path in
   mkdir_p (Filename.dirname vo);
+  (* a module without a definition: an empty one, in the cache, for the
+     module (SOMA_WASM_FILE, which toplevel/ccompile.ml reads) *)
+  let module_file, input =
+    if Filename.check_suffix src ".wasm" then begin
+      let definition = Filename.concat (cache root) (path ^ ".definition") in
+      Out_channel.with_open_bin definition (fun oc ->
+          output_string oc ("(* " ^ Filename.basename src ^
+                            " has no .definition: its exports are all of type Any *)\n"));
+      [ "SOMA_WASM_FILE=" ^ src ], definition
+    end else [], src in
   Printf.eprintf "Compiling %s (into %s)\n%!" (path ^ Filename.extension src) cache_name;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"; "SOMA_REVIEW"]))
+                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"; "SOMA_REVIEW"; "SOMA_WASM_FILE"]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ root;
           stack_var ^ "=" ^ String.concat ":" (stack ?loc root @ [path]);
           stamp_var ^ "=" ^ stamp_of root path;
           source_var ^ "=" ^ src;
           (* what a program imports is not a unikernel of its own *)
-          "SOMA_MIRAGE_BUILD=0" ]) in
+          "SOMA_MIRAGE_BUILD=0" ] @ module_file) in
   let prog = Sys.executable_name in
   (* the cache in the load path names the library by its place there:
      .soma-cache/models/task.vo is models.task *)
-  let argv = [| prog; "--kind=compile"; src; "-o"; vo; "-Q"; cache root; "" |] in
+  let argv = [| prog; "--kind=compile"; input; "-o"; vo; "-Q"; cache root; "" |] in
   let null = Unix.openfile "/dev/null" [Unix.O_WRONLY] 0 in
   let pid = Unix.create_process_env prog argv env Unix.stdin null Unix.stderr in
   Unix.close null;

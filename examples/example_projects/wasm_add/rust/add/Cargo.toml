@@ -3,8 +3,8 @@ name = "add"
 version = "0.1.0"
 edition = "2021"
 
-# A WebAssembly module with no imports: build.sh builds it and copies it
-# next to add.definition, as ../add.wasm.
+# A WebAssembly module with no imports: ../build.sh builds it and copies
+# it next to add.definition, as ../../add.wasm.
 [lib]
 crate-type = ["cdylib"]
 

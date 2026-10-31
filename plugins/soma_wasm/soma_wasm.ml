@@ -121,6 +121,19 @@ let fits kind w = match kind, w with
   | KI64, W32 | KI32, W64 -> false
   | _ -> true
 
+(* [name : Any -> ... -> Any], with [arity] arguments: an export that the
+   .definition does not declare, or of a module without one, which gradual
+   types make usable as it is *)
+let declare_any name arity =
+  let env = Global.env () in
+  let sigma = Evd.from_env env in
+  let text = String.concat " -> " (List.init (arity + 1) (fun _ -> "Any")) in
+  let sigma, typ = Constrintern.interp_type_evars env sigma (Procq.parse_string Procq.Constr.lconstr text) in
+  let sigma, entry = Declare.prepare_parameter ~poly:PolyFlags.default
+      ~udecl:UState.default_univ_decl ~types:typ sigma in
+  ignore sigma;
+  Declare.declare_constant ~name ~kind:Decls.(IsAssumption Definitional) (Declare.ParameterEntry entry)
+
 let bind file =
   let env = Global.env () in
   let sigma = Evd.from_env env in
@@ -178,7 +191,24 @@ let bind file =
         CErrors.user_err (str (Filename.remove_extension base ^ ".definition") ++
                           str " declares what " ++ str base ++ str " exports, and defines nothing: " ++
                           str name ++ str " is a definition."))
-    constants
+    constants;
+  (* the exports it does not declare: of type Any, as gradual types allow *)
+  let declared = List.map (fun (c, _) -> Id.to_string (Constant.label c)) constants in
+  List.iter (fun (name, (ps, rs)) ->
+      let wnum t = match t with
+        | Wasm.Types.NumType Wasm.Types.I32Type -> Some W32
+        | Wasm.Types.NumType Wasm.Types.I64Type -> Some W64
+        | _ -> None in
+      let valid = try ignore (Id.of_string name); true with e when CErrors.noncritical e -> false in
+      if valid && not (List.mem name declared) then
+        match List.map wnum ps, rs with
+        | wps, [r] when List.for_all Option.has_some wps && Option.has_some (wnum r) ->
+          let c = declare_any (Id.of_string name) (List.length ps) in
+          Lib.add_leaf (in_binding (c, { file; export = name;
+                                         params = List.map (fun w -> KAny, Option.get w) wps;
+                                         result = KAny, Option.get (wnum r) }))
+        | _ -> ())
+    exports
 
 (* * Calls *)
 
@@ -213,6 +243,20 @@ let rec number_of env sigma c =
       (* an Any, made of a number *)
       number_of env sigma args.(2)
     | _ -> None
+
+(* an Any made of a closed value of a type that is no number's: its type
+   and the value *)
+let any_value env sigma c =
+  let f, args = EConstr.decompose_app sigma c in
+  match EConstr.kind sigma f with
+  | Const (k, _) when Gradual.kind_of env k = Some Gradual.GCast && Array.length args = 3 ->
+    let source = args.(0) and v = args.(2) in
+    let head, _ = EConstr.decompose_app sigma v in
+    let is_value = match EConstr.kind sigma head with
+      | Construct _ | Int _ | Float _ | String _ -> true
+      | _ -> false in
+    if is_value && EConstr.Vars.closed0 sigma v && EConstr.Vars.closed0 sigma source then Some (source, v) else None
+  | _ -> None
 
 let rec mk_positive z =
   if Z.equal z Z.one then EConstr.mkRef (ref_of "num.pos.xH", EConstr.EInstance.empty)
@@ -291,7 +335,13 @@ let call env sigma b args =
     | [] -> Ok (List.rev acc)
     | ((k, w), (a, ty)) :: rest ->
       match number_of env sigma a with
-      | None -> Error None (* not a number yet: the call waits *)
+      | None ->
+        begin match any_value env sigma a with
+          (* an Any holding a value of another type, "two" : string: no
+             number of the module's is one *)
+          | Some (source, v) -> Error (Some (failing env ~declared source (wasm_type w) v))
+          | None -> Error None (* not a number yet: the call waits *)
+        end
       | Some z ->
         let lo, hi = range w in
         let negative_for_N = (k = KN && Z.lt z Z.zero) in

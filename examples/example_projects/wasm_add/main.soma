@@ -13,3 +13,13 @@ fibs (n : nat) : list N := map (fun k => fib (N.of_nat k)) (seq 0 n).
 total [1%N, 2%N, 3%N, 4%N].    (* 10 *)
 double 21.                     (* 42 *)
 fibs 12.                       (* [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89] *)
+
+(** mul.wasm has no .definition: gradual types make it usable as it is.
+    Its export is [mul : Any -> Any -> Any]; Soma numbers go in as Anys,
+    and what it gives back is the number it is, the module's i64 as a Z:
+    used as a Z, which a cast checks. *)
+Import mul.
+
+area (w h : N) : Z := (mul w h : Z).
+
+area 6 7.                      (* 42 *)

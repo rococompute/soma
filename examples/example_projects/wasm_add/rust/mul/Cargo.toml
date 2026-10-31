@@ -1,0 +1,14 @@
+[package]
+name = "mul"
+version = "0.1.0"
+edition = "2021"
+
+# A WebAssembly module with no imports, and no .definition: Soma takes its
+# exports to be of type Any. ../build.sh builds it as ../../mul.wasm.
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"

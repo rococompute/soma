@@ -3,12 +3,13 @@
 A program that uses functions written in Rust, compiled to WebAssembly.
 
 ```
-add.wasm          the module: add and fib, of i64s (built from rust/)
+add.wasm          a module: add and fib, of i64s (built from rust/add)
 add.definition    what Soma takes add.wasm to be
-main.soma         Soma code built on add and fib
+mul.wasm          a module without a .definition: mul (built from rust/mul)
+main.soma         Soma code built on add, fib and mul
 main.proof        what follows if add adds
 model.soma        does add add? tested on sums small and large
-rust/             the Rust crate; rust/build.sh builds add.wasm
+rust/             the Rust crates; rust/build.sh builds both modules
 ```
 
 ## A module, and its definition
@@ -25,7 +26,8 @@ pub extern "C" fn fib(n: i64) -> i64 { ... }
 
 `rust/build.sh` builds it for `wasm32-unknown-unknown` (`rustup target
 add wasm32-unknown-unknown`) and copies it to `add.wasm`, which is kept
-here, so that the example needs no Rust to run.
+here, so that the example needs no Rust to run; and `rust/mul` as
+`mul.wasm`.
 
 `add.definition`, next to `add.wasm`, says what Soma takes its exports to
 be:
@@ -79,6 +81,24 @@ Run-time error: expected a Wasm.i64, but got 9223372036854775808%N : N.
 
 A trap of the module is one too: `Trapped "unreachable executed"`.
 
+## A module without a definition
+
+`mul.wasm` has no `.definition`: `Import mul.` takes it as it is, its
+exports of type `Any`, which gradual types allow:
+
+```
+Check mul.                       (* mul : Any -> Any -> Any *)
+area (w h : N) : Z := (mul w h : Z).
+area 6 7.                        (* 42 *)
+```
+
+Soma numbers go in as `Any`s; what the module gives back is the number it
+is, its `i64` as a `Z`. Using it as something else is a cast that fails,
+as any: `(mul 6 7 : N)` is `expected an N, but got 42%Z : Z`, and an
+`Any` that holds no number is no argument: `mul "six" 7` is `expected a
+Wasm.i64, but got "six" : string`. An export that a `.definition` does
+not declare is of type `Any` in the same way.
+
 ## Proofs, and a model
 
 Soma does not compute the module when it checks a proof: to the kernel,
@@ -123,4 +143,3 @@ Escape hatches, where static types are given up:
   when it is built, until the image has an interpreter.
 - Exports of `f32` and `f64`, of several results, and modules that import
   functions (WASI): a `.definition` says so when it meets one.
-- A `.wasm` without a `.definition`, as exports of type `Any`.
