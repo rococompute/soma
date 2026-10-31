@@ -41,13 +41,16 @@ let one_line s =
       end) s;
   Buffer.contents b
 
-let printed env sigma t = one_line (string_of_ppcmds (Printer.pr_econstr_env env sigma t))
+let printed ?flags env sigma t = one_line (string_of_ppcmds (Printer.pr_econstr_env ?flags env sigma t))
 
 let reads_back env sigma s t =
   try
     let c = Procq.parse_string Procq.Constr.lconstr s in
-    let t', _ = Constrintern.interp_constr env sigma c in
-    Reductionops.is_conv env sigma t' t
+    (* complete by itself, with the universes it makes ([Type] is a new
+       one), which may be those of [t] *)
+    let t', ustate = Constrintern.interp_constr env sigma c in
+    let sigma = Evd.merge_ustate sigma ustate in
+    Option.has_some (Reductionops.infer_conv env sigma t' t)
   with e when CErrors.noncritical e -> false
 
 (* [t] as text that reads back as [t]: printed, or printed in the scope of
@@ -72,7 +75,12 @@ let statement env sigma t =
   let candidates = s :: List.map (fun k -> "(" ^ s ^ ")%" ^ k) ["R"; "Z"; "Q"; "N"; "nat"; "bool"; "str"] in
   match List.find_opt (fun s -> reads_back env sigma s t) candidates with
   | Some s -> s
-  | None -> s
+  | None ->
+    (* what printing leaves out ([length []]: a list of what?), shown *)
+    let flags = PrintingFlags.current () in
+    let flags = { flags with extern = { flags.extern with implicits = true } } in
+    let full = strip_parens (printed ~flags env sigma t) in
+    if reads_back env sigma full t then full else s
 
 (* Lemmas that could prove the goal: those whose conclusion has the goal's
    head ([eq], [le], [Nat.Even], ...) and mentions what it mentions, and

@@ -45,11 +45,17 @@ let applies ?loc () = match file_of_loc loc with
 
 let absolute f = if Filename.is_relative f then Filename.concat (Sys.getcwd ()) f else f
 
-(* as the load path has it: absolute, without "." *)
+(* Paths are as the load path has them: absolute, without "." *)
+
+(* $SOMA_PROJECT_ROOT, set by [compile] for what it compiles, or by hand *)
+let env_root () = match Sys.getenv_opt root_var with
+  | Some r when r <> "" -> Some (CUnix.canonical_path_name r)
+  | _ -> None
+
 let project_root ?loc () =
-  match Sys.getenv_opt root_var with
-  | Some r when r <> "" -> r
-  | _ -> CUnix.canonical_path_name (match file_of_loc loc with
+  match env_root () with
+  | Some r -> r
+  | None -> CUnix.canonical_path_name (match file_of_loc loc with
     | Some f -> Filename.dirname (absolute f)
     | None -> Sys.getcwd ())
 
@@ -185,6 +191,71 @@ let prepare ?loc qids =
       | None -> any) false qids in
   if any then add_cache_to_loadpath root;
   any
+
+(* A folder's rules: X/X.lang, with its proofs in X/X.proof, apply to every
+   Soma file under X/, as if each started with [Import X.X]; so they are
+   compiled once, into the cache, and what they define, macros and
+   theorems included, is the same for all. Unless X/X.soma exists: then
+   they are its own, as for any program. *)
+let is_folder_rules f =
+  Filename.check_suffix f ".lang" &&
+  let base = Filename.remove_extension f in
+  Filename.basename base = Filename.basename (Filename.dirname (absolute f)) &&
+  not (Sys.file_exists (base ^ ".soma"))
+
+(* The rules of the folders of the project from its root to [file]'s,
+   outermost first, compiled when needed: the libraries to import *)
+let folder_rules file =
+  if not (is_soma_file file) then [] else
+  let file = absolute file in
+  let dir = CUnix.canonical_path_name (Filename.dirname file) in
+  let root = match env_root () with
+    | Some r -> r
+    | None ->
+      (* a file built by itself is the program; the rules of the folders
+         above it are not its project's *)
+      let rec above d =
+        let up = Filename.dirname d in
+        if up = d then ()
+        else if Sys.file_exists (Filename.concat up (Filename.basename up ^ ".lang"))
+             && not (Sys.file_exists (Filename.concat up (Filename.basename up ^ ".soma")))
+        then Feedback.msg_warning Pp.(
+            str (Filename.basename up ^ "/" ^ Filename.basename up ^ ".lang") ++
+            str ", the rules of the folder " ++ str (Filename.basename up ^ "/") ++
+            str " this file is under, does not apply to it when it is built by itself: build the program that imports it, or set " ++
+            str root_var ++ str " to the folder of that program.")
+        else above up in
+      above dir;
+      dir in
+  let folders =
+    if dir = root then Some []
+    else if CString.is_prefix (root ^ "/") dir then
+      Some (String.split_on_char '/' (String.sub dir (String.length root + 1)
+                                        (String.length dir - String.length root - 1)))
+    else None in
+  match folders with
+  | None -> []
+  | Some folders ->
+    (* the root's rules are ROOT/ROOT.lang, a folder X's X/X.lang *)
+    let rec paths prefix = function
+      | [] -> []
+      | x :: rest -> let p = prefix ^ x in (p ^ "/" ^ x) :: paths (p ^ "/") rest in
+    let self = Filename.concat dir (Filename.remove_extension (Filename.basename file)) in
+    let rules = List.filter_map (fun path ->
+        let base = Filename.concat root path in
+        let lang = base ^ ".lang" in
+        if base = self || Sys.file_exists (base ^ ".soma") then None
+        else if Sys.file_exists lang then Some (path, lang)
+        else if Sys.file_exists (base ^ ".proof") then
+          CErrors.user_err Pp.(str (path ^ ".proof") ++ str " has the proofs of the rules of its folder, " ++
+                               str (path ^ ".lang") ++ str ", which does not exist.")
+        else None) (Filename.basename root :: paths "" folders) in
+    List.iter (fun (path, src) ->
+        ensure root path src;
+        if not (List.mem_assoc path !imported) then
+          imported := (path, vo_of root path) :: !imported) rules;
+    if rules <> [] then add_cache_to_loadpath root;
+    List.map (fun (path, _) -> String.map (function '/' -> '.' | c -> c) path) rules
 
 (* A compilation started by [compile] writes its stamp once it succeeded *)
 let write_stamp () =

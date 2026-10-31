@@ -1,0 +1,10 @@
+(** The program. main.soma is not under lists/, so the rules of lists/ do
+    not apply to it: it imports what it uses. See README.md. *)
+Import lists.scores.total.
+
+totals points bonus.        (* [4, 6, 13] *)
+winners 5 points bonus.     (* [12, 26] *)
+
+(** [zip_with] is not in scope here: lists.lists is imported by total.soma,
+    not by main.soma *)
+Fail zip_with (fun p b => p + b) points bonus.

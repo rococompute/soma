@@ -30,6 +30,11 @@ end
     state. *)
 val process_expr : state:State.t -> Vernacexpr.vernac_control -> State.t
 
+(** [interp_vernac ~check ~state cmd]: [cmd] run on top of [state], as
+    [load_vernac] runs each command of a file, without going back to
+    [state] when it fails (which only an interactive document can) *)
+val interp_vernac : check:bool -> state:State.t -> Vernacexpr.vernac_control -> State.t
+
 (** [load_vernac sid file] Loads [file] on top of [sid].
     Callers are expected to handle and print errors in form of exceptions. *)
 val load_vernac : ?beautify:bool -> check:bool ->

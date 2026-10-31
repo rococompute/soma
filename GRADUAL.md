@@ -227,6 +227,29 @@ others, is `Import cycle: a -> b -> a.`
 one project at the same time, and `soma run --supervise` of a program
 that imports project files.
 
+### The rules of a folder
+
+`X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their
+proofs, unless `X/X.soma` exists, whose `.lang` and `.proof` they then
+are. Every Soma file under `X/`, in its subfolders too, is compiled as if
+it started with `Import X.X`, after the rules of the folders around `X/`
+(the project's own, `ROOT/ROOT.lang`, first). So what the rules define,
+macros and theorems included, is in scope in those files and their
+`.proof`s, and it is one library, compiled once into `.soma-cache` with
+its proofs checked, and recompiled when it changes, as any import
+(`folder_rules` in `vernac/somaImport.ml`, called from
+`toplevel/ccompile.ml`). The rules of a nested folder see those of the
+folders around it. A file is not given its folder's rules by importing a
+file that is.
+
+The folders are those from the project to the file. A file built by
+itself is its own project, so the rules of the folders above it do not
+apply; a warning says so, and `SOMA_PROJECT_ROOT` sets the project. A
+`X/X.proof` without `X/X.lang` is an error.
+
+`examples/example_projects/folder_rules` is an example;
+`test-suite/misc/soma_folder_rules.sh` tests it.
+
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
 `.lang`; given a name without an extension, they look for `.soma` first,

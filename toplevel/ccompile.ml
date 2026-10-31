@@ -26,16 +26,17 @@ let source ldir file = Loc.InFile {
    program, in its environment: the proofs see what the program defines
    and imports, and the program is only built once they are checked. *)
 let proof_file f =
-  if Filename.check_suffix f ".soma" then
-    let p = Filename.chop_suffix f ".soma" ^ ".proof" in
+  if Filename.check_suffix f ".soma" || SomaImport.is_folder_rules f then
+    let p = Filename.remove_extension f ^ ".proof" in
     if Sys.file_exists p then Some p else None
   else None
 
-(* The commands of [s], run in [state] *)
-let process_string ~state s =
-  let pa = Procq.Parsable.make (Gramlib.Stream.of_string s) in
+(* The commands of [s], run in [state]; as if in [file], when given *)
+let process_string ?file ~state s =
+  let loc = Option.map (fun file -> Loc.initial (Loc.InFile { dirpath = None; file })) file in
+  let pa = Procq.Parsable.make ?loc (Gramlib.Stream.of_string s) in
   let rec loop state = match Procq.Entry.parse (Pvernac.main_entry None) pa with
-    | Some cmd -> loop (Vernac.process_expr ~state cmd)
+    | Some cmd -> loop (Vernac.interp_vernac ~check:true ~state cmd)
     | None -> state
   in
   loop state
@@ -63,6 +64,14 @@ let load_lang_file ~state f =
   | None -> state
   | Some l -> Load.load_lang ~state l
 
+(* Soma: the rules of the folders a file is in, X/X.lang and X/X.proof,
+   apply to it: they are compiled first (vernac/somaImport.ml), then
+   imported, by an [Import] in the file, which puts the cache in the load
+   path of its document *)
+let load_folder_rules ~state f = function
+  | [] -> state
+  | libs -> process_string ~file:f ~state ("Import " ^ String.concat " " libs ^ ".")
+
 (* Compile a vernac file *)
 let compile opts stm_options injections copts ~f_in ~f_out =
   let open Vernac.State in
@@ -80,6 +89,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
     ensure_exists_with_prefix ~src:f_in ~tgt:f_out ~tgt_ext:ext_out in
   let beautify = copts.beautify in
   let () = if beautify then CLexer.record_comments := true in
+  let rules = SomaImport.folder_rules long_f_dot_in in
   match mode with
   | BuildVo | BuildVok ->
       let doc, sid = Topfmt.(in_phase ~phase:LoadingPrelude)
@@ -103,6 +113,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let wall_clock1 = Unix.gettimeofday () in
       let check = Stm.AsyncOpts.(stm_options.async_proofs_mode = APoff) in
       let source = source ldir long_f_dot_in in
+      let state = load_folder_rules ~state long_f_dot_in rules in
       let state = load_lang_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
@@ -137,6 +148,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = Load.load_init_vernaculars opts ~state in
       let ldir = Stm.get_ldir ~doc:state.doc in
       let source = source ldir long_f_dot_in in
+      let state = load_folder_rules ~state long_f_dot_in rules in
       let state = load_lang_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check:false ~source ~state long_f_dot_in in
       let state = load_proof_file ~beautify ~check:false ~state ldir long_f_dot_in in

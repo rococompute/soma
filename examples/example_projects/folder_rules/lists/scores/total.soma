@@ -1,0 +1,18 @@
+(** lists/scores/total.soma is under lists/, so the rules of lists/
+    (lists/lists.lang) apply to it: [zip_with] and [pipe] are in scope
+    without importing anything, and what lists/lists.proof proves about
+    them is usable in total.proof. *)
+
+(** a round's points, and the bonus for each *)
+points := [3, 1, 4].
+bonus := [1, 5, 9].
+
+(** each total: points and bonus, in pairs *)
+totals (ps bs : list nat) : list nat := zip_with (fun p b => p + b) ps bs.
+
+(** the totals that reach [bar], doubled *)
+winners (bar : nat) (ps bs : list nat) : list nat :=
+  pipe (totals ps bs) (filter (fun t => bar <=? t)) (map (fun t => t * 2)).
+
+totals points bonus.        (* [4, 6, 13] *)
+winners 5 points bonus.     (* [12, 26] *)

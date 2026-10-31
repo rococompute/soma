@@ -23,3 +23,13 @@ val prepare : ?loc:Loc.t -> Libnames.qualid list -> bool
 (** Written at the end of a compilation that [prepare] started: its stamp,
     the hash of its source and the digests of what it imported *)
 val write_stamp : unit -> unit
+
+(** Is [f] the rules of its folder: X/X.lang, with no X/X.soma? Their
+    proofs are in X/X.proof. *)
+val is_folder_rules : string -> bool
+
+(** [folder_rules file]: the rules of the folders of the project from its
+    root to [file]'s (ROOT/ROOT.lang, X/X.lang, ...), outermost first,
+    which apply to every Soma file under them, compiled into the cache when
+    they are not up to date; the libraries for [file] to import. *)
+val folder_rules : string -> string list

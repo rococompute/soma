@@ -1,0 +1,19 @@
+(** The rules of the folder lists/: every Soma file under lists/,
+    lists/scores/ included, has what this file defines, as if it started
+    with [Import lists.lists]. It is compiled once, with its proofs in
+    lists.proof, and shared by all of them. *)
+
+(** [zip_with f xs ys]: [f] on the elements of [xs] and [ys] in pairs, as
+    far as the shorter list goes *)
+Recursive zip_with {A B C : Type} (f : A -> B -> C) (xs : list A) (ys : list B) : list C :=
+  match xs, ys with
+  | cons x xs', cons y ys' => cons (f x y) (zip_with f xs' ys')
+  | _, _ => nil
+  end.
+
+(** [pipe x f g h] is [h (g (f x))]: [x], through each function in turn *)
+Macro pipe args :=
+  match args with
+  | cons x fs => List.fold_left (fun acc f => App f (cons acc nil)) fs x
+  | nil => MacroError "pipe takes a value, then functions"
+  end.

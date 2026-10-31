@@ -74,3 +74,22 @@ grep -q 'Take n : nat.' prog.proof
 grep -q 'The rest does not follow. Still to show:' err.log
 grep -q 'We need to show that n + 1 = n.' err.log
 [ ! -e .lia.cache ] && [ ! -e .nia.cache ]
+
+# a search over types takes them ([Take A : Type.]), and what printing
+# leaves out ([length []]: a list of what?) is written so that it reads
+# back, so that the proofs written in check by themselves
+cat > prog.proof <<'EOT'
+Theorem pow4_any : forall (A : Type) (f : A -> A) x, f (f x) = f (f x).
+Proof.
+  The rest follows.
+Qed.
+
+Theorem nil_length : forall (A : Type), length (@nil A) = 0.
+Proof.
+  The rest follows.
+Qed.
+EOT
+soma build --fill prog.soma > out.log
+grep -q 'prog.proof: 2 proofs written in' out.log
+grep -q '^  Take A : Type\.$' prog.proof
+soma build prog.soma > out.log

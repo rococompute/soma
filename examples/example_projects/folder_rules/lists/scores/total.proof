@@ -1,0 +1,11 @@
+(** What is proved about total.soma, with the theorems of lists/lists.proof *)
+
+(** There are as many totals as rounds that have both points and a bonus. *)
+Theorem totals_length : forall ps bs, length (totals ps bs) = min (length ps) (length bs).
+Proof.
+  Take ps : list nat.
+  Take bs : list nat.
+  We need to show that length (zip_with (fun p b => p + b) ps bs) = min (length ps) (length bs).
+  By zip_with_length, we conclude that
+    length (zip_with (fun p b => p + b) ps bs) = min (length ps) (length bs).
+Qed.

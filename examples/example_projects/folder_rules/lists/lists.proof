@@ -1,0 +1,46 @@
+(** What is proved about the rules of lists/: checked once, when they are
+    compiled, and usable in the proofs of every file under lists/. *)
+
+(** [zip_with] goes as far as the shorter list. *)
+Theorem zip_with_length : forall (A B C : Type) (f : A -> B -> C) xs ys,
+  length (zip_with f xs ys) = min (length xs) (length ys).
+Proof.
+  Take A : Type.
+  Take B : Type.
+  Take C : Type.
+  Take f : A -> B -> C.
+  Take xs : list A.
+  We use induction on xs.
+  - Take ys : list B.
+    We conclude that length (zip_with f [] ys) = 0.
+  - Take x : A.
+    Take xs : list A.
+    Assume that forall ys, length (zip_with f xs ys) = min (length xs) (length ys) as IH.
+    Take ys : list B.
+    We consider each case of ys.
+    + We conclude that length (zip_with f (x :: xs) []) = 0.
+    + We conclude that length (zip_with f (x :: xs) (b :: ys)) = min (length (x :: xs)) (length (b :: ys)).
+Qed.
+
+(** Mapping over what [zip_with] makes is [zip_with] of the composed function. *)
+Theorem map_zip_with : forall (A B C D : Type) (f : A -> B -> C) (g : C -> D) xs ys,
+  map g (zip_with f xs ys) = zip_with (fun x y => g (f x y)) xs ys.
+Proof.
+  Take A : Type.
+  Take B : Type.
+  Take C : Type.
+  Take D : Type.
+  Take f : A -> B -> C.
+  Take g : C -> D.
+  Take xs : list A.
+  We use induction on xs.
+  - Take ys : list B.
+    We conclude that map g (zip_with f [] ys) = zip_with (fun (x : A) (y : B) => g (f x y)) [] ys.
+  - Take x : A.
+    Take xs : list A.
+    Assume that forall ys, map g (zip_with f xs ys) = zip_with (fun x y => g (f x y)) xs ys as IH.
+    Take ys : list B.
+    We consider each case of ys.
+    + We conclude that map g (zip_with f (x :: xs) []) = zip_with (fun (x : A) (y : B) => g (f x y)) (x :: xs) [].
+    + We conclude that map g (zip_with f (x :: xs) (b :: ys)) = zip_with (fun (x : A) (y : B) => g (f x y)) (x :: xs) (b :: ys).
+Qed.
