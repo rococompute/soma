@@ -123,7 +123,7 @@ let created ~before ~start ~source dir =
       name <> ".soma-cache" &&
       not (Sys.is_directory (Filename.concat dir name)) &&
       (* sources are not outputs, even when edited just before *)
-      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"]) &&
+      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"; ".definition"; ".wasm"]) &&
       (time >= start || not (List.mem_assoc name before)))
   |> List.map (fun (name, _) -> Filename.concat dir name)
   |> List.sort compare

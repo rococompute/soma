@@ -66,6 +66,8 @@ let evaluate env sigma t =
   Gradual.reset_steps ();
   try
     let v = Reductionops.nf_all env sigma t in
+    (* the calls to WebAssembly modules, computed (SomaForeign) *)
+    let v = SomaForeign.evaluate ~reduce:(Reductionops.nf_all env sigma) env sigma v in
     if Gradual.enabled env && GradualErrors.mentions_err env sigma v then
       Error (without_prefix (GradualErrors.runtime_error env sigma ~original:t ~failures:(Gradual.failures ())))
     else Value v
@@ -410,6 +412,9 @@ let review ~opaque_access =
        | _ -> ());
       let types l = Pp.h (prlist_with_sep (fun () -> str ", ") (a_or_an env) l) in
       let lines =
+        (match !SomaForeign.describe c with
+         | Some d -> [str "is " ++ d]
+         | None -> []) @
         (if any_in_type then
            [if theorem then str "its statement has Any" else hov 2 (str "its type has Any:" ++ spc () ++ pr typ)]
          else []) @
@@ -439,7 +444,8 @@ let review ~opaque_access =
       | None -> ()) theorems;
   List.iter (fun (c, cb) ->
       match cb.Declarations.const_body with
-      | Declarations.Undef _ when Option.is_empty (Gradual.kind_of env c) ->
+      | Declarations.Undef _ when Option.is_empty (Gradual.kind_of env c)
+                                && Option.is_empty (!SomaForeign.describe c) ->
         issue (hov 2 (pr_c c ++ str ":" ++ spc () ++ words "is assumed (an Axiom, a Parameter or an Admitted proof), not defined or proved."))
       | _ -> ()) constants;
   List.iter (fun (c, _) ->
@@ -448,6 +454,7 @@ let review ~opaque_access =
           let _, assums = Assumptions.assumptions opaque_access st [GlobRef.ConstRef c] in
           Printer.ContextObjectMap.fold (fun o _ acc -> match o with
               | Printer.Axiom (Printer.Constant k, _) when Option.is_empty (Gradual.kind_of env k)
+                                                       && Option.is_empty (!SomaForeign.describe k)
                                                        && not (Constant.CanOrd.equal k c) -> pr_c k :: acc
               | Printer.Axiom (Printer.Guarded g, _) -> (Printer.pr_global g ++ str " (whose recursion is not checked)") :: acc
               | Printer.Axiom (Printer.TypeInType g, _) -> (Printer.pr_global g ++ str " (Type : Type)") :: acc

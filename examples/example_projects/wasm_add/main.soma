@@ -1,0 +1,15 @@
+(** A program that uses functions written in Rust: add.wasm, which rust/
+    builds (rust/build.sh), exports add and fib, and add.definition, next
+    to it, says what Soma takes them to be. [Import add.] compiles the two
+    into the project's .soma-cache: add and fib are then Soma functions as
+    any, which Soma computes by running the module. *)
+Import add.
+
+(** Soma code built on add.wasm's functions *)
+total (xs : list N) : N := fold_left add xs 0%N.
+double (n : N) : N := add n n.
+fibs (n : nat) : list N := map (fun k => fib (N.of_nat k)) (seq 0 n).
+
+total [1%N, 2%N, 3%N, 4%N].    (* 10 *)
+double 21.                     (* 42 *)
+fibs 12.                       (* [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89] *)

@@ -1,0 +1,8 @@
+(** What Soma takes add.wasm, next to this file, to be: built from rust/
+    (rust/build.sh), it exports add and fib, of i64s. Here they are of
+    whole numbers, N: each call checks it, and a number the module gives
+    that an N cannot hold, a negative one, is a run-time error that says
+    so. *)
+
+add : N -> N -> N.
+fib : N -> N.

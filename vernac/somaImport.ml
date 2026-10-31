@@ -33,7 +33,7 @@ let stack_var = "SOMA_IMPORT_STACK"
 let stamp_var = "SOMA_IMPORT_STAMP"
 let source_var = "SOMA_IMPORT_SOURCE"
 
-let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".proof"; ".lang"]
+let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".proof"; ".lang"; ".definition"]
 
 let file_of_loc = function
   | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> Some file
@@ -69,7 +69,7 @@ let path_of_qualid qid =
 let source_of root path =
   List.find_map (fun ext ->
       let f = Filename.concat root (path ^ ext) in
-      if Sys.file_exists f then Some f else None) [".soma"; ".lang"]
+      if Sys.file_exists f then Some f else None) [".soma"; ".lang"; ".definition"]
 
 let vo_of root path = Filename.concat (cache root) (path ^ ".vo")
 let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
@@ -78,7 +78,8 @@ let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
 let source_hash src =
   let base = Filename.remove_extension src in
   let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
-  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"])))
+  (* and FILE.wasm, which FILE.definition declares *)
+  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"])))
 
 let digest f = Digest.to_hex (Digest.file f)
 

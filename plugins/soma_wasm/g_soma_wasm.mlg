@@ -1,0 +1,25 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Wasm Bind "FILE.wasm".], at the end of FILE.definition
+   (toplevel/ccompile.ml): its declarations, tied to the module's exports
+   (soma_wasm.ml) *)
+
+{
+
+open Stdarg
+
+}
+
+DECLARE PLUGIN "soma-runtime.plugins.soma_wasm"
+
+VERNAC COMMAND EXTEND SomaWasmBind CLASSIFIED AS SIDEFF
+| [ "Wasm" "Bind" string(file) ] -> { Soma_wasm.bind file }
+END

@@ -278,6 +278,36 @@ is a `Type`, where Rocq, in a `.v` file, would make a type of one
 constructor whose arguments are proofs (here, none) a proposition, as
 `True` is (`vernac/comInductive.ml`). `: Prop` makes it one.
 
+### WebAssembly modules: `.definition`
+
+A WebAssembly module `FILE.wasm` is used through `FILE.definition`, next
+to it, which declares what Soma takes its exports to be, one per line:
+`add : N -> N -> N.` (`vernac/g_vernac.mlg` reads `name : type.` there
+as a parameter; `theories/Soma/Wasm.v`, `plugins/soma_wasm`). `Import
+FILE` compiles the pair into the project's cache as any imported file,
+the stamp having the module's digest. Compiling checks each declaration
+against the module: it is an export, with as many arguments, whose
+`i32`s and `i64`s the declared types fit; a declared type is `N`, `Z`,
+`Any`, or `Wasm.i64` or `Wasm.i32`. A `.definition` defines nothing, and
+proves nothing (its `.proof` may).
+
+The declarations are parameters to the kernel, which never computes
+them: no proof holds by running the module. Soma computes them when it
+evaluates a term, a bare term or an `Explore` model
+(`vernac/somaForeign.ml`): a call whose arguments are numbers is run by
+the WebAssembly reference interpreter (opam `wasm`), and replaced by
+what it returns, as a value of the declared type. What does not fit is a
+cast that fails, and so a run-time error saying so: a negative number
+for an `N` (`expected an N, but got Wasm.I64 (-9223372036854775808) :
+Wasm.i64`), an argument too large for the module (`expected a Wasm.i64,
+but got 9223372036854775808%N : N`), a trap (`Trapped "unreachable
+executed"`). `soma explore` lists each declared export as an escape
+hatch. An image cannot run a module yet: a Sandbox program whose `main`
+calls one is refused when it is built. Not yet either: `f32` and `f64`,
+several results, imports (WASI), and a `.wasm` without a `.definition`.
+`examples/example_projects/wasm_add` uses a module built from Rust;
+`test-suite/misc/soma_wasm.sh` tests it.
+
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
 `.lang`; given a name without an extension, they look for `.soma` first,

@@ -1,0 +1,33 @@
+(** What is proved about the Soma code of main.soma. Soma cannot see
+    inside add.wasm, so nothing is proved about what its add computes;
+    what is proved is what follows if it adds: then total sums. That add
+    adds is a hypothesis of the theorem, said where it is used, and not an
+    axiom: model.soma tests it, and finds where it does not hold. *)
+
+(** If add adds, folding with it is folding with +, from any start. *)
+Lemma fold_add : (forall a b, add a b = (a + b)%N) ->
+  forall xs acc, fold_left add xs acc = fold_left N.add xs acc.
+Proof.
+  Assume that forall a b, add a b = (a + b)%N as adds.
+  Take xs : list N.
+  We use induction on xs.
+  - Take acc : N.
+    We conclude that fold_left add [] acc = fold_left N.add [] acc.
+  - Take x : N.
+    Take xs : list N.
+    Assume that forall acc, fold_left add xs acc = fold_left N.add xs acc as IH.
+    Take acc : N.
+    We need to show that fold_left add xs (add acc x) = fold_left N.add xs (N.add acc x).
+    By adds, it suffices to show that fold_left add xs (acc + x)%N = fold_left N.add xs (acc + x)%N.
+    By IH, we conclude that fold_left add xs (acc + x)%N = fold_left N.add xs (acc + x)%N.
+Qed.
+
+(** If add adds, total is the sum. *)
+Theorem total_sums : (forall a b, add a b = (a + b)%N) ->
+  forall xs, total xs = fold_left N.add xs 0%N.
+Proof.
+  Assume that forall a b, add a b = (a + b)%N as adds.
+  Take xs : list N.
+  We need to show that fold_left add xs 0%N = fold_left N.add xs 0%N.
+  By fold_add, we conclude that fold_left add xs 0%N = fold_left N.add xs 0%N.
+Qed.

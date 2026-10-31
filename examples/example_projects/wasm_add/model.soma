@@ -1,0 +1,28 @@
+(** Does add.wasm's add add? main.proof's theorems assume it does; this
+    tests it, on sums small and large, as Soma.Explore explores a model:
+
+        soma build model.soma
+
+    It does not hold for all of them: Rust's add wraps around past the
+    largest i64, and an N larger than that cannot be given to it. Each is
+    reported, with what the module did. *)
+Import Explore.
+Import add.
+
+sums : Explore.model (N * N) (N * N) unit := {|
+  Explore.inputs := [
+    (0%N, 0%N), (2%N, 3%N), (1000%N, 2000%N),
+    (4611686018427387904%N, 4611686018427387903%N),
+    (9223372036854775807%N, 0%N),
+    (9223372036854775807%N, 1%N),
+    (9223372036854775808%N, 0%N)];
+  Explore.initial := fun p => p;
+  Explore.actions := [];
+  Explore.transition := fun _ p => p;
+  Explore.depth := 0;
+  Explore.invariants := [
+    ("add.wasm's add is +", fun p => N.eqb (add (fst p) (snd p)) (fst p + snd p)%N)];
+  Explore.steps := []
+|}.
+
+Explore sums.

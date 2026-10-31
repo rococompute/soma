@@ -26,7 +26,7 @@ let source ldir file = Loc.InFile {
    program, in its environment: the proofs see what the program defines
    and imports, and the program is only built once they are checked. *)
 let proof_file f =
-  if Filename.check_suffix f ".soma" || SomaImport.is_folder_rules f then
+  if Filename.check_suffix f ".soma" || Filename.check_suffix f ".definition" || SomaImport.is_folder_rules f then
     let p = Filename.remove_extension f ^ ".proof" in
     if Sys.file_exists p then Some p else None
   else None
@@ -72,6 +72,28 @@ let load_folder_rules ~state f = function
   | [] -> state
   | libs -> process_string ~file:f ~state ("Import " ^ String.concat " " libs ^ ".")
 
+(* Soma: FILE.definition declares what FILE.wasm, next to it, exports:
+   Soma.Wasm first, then, after its declarations, [Wasm Bind], which ties
+   them to the exports (plugins/soma_wasm) *)
+let is_definition_file f = Filename.check_suffix f ".definition"
+
+let load_definition_prologue ~state f =
+  if is_definition_file f then process_string ~state "Require Soma.Wasm." else state
+
+let load_definition_epilogue ~state f =
+  if not (is_definition_file f) then state else
+  let wasm = Filename.chop_suffix f ".definition" ^ ".wasm" in
+  let wasm = if Filename.is_relative wasm then Filename.concat (Sys.getcwd ()) wasm else wasm in
+  if not (Sys.file_exists wasm) then
+    CErrors.user_err Pp.(str (Filename.basename f) ++ str " declares what " ++
+                         str (Filename.basename wasm) ++ str " exports, and there is no " ++
+                         str (Filename.basename wasm) ++ str " next to it.");
+  (* its errors are the file's *)
+  try process_string ~state (Printf.sprintf "Wasm Bind %S." wasm)
+  with e when CErrors.noncritical e ->
+    let loc = Loc.initial (Loc.InFile { dirpath = None; file = f }) in
+    CErrors.user_err ~loc (CErrors.print_no_report e)
+
 (* Compile a vernac file *)
 let compile opts stm_options injections copts ~f_in ~f_out =
   let open Vernac.State in
@@ -115,7 +137,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let source = source ldir long_f_dot_in in
       let state = load_folder_rules ~state long_f_dot_in rules in
       let state = load_lang_file ~state long_f_dot_in in
+      let state = load_definition_prologue ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
+      let state = load_definition_epilogue ~state long_f_dot_in in
       let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
       (* Soma: soma explore FILE reviews it, last (plugins/soma_explore) *)
       let state = if Sys.getenv_opt "SOMA_REVIEW" = Some "1"

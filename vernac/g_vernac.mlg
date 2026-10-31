@@ -95,6 +95,20 @@ let test_implicit_definition =
     lk_ident >> lk_kw_before_end ":="
   end
 
+(* Soma: in a .definition file, [name : type.] declares what the
+   WebAssembly module next to it (FILE.wasm) exports, as a parameter, which
+   the command Wasm Bind ties to the export (plugins/soma_wasm) *)
+let soma_declaration ~loc c =
+  let in_definition = match loc.Loc.fname with
+    | Loc.InFile { file; _ } -> Filename.check_suffix file ".definition"
+    | Loc.ToplevelInput -> false in
+  if not in_definition then None else
+  match c.CAst.v with
+  | CCast ({ CAst.v = CRef (qid, None); _ }, _, t) when Libnames.qualid_is_ident qid ->
+    let name = CAst.make ?loc:qid.CAst.loc (Libnames.qualid_basename qid) in
+    Some (VernacAssumption ((NoDischarge, Definitional), NoInline, [NoCoercion, ([(name, None)], t)]))
+  | _ -> None
+
 let warn_chdir_pwd = CWarnings.create ~name:"change-dir-pwd-deprecated" ~category:Deprecation.Version.v8_20
     (fun () -> strbrk "Command \"Cd\" as a synonym of \"Pwd\" is deprecated." ++ spc () ++
                strbrk "Use \"Pwd\" instead.")
@@ -187,7 +201,9 @@ GRAMMAR EXTEND Gram
                                            (CAst.map (fun s -> Name s) lid, u), b)) }
       (* Soma: outside a proof, a bare term [t.] is [Eval lazy in t.] *)
       | c = lconstr; "." ->
-        { VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, c)) } ] ]
+        { match soma_declaration ~loc c with
+          | Some declaration -> VernacSynPure declaration
+          | None -> VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, c)) } ] ]
   ;
 
   subprf:

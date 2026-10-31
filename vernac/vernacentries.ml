@@ -2127,6 +2127,8 @@ let check_may_eval env sigma redexp rc =
       let r, _ = Redexpr.reduction_of_red_expr env r in
       Gradual.clear_failures ();
       let sigma, c = r env sigma c in
+      (* Soma: the calls to WebAssembly modules, computed (SomaForeign) *)
+      let c = SomaForeign.evaluate ~reduce:(fun c -> snd (r env sigma c)) env sigma c in
       sigma, c
   in
   (* Soma: a value with a [raise] in it is a run-time error, said

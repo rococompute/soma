@@ -446,9 +446,27 @@ let copy_file ~src ~dst =
   write_file dst (read_file src);
   Unix.chmod dst 0o755
 
+(* [main] calls no function of a WebAssembly module (SomaForeign): the
+   image has no interpreter for them yet, and extraction would make each a
+   function that fails when called *)
+let check_no_foreign () =
+  let main = Nametab.global (Libnames.qualid_of_ident (Id.of_string "main")) in
+  let st = Conv_oracle.get_transp_state (Environ.oracle (Global.env ())) in
+  let _, assums = Assumptions.assumptions (Library.indirect_accessor [@ocaml.alert "-deprecated"]) st [main] in
+  let foreign = Printer.ContextObjectMap.fold (fun o _ acc -> match o with
+      | Printer.Axiom (Printer.Constant k, _) ->
+        (match !SomaForeign.describe k with Some d -> d :: acc | None -> acc)
+      | _ -> acc) assums [] in
+  match foreign with
+  | [] -> ()
+  | d :: _ ->
+    error Pp.(str "main calls" ++ spc () ++ d ++ str "," ++ spc () ++
+              str "and an image cannot run WebAssembly modules yet: soma build -v and Explore can.")
+
 let build ~state ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then begin
     check_main ();
+    check_no_foreign ();
     (* extracted once to find out which project the program needs *)
     let staging = Filename.concat (cache_dir ()) "extract" in
     mkdir_p staging;

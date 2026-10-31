@@ -52,7 +52,7 @@ module Proof = struct
      or .lang file (Rocq's .v files are not concerned) *)
   let check_proof_file ?loc () = match loc with
     | Some { Loc.fname = Loc.InFile { file; _ }; _ }
-      when List.exists (Filename.check_suffix file) [".soma"; ".lang"] ->
+      when List.exists (Filename.check_suffix file) [".soma"; ".lang"; ".definition"] ->
       CErrors.user_err ?loc
         Pp.(str "Proofs go in a .proof file: the lemmas and theorems of FILE.soma are in FILE.proof, next to it.")
     | _ -> ()
