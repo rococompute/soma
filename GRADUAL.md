@@ -287,8 +287,10 @@ as a parameter; `theories/Soma/Wasm.v`, `plugins/soma_wasm`). `Import
 FILE` compiles the pair into the project's cache as any imported file,
 the stamp having the module's digest. Compiling checks each declaration
 against the module: it is an export, with as many arguments, whose
-`i32`s and `i64`s the declared types fit; a declared type is `N`, `Z`,
-`Any`, or `Wasm.i64` or `Wasm.i32`. A `.definition` defines nothing, and
+`i32`s, `i64`s, `f32`s and `f64`s the declared types fit; a declared
+type is `N`, `Z`, `float` (an `f32` rounds), `Any`, or the module's own
+`i64` or `i32` (of `Soma.Wasm`, which a `.definition` exports, with
+`float` and its literals). A `.definition` defines nothing, and
 proves nothing (its `.proof` may).
 
 The declarations are parameters to the kernel, which never computes
@@ -298,13 +300,13 @@ evaluates a term, a bare term or an `Explore` model
 the WebAssembly reference interpreter (opam `wasm`), and replaced by
 what it returns, as a value of the declared type. What does not fit is a
 cast that fails, and so a run-time error saying so: a negative number
-for an `N` (`expected an N, but got Wasm.I64 (-9223372036854775808) :
-Wasm.i64`), an argument too large for the module (`expected a Wasm.i64,
+for an `N` (`expected an N, but got I64 (-9223372036854775808) :
+i64`), an argument too large for the module (`expected an i64,
 but got 9223372036854775808%N : N`), a trap (`Trapped "unreachable
 executed"`). `soma explore` lists each declared export as an escape
 hatch. An image cannot run a module yet: a Sandbox program whose `main`
-calls one is refused when it is built. Not yet either: `f32` and `f64`,
-several results, and imports (WASI).
+calls one is refused when it is built. Not yet either: several results,
+and imports (WASI).
 
 An export that the `.definition` does not declare is declared as a
 function of `Any`s, `Any -> Any -> Any`, and a `FILE.wasm` without a
@@ -312,7 +314,7 @@ function of `Any`s, `Any -> Any -> Any`, and a `FILE.wasm` without a
 `Import` writes in the cache): gradual types make a module usable as it
 is. Numbers go in as `Any`s, and what it gives back is the number it is,
 its `i64` or `i32` as a `Z`; an `Any` holding no number is an error
-(`expected a Wasm.i64, but got "two" : string`).
+(`expected an i64, but got "two" : string`).
 `examples/example_projects/wasm_add` uses a module built from Rust;
 `test-suite/misc/soma_wasm.sh` tests it.
 

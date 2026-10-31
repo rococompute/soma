@@ -20,7 +20,8 @@
     each declared name is the module's export of that name, checked when
     it is compiled: it exists, takes as many arguments, and its numbers
     fit the declared types (plugins/soma_wasm). A declared type is [N],
-    [Z], [Any], or the module's own [i64] or [i32]: a value of the module
+    [Z], [float] (for the module's f64s and f32s), [Any], or the module's
+    own [i64] or [i32]: a value of the module
     that it cannot hold ([-5] for an [N]) fails as a cast does, with what
     the module gave ("expected an N, but got I64 (-5) : i64"), and so does
     an argument that the module cannot take, and a trap.
@@ -31,6 +32,16 @@
     through a module. *)
 
 From Corelib Require Import BinNums.
+From Corelib Require PrimFloat.
+
+(** [float], for the module's f64s and f32s, and its literals ([1.5]),
+    without PrimFloat's names ([add], [mul], ...), which a module's
+    exports may have *)
+Module Export Floats.
+  Export PrimFloat.PrimFloatNotations.
+  Abbreviation float := PrimFloat.float.
+  Number Notation PrimFloat.float PrimFloat.parser PrimFloat.printer : float_scope.
+End Floats.
 From Stdlib Require Strings.String.
 Require Import Soma.Strings.
 

@@ -21,3 +21,15 @@ pub extern "C" fn fib(n: i64) -> i64 {
     }
     a
 }
+
+/// the length of the hypotenuse of a right triangle with sides a and b
+#[no_mangle]
+pub extern "C" fn hypot(a: f64, b: f64) -> f64 {
+    (a * a + b * b).sqrt()
+}
+
+/// x / 2, in single precision
+#[no_mangle]
+pub extern "C" fn half(x: f32) -> f32 {
+    x / 2.0
+}

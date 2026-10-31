@@ -6,3 +6,9 @@
 pub extern "C" fn mul(a: i64, b: i64) -> i64 {
     a.wrapping_mul(b)
 }
+
+/// the mean of a and b
+#[no_mangle]
+pub extern "C" fn average(a: f64, b: f64) -> f64 {
+    (a + b) / 2.0
+}

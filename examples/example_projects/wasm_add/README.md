@@ -3,9 +3,9 @@
 A program that uses functions written in Rust, compiled to WebAssembly.
 
 ```
-add.wasm          a module: add and fib, of i64s (built from rust/add)
+add.wasm          a module: add and fib, of i64s; hypot and half, of floats (rust/add)
 add.definition    what Soma takes add.wasm to be
-mul.wasm          a module without a .definition: mul (built from rust/mul)
+mul.wasm          a module without a .definition: mul and average (rust/mul)
 main.soma         Soma code built on add, fib and mul
 main.proof        what follows if add adds
 model.soma        does add add? tested on sums small and large
@@ -73,13 +73,37 @@ module gave or could not take:
 
 ```
 add 9223372036854775807 1.
-Run-time error: expected an N, but got Wasm.I64 (-9223372036854775808) : Wasm.i64.
+Run-time error: expected an N, but got I64 (-9223372036854775808) : i64.
 
 add 9223372036854775808 0.
-Run-time error: expected a Wasm.i64, but got 9223372036854775808%N : N.
+Run-time error: expected an i64, but got 9223372036854775808%N : N.
 ```
 
 A trap of the module is one too: `Trapped "unreachable executed"`.
+
+## Floats
+
+`rust/add` also exports `hypot`, of `f64`s, and `half`, of an `f32`,
+which `add.definition` declares as `float`s; `rust/mul` exports
+`average`, of `f64`s, which is of type `Any`:
+
+```
+hypot : float -> float -> float.
+half : float -> float.
+```
+
+```
+hypot 3 4.                            (* 5 *)
+half 2.5.                             (* 1.25 *)
+(average 1%float 2%float : float).    (* 1.5 *)
+```
+
+A declared `float` makes `3` and `2.5` floats there; `average`, of type
+`Any`, takes its arguments as they are written, so `1%float`: `average 1
+2` is `expected a float, but got 1 : nat`, as a `nat` is no float. An
+`f32` rounds what it is given (`half 0.1` is `0.05000000074505806`).
+`Import add` gives `float` and its literals, which `Soma.Wasm` exports
+with the module's types.
 
 ## A module without a definition
 
@@ -95,8 +119,8 @@ area 6 7.                        (* 42 *)
 Soma numbers go in as `Any`s; what the module gives back is the number it
 is, its `i64` as a `Z`. Using it as something else is a cast that fails,
 as any: `(mul 6 7 : N)` is `expected an N, but got 42%Z : Z`, and an
-`Any` that holds no number is no argument: `mul "six" 7` is `expected a
-Wasm.i64, but got "six" : string`. An export that a `.definition` does
+`Any` that holds no number is no argument: `mul "six" 7` is `expected an
+i64, but got "six" : string`. An export that a `.definition` does
 not declare is of type `Any` in the same way.
 
 ## Proofs, and a model
@@ -117,9 +141,9 @@ fails, saying where:
 
 ```
 Violation 1, from input (9223372036854775807%N, 1%N):
-  "add.wasm's add is +" is a run-time error: expected an N, but got Wasm.I64 (-9223372036854775808) : Wasm.i64.
+  "add.wasm's add is +" is a run-time error: expected an N, but got I64 (-9223372036854775808) : i64.
 Violation 2, from input (9223372036854775808%N, 0%N):
-  "add.wasm's add is +" is a run-time error: expected a Wasm.i64, but got 9223372036854775808%N : N.
+  "add.wasm's add is +" is a run-time error: expected an i64, but got 9223372036854775808%N : N.
 ...
 No violation from: (0%N, 0%N), (2%N, 3%N), (1000%N, 2000%N),
   (4611686018427387904%N, 4611686018427387903%N),
@@ -141,5 +165,5 @@ Escape hatches, where static types are given up:
 
 - An image: a Sandbox program whose `main` calls a module is refused
   when it is built, until the image has an interpreter.
-- Exports of `f32` and `f64`, of several results, and modules that import
-  functions (WASI): a `.definition` says so when it meets one.
+- Exports of several results, and modules that import functions (WASI):
+  a `.definition` says so when it meets one.

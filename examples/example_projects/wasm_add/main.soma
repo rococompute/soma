@@ -23,3 +23,12 @@ Import mul.
 area (w h : N) : Z := (mul w h : Z).
 
 area 6 7.                      (* 42 *)
+
+(** Floats: add.wasm's hypot takes and gives f64s, half an f32, which the
+    definition declares as floats, so that 3 and 2.5 are floats there;
+    mul.wasm's average, of f64s, is of type Any: its arguments are floats
+    because they are written so ([1] would be a nat, which is no float),
+    and it gives back a float. *)
+hypot 3 4.                     (* 5 *)
+half 2.5.                      (* 1.25 *)
+(average 1%float 2%float : float).    (* 1.5 *)

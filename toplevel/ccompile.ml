@@ -78,7 +78,8 @@ let load_folder_rules ~state f = function
 let is_definition_file f = Filename.check_suffix f ".definition"
 
 let load_definition_prologue ~state f =
-  if is_definition_file f then process_string ~state "Require Soma.Wasm." else state
+  (* exported: what imports the module has its types, float among them *)
+  if is_definition_file f then process_string ~state "Require Export Soma.Wasm." else state
 
 let load_definition_epilogue ~state f =
   if not (is_definition_file f) then state else

@@ -28,8 +28,8 @@ open Names
 open Pp
 
 (* What a declared type is, and the module's numbers *)
-type kind = KN | KZ | KAny | KI64 | KI32
-type wnum = W32 | W64
+type kind = KN | KZ | KFloat | KAny | KI64 | KI32
+type wnum = W32 | W64 | F32 | F64
 
 type binding = {
   file : string;            (* FILE.wasm, absolute *)
@@ -45,7 +45,7 @@ let in_binding : Constant.t * binding -> Libobject.obj =
     ~cache:(fun (c, b) -> bindings := Cmap_env.add c b !bindings)
     ~subst:None
 
-let wnum_name = function W32 -> "i32" | W64 -> "i64"
+let wnum_name = function W32 -> "i32" | W64 -> "i64" | F32 -> "f32" | F64 -> "f64"
 
 (* * The modules *)
 
@@ -112,14 +112,25 @@ let kind_of env sigma t =
       | Some gr -> EConstr.isRefX env sigma gr t
       | None -> false in
     if EConstr.isRefX env sigma (ref_of "num.N.type") t then Some KN
+    else if EConstr.isRefX env sigma (ref_of "num.float.type") t then Some KFloat
     else if EConstr.isRefX env sigma (ref_of "num.Z.type") t then Some KZ
     else if is "i64" then Some KI64
     else if is "i32" then Some KI32
     else None
 
+let wnum_of = function
+  | Wasm.Types.NumType Wasm.Types.I32Type -> Some W32
+  | Wasm.Types.NumType Wasm.Types.I64Type -> Some W64
+  | Wasm.Types.NumType Wasm.Types.F32Type -> Some F32
+  | Wasm.Types.NumType Wasm.Types.F64Type -> Some F64
+  | _ -> None
+
 let fits kind w = match kind, w with
-  | KI64, W32 | KI32, W64 -> false
-  | _ -> true
+  | KAny, _ -> true
+  | KFloat, (F32 | F64) -> true
+  | (KN | KZ), (W32 | W64) -> true
+  | KI64, W64 | KI32, W32 -> true
+  | _ -> false
 
 (* [name : Any -> ... -> Any], with [arity] arguments: an export that the
    .definition does not declare, or of a module without one, which gradual
@@ -156,11 +167,10 @@ let bind file =
             CErrors.user_err (hov 0 (str (Filename.remove_extension base ^ ".definition") ++ str " declares " ++
                                      str name ++ str ", which " ++ str base ++ str " does not export." ++
                                      spc () ++ exported ())) in
-        let wnum t = match t with
-          | Wasm.Types.NumType Wasm.Types.I32Type -> W32
-          | Wasm.Types.NumType Wasm.Types.I64Type -> W64
-          | t -> CErrors.user_err (str name ++ str ": " ++ str base ++ str "'s " ++ str name ++ str " has a " ++
-                                   str (pr_num_type t) ++ str ", and Soma only gives and takes i32 and i64 yet.") in
+        let wnum t = match wnum_of t with
+          | Some w -> w
+          | None -> CErrors.user_err (str name ++ str ": " ++ str base ++ str "'s " ++ str name ++ str " has a " ++
+                                      str (pr_num_type t) ++ str ", and Soma gives and takes numbers only.") in
         let wps = List.map wnum ps in
         let wr = match rs with
           | [r] -> wnum r
@@ -181,7 +191,7 @@ let bind file =
             CErrors.user_err (str name ++ str ": " ++ Printer.pr_econstr_env env sigma t ++
                               str " is not " ++ str base ++ str "'s " ++ str (wnum_name w) ++ str ".")
           | None ->
-            CErrors.user_err (hov 0 (str name ++ str ": a declared type is N, Z, Any, i64 or i32," ++ spc () ++
+            CErrors.user_err (hov 0 (str name ++ str ": a declared type is N, Z, float, Any, i64 or i32," ++ spc () ++
                                      str "and not " ++ Printer.pr_econstr_env env sigma t ++ str "."))
         in
         let params = List.map2 (fun (_, t) w -> declared t w, w) decls wps in
@@ -195,10 +205,7 @@ let bind file =
   (* the exports it does not declare: of type Any, as gradual types allow *)
   let declared = List.map (fun (c, _) -> Id.to_string (Constant.label c)) constants in
   List.iter (fun (name, (ps, rs)) ->
-      let wnum t = match t with
-        | Wasm.Types.NumType Wasm.Types.I32Type -> Some W32
-        | Wasm.Types.NumType Wasm.Types.I64Type -> Some W64
-        | _ -> None in
+      let wnum = wnum_of in
       let valid = try ignore (Id.of_string name); true with e when CErrors.noncritical e -> false in
       if valid && not (List.mem name declared) then
         match List.map wnum ps, rs with
@@ -228,8 +235,20 @@ let rec nat_of env sigma c =
   else if EConstr.isRefX env sigma (ref_of "num.nat.S") f then Option.map Z.succ (nat_of env sigma args.(0))
   else None
 
-(* the number a value is, and its type: N, Z or nat; an Any holding one *)
+(* a number: an integer, or a float *)
+type number = Int of Z.t | Flt of float
+
+(* the number a value is: an N, Z or nat, a float; an Any holding one *)
 let rec number_of env sigma c =
+  let f, args = EConstr.decompose_app sigma c in
+  match EConstr.kind sigma c, EConstr.kind sigma f with
+  | Float x, _ -> Some (Flt (Float64.to_float x))
+  | _, Const (k, _) when Gradual.kind_of env k = Some Gradual.GCast && Array.length args = 3 ->
+    (* an Any, made of a number *)
+    number_of env sigma args.(2)
+  | _ -> Option.map (fun z -> Int z) (integer_of env sigma c)
+
+and integer_of env sigma c =
   let f, args = EConstr.decompose_app sigma c in
   if EConstr.isRefX env sigma (ref_of "num.N.N0") f then Some Z.zero
   else if EConstr.isRefX env sigma (ref_of "num.N.Npos") f then positive_of env sigma args.(0)
@@ -238,11 +257,7 @@ let rec number_of env sigma c =
   else if EConstr.isRefX env sigma (ref_of "num.Z.Zneg") f then Option.map Z.neg (positive_of env sigma args.(0))
   else if EConstr.isRefX env sigma (ref_of "num.nat.O") f || EConstr.isRefX env sigma (ref_of "num.nat.S") f
   then nat_of env sigma c
-  else match EConstr.kind sigma f with
-    | Const (k, _) when Gradual.kind_of env k = Some Gradual.GCast && Array.length args = 3 ->
-      (* an Any, made of a number *)
-      number_of env sigma args.(2)
-    | _ -> None
+  else None
 
 (* an Any made of a closed value of a type that is no number's: its type
    and the value *)
@@ -292,14 +307,17 @@ let type_of_kind env = function
   | KAny -> any_type env
   | KI64 -> wasm_ref "i64"
   | KI32 -> wasm_ref "i32"
+  | KFloat -> mk_ref "num.float.type"
 
 let cast env a b v = EConstr.mkApp (gradual env Gradual.GCast, [|a; b; v|])
 
 (* the module's number, as its own type: I64 z *)
 let mk_wasm env w z =
-  EConstr.mkApp (wasm_ref (match w with W64 -> "I64" | W32 -> "I32"), [|mk_Z z|])
+  EConstr.mkApp (wasm_ref (match w with W32 -> "I32" | W64 | F32 | F64 -> "I64"), [|mk_Z z|])
 
-let wasm_type w = wasm_ref (wnum_name w)
+let wasm_type = function
+  | W32 | W64 as w -> wasm_ref (wnum_name w)
+  | F32 | F64 -> mk_ref "num.float.type"
 
 (* a value of type [declared] that fails, as the cast of [v], of type [a],
    to [b] does, then is [raise] at [declared] *)
@@ -315,15 +333,24 @@ let failing env ~declared a b v =
 let range = function
   | W64 -> Z.neg (Z.shift_left Z.one 63), Z.pred (Z.shift_left Z.one 63)
   | W32 -> Z.neg (Z.shift_left Z.one 31), Z.pred (Z.shift_left Z.one 31)
+  | F32 | F64 -> Z.zero, Z.zero
 
-let to_value w z = match w with
-  | W64 -> Wasm.Values.Num (Wasm.Values.I64 (Z.to_int64 z))
-  | W32 -> Wasm.Values.Num (Wasm.Values.I32 (Z.to_int32 z))
+(* a number as the module's type takes it, if it can: an f32 rounds *)
+let to_value w n = match w, n with
+  | W64, Int z -> Some (Wasm.Values.Num (Wasm.Values.I64 (Z.to_int64 z)))
+  | W32, Int z -> Some (Wasm.Values.Num (Wasm.Values.I32 (Z.to_int32 z)))
+  | F64, Flt x -> Some (Wasm.Values.Num (Wasm.Values.F64 (Wasm.F64.of_float x)))
+  | F32, Flt x -> Some (Wasm.Values.Num (Wasm.Values.F32 (Wasm.F32.of_float x)))
+  | _ -> None
 
 let of_value = function
-  | Wasm.Values.Num (Wasm.Values.I64 x) -> Some (Z.of_int64 x)
-  | Wasm.Values.Num (Wasm.Values.I32 x) -> Some (Z.of_int32 x)
+  | Wasm.Values.Num (Wasm.Values.I64 x) -> Some (Int (Z.of_int64 x))
+  | Wasm.Values.Num (Wasm.Values.I32 x) -> Some (Int (Z.of_int32 x))
+  | Wasm.Values.Num (Wasm.Values.F64 x) -> Some (Flt (Wasm.F64.to_float x))
+  | Wasm.Values.Num (Wasm.Values.F32 x) -> Some (Flt (Wasm.F32.to_float x))
   | _ -> None
+
+let mk_float x = EConstr.mkFloat (Float64.of_float x)
 
 (* the result of a call, as a value of its declared type, or as a cast
    that fails, saying why *)
@@ -342,13 +369,19 @@ let call env sigma b args =
           | Some (source, v) -> Error (Some (failing env ~declared source (wasm_type w) v))
           | None -> Error None (* not a number yet: the call waits *)
         end
-      | Some z ->
-        let lo, hi = range w in
-        let negative_for_N = (k = KN && Z.lt z Z.zero) in
-        if Z.lt z lo || Z.gt z hi || negative_for_N then
-          (* it fails as the cast of the argument to the module's type *)
-          Error (Some (failing env ~declared ty (wasm_type w) a))
-        else arguments (to_value w z :: acc) rest
+      | Some n ->
+        let out_of_range = match n, w with
+          | Int z, (W32 | W64) ->
+            let lo, hi = range w in Z.lt z lo || Z.gt z hi || (k = KN && Z.lt z Z.zero)
+          | _ -> false in
+        match (if out_of_range then None else to_value w n) with
+        | Some v -> arguments (v :: acc) rest
+        | None ->
+          (* it fails as the cast of the argument to the module's type: too
+             large, or a float for an integer, or the other way *)
+          let ty = match any_value env sigma a with Some (source, _) -> source | None -> ty in
+          let v = match any_value env sigma a with Some (_, v) -> v | None -> a in
+          Error (Some (failing env ~declared ty (wasm_type w) v))
   in
   let typed = List.map2 (fun p a -> p, a) b.params args in
   match arguments [] (List.map (fun (p, a) -> p, (a, type_of_kind env (fst p))) typed) with
@@ -369,13 +402,17 @@ let call env sigma b args =
     | [r] ->
       begin match of_value r with
         | None -> None
-        | Some z ->
+        | Some (Flt x) ->
+          (match rkind with
+           | KAny -> Some (cast env (mk_ref "num.float.type") (any_type env) (mk_float x))
+           | _ -> Some (mk_float x))
+        | Some (Int z) ->
           match rkind with
           | KN when Z.lt z Z.zero ->
             (* what the module gave, which an N cannot hold *)
             Some (failing env ~declared (wasm_type rw) declared (mk_wasm env rw z))
           | KN -> Some (mk_N z)
-          | KZ -> Some (mk_Z z)
+          | KZ | KFloat -> Some (mk_Z z)
           | KI64 | KI32 -> Some (mk_wasm env rw z)
           | KAny -> Some (cast env (mk_ref "num.Z.type") (any_type env) (mk_Z z))
       end
@@ -412,7 +449,7 @@ let describe c =
   match Cmap_env.find_opt c !bindings with
   | None -> None
   | Some b ->
-    let kind = function KN -> "N" | KZ -> "Z" | KAny -> "Any" | KI64 -> "i64" | KI32 -> "i32" in
+    let kind = function KN -> "N" | KZ -> "Z" | KFloat -> "float" | KAny -> "Any" | KI64 -> "i64" | KI32 -> "i32" in
     Some (str (Filename.basename b.file) ++ str "'s " ++ str b.export ++ str " (" ++
           str (String.concat ", " (List.map (fun (_, w) -> wnum_name w) b.params)) ++ str ") -> " ++
           str (wnum_name (snd b.result)) ++ str ", taken to be " ++

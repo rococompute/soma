@@ -34,9 +34,9 @@ EOT
 soma build -v prog.soma > out.log 2>&1
 grep -q '= 5%N' out.log
 # the module wraps around: an N cannot hold what it gives
-grep -q 'expected an N, but got Wasm.I64 (-9223372036854775808) : Wasm.i64' out.log
+grep -q 'expected an N, but got I64 (-9223372036854775808) : i64' out.log
 # an i64 cannot hold the argument
-grep -q 'expected a Wasm.i64, but got 9223372036854775808%N : N' out.log
+grep -q 'expected an i64, but got 9223372036854775808%N : N' out.log
 # a trap
 grep -q 'Trapped "unreachable executed"' out.log
 
@@ -60,9 +60,18 @@ check() {
 printf 'Import m.\n' > prog.soma
 check 'sub : N -> N -> N.' 'm.definition declares sub, which m.wasm does not export.'
 check 'add : N -> N.' 'add is declared with 1 arguments'
-check 'add : nat -> nat -> nat.' 'a declared type is N, Z, Any, i64 or i32'
-check 'half : N -> N.' 'Soma only gives and takes i32 and i64 yet'
+check 'add : nat -> nat -> nat.' 'a declared type is N, Z, float, Any, i64 or i32'
+check 'half : N -> N.' "half: N is not m.wasm's f64."
 check 'x := 1.' 'defines nothing: x is a definition'
+
+# floats: half takes and gives an f64, declared as a float
+printf 'half : float -> float.\n' > m.definition
+rm -rf .soma-cache
+printf 'Import m.\nhalf 2.5.\n(boom 1 : Z).\n' > prog.soma
+soma build -v prog.soma > out.log 2>&1
+grep -q '= 2.5%float' out.log
+# boom, which it does not declare, is of type Any
+grep -q 'Trapped "unreachable executed"' out.log
 
 # a module without a definition: its exports are of type Any; what it gives
 # is a Z, which a cast checks; an Any that holds no number is an error
@@ -79,7 +88,12 @@ soma build -v prog.soma > out.log 2>&1
 grep -q 'Any -> Any -> Any' out.log
 grep -q '= 5%Z' out.log
 grep -q 'expected an N, but got 5%Z : Z' out.log
-grep -q 'expected a Wasm.i64, but got "two" : string' out.log
+grep -q 'expected an i64, but got "two" : string' out.log
+# a float in an Any is a float; a nat is no float
+printf 'Import m.\n(half 2.5%%float : float).\n(half 2 : float).\n' > prog.soma
+soma build -v prog.soma > out.log 2>&1
+grep -q '= 2.5%float' out.log
+grep -q 'expected a float, but got 2 : nat' out.log
 # an export a definition does not declare is of type Any too
 printf 'add : N -> N -> N.\n' > m.definition
 rm -rf .soma-cache
