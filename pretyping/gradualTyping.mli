@@ -100,3 +100,25 @@ type fake = { kind : Gradual.kind; env : env; prop : Constr.t; within : Names.Co
     are not evidence. [None] when there is none, or when no gradual
     primitive is registered. *)
 val proof_fake_evidence : env -> typ:Constr.types -> body:Constr.constr -> fake option
+
+(** {6 What a value of type [Any] may be} *)
+
+(** A static type a value was made an [Any] from, and the definition where
+    it was *)
+type origin = { otype : Constr.types; made_in : Names.Constant.t option }
+
+(** A cast from [Any] to [target] of [value], which may have been made from
+    each of [failing], which [target] is not consistent with, so that the
+    cast fails for it, and of [fitting] *)
+type may_fail = {
+  env : env;
+  value : Constr.t;
+  target : Constr.types;
+  failing : origin list;
+  fitting : origin list;
+}
+
+(** The casts from [Any] of [body] that fail for some of what their value
+    may be, following it back through [match]es and definitions *)
+val casts_that_may_fail : env -> Constr.t -> may_fail list
+

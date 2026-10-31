@@ -484,3 +484,93 @@ let proof_fake_evidence env ~typ ~body =
   (* most proofs reach no gradual primitive at all (cached per constant) *)
   else if uses env [] body = [] then None
   else find_fake env ~allowed:(Some typ) body
+
+(* Soma: what a value of type [Any] may be. An [Any] is made from a value
+   of a static type by a cast to it ([cast string Any v]); following the
+   value back, through the branches of [match]es and into the definitions
+   it calls, gives the static types it may have been made from, and where
+   ([Among]). A value whose origin is not known, an argument, [?], what a
+   recursive function computes, may be anything ([Anything]). A cast from
+   [Any] to [T] then fails for each of them that is not consistent with
+   [T]: [Any] that may be a [string], used as an [N], is [raise] whenever
+   it is a [string]. *)
+type origin = { otype : Constr.types; made_in : Names.Constant.t option }
+type possible = Anything | Among of origin list
+
+let union a b = match a, b with
+  | Anything, _ | _, Anything -> Anything
+  | Among l1, Among l2 ->
+    Among (l1 @ List.filter (fun o -> not (List.exists (fun o' -> Constr.equal o.otype o'.otype) l1)) l2)
+
+let gradual_kind env f = match Constr.kind f with
+  | Constr.Const (k, _) -> Gradual.kind_of env k
+  | _ -> None
+
+let is_any env t = is_unknown_type env Evd.empty (EConstr.of_constr t)
+
+let rec strip_lambdas c = match Constr.kind c with
+  | Constr.Lambda (_, _, b) -> strip_lambdas b
+  | _ -> c
+
+(* [depth]: how many definitions are followed at most *)
+let rec possible env ~depth ~made_in c =
+  match Constr.kind c with
+  | Constr.App (f, [|a; b; v|]) when gradual_kind env f = Some Gradual.GCast ->
+    (* [env] is the global one: types that mention the variables of the
+       term (a parameter [A]) are not known here *)
+    let closed t = EConstr.Vars.closed0 Evd.empty (EConstr.of_constr t) in
+    if not (closed a && closed b) then Anything
+    else if not (is_any env b) then Anything
+    else if is_any env a then possible env ~depth ~made_in v
+    else Among [{ otype = a; made_in }]
+  | Constr.Case (_, _, _, _, _, _, brs) ->
+    Array.fold_left (fun acc (_, br) -> union acc (possible env ~depth ~made_in br)) (Among []) brs
+  | Constr.LetIn (_, _, _, body) -> possible env ~depth ~made_in body
+  | Constr.Cast (c, _, _) -> possible env ~depth ~made_in c
+  | Constr.App (f, _) -> defined env ~depth f
+  | Constr.Const _ -> defined env ~depth c
+  | _ -> Anything
+
+and defined env ~depth f = match Constr.kind f with
+  | Constr.Const (cst, _) when depth > 0 && Option.is_empty (Gradual.kind_of env cst) ->
+    begin match (Environ.lookup_constant cst env).Declarations.const_body with
+      | Declarations.Def b -> possible env ~depth:(depth - 1) ~made_in:(Some cst) (strip_lambdas b)
+      | _ -> Anything
+    end
+  | _ -> Anything
+
+type may_fail = {
+  env : Environ.env;       (* where the cast is *)
+  value : Constr.t;        (* the [Any] *)
+  target : Constr.types;   (* what it is used as *)
+  failing : origin list;   (* what it may be, and the cast fails for *)
+  fitting : origin list;   (* what it may be, and the cast is fine for *)
+}
+
+let casts_that_may_fail env body =
+  if not (Gradual.enabled env) || uses env [] body = [] then [] else
+  (* a warning: whatever it cannot follow, it does not report *)
+  try
+  let found = ref [] in
+  let sigma = Evd.from_env env in
+  let rec visit env c =
+    (match Constr.kind c with
+     | Constr.App (f, [|a; b; v|]) when gradual_kind env f = Some Gradual.GCast
+                                     && is_any env a && not (is_any env b) && EConstr.Vars.closed0 Evd.empty (EConstr.of_constr b) ->
+       begin match possible (Global.env ()) ~depth:8 ~made_in:None v with
+         | Among origins ->
+           let failing, fitting = List.partition (fun o ->
+               not (consistent env sigma (EConstr.of_constr o.otype) (EConstr.of_constr b))) origins in
+           if failing <> [] then found := { env; value = v; target = b; failing; fitting } :: !found
+         | Anything -> ()
+       end
+     | _ -> ());
+    Termops.fold_constr_with_full_binders env Evd.empty
+      (fun d env -> EConstr.push_rel d env)
+      (fun env () c -> visit env (EConstr.Unsafe.to_constr c))
+      env () (EConstr.of_constr c)
+  in
+  visit env body;
+  List.rev !found
+  with e when CErrors.noncritical e -> []
+

@@ -1,0 +1,14 @@
+(** A counter, in the language of pages/ (pages/pages.lang): a page with a
+    +1 link. Its state is the count of pages.lang, from the start the
+    server gives it, and its only action is [Increment]: this file gives
+    the view, nothing else. [counter start] is the app from [start]. *)
+
+counter := app count
+  (html
+    (head
+      (title "Counter")
+      (meta (attrs (charset "utf-8"))))
+    (body
+      (div (attrs (class "counter"))
+        (h1 "Count: " count)
+        (increment "+1")))).

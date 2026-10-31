@@ -1,0 +1,56 @@
+(** What is proved about the state of every app of pages/: checked once,
+    with the rules of pages/, and so for any view, any page, and any start
+    the server gives it. The only action is +1, so the count is the start
+    and one more for each click, and every click increases it. *)
+
+(** From any count, the clicks add one each. *)
+Lemma replay_counts : forall clicks count,
+  replay step count clicks = (count + N.of_nat (length clicks))%N.
+Proof.
+  Take clicks : list action.
+  We use induction on clicks.
+  - Take count : N.
+    We conclude that replay step count [] = (count + 0)%N.
+  - Take a : action.
+    Take clicks : list action.
+    Assume that forall count, replay step count clicks = (count + N.of_nat (length clicks))%N as IH.
+    Take count : N.
+    We need to show that replay step (step a count) clicks = (count + N.of_nat (length (a :: clicks)))%N.
+    By IH, it suffices to show that
+      (step a count + N.of_nat (length clicks))%N = (count + N.of_nat (length (a :: clicks)))%N.
+    We consider each case of a.
+    We conclude that (step Increment count + N.of_nat (length clicks))%N = (count + N.of_nat (length (Increment :: clicks)))%N.
+Qed.
+
+(** The state of any app of pages/, from any start, is the start and the
+    number of clicks. *)
+Theorem state_is_start_and_clicks : forall start view clicks,
+  state_after (counter_app start view) clicks = (start + N.of_nat (length clicks))%N.
+Proof.
+  Take start : N.
+  Take view : N -> element action.
+  Take clicks : list action.
+  By replay_counts, we conclude that state_after (counter_app start view) clicks = (start + N.of_nat (length clicks))%N.
+Qed.
+
+(** So it is strictly increasing: from any start, there is no click after
+    which it is as it was, or less. *)
+Theorem strictly_increasing : forall start view clicks a,
+  (state_after (counter_app start view) clicks < state_after (counter_app start view) (clicks ++ [a]))%N.
+Proof.
+  Take start : N.
+  Take view : N -> element action.
+  Take clicks : list action.
+  Take a : action.
+  By state_is_start_and_clicks, it suffices to show that
+    (start + N.of_nat (length clicks) < start + N.of_nat (length (clicks ++ [a])))%N.
+  By last_length, we conclude that (start + N.of_nat (length clicks) < start + N.of_nat (length (clicks ++ [a])))%N.
+Qed.
+
+(** The +1 control of the page at [count] leads to the page at the next
+    count, which is greater. *)
+Theorem next_link_is_greater : forall count, (count < step Increment count)%N.
+Proof.
+  Take count : N.
+  We conclude that (count < step Increment count)%N.
+Qed.

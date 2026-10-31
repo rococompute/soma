@@ -194,6 +194,11 @@ diagnose cast_failure 'Require Import Sandbox.
 bad (x : Any) : string := x.
 main : io unit := print (bad 42).' \
     'soma-outcome \{"outcome":"failed","kind":"cast".*"expected":"a string","actual":"a nat"'
+# a failed cast reached through a match into a string (to_string of an
+# N) says what it was, not only where it ended up
+diagnose cast_through_match 'Require Import Sandbox.
+main : io unit := print (to_string ((("41" : string) : Any) : N)).' \
+    'the program stopped on a run-time error: expected an N, but got a string'
 diagnose stack_overflow 'Require Import Sandbox.
 main : io unit := print (to_string (length (repeat 0 (N.to_nat 3000000)))).' \
     'the program stopped on a stack overflow'

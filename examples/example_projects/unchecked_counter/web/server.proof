@@ -1,0 +1,17 @@
+(** The proof of counter_server, which still checks: the counter's state,
+    from any [N] it starts at, strictly increases. Here the start is the
+    request's [Any] cast to [N], and for a count from the address or the
+    cookie, a string, that cast is [raise]: an [N]-typed error, not a
+    number. The theorem holds for it too, and so says nothing about what
+    such a request is served: an error, not a counter. *)
+Theorem served_state_increases : forall request clicks a,
+  (state_after (counter (start_of request)) clicks <
+   state_after (counter (start_of request)) (clicks ++ [a]))%N.
+Proof.
+  Take request : string.
+  Take clicks : list action.
+  Take a : action.
+  By strictly_increasing, we conclude that
+    (state_after (counter (start_of request)) clicks <
+     state_after (counter (start_of request)) (clicks ++ [a]))%N.
+Qed.

@@ -81,7 +81,11 @@ let a_value_of env sigma t =
   else
     let pp = pr env sigma t in
     let s = string_of_ppcmds pp in
-    let vowel = String.length s > 0 && String.contains "aeiouAEIOU" s.[0] in
+    let n = String.length s in
+    (* "an N", "an int": a letter read as a vowel, or a vowel *)
+    let vowel = n > 0 && (String.contains "aeiouAEIOU" s.[0] ||
+                          (String.contains "AEFHILMNORSX" s.[0] &&
+                           (n = 1 || not (Char.lowercase_ascii s.[1] = s.[1] && Char.uppercase_ascii s.[1] <> s.[1])))) in
     str (if vowel then "an " else "a ") ++ pp
 
 let failure_message env sigma { Gradual.expected; actual; value; reason } =

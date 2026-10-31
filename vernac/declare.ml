@@ -1016,6 +1016,47 @@ let check_gradual_proof ~kind name (entry : proof_entry) =
     end
   | _ -> ()
 
+(* Soma: a value of type [Any] that may have been made from a type it is
+   then used as something inconsistent with: an [Any] that may be a
+   [string], used as an [N], fails whenever it is a [string]
+   (GradualTyping.casts_that_may_fail). *)
+let a_or_an ?(capital=false) env t =
+  let s = Pp.string_of_ppcmds (Printer.pr_constr_env env Evd.empty t) in
+  let n = String.length s in
+  (* "an N", "an RGB", "an int"; "a nat", "a string" *)
+  let letter_vowel = n > 0 && String.contains "AEFHILMNORSX" s.[0] &&
+                     (n = 1 || not (Char.lowercase_ascii s.[1] = s.[1] && Char.uppercase_ascii s.[1] <> s.[1])) in
+  let vowel = n > 0 && String.contains "aeiouAEIOU" s.[0] in
+  let article = if letter_vowel || vowel then "an " else "a " in
+  let article = if capital then String.capitalize_ascii article else article in
+  Pp.(str article ++ Printer.pr_constr_env env Evd.empty t)
+
+let warn_may_fail =
+  CWarnings.create ~name:"gradual-may-fail" ~category:CWarnings.CoreCategories.vernacular
+    (fun (name, (m : GradualTyping.may_fail)) ->
+       let genv = Global.env () in
+       let where (o : GradualTyping.origin) = match o.made_in with
+         | Some c -> Pp.(str " (made an Any in " ++ Printer.pr_constant genv c ++ str ")")
+         | None -> Pp.mt () in
+       let some l = Pp.prlist_with_sep (fun () -> Pp.str " or ") (fun (o : GradualTyping.origin) ->
+           Pp.(a_or_an genv o.otype ++ where o)) l in
+       let first = List.hd m.failing in
+       let words s = Pp.prlist_with_sep Pp.spc Pp.str (String.split_on_char ' ' s) in
+       Pp.(hov 0 (Id.print name ++ str ":" ++ spc () ++
+           Printer.pr_lconstr_env m.env Evd.empty m.value ++ spc () ++ words "is an Any that may be" ++ spc () ++
+           some m.failing ++ str "," ++ spc () ++ words "and it is used as" ++ spc () ++ a_or_an genv m.target ++ str "." ++ spc () ++
+           a_or_an ~capital:true genv first.otype ++ spc () ++ words "is never" ++ spc () ++ a_or_an genv m.target ++ str ":" ++ spc () ++
+           words "where it is one, this is a run-time error," ++ spc () ++ str "\"expected " ++ a_or_an genv m.target ++
+           str "," ++ spc () ++ str "but got " ++ a_or_an genv first.otype ++ str "\"." ++
+           (if m.fitting = [] then mt ()
+            else spc () ++ words "It may also be" ++ spc () ++ some m.fitting ++ str "," ++ spc () ++ words "which is fine."))))
+
+let check_casts_may_fail name (entry : proof_entry) =
+  match entry.proof_entry_body with
+  | Default { body; _ } ->
+    List.iter (fun m -> warn_may_fail (name, m)) (GradualTyping.casts_that_may_fail (Global.env ()) body)
+  | _ -> ()
+
 let declare_possibly_mutual_definitions ~info ~cinfo ~obls ?(is_telescope=false) obj =
   let eff, entries = process_proof ~info ~is_telescope obj in
   let () = export_side_effects eff in
@@ -1024,6 +1065,7 @@ let declare_possibly_mutual_definitions ~info ~cinfo ~obls ?(is_telescope=false)
       (* replacing matters for Derive-like statement but it does not hurt otherwise *)
       let entry = ProofEntry.map_entry entry ~f:(Vars.replace_vars subst) in
       let () = check_gradual_proof ~kind name entry in
+      let () = check_casts_may_fail name entry in
       let gref = declare_entry ~loc ~name ~scope ~clearbody ~kind ?hook ~impargs ~typing_flags ~user_warns ~obls ~uctx entry in
       let inst = instance_of_univs entry.proof_entry_universes in
       let const = Constr.mkRef (gref, inst) in

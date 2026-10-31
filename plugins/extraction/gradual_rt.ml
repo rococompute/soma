@@ -145,7 +145,11 @@ and describe_arg = function
 (* "a nat", "an option nat" *)
 let describe t =
   let s = describe t in
-  if String.length s > 2 && String.sub s 0 2 = "a " && String.contains "aeiou" s.[2] then "an " ^ String.sub s 2 (String.length s - 2)
+  let n = String.length s in
+  (* "an int", "an N": a vowel, or a letter read as one *)
+  let letter_vowel = n > 2 && String.contains "AEFHILMNORSX" s.[2] &&
+                     (n = 3 || not (Char.lowercase_ascii s.[3] = s.[3] && Char.uppercase_ascii s.[3] <> s.[3])) in
+  if n > 2 && String.sub s 0 2 = "a " && (String.contains "aeiou" s.[2] || letter_vowel) then "an " ^ String.sub s 2 (n - 2)
   else s
 
 (* [err] at type [b]: a value when [b] is an inductive type that can hold
@@ -246,6 +250,11 @@ let is_exc_value (v : 'a) = is_exc (Obj.repr v)
 let propagate (ty : ty) (v : 'a) : Obj.t =
   match ty with
   | Ind { data = true; _ } -> Obj.repr v
+  (* an error, at a type that cannot hold it ([string], as OCaml's [char
+     list]): it is raised, saying what it says ("expected an N, but got a
+     string"), rather than as a new [err] at [ty], which would say only
+     where it ended up. ([?] is [?] at [ty], as in the kernel.) *)
+  | Ind _ | Prim _ | Err when is_error v -> raise_exc (Obj.repr v)
   | ty -> if is_unknown v then unknown_term ty else err_term ty
 
 let cast_with fs a b v =

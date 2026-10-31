@@ -1,0 +1,35 @@
+(** The answer to each request: the counter's page at the start of the
+    request (web/request.soma), unchecked: [page] takes an [N], and the
+    start is an [Any], so a cast to [N] is inserted, which the type
+    checker cannot check; and an address that is not the page,
+    [404 Not Found]. *)
+Import Sandbox.
+Import pages.pages.
+Import pages.counter.
+Import web.request.
+
+(** a response, with its status and its headers *)
+response (status : string) (headers : list string) (content_type body : string) : string :=
+  ("HTTP/1.1 " ++ status ++ crlf ++
+   "Content-Type: " ++ content_type ++ crlf ++
+   String.concat "" (List.map (fun h => h ++ crlf) headers) ++
+   "Content-Length: " ++ to_string (String.length body) ++ crlf ++
+   "Connection: close" ++ crlf ++ crlf ++ body)%str.
+
+(** the page at [n], which the cookie remembers *)
+page (n : N) : string :=
+  response "200 OK" [("Set-Cookie: count=" ++ to_string n ++ "; Path=/; SameSite=Lax")%str]
+    "text/html; charset=utf-8"
+    ("<!DOCTYPE html>" ++ render (view (counter n) (init (counter n))))%str.
+
+not_found : string := response "404 Not Found" [] "text/plain; charset=utf-8" "Not found.".
+
+(** the counter's address: [/], and [/?...] with a query *)
+is_page (path : string) : bool := String.eqb path "/" || String.prefix "/?" path.
+
+respond (request : string) : string :=
+  if is_page (path_of request) then page (start_of request) else not_found.
+
+answer (request : string) : io string :=
+  print ("request for " ++ path_of request) ;;
+  ret (respond request).

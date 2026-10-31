@@ -423,7 +423,37 @@ its characters (`Register ... as soma.string.append`, in
 run-time error. Compiled code raises `Gradual_rt.Cast_error` at the cast
 instead, worded the same way from the types it has at run time
 (`expected a bool, but got a nat`, without the value); a MirageOS image
-prints it as `Run-time error: ...` and exits.
+prints it as `Run-time error: ...` and exits. An error that reaches a
+`match` whose type cannot hold it (a `string`, which is OCaml's `char
+list`) is raised as it is, saying what it was, and not only where it
+ended up.
+
+### What an `Any` may be
+
+When a definition is declared, each cast from `Any` to a type `T` in it
+is looked at (`GradualTyping.casts_that_may_fail`, warned about in
+`vernac/declare.ml`): the value is followed back, through `match`es,
+`let`s and the definitions it calls, to the casts that made it an `Any`,
+which give the types it may have been made from. Each of those that is
+not consistent with `T` is a run-time error whenever the value is one,
+and is reported, with the definition where it was made an `Any`:
+
+```
+Warning:
+respond: start_of request is an Any that may be
+a string (made an Any in start_of), and it is used as an N. A string is never
+an N: where it is one, this is a run-time error, "expected an N,
+but got a string". It may also be an N (made an Any in start_of), which is
+fine. [gradual-may-fail,vernacular,default]
+```
+
+A value whose origin is not known, an argument of type `Any`, `?`, what
+a recursive function computes, is not reported. A theorem whose subject
+is such a cast gets the warning too: it holds for the [raise] the cast
+is, and so says nothing for those values.
+`examples/example_projects/unchecked_counter` is `counter_server`
+without its parser, where the warning shows the counter failing for
+every count in a request; `test-suite/misc/soma_may_fail.sh` tests it.
 
 ## Architecture
 
