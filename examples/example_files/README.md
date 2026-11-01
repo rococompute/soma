@@ -1,58 +1,59 @@
 # Example files
 
-Small Soma programs, each a single file (with its `.proof` and `.lang`
-next to it, when it has them). Run one with `soma run` (in
-`_build/install/default/bin` once Soma is built), which prints the value
-of its last line, or, for a Sandbox program, runs its image:
+Small Soma programs, each in a folder of its name: `NAME/NAME.soma`, with
+`NAME.proof` and `NAME.lang` next to it when it has them. Run one with
+`soma run` (in `_build/install/default/bin` once Soma is built), which
+prints the value of its last line, or, for a Sandbox program, runs its
+image:
 
 ```sh
-soma run examples/example_files/hello.soma
+soma run examples/example_files/hello/hello.soma
 ```
 
 `soma build` checks one, deletes the files that checking makes, and keeps
 (and prints) the image of a Sandbox program;
 `soma build -v` first prints the value of each line.
 
-- `hello.soma`: hello world.
-- `string_formatting.soma`: `to_string` on strings, numbers and lists, and
+- `hello/`: hello world.
+- `string_formatting/`: `to_string` on strings, numbers and lists, and
   a `greet` that accepts any of them.
-- `compile_time_error.soma`: a wrong argument is rejected when the program
+- `compile_time_error/`: a wrong argument is rejected when the program
   is checked, before it runs.
-- `run_time_error.soma`: the same mistake with an `Any` parameter is
+- `run_time_error/`: the same mistake with an `Any` parameter is
   accepted, and fails when the program runs: `soma run` prints the value
   as far as it was computed, `"Hello, " ++ raise`, and the error,
   `Run-time error: expected a string, but got 42 : nat.`
-- `basic_fibonacci.soma`: the textbook recursive `fib`, with `Recursive`
+- `basic_fibonacci/`: the textbook recursive `fib`, with `Recursive`
   and `match`.
-- `gradual_fibonacci.soma`: a linear-time `fib`, first with its types
+- `gradual_fibonacci/`: a linear-time `fib`, first with its types
   inferred as `nat`, then with them written as Stdlib's binary `N` for large
   results.
-- `recursive_countdown.soma`: why a recursive call on `n - 1` is rejected,
+- `recursive_countdown/`: why a recursive call on `n - 1` is rejected,
   and the `Succ m` countdown that is accepted.
-- `type_functions.soma`: functions from types to types. `f` swaps
+- `type_functions/`: functions from types to types. `f` swaps
   ints and strings, `g` turns ints into even ints (a number with a proof
   that it is even), and `h` and `j` take arguments of the types they
   compute. The types are passed as codes (`Int`, `Str`), since a function
   cannot ask a type what it is. `type_functions.proof` proves that `j`
   cannot be given an odd number, and that it returns a larger number for
   any number above 1.
-- `macros.soma`: macros, defined in `macros.lang` next to it, which is
+- `macros/`: macros, defined in `macros.lang` next to it, which is
   read first: `pipe` threads a value through functions, `swap` swaps two
   arguments, and `repeat` builds a string while the program is checked.
   `pow8 x` is defined as `pipe x square square square`, and
   `macros.proof` proves that it is `x ^ 8`.
-- `sqrt2_irrational.soma` and `.proof`: a proof that the square root of 2
+- `sqrt2_irrational/`: a proof that the square root of 2
   is irrational (`irrational (sqrt 2)`, with `irrational` defined in the
   `.soma`), top down: the theorem first, then a proof that reduces it with
   `enough` to the rationals, to whole numbers, and to "`n * n` even means
   `n` even". `lia`, `nia` and `lra` do the arithmetic.
-- `sqrt2_irrational_bottom_up.soma` and `.proof`: the same proof bottom
+- `sqrt2_irrational_bottom_up/`: the same proof bottom
   up, as separate named lemmas proved before the theorem that uses them.
-- `reason_components.soma`: React components with JSX
+- `reason_components/`: React components with JSX
   (`Require Import JSX.`): typed props, an untyped (`Any`) prop checked
   when the page is built, a fragment, rendered to HTML. What is proved
   about them (`Greeting` escapes any name) is in `reason_components.proof`.
-- `reason_counter.soma`: a counter app (state, actions, a view);
+- `reason_counter/`: a counter app (state, actions, a view);
   `reason_counter.proof` proves that its count stays within a limit,
   whatever buttons are clicked. Only the theorems have types.
 
@@ -62,19 +63,19 @@ reads it after the program and checks them, and fails if one does not
 hold. A proof can be written as checked sentences (`Take x : nat.`,
 `We need to show that ...`, `We conclude that ...`; see GRADUAL.md), as
 in `macros.proof` and `type_functions.proof`.
-- `mirage_*.soma`: MirageOS unikernels. A program that has
-  `Require Import Sandbox.` is built into an image, `<name>.hvt`, by `soma build`,
+- `mirage_*/`: MirageOS unikernels. A program that has
+  `Require Import Sandbox.` is built into an image, `<name>.hvt` next to it, by `soma build`,
   which says how to run it (see the Sandbox section of GRADUAL.md):
-  - `mirage_minimal.soma`: the smallest unikernel, one line printed.
-  - `mirage_minimal_web_server.soma`: the smallest web server, one page.
-  - `mirage_hello.soma`: console output and a countdown with `sleep`.
-  - `mirage_clock.soma`: the time of day every second, `forever`.
-  - `mirage_http_server.soma`: an HTTP server, with `serve`, `now` and
+  - `mirage_minimal/`: the smallest unikernel, one line printed.
+  - `mirage_minimal_web_server/`: the smallest web server, one page.
+  - `mirage_hello/`: console output and a countdown with `sleep`.
+  - `mirage_clock/`: the time of day every second, `forever`.
+  - `mirage_http_server/`: an HTTP server, with `serve`, `now` and
     `random`.
-  - `mirage_supervised.soma`: a server with a restart policy
+  - `mirage_supervised/`: a server with a restart policy
     (`soma run --supervise`); `mirage_supervised.proof` proves what the
     policy does.
-  - `mirage_fetch.soma`: fetches a page from the server, with `args`,
+  - `mirage_fetch/`: fetches a page from the server, with `args`,
     `fetch` and exit codes.
 
   `dev/mirage-check.sh` builds and runs them all.

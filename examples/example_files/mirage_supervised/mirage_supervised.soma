@@ -1,6 +1,6 @@
 (** A supervised server: run with
 
-        soma run --supervise examples/example_files/mirage_supervised.soma
+        soma run --supervise examples/example_files/mirage_supervised/mirage_supervised.soma
 
     when the image stops, soma run asks [restart_policy] whether to run it
     again (theories/Soma/Orchestrate.v). This one is the default policy

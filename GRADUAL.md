@@ -88,7 +88,7 @@ included, without importing anything. A proof that does not hold fails the
 build, with its location in `FILE.proof`, and no `.vo` or MirageOS image is
 made; the theorems are part of the program's library. `soma build
 FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
-`examples/example_files/reason_counter.proof` and `examples/example_files/reason_components.proof` are
+`examples/example_files/reason_counter/reason_counter.proof` and `examples/example_files/reason_components/reason_components.proof` are
 examples; `test-suite/misc/soma_proof.sh` tests it.
 
 ### Proof sentences
@@ -197,7 +197,7 @@ Macros are in scope only where they are asked for:
   (`syntax`, `App`, ...) is only in scope there: a `.lang` file is loaded in
   a module of its own that imports it.
 
-`examples/example_files/macros.lang` and `examples/example_files/macros.soma` are an example;
+`examples/example_files/macros/macros.lang` and `examples/example_files/macros/macros.soma` are an example;
 `test-suite/misc/soma_macros.sh` tests it.
 
 ### Projects: `Import` compiles what it imports
@@ -963,18 +963,18 @@ library proves all three (`default_never_reruns_deterministic`,
 program's `restart_policy` (or `default_policy 3 1024`) what to do: the
 outcome is given to it as a term of Soma and the decision evaluated by
 Soma, so that what runs is the policy that is proved. A run stopped from
-outside ends supervision. `examples/example_files/mirage_supervised.soma`
+outside ends supervision. `examples/example_files/mirage_supervised/mirage_supervised.soma`
 is a server with its own policy, whose `.proof` proves that it never runs
 again a failed cast, stops after 5 restarts and asks for at most 512 MB;
 `dev/mirage-check.sh` checks a run out of memory in 64 MB, run again with
 128 (`supervised`).
 
 ```sh
-soma run examples/example_files/mirage_http_server.soma              # prints its IP
-soma run examples/example_files/mirage_fetch.soma -- --arg=<that IP>
+soma run examples/example_files/mirage_http_server/mirage_http_server.soma              # prints its IP
+soma run examples/example_files/mirage_fetch/mirage_fetch.soma -- --arg=<that IP>
 ```
 
-`dev/mirage-check.sh` builds the examples (`examples/example_files/mirage_*.soma`), boots
+`dev/mirage-check.sh` builds the examples (`examples/example_files/mirage_*/`), boots
 each image and checks its console and exit code, the network cases with one
 unikernel serving and another fetching from it.
 
@@ -1030,7 +1030,7 @@ type `S`, starts at `init`, changes with `update : A -> S -> S` on each
 action, and shows it with `view : S -> element A`, whose events produce
 actions. `state_after app actions` is the state after a list of actions,
 what a theorem about the app's behavior is about.
-`examples/example_files/reason_counter.soma` proves that a counter stays within its
+`examples/example_files/reason_counter/reason_counter.soma` proves that a counter stays within its
 limit whatever buttons are clicked, with no type annotation outside the
 theorems.
 

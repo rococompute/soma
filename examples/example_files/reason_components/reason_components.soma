@@ -4,7 +4,7 @@
     with the prop [name], and [<> ... </>] is a fragment. Running the
     program prints its last value, the page as HTML:
 
-        soma run examples/example_files/reason_components.soma
+        soma run examples/example_files/reason_components/reason_components.soma
 
     What is proved about the components, such as [Greeting] escaping any
     name, is in reason_components.proof, which building or running this
