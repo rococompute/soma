@@ -1,7 +1,0 @@
-(** What Soma takes facts.lean to prove: theorems about series.soma's
-    functions. Lean checks each, before Soma takes it, against Soma's
-    definitions, which Soma translates to Lean. *)
-Import series.
-
-sum_to_formula : forall n, 2 * sum_to n = n * (n + 1).
-fib_le_pow : forall n, fib n <= 2 ^ n.

@@ -598,8 +598,9 @@ and structural `Fixpoint`s, a variable matched being written as its pattern
 in its branch so that Lean sees the recursion is structural. The rest is
 refused, saying what. To Soma's kernel, a theorem is an axiom, trusted as
 Lean's kernel, the axioms Lean's proof uses, and the translation are, which
-`soma explore` lists. `examples/example_projects/lean_facts` is an example;
-`test-suite/misc/soma_lean.sh` is skipped without Lean.
+`soma explore` lists. `test-suite/misc/soma_lean.sh` tests it, and is
+skipped without Lean.
+
 ### Run-time errors
 
 A cast that fails reduces to `raise`, which keeps nothing but its type, and
