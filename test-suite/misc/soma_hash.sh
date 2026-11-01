@@ -133,6 +133,29 @@ O="$(contract ouse.soma ouse.useo)"
 printf 'let f x = x ^ "!"\n' > o.ml
 differ 'an OCaml module with other source' "$O" "$(contract ouse.soma ouse.useo)"
 
+# * Another proof compiles nothing else; the hashes say what it now rests on,
+# of the compiled files as they are
+mkdir cached; cd cached
+echo 'Axiom unused : 1 = 1.' > a.soma
+printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > a.proof
+printf 'Import a.\nused : 1 = 1 := t.\n' > b.soma
+printf 'Import b.\nfinal : 1 = 1 := used.\n' > main.soma
+soma build main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+BVO="$(cksum .soma-cache/b.vo)"
+C="$(contract main.soma main.final)"
+printf 'Theorem t : 1 = 1.\nProof. exact unused. Qed.\n' > a.proof
+soma build main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q 'Compiling a.soma' out.log
+if grep -q 'Compiling b.soma' out.log; then echo "another proof compiled an importer"; cat out.log; exit 1; fi
+[ "$BVO" = "$(cksum .soma-cache/b.vo)" ]
+differ 'a cached importer of what now rests on an axiom' "$C" "$(contract main.soma main.final)"
+line main.soma main.final | grep -q 'assumes a.unused$'
+# a statement is not a proof
+printf 'Theorem t : 2 = 2.\nProof. reflexivity. Qed.\nTheorem s : 1 = 1.\nProof. reflexivity. Qed.\n' > a.proof
+if soma build main.soma > out.log 2>&1; then echo "an importer took a statement that went away"; exit 1; fi
+grep -q 'Compiling b.soma' out.log
+cd "$TMP"
+
 # * Equal hashes say two definitions are the same, and not that a file imports
 # the same: a notation is not in the kernel's terms
 printf 'x1 : nat := 5.\nx2 : nat := 6.\nNotation "!!" := x1.\n' > nota.soma

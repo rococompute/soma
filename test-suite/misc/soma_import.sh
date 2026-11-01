@@ -98,7 +98,7 @@ grep -q '= 5' out.log
 # a stamp holds the digests of the libraries from elsewhere (Stdlib, ...)
 # that the file was compiled with: one that changed (an upgrade of Soma)
 # compiles the file again, and so does a stamp of an older format
-grep -q '^soma-stamp 2$' .soma-cache/show.stamp
+grep -q '^soma-stamp 3$' .soma-cache/show.stamp
 grep -q '^library Corelib.Init.Prelude ' .soma-cache/show.stamp
 sed -i.bak 's/^\(library Corelib.Init.Prelude\) .*/\1 0/' .soma-cache/show.stamp
 soma build main.soma > out.log 2> err.log
@@ -126,3 +126,35 @@ if soma build mods.soma > out.log 2> err.log; then
   echo "importing a module and a file in one command did not fail"; exit 1
 fi
 grep -q 'Import modules in scope and libraries or files in separate commands.' err.log
+
+# Another proof compiles the file and nothing that imports it. What else a
+# file says does: a notation is no proof, and goes on through what imports it.
+mkdir "$TMP/proofs"; cd "$TMP/proofs"
+printf 'x1 : nat := 1.\nx2 : nat := 2.\nNotation "!!" := x1.\n' > a.soma
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > a.proof
+printf 'Import a.\nview : nat := !!.\n' > b.soma
+printf 'Import b.\nfinal : nat := view.\nfinal.\n' > main.soma
+soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q '= 1' out.log
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > a.proof
+soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q 'Compiling a.soma' out.log
+if grep -q 'Compiling b.soma' out.log; then echo "another proof compiled an importer"; cat out.log; exit 1; fi
+sed -i.bak 's/:= x1\./:= x2./' a.soma
+soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q 'Compiling b.soma' out.log
+grep -q '= 2' out.log
+# a change that leaves the file in between compiled the same still reaches past
+# it: Rocq would not load what imports it otherwise
+mkdir "$TMP/chain"; cd "$TMP/chain"
+printf 'x : nat := 1.\n' > a.soma
+printf 'Import a.\ny : nat := 7.\n' > b.soma
+printf 'Import b.\nz : nat := y.\n' > c.soma
+printf 'Import c.\nz.\n' > main.soma
+soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q '= 7' out.log
+printf 'x : nat := 1.\nspare : nat := 9.\n' > a.soma
+soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q 'Compiling b.soma' out.log
+grep -q 'Compiling c.soma' out.log
+grep -q '= 7' out.log

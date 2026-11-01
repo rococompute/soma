@@ -225,9 +225,12 @@ is used while its stamp holds: its sources unchanged, what it imports up
 to date and unchanged since, and the libraries the same, so that an
 upgrade of Soma compiles the project again rather than failing on a
 library compiled with the old one. A stamp of an older format is out of
-date. So a change to a file compiles it again, and what
-imports it only when its `.vo` changed (a `.vo` keeps locations, so a
-change that moves lines does). Each file is checked once per
+date. So a change to a file compiles it again, and what imports it only when
+its `.vo` changed, apart from its proofs: another proof of a statement compiles
+nothing else, as no importer sees the body of a proof, and Rocq keeps proofs in
+a segment of their own that its check of a `.vo`'s imports does not read. A `.vo`
+keeps locations, so a change that moves lines does compile what imports it. Each
+file is checked once per
 compilation. A failed compilation leaves the cache as it was, and the
 import fails with `Cannot import X.Y: X/Y.soma does not compile (its
 errors are above).`, after its errors. A file that imports itself, through
@@ -410,7 +413,7 @@ libraries and `FILE.ml`'s digest. A constructor's name enters its type's hash,
 and the type's own does not: a `color` of `Red | Green` is not `bool`.
 
 **What the hash does not decide.** It is not the cache, which stays the bytes of
-files and their `.vo`s (`soma-stamp 2`), for two reasons:
+files and their `.vo`s without their proofs (`soma-stamp 3`), for two reasons:
 
 - A file does more than define. A notation, an instance, a hint or a tactic is
   not in the kernel's terms, and changes what its importers elaborate to. With

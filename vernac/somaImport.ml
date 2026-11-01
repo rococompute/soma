@@ -19,7 +19,8 @@
    being built (vernac/somaProject.ml), or else the program's folder
    ($SOMA_PROJECT_ROOT for the compilations it starts). What is compiled
    goes to its .soma-cache, with a stamp: the hash of the source (with
-   its .proof and .lang) and the digests of what it imports, as compiled.
+   its .proof and .lang) and the digests of what it imports, as compiled,
+   without their proofs.
    A cached file is used while its stamp holds: its source unchanged, and
    what it imports up to date and the same as when it was compiled. A
    file is compiled by a process of its own, which compiles what it
@@ -218,6 +219,22 @@ let source_hash src =
 
 let digest f = Digest.to_hex (Digest.file f)
 
+(* What an importer of a compiled file depends on: all but its proofs. Its
+   "library" segment has what Rocq identifies a library by, and will not load
+   an importer with another of: its definitions, statements, notations,
+   instances and hints, with their locations. Its "summary" segment has the same
+   digests of what it imports, so a change goes on through a file that was
+   compiled again to the same result. Its "opaques" segment has the proofs, whose
+   bodies no importer sees: another proof of a statement compiles nothing else. *)
+let interface_digest vo =
+  match ObjFile.open_in ~file:vo with
+  | exception (Sys_error _ | CErrors.UserError _) -> digest vo
+  | ch ->
+    Fun.protect ~finally:(fun () -> ObjFile.close_in ch) (fun () ->
+        let segments = ObjFile.segments ch in
+        let hash name = (CString.Map.get name segments).ObjFile.hash in
+        Digest.to_hex (Digest.string (hash "summary" ^ hash "library")))
+
 (* The digests of the files of libraries, each read once *)
 let digests : (string, string) Hashtbl.t = Hashtbl.create 97
 
@@ -229,7 +246,7 @@ let library_file dir = match Loadpath.locate_absolute_library dir with
   | Ok f -> Some f
   | Error _ -> None
 
-let stamp_format = "soma-stamp 2"
+let stamp_format = "soma-stamp 3"
 
 (* A stamp: its format, "source HASH", then "import PATH DIGEST" for each import of
    the project, and "library NAME DIGEST" for each library from elsewhere
@@ -385,7 +402,7 @@ let rec ensure ?loc p path src =
             | None -> false) libraries &&
         List.for_all (fun (i, d) -> match locate ?loc p i with
             | None -> false
-            | Some (q, i, s) -> ensure ?loc q i s; digest (vo_of q i) = d) imports
+            | Some (q, i, s) -> ensure ?loc q i s; interface_digest (vo_of q i) = d) imports
     in
     if not fresh then compile ?loc p path src;
     Hashtbl.replace ensured id ()
@@ -511,6 +528,6 @@ let write_stamp () =
         | Some f when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
         | _ -> None) (Library.loaded_libraries ()) in
     let lines = stamp_format :: ("source " ^ source_hash src) ::
-                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ digest vo) !imported @ libraries in
+                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @ libraries in
     Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"))
   | _ -> ()
