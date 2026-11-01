@@ -20,8 +20,21 @@ type kind =
   | Worker of { init : unit -> unit; loop : unit -> unit }
   | Compile
   | Repl
+  | Get
+
+(* soma get [PATH[@VERSION]] (vernac/somaDeps.ml) *)
+let get args =
+  try
+    match args with
+    | [] -> SomaDeps.get None
+    | [spec] -> SomaDeps.get (Some spec)
+    | _ -> error "soma get takes one path" ()
+  with e when CErrors.noncritical e ->
+    Format.eprintf "Error:@\n%s@\n%!" (Pp.string_of_ppcmds (CErrors.print_no_report e));
+    exit 1
 
 let start kind args = match kind with
+  | Get -> get args
   | Worker { init; loop } -> WorkerLoop.start ~init ~loop args
   | Compile -> Coqc.main args
   | Repl -> Coqtop.(start_coq coqtop_toplevel args)
@@ -37,6 +50,7 @@ let () =
       match kind with
       | "--kind=compile" -> Compile
       | "--kind=repl" -> Repl
+      | "--kind=get" -> Get
       | "--kind=proof" -> Worker { init = WProof.init_stdout; loop = WProof.main_loop }
       | "--kind=query" -> Worker { init = WQuery.init_stdout; loop = WQuery.main_loop }
       | "--kind=tactic" -> Worker { init = WTactic.init_stdout; loop = WTactic.main_loop }

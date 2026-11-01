@@ -740,13 +740,17 @@ let full_extr opaque_access f (refs,mps) =
   let () = warns table in
   print_structure_to_file table (mono_filename f) false struc
 
+(* Soma: a dependency is checked, not run: what writes a file is refused in
+   its compilation (vernac/somaImport.ml). Printing is not. *)
 let full_extraction ~opaque_access f lr =
+  if Option.has_some f then SomaImport.refuse_in_dependency "Extraction";
   full_extr opaque_access f (locate_refs lr)
 
 (*s Separate extraction is similar to recursive extraction, with the output
    decomposed in many files, one per Rocq .v file *)
 
 let separate_extraction ~opaque_access lr =
+  SomaImport.refuse_in_dependency "Separate Extraction";
   let table = init ~modular:true ~library:false () in
   let refs,mps = locate_refs lr in
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
@@ -791,6 +795,7 @@ let simple_extraction ~opaque_access r =
   \verb!(Recursive) Extraction Library! [M]. *)
 
 let extraction_library ~opaque_access is_rec CAst.{loc;v=m} =
+  SomaImport.refuse_in_dependency (if is_rec then "Recursive Extraction Library" else "Extraction Library");
   let table = init ~modular:true ~library:true () in
   let dir_m =
     (* XXX WTF is going on here? *)
@@ -846,6 +851,7 @@ let remove f =
   if Sys.file_exists f then Sys.remove f
 
 let extract_and_compile ~opaque_access l =
+  SomaImport.refuse_in_dependency "Extraction TestCompile";
   if lang () != Ocaml then
     CErrors.user_err (Pp.str "This command only works with OCaml extraction");
   let f = Filename.temp_file "testextraction" ".ml" in

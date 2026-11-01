@@ -165,7 +165,9 @@ let rocq_binary () =
 (* the environment of a compilation: none of Soma's own variables, which
    are about the program *)
 let clean_env () =
-  Array.of_list (List.filter (fun v -> not (String.starts_with ~prefix:"SOMA_" v))
+  Array.of_list (List.filter (fun v -> not (String.starts_with ~prefix:"SOMA_" v)
+                                       (* a library a dependency names is compiled as a dependency *)
+                                       || String.starts_with ~prefix:(SomaImport.prefix_var ^ "=") v)
                    (Array.to_list (Unix.environment ())))
 
 let wait pid =
@@ -321,6 +323,7 @@ let library package source =
              else Filename.concat base path)
     | s -> s in
   List.iter (fun (logical, dir) ->
+      SomaImport.record_load_path logical dir;
       Loadpath.add_vo_path { Loadpath.unix_path = dir; coq_path = Libnames.dirpath_of_string logical;
                              implicit = false; recursive = true; installed = false })
     (ensure ~package source)

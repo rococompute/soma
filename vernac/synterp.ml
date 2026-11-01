@@ -378,6 +378,22 @@ let with_synterp_state =
   in
   { VernacControl.with_local_state }
 
+(* Soma: the commands that write where their argument says, in a compilation
+   of a dependency (vernac/somaImport.ml). The Extraction commands that write
+   are the plugin's, which asks the same. *)
+let refuse_writes_in_dependency cmd =
+  List.iter (fun { CAst.v; _ } -> match v with
+      | ControlRedirect _ -> SomaImport.refuse_in_dependency "Redirect"
+      | ControlProfile (Some _) -> SomaImport.refuse_in_dependency "Profile"
+      | _ -> ()) cmd.control;
+  match cmd.expr with
+  | VernacSynPure (VernacPrint (PrintUniverses { file = Some _; _ })) ->
+    SomaImport.refuse_in_dependency "Print Universes"
+  | VernacSynterp (VernacSetOption (_, (["Extraction"; "Output"; "Directory"] | ["NativeCompute"; "Profile"; "Filename"] as key), OptionSetString _)) ->
+    SomaImport.refuse_in_dependency ~does:"says where files are written"
+      ("Set " ^ String.concat " " key)
+  | _ -> ()
+
 let rec synterp ~intern ?loc ~atts v =
   match v with
   | VernacSynterp v0 ->
@@ -419,12 +435,13 @@ let rec synterp ~intern ?loc ~atts v =
          [Require Import X], compiling [X] first when it is a file of the
          program's project (vernac/somaImport.ml) *)
       let in_scope (qid, _) = match Nametab.locate_module qid with
-        | _ -> true
+        | mp -> not (SomaImport.applies ?loc () && SomaImport.names_another_library ?loc qid mp)
         | exception Not_found -> false in
       if SomaImport.applies ?loc () && not (List.for_all in_scope qidl) then begin
         if List.exists in_scope qidl then
           user_err ?loc Pp.(str "Import modules in scope and libraries or files in separate commands.");
-        ignore (SomaImport.prepare ?loc (List.map fst qidl));
+        let names = SomaImport.prepare ?loc (List.map fst qidl) in
+        let qidl = List.map2 (fun (_, filter) qid -> qid, filter) qidl names in
         let needed, modrefl = synterp_require ~intern None (Some export) qidl in
         EVernacRequire (needed, modrefl, Some export, qidl)
       end else
@@ -499,6 +516,8 @@ and synterp_load ~intern verbosely fname =
   EVernacLoad(verbosely, entries)
 
 and synterp_control ~intern CAst.{ loc; v = cmd } =
+  Loc.set_current_command_loc loc;
+  refuse_writes_in_dependency cmd;
   let fn expr =
     with_generic_atts ~check:true cmd.attrs (fun ~atts ->
         synterp ~intern ?loc ~atts cmd.expr)

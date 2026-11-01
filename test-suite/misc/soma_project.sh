@@ -56,6 +56,51 @@ refused 'soma.toml:4: unterminated string' 'a TOML error'
 manifest 'description = 1979-05-27'
 refused 'dates and times are not supported' 'a date'
 
+# [dependencies] is read without the network: each key a path, each value a
+# version or a checkout
+deps() { printf '[project]\nname = "shop"\nversion = "0.1.0"\n[dependencies]\n%s\n' "$1" > soma.toml; }
+deps 'owner/repo = "1.2.3"'
+refused "soma.toml:5: expected = after the key owner, found '/'" 'a path out of quotes'
+deps 'owner.repo = "1.2.3"'
+refused 'soma.toml:5: owner is no path. A dependency path is in quotes' 'a dotted key'
+deps 'owner = "1.2.3"'
+refused 'soma.toml:5: owner is no path' 'one segment'
+deps '"https://github.com/owner/repo" = "1.2.3"'
+refused 'is a URL. A dependency is a path: "owner/repo" = "1.2.3"' 'a URL'
+deps '"owner/repo/" = "1.2.3"'
+refused 'is no path. A path is segments separated by /' 'an empty segment'
+deps '"../repo" = "1.2.3"'
+refused 'is no path. A path is segments separated by /' 'a folder'
+deps '"owner/bad seg" = "1.2.3"'
+refused '"bad seg" is no path segment' 'a space'
+deps '"owner/repo/sub" = "1.2.3"'
+refused 'a subdirectory of a repository is not supported yet' 'a subdirectory'
+deps '"owner/repo" = "1.0"'
+refused 'soma.toml:5: "1.0" is no semantic version' 'two numbers'
+deps '"owner/repo" = "1.2.3+build.5"'
+refused 'has build metadata. A dependency version is a tag: "owner/repo" = "1.2.3"' 'build metadata'
+deps '"owner/repo" = "2.0.0"'
+refused 'Major 2 and above is "owner/repo/v2" = "2.0.0"' 'major 2 at no suffix'
+deps '"owner/repo/v2" = "1.4.0"'
+refused '"owner/repo/v2" is major 2, and "1.4.0" is major 1' 'a major that disagrees'
+deps '"owner/repo/v1" = "1.4.0"'
+refused 'Major 0 and 1 have no suffix: "owner/repo"' 'a suffix v1'
+deps '"owner/repo" = 1'
+refused '"owner/repo" is an integer. A dependency is a version' 'an integer'
+deps '"owner/wip" = { path = "../wip", version = "1.0.0" }'
+refused 'has path and version' 'a checkout with a version'
+deps '"owner/wip" = { version = "1.0.0" }'
+refused '"owner/wip" has no path' 'a table with no path'
+deps '"owner/wip" = { path = "../no-such-folder" }'
+refused '"../no-such-folder" has no soma.toml' 'a folder that is no project'
+deps '"owner/wip" = { path = "..", name = "other" }'
+refused 'name is not a key of a checkout' 'an unknown key in a checkout'
+printf '[project]\nname = "shop"\nversion = "0.1.0"\n[dependencies]\n"owner/repo" = "1.0.0"\n"github.com/owner/repo" = "1.0.0"\n' > soma.toml
+refused 'one path, written twice' 'one path two ways'
+# none, or an empty table, is no dependency
+manifest '[dependencies]'
+soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+
 # a pre-release and build metadata are a version
 printf '[project]\nname = "shop"\nversion = "1.0.0-rc.1+build.5"\n' > soma.toml
 soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }

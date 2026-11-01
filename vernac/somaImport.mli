@@ -15,10 +15,27 @@
 val applies : ?loc:Loc.t -> unit -> bool
 
 (** [prepare ?loc qids], for an [Import] of names that are no modules in
-    scope: those that are files of the program's project are compiled into
-    its .soma-cache when they are not up to date, and the cache is put in
-    the load path. Whether any is such a file. *)
-val prepare : ?loc:Loc.t -> Libnames.qualid list -> bool
+    scope: those that are files of the program's project, or of a dependency
+    it names, are compiled into its .soma-cache when they are not up to date,
+    and the cache is put in the load path. The names to require, in order:
+    those of their libraries. *)
+val prepare : ?loc:Loc.t -> Libnames.qualid list -> Libnames.qualid list
+
+(** Does [qid], a file of this project, resolve to [mp], a library of the
+    same last name that is not it? *)
+val names_another_library : ?loc:Loc.t -> Libnames.qualid -> Names.ModPath.t -> bool
+
+(** For what imports a file that named a Rocq library: that library's
+    logical name and folder, kept in the build's cache *)
+val record_load_path : string -> string -> unit
+
+(** The variable a compilation is a dependency's by, which is set to its name *)
+val prefix_var : string
+
+(** An error, in a compilation of a dependency, saying that [command] [does]
+    ("writes a file") and works when the project is built on its own; in any
+    other compilation, nothing. *)
+val refuse_in_dependency : ?does:string -> string -> unit
 
 (** Written at the end of a compilation that [prepare] started: its stamp,
     the hash of its source and the digests of what it imported *)
@@ -32,7 +49,7 @@ val is_folder_rules : string -> bool
     a path in it is relative to, when no location says *)
 val source_file : string option ref
 
-(** The cache of the project of the file being compiled, ROOT/.soma-cache *)
+(** The cache of the project being built, ROOT/.soma-cache *)
 val project_cache : unit -> string
 
 (** [folder_rules file]: the rules of the folders of the project from its

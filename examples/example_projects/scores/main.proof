@@ -1,0 +1,7 @@
+(** From tally's own theorem, which Soma's kernel checked when it compiled
+    tally *)
+Theorem passing_le_all : forall scores, passing scores <= length scores.
+Proof.
+  intros scores.
+  apply count_if_le_length.
+Qed.

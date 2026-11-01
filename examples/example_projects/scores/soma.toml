@@ -1,0 +1,7 @@
+[project]
+name = "scores"
+version = "0.1.0"
+description = "How many scores pass, counted by the tally project it depends on"
+
+[dependencies]
+"example/tally" = { path = "../tally" }

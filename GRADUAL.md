@@ -275,8 +275,9 @@ soma.toml:2: "My-shop" is no project name: a name is lowercase letters, digits
 and _, beginning with a letter (...), 64 at most: name = "my_shop"
 soma.toml:3: "1.0" is no semantic version (https://semver.org): it is
 MAJOR.MINOR.PATCH, three numbers, as 0.1.0 or 1.2.3
-soma.toml:4: ocaml is not something soma.toml says (yet). soma.toml has one
-table, [project]: name (...), version (...), description (...).
+soma.toml:4: ocaml is not something soma.toml says (yet). soma.toml has
+[project]: name (...), version (...), description (...), and [dependencies]
+("owner/repo" = "1.2.3").
 ```
 
 `soma extract` names the opam package after the project, and gives it its
@@ -285,13 +286,104 @@ Soma depends on no TOML library), without dates and times. Every project
 under `examples/example_projects` has one; `test-suite/misc/soma_project.sh`
 tests it.
 
+### Dependencies: other projects, by their git tags
+
+A project depends on other Soma projects as a Go module does: by the path
+it is fetched from, and a version that is a tag there.
+
+```toml
+[dependencies]
+"owner/maps" = "1.2.3"                    # https://github.com/owner/maps.git, tag v1.2.3
+"gitlab.com/group/shop/v2" = "2.0.1"      # https://gitlab.com/group/shop.git, tag v2.0.1
+"owner/wip" = { path = "../wip" }         # a folder on disk, for a project being edited
+```
+
+In a file, a dependency is its own `[project] name`, not its path, as
+`Import` takes a qualid, which has no `/`: `Import maps.gmap.` is
+`gmap.soma` of the project whose `name` is `maps`, and `Import maps.a.b` is
+its `a/b.soma`. `soma get owner/maps@1.2.3` writes that line and resolves;
+`soma get owner/maps` looks up the greatest tag of the path's major, and
+`soma get` alone resolves what is written, from the tags rather than
+`soma.lock` (`vernac/somaDeps.ml`).
+
+**Paths.** A key is in quotes (`/` is no bare key of TOML). `owner/repo` is
+on `github.com`, and `github.com/owner/repo` is the same path. A first
+segment with a `.` is the host, and the rest may be subgroups. Major 2 and
+above is the suffix `/vN`, a path of its own, so `2.0.0` is never taken for
+a later `1.9.0`. A subdirectory of a repository is not supported: `soma.toml`
+is at the root of the tag. Two majors of one project have one `name`, so a
+build cannot have both yet.
+
+**Versions.** The value is a semantic version, without build metadata. Its
+tag is `vVERSION` or `VERSION`; if both exist they are one commit.
+
+**Selection.** Resolving runs once, before any file is compiled. The version
+of a path is the greatest that anything asks for (minimal version selection,
+as Go's), except that a version this project names is the one it gets, which
+must be at least what its dependencies ask for. A checkout is used whatever
+they ask for, as Go's `replace` is, and only a project on disk can name one.
+A cycle of paths, or two selected projects of one `name`, is an error, as is a
+dependency named as a file or folder of the project that names it. Each error
+says what to write.
+
+**`soma.lock`**, next to `soma.toml`, has the commit of each version selected.
+It is written by Soma, and committed. A build whose `soma.lock` matches its
+`soma.toml` uses those commits, and the network only for one that is not on
+disk, so a moved tag changes nothing until `soma get`, which says it moved.
+Otherwise it resolves the tags and writes `soma.lock`.
+
+**Sources and what they compile to.** A source is in
+`~/.cache/soma/src/PATH@VERSION-COMMIT/` (`$XDG_CACHE_HOME/soma`), without
+`.git`, shared by all projects, and not written to. It compiles into the
+`.soma-cache/.deps` of the project being built. A dependency is compiled as a
+project of its own, with its folder rules and its proofs, and its imports are
+its own files, then the dependencies its `soma.toml` names. A dependency of a
+dependency cannot be imported without naming it, which the error says how to.
+Its libraries are named after it, `maps.gmap`, so that the `util.soma` of two
+projects are two libraries. A dependency's Rocq libraries are compiled once,
+in the build's cache, and what imports it need not name them.
+
+**A dependency is checked, not run.** Fetching runs nothing: no hooks and no
+submodules, and git never asks for a password. Compiling a dependency, fetched
+or a checkout, with its `.proof`, its own imports and the Rocq libraries it
+names, refuses each command whose argument says where to write:
+
+```
+maps.gmap:5: Redirect writes a file. A dependency is checked, not run.
+Redirect works when that project is built on its own.
+```
+
+These are `Redirect`, `Profile "FILE"`, `Print Universes "FILE"`,
+`Extraction "FILE"`, `Separate Extraction`, `Extraction Library`, `Recursive
+Extraction Library`, `Extraction TestCompile`, and `Set` of `Extraction Output
+Directory` and `NativeCompute Profile Filename`. The gate is the role of the
+compilation and not the text of the repository: `soma build` or `soma extract`
+of that project on its own runs them, and so does this project of its own
+files. A file a library needs in order to check is in its repository, or its
+author's build makes it before the tag; who wants the OCaml names an `OCaml
+Library`, or extracts a program they trust. What prints stays (`Extraction d`,
+`Recursive Extraction d`, `Print Universes`).
+
+This is not a sandbox. `Declare ML Module` takes only libraries already
+installed, so a repository cannot load native code of its own, but such a
+plugin does what it does (micromega opens scratch files when it loads). An
+`OCaml Library` a dependency names is installed by opam when `main` uses it,
+and its `.ml` files run when the program does. Depend on what you would run.
+What it proves is checked by Soma's kernel, and `soma explore` reviews it with
+the program, escape hatches included.
+
+`examples/example_projects/scores` depends on `../tally`;
+`test-suite/misc/soma_deps.sh` tests all of this, with local bare repositories
+in the place of hosts (git's `url.insteadOf`).
+
 ### The rules of a folder
 
 `X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their
 proofs, unless `X/X.soma` exists, whose `.lang` and `.proof` they then
 are. Every Soma file under `X/`, in its subfolders too, is compiled as if
 it started with `Import X.X`, after the rules of the folders around `X/`
-(the project's own, `ROOT/ROOT.lang`, first). So what the rules define,
+(the project's own first: `ROOT/NAME.lang`, by its `soma.toml`'s name, or
+`ROOT/ROOT.lang` without one). So what the rules define,
 macros and theorems included, is in scope in those files and their
 `.proof`s, and it is one library, compiled once into `.soma-cache` with
 its proofs checked, and recompiled when it changes, as any import

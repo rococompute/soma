@@ -28,7 +28,10 @@
 
    [soma extract FILE [-o DIR]] checks a program, as [soma run] does, and
    writes it as an OCaml project into DIR: its main extracted to OCaml,
-   with the OCaml modules and libraries it uses, which dune builds. *)
+   with the OCaml modules and libraries it uses, which dune builds.
+
+   [soma get [PATH[@VERSION]]] writes a dependency into soma.toml, and
+   resolves the project's dependencies into soma.lock (vernac/somaDeps.ml). *)
 
 open Rocqshim
 
@@ -47,6 +50,9 @@ Commands:
                               check; fails if the review finds an issue.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
+  get [PATH[@VERSION]]        Add a dependency to soma.toml ("owner/repo" = "1.2.3"; its
+                              greatest tag without a version), and resolve the project's
+                              dependencies into soma.lock.
   repl                        Start an interactive session, with FILE loaded if given.
   help                        Show help.
 
@@ -135,6 +141,8 @@ let created ~before ~start ~source dir =
       Filename.concat dir name <> source &&
       (* the cache of what the program imports (vernac/somaImport.ml) *)
       name <> ".soma-cache" &&
+      (* and of the versions of its dependencies (vernac/somaDeps.ml) *)
+      name <> "soma.lock" &&
       not (Sys.is_directory (Filename.concat dir name)) &&
       (* sources are not outputs, even when edited just before *)
       not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"; ".definition"; ".wasm"]) &&
@@ -815,6 +823,13 @@ let () =
   | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
+  | "get" :: args ->
+    let opts, _ = parse_opts [] in
+    let () = init opts [] in
+    let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
+    let pid = Unix.create_process prog (Array.of_list (prog :: "--kind=get" :: args))
+        Unix.stdin Unix.stdout Unix.stderr in
+    exit (exit_code (wait pid))
   | ("build" | "compile" as command) :: rest ->
     (* -v is soma's (rocq c's -v prints its version), before or after FILE *)
     let is_verbose a = a = "-v" || a = "--verbose" in

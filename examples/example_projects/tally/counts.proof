@@ -1,0 +1,9 @@
+(** A count is never more than there are items *)
+Theorem count_if_le_length : forall {A : Type} (test : A -> bool) (items : list A),
+  count_if test items <= length items.
+Proof.
+  intros A test items.
+  induction items as [| x rest IH]; simpl.
+  - lia.
+  - destruct (test x); simpl; lia.
+Qed.

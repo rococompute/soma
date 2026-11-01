@@ -1,0 +1,9 @@
+(** [tally] is a dependency of this project, in soma.toml, and this is its
+    file counts.soma. *)
+Import tally.counts.
+
+passes (score : nat) : bool := 50 <=? score.
+
+passing (scores : list nat) : nat := count_if passes scores.
+
+passing (40 :: 55 :: 90 :: 12 :: 50 :: nil).

@@ -378,6 +378,8 @@ and inline_table st =
 and keyval st t =
   let line = st.line in
   let keys = key st in
+  if peek st = Some '/' then
+    fail st "expected = after the key %s, found '/'. A key with a / is in quotes: \"%s/...\"" (dotted keys) (dotted keys);
   if peek st <> Some '=' then fail st "expected = after the key %s, found %s" (dotted keys) (shown (peek st));
   advance st;
   skip_ws st;

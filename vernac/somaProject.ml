@@ -24,7 +24,16 @@
    Rocq and OCaml, and to opam: lowercase letters, digits and _, as Rocq's
    and OCaml's names do not take -. The version is a semantic version,
    the project's own. Every key and table is checked: one Soma does not
-   know is an error rather than ignored, until Soma knows it. *)
+   know is an error rather than ignored, until Soma knows it.
+
+   [dependencies] has the projects it is built with, each key the path it is
+   fetched from and each value its version, or a checkout on disk:
+
+     [dependencies]
+     "owner/repo" = "1.2.3"
+     "owner/wip" = { path = "../wip" }
+
+   Reading them uses no network: vernac/somaDeps.ml resolves them. *)
 
 let file_name = "soma.toml"
 
@@ -79,6 +88,133 @@ let parse_version s =
   let major, minor, patch = numbers in
   Ok { major; minor; patch; pre; build }
 
+(* the numbers, then the pre-release: none is greater than any; identifier
+   by identifier, numbers by value and below others, and more of them greater *)
+let compare_version a b =
+  let rec pre a b = match a, b with
+    | [], [] -> 0
+    | [], _ -> -1
+    | _, [] -> 1
+    | x :: a, y :: b ->
+      let c = match numeric x, numeric y with
+        | true, true -> compare (int_of_string_opt x, x) (int_of_string_opt y, y)
+        | true, false -> -1
+        | false, true -> 1
+        | false, false -> compare x y in
+      if c <> 0 then c else pre a b in
+  let c = compare (a.major, a.minor, a.patch) (b.major, b.minor, b.patch) in
+  if c <> 0 then c else match a.pre, b.pre with
+    | [], [] -> 0
+    | [], _ -> 1
+    | _, [] -> -1
+    | a, b -> pre a b
+
+(* * What a dependency is fetched from
+
+   The path is an address, as Go's are: owner/repo is on github.com, a first
+   segment with a . is the host. It is not the name [Import] uses, which is
+   the dependency's own [project] name: a qualid has no / and no . inside a
+   component. Major 2 and above is the suffix /vN, a path of its own. *)
+
+type dependency_path = {
+  canonical : string;
+  url : string;
+  major : int option;
+}
+
+let example_line = "\"owner/repo\" = \"1.2.3\""
+
+let is_segment_char = function
+  | 'a'..'z' | 'A'..'Z' | '0'..'9' | '.' | '_' | '-' -> true
+  | _ -> false
+
+(* vN, with N a number that does not begin with 0, unless it is v0 *)
+let major_suffix s =
+  if String.length s < 2 || s.[0] <> 'v' then None
+  else
+    let n = String.sub s 1 (String.length s - 1) in
+    if numeric n && not (leading_zero n) then int_of_string_opt n else None
+
+let rec split_last = function
+  | [] -> assert false
+  | [x] -> [], x
+  | x :: r -> let p, l = split_last r in x :: p, l
+
+let parse_path s =
+  let contains_sub sub =
+    let n = String.length sub in
+    let rec at i = i + n <= String.length s && (String.sub s i n = sub || at (i + 1)) in
+    at 0 in
+  if contains_sub "://" then begin
+    let after = match String.index_opt s ':' with
+      | Some i -> String.sub s (i + 3) (String.length s - i - 3)
+      | None -> s in
+    let after = if Filename.check_suffix after ".git" then Filename.chop_suffix after ".git" else after in
+    let after = if String.starts_with ~prefix:"github.com/" after
+      then String.sub after 11 (String.length after - 11) else after in
+    Error (Printf.sprintf "%S is a URL. A dependency is a path: %S = \"1.2.3\"" s after)
+  end else if not (String.contains s '/') then
+    Error (Printf.sprintf "%s is no path. A dependency path is in quotes: %s" s example_line)
+  else
+    let segments = String.split_on_char '/' s in
+    if List.exists (fun x -> x = "" || x = "." || x = "..") segments then
+      Error (Printf.sprintf "%S is no path. A path is segments separated by /: %s" s example_line)
+    else match List.find_opt (fun x -> not (String.for_all is_segment_char x)) segments with
+      | Some bad -> Error (Printf.sprintf "%S is no path segment." bad)
+      | None ->
+        let host, rest = match segments with
+          | first :: rest when String.contains first '.' -> Some first, rest
+          | _ -> None, segments in
+        (* a suffix comes after owner/repo: owner/v2 is a repository named v2 *)
+        let base, major =
+          if List.length rest < 3 then rest, None
+          else
+            let base, last = split_last rest in
+            match major_suffix last with
+            | Some n -> base, Some n
+            | None -> rest, None in
+        match major with
+        | Some n when n < 2 ->
+          let without = String.concat "/" ((match host with Some h -> [h] | None -> []) @ base) in
+          Error (Printf.sprintf "%S has the suffix v%d. Major 0 and 1 have no suffix: %S = \"1.2.3\"" s n without)
+        | _ ->
+          let host_name = Option.default "github.com" host in
+          if host_name = "github.com" && List.length base <> 2 then
+            Error (Printf.sprintf "%S is no path on github.com, whose paths are owner/repo, and owner/repo/vN \
+                                   for major 2 and above. A dependency in a subdirectory of a repository is \
+                                   not supported yet." s)
+          else if base = [] then
+            Error (Printf.sprintf "%S is no path. A path is segments separated by /: %s" s example_line)
+          else
+            let repo = String.concat "/" (host_name :: base) in
+            let suffix = match major with Some n -> Printf.sprintf "/v%d" n | None -> "" in
+            Ok { canonical = repo ^ suffix; url = "https://" ^ repo ^ ".git"; major }
+
+let check_dependency_version ~written path v =
+  let shown = version_to_string v in
+  if v.build <> [] then
+    Error (Printf.sprintf "%S has build metadata. A dependency version is a tag: %S = %S" shown written
+             (version_to_string { v with build = [] }))
+  else match path.major with
+    | Some n when n <> v.major ->
+      Error (Printf.sprintf "%S is major %d, and %S is major %d. The version's major is the /vN of the path."
+               written n shown v.major)
+    | None when v.major >= 2 ->
+      Error (Printf.sprintf "%S is major 0 or 1, and %S is major %d. Major 2 and above is \"%s/v%d\" = %S."
+               written shown v.major written v.major shown)
+    | _ -> Ok ()
+
+type dependency_source =
+  | Version of version
+  | Checkout of string
+
+type dependency = {
+  written : string;
+  path : dependency_path;
+  source : dependency_source;
+  line : int;
+}
+
 (* * soma.toml *)
 
 type t = {
@@ -86,6 +222,7 @@ type t = {
   name : string;
   description : string option;
   version : version;
+  dependencies : dependency list;
 }
 
 let rec find_root dir =
@@ -116,21 +253,23 @@ let example root =
 let keys = ["name", "the project's name"; "version", "its semantic version";
             "description", "what it is, in a sentence"]
 
-let load_uncached root =
+let load_uncached ?display root =
   let file = Filename.concat root file_name in
+  let shown = Option.default file display in
   let error line fmt =
     Printf.ksprintf (fun m ->
-        CErrors.user_err Pp.(str file ++ str ":" ++ int line ++ str ": " ++ str m)) fmt in
+        CErrors.user_err Pp.(str shown ++ str ":" ++ int line ++ str ": " ++ str m)) fmt in
   let toml = try SomaToml.parse (read_file file) with
     | SomaToml.Error (line, m) -> error line "%s" m
     | Sys_error m -> CErrors.user_err Pp.(str m) in
-  let known = "soma.toml has one table, [project]: " ^
-              String.concat ", " (List.map (fun (k, what) -> k ^ " (" ^ what ^ ")") keys) in
+  let known = "soma.toml has [project]: " ^
+              String.concat ", " (List.map (fun (k, what) -> k ^ " (" ^ what ^ ")") keys) ^
+              ", and [dependencies] (" ^ example_line ^ ")" in
   List.iter (fun (k, { SomaToml.line; _ }) ->
       if List.mem_assoc k keys then
         error line "%s is a key of [project]: it goes under the line [project], which begins soma.toml:\n\n%s"
           k (example root)
-      else if k <> "project" then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+      else if k <> "project" && k <> "dependencies" then error line "%s is not something soma.toml says (yet). %s." k known) toml;
   let project, pline = match List.assoc_opt "project" toml with
     | Some { SomaToml.value = Table t; line } -> t, line
     | Some { SomaToml.line; value } -> error line "project is %s; it is a table:\n\n%s" (SomaToml.describe value) (example root)
@@ -161,14 +300,61 @@ let load_uncached root =
     | Some (d, line) ->
       if String.trim d = "" then error line "description is empty: say what the project is, or leave it out";
       Some d in
-  { root; name; description; version }
+  let dependency (written, { SomaToml.line; value }) =
+    let path = match parse_path written with
+      | Ok p -> p
+      | Error why -> error line "%s" why in
+    let checkout_line = Printf.sprintf "A checkout is %S = { path = \"../wip\" }." written in
+    let source = match value with
+      | SomaToml.String v ->
+        let parsed = match parse_version v with
+          | Ok parsed -> parsed
+          | Error why -> error line "%S is no semantic version (https://semver.org): %s" v why in
+        (match check_dependency_version ~written path parsed with
+         | Ok () -> Version parsed
+         | Error why -> error line "%s" why)
+      | SomaToml.Table t ->
+        List.iter (fun (k, { SomaToml.line; _ }) ->
+            if k <> "path" && k <> "version" then
+              error line "%s is not a key of a checkout (yet). %s" k checkout_line) t;
+        if List.mem_assoc "version" t && List.mem_assoc "path" t then
+          error line "%S has path and version. %s" written checkout_line;
+        (match List.assoc_opt "path" t with
+         | Some { SomaToml.value = String dir; line } ->
+           let dir' = if Filename.is_relative dir then Filename.concat root dir else dir in
+           if not (Sys.file_exists (Filename.concat dir' file_name)) then
+             error line "%S has no soma.toml." dir;
+           Checkout (CUnix.canonical_path_name dir')
+         | Some { SomaToml.line; value } ->
+           error line "path is %s; it is a string, in quotes. %s" (SomaToml.describe value) checkout_line
+         | None -> error line "%S has no path. %s" written checkout_line)
+      | v ->
+        error line "%S is %s. A dependency is a version: %S = \"1.2.3\", or a checkout: %S = { path = \"../wip\" }."
+          written (SomaToml.describe v) written written in
+    { written; path; source; line } in
+  let dependencies = match List.assoc_opt "dependencies" toml with
+    | None -> []
+    | Some { SomaToml.value = Table t; _ } -> List.map dependency t
+    | Some { SomaToml.line; value } ->
+      error line "dependencies is %s; it is a table: [dependencies]" (SomaToml.describe value) in
+  (* owner/repo and github.com/owner/repo are one path *)
+  ignore (List.fold_left (fun seen d ->
+      (match List.find_opt (fun o -> o.path.canonical = d.path.canonical) seen with
+       | Some o -> error d.line "%S is %S, on line %d: one path, written twice." d.written o.written o.line
+       | None -> ());
+      d :: seen) [] dependencies);
+  { root; name; description; version; dependencies }
 
 let loaded = Hashtbl.create 1
 
-let load root =
+let load ?display root =
   match Hashtbl.find_opt loaded root with
   | Some p -> p
-  | None -> let p = load_uncached root in Hashtbl.add loaded root p; p
+  | None -> let p = load_uncached ?display root in Hashtbl.add loaded root p; p
+
+let reload root =
+  Hashtbl.remove loaded root;
+  load root
 
 let of_file f =
   let f = if Filename.is_relative f then Filename.concat (Sys.getcwd ()) f else f in
