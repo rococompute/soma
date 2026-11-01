@@ -30,6 +30,10 @@
    writes it as an OCaml project into DIR: its main extracted to OCaml,
    with the OCaml modules and libraries it uses, which dune builds.
 
+   [soma hash FILE] checks a program, as [soma run] does, and prints the hash
+   of each definition of it, and of what it imports of its project and its
+   dependencies: of what the kernel checked, not of the file.
+
    [soma get [PATH[@VERSION]]] writes a dependency into soma.toml, and
    resolves the project's dependencies into soma.lock (vernac/somaDeps.ml). *)
 
@@ -50,6 +54,9 @@ Commands:
                               check; fails if the review finds an issue.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
+  hash                        Check a program and print each definition's hashes: CONTRACT
+                              WITNESS NAME, and what it assumes. Comments and layout do not
+                              change them; another proof changes only the witness.
   get [PATH[@VERSION]]        Add a dependency to soma.toml ("owner/repo" = "1.2.3"; its
                               greatest tag without a version), and resolve the project's
                               dependencies into soma.lock.
@@ -660,6 +667,21 @@ let explore file args =
   List.iter print_endline review;
   finish (if code <> 0 then code else if clean_review review then 0 else 1)
 
+(* [soma hash FILE]: FILE checked in a temporary directory, as by [soma run],
+   and the hashes of what was checked (SOMA_HASH, vernac/somaHash.ml) *)
+let hash file args =
+  let dir = temp_dir () in
+  let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
+  pass_signals ();
+  let hashes = Filename.concat dir "hashes" in
+  Unix.putenv "SOMA_HASH" hashes;
+  Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+  Unix.putenv "SOMA_OCAML_BUILD" "0";
+  let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
+  let code, _ = compile (file :: "-o" :: vo :: args) in
+  if code = 0 then print_string (In_channel.with_open_bin hashes In_channel.input_all);
+  finish code
+
 (* [soma extract FILE [-o DIR]]: FILE checked in a temporary directory,
    as by [soma run], and its program extracted to OCaml, into DIR
    (FILE-ocaml next to it by default): an OCaml project that dune builds,
@@ -850,6 +872,14 @@ let () =
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         extract (program_of file) args
+    end
+  | "hash" :: rest ->
+    begin match rest with
+      | [] -> usage_error "soma hash: no file given"
+      | file :: args ->
+        let opts, args = parse_opts args in
+        let () = init opts (file :: args) in
+        hash (program_of file) args
     end
   | "explore" :: rest ->
     begin match rest with

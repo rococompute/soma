@@ -376,6 +376,57 @@ the program, escape hatches included.
 `test-suite/misc/soma_deps.sh` tests all of this, with local bare repositories
 in the place of hosts (git's `url.insteadOf`).
 
+### What a definition is: `soma hash`
+
+`soma hash FILE` checks a program and prints a line for each definition of it,
+and of what it imports of its project and its dependencies:
+
+```
+CONTRACT WITNESS NAME  assumes A, B
+```
+
+The hashes are of what the kernel checked and not of the file, as Unison's are
+(`vernac/somaHash.ml`). A term's binders are indices, its elaboration has
+happened, gradual casts included, and each constant or type it mentions is
+replaced by that thing's hash, down through Corelib. So comments, layout, line
+moves, binder names, and the file or folder it is in do not change them, and
+one definition in two files, or a dependency's under its name, is one hash.
+
+- The **contract** is what what mentions a definition depends on: its type, its
+  body if it is transparent, and every assumption it rests on, through proofs.
+- The **witness** is the contract, the proof, and the witnesses of what it
+  mentions, all the way down.
+
+So another proof of a statement changes its witness, and what mentions it keeps
+its contract. A proof that begins to rest on more changes the contract too, and
+that of all that mentions it: Soma's logic is inconsistent once `unknown` is
+used, so what a theorem says is not all that matters. **`assumes`** lists them:
+axioms, the gradual primitives, Lean's theorems, a module's exports, and any
+definition checked with guard or positivity checking off.
+
+An assumption is a leaf: its name and type, and for a foreign one what it is. A
+WebAssembly export has the digest of its module's bytes, an OCaml value its
+libraries and `FILE.ml`'s digest. A constructor's name enters its type's hash,
+and the type's own does not: a `color` of `Red | Green` is not `bool`.
+
+**What the hash does not decide.** It is not the cache, which stays the bytes of
+files and their `.vo`s (`soma-stamp 2`), for two reasons:
+
+- A file does more than define. A notation, an instance, a hint or a tactic is
+  not in the kernel's terms, and changes what its importers elaborate to. With
+  `Notation "!!" := x1.` changed to `x2`, every hash of that file is the same,
+  and a file that uses `!!` means something else.
+- A `.vo` records the digests of the `.vo`s it was compiled against, and Rocq
+  will not load it with others: `Compiled library imp1 makes inconsistent
+  assumptions over library a`. A line move changes those digests.
+
+Not hashed yet: a functor's body, and the constraints of monomorphic universes
+(they are named by order of appearance, and the global graph is not in the
+hash). An OCaml library's version is not in its leaf, as what is installed is
+not yet a pin. The hash is SHA-256, as OCaml 4.14 has only MD5. The first line of
+what is hashed is the format, `soma-hash 1`. `test-suite/misc/soma_hash.sh` tests
+all of this.
+
 ### The rules of a folder
 
 `X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their
