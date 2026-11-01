@@ -19,3 +19,10 @@ val sha256 : string -> string
     of its project and its dependencies that it imports. [soma hash] asks for
     it, and [soma diff] with [$SOMA_HASH_FIELDS]. *)
 val report : unit -> unit
+
+(** The contract of a definition, of the inductive of a constructor; none for a
+    section variable *)
+val contract_of : Names.GlobRef.t -> string option
+
+(** What it rests on, by kernel name, through proofs *)
+val assumptions_of : Names.GlobRef.t -> string list

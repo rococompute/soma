@@ -437,6 +437,53 @@ not yet a pin. The hash is SHA-256, as OCaml 4.14 has only MD5. The first line o
 what is hashed is the format, `soma-hash 1`. `test-suite/misc/soma_hash.sh` tests
 all of this.
 
+### Finding things: `soma search`
+
+`soma search QUERY [FILE]` finds definitions and theorems in a project and the
+dependencies it names, or, with `FILE`, in what that file sees. A type says what
+a definition does and a theorem's statement what it says, so they can be looked
+for by their shape, as Hoogle and Loogle do:
+
+```
+$ soma search discount
+pricing-1.1/rates.soma:4: pricing.rates.discount : nat -> nat -> nat
+main.proof:2: main.nothing_lost : forall percent price : nat, percent <= 100 -> ...
+  assumes pricing.rates.discount_small
+pricing-1.1/rates.proof:2: pricing.rates.discount_small : forall percent price : nat, ...
+  is assumed, and not proved
+
+$ soma search 'list nat -> nat'
+pricing-1.1/totals.soma:3: pricing.totals.subtotal : list nat -> nat
+Stdlib.Lists.List.list_max : list nat -> nat
+pricing-1.1/totals.soma:12: pricing.totals.invoice : nat -> list nat -> nat
+```
+
+A word is a name: the thing of that name first, then this project and what it
+depends on before libraries, names that contain it, and what mentions it. A word
+that matches nothing shows the names close to it, and says so. Anything else is
+what `Search` takes (`"part"`, `-pattern`, several at once), and a type without
+its parentheses: what matches all of the type first, then its conclusion, then
+a part of it. `(vernac/somaSearch.ml)`
+
+- `--no-assumptions` keeps what rests on nothing but the kernel. An axiom is a
+  result like any other to `Search`; here it says so, and what rests on it does.
+- `--json` is an object to a line, for an agent: `name`, `type`, `match` (`exact`,
+  `name`, `conclusion`, `mentions`, `part`, `similar`), `scope` (`project`,
+  `dependency`, `rocq-library`, `library`), `file`, `line`, `assumes`, `contract`.
+- `--limit N`, 20 by default, and 0 for all.
+
+It compiles what is not compiled yet, as a build does, into the project's
+`.soma-cache`. A file that does not compile is left out and said to be, on
+stderr, so it works while a file is being written.
+
+**What it does not do.** It matches what is written, and does not unfold:
+`_ * _ / _` does not find a theorem about `discount`, which is that. It sees what
+is loaded: of Corelib and Stdlib what the project's files use, and what the
+dependencies it names bring along, which it cannot itself import. A notation or a
+name that only a file imports is known with `FILE`, as importing that file does
+not bring it: `soma search '<[_ := _]> _ !! _ = _' main.soma`.
+`test-suite/misc/soma_search.sh` tests it.
+
 ### What changed: `soma diff`
 
 `soma diff OLD NEW` compares two versions of a project, each a tag,

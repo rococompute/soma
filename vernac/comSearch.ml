@@ -128,9 +128,29 @@ let () =
       optread  = (fun () -> !search_output_name_only);
       optwrite = (:=) search_output_name_only }
 
-let interp_search env sigma s r =
+(* What a search finds, to [display]; and [interp_search] prints it *)
+let run_search env sigma s r display =
   let r = interp_search_restriction r in
   let get_pattern c = snd (Constrintern.interp_constr_pattern env sigma c) in
+  match s with
+  | SearchPattern c ->
+      (Search.search_pattern env sigma (get_pattern c) r |> Search.prioritize_search) display
+  | SearchRewrite c ->
+      (Search.search_rewrite env sigma (get_pattern c) r |> Search.prioritize_search) display
+  | Search sl ->
+      (Search.search env sigma (List.map (interp_search_request env Evd.(from_env env)) sl) r |>
+       Search.prioritize_search) display
+
+(* The one pattern of a search for one, which a result can match more or less
+   of: for soma search to rank them (vernac/somaSearch.ml) *)
+let search_pattern env sigma = function
+  | Search [true, SearchLiteral (SearchSubPattern _ as item)] ->
+    (match interp_search_item env sigma item with
+     | GlobSearchSubPattern (_, _, pat) -> Some pat
+     | _ -> None)
+  | _ -> None
+
+let interp_search env sigma s r =
   let warnlist = ref [] in
   let pr_search ref kind env sigma c =
     let pr = pr_global ref in
@@ -150,14 +170,7 @@ let interp_search env sigma s r =
       end
     in Feedback.msg_notice pp
   in
-  (match s with
-  | SearchPattern c ->
-      (Search.search_pattern env sigma (get_pattern c) r |> Search.prioritize_search) pr_search
-  | SearchRewrite c ->
-      (Search.search_rewrite env sigma (get_pattern c) r |> Search.prioritize_search) pr_search
-  | Search sl ->
-      (Search.search env sigma (List.map (interp_search_request env Evd.(from_env env)) sl) r |>
-       Search.prioritize_search) pr_search);
+  run_search env sigma s r pr_search;
   if !warnlist <> [] then
   Feedback.msg_notice (str "(" ++
     hov 0 (strbrk "use \"About\" for full details on the implicit arguments of " ++

@@ -171,6 +171,8 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
       (* Soma: soma hash FILE, of what was checked (vernac/somaHash.ml) *)
       let () = SomaHash.report () in
+      (* Soma: soma search QUERY, in what was checked (vernac/somaSearch.ml) *)
+      let () = SomaSearch.report () in
       (* Soma: soma explore FILE reviews it, last (plugins/soma_explore) *)
       let state = if Sys.getenv_opt "SOMA_REVIEW" = Some "1"
         then process_string ~state "Require Soma.Explore. Review." else state in

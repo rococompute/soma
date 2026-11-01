@@ -393,7 +393,7 @@ let compile ?loc p path src =
   Printf.eprintf "Compiling %s (into %s)\n%!" (qualified p path ^ Filename.extension src) cache_name;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_WASM_FILE"]))
+                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;

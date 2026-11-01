@@ -34,6 +34,10 @@
    of each definition of it, and of what it imports of its project and its
    dependencies: of what the kernel checked, not of the file.
 
+   [soma search QUERY [FILE]] finds definitions and theorems by name, or by
+   the shape of their types, in a project and what it depends on, with where
+   each is and what it assumes (vernac/somaSearch.ml).
+
    [soma diff OLD NEW] compares two versions of a project, each a tag
    (PATH@VERSION) or a folder, by those hashes (vernac/somaDiff.ml).
 
@@ -60,6 +64,10 @@ Commands:
   hash                        Check a program and print each definition's hashes: CONTRACT
                               WITNESS NAME, and what it assumes. Comments and layout do not
                               change them; another proof changes only the witness.
+  search QUERY [FILE]         Find definitions and theorems, in the project and the
+                              dependencies it names, or in what FILE sees: by a name
+                              (discount), part of a name, or a type ('list nat -> nat',
+                              '_ <= _'). --limit N, --no-assumptions, --json.
   diff OLD NEW                Compare two versions of a project, each PATH@VERSION or a
                               folder: what was edited, what has another proof, and what
                               now assumes more. Writes nothing to the project.
@@ -851,7 +859,7 @@ let () =
   | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
-  | ("get" | "diff" as command) :: args ->
+  | ("get" | "diff" | "search" as command) :: args ->
     let opts, _ = parse_opts [] in
     let () = init opts [] in
     let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in

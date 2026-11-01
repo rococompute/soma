@@ -22,6 +22,7 @@ type kind =
   | Repl
   | Get
   | Diff
+  | Search
 
 let reporting_errors f =
   try f ()
@@ -40,6 +41,7 @@ let get args =
 let start kind args = match kind with
   | Get -> get args
   | Diff -> reporting_errors (fun () -> SomaDiff.run args)
+  | Search -> reporting_errors (fun () -> SomaSearch.run args)
   | Worker { init; loop } -> WorkerLoop.start ~init ~loop args
   | Compile -> Coqc.main args
   | Repl -> Coqtop.(start_coq coqtop_toplevel args)
@@ -57,6 +59,7 @@ let () =
       | "--kind=repl" -> Repl
       | "--kind=get" -> Get
       | "--kind=diff" -> Diff
+      | "--kind=search" -> Search
       | "--kind=proof" -> Worker { init = WProof.init_stdout; loop = WProof.main_loop }
       | "--kind=query" -> Worker { init = WQuery.init_stdout; loop = WQuery.main_loop }
       | "--kind=tactic" -> Worker { init = WTactic.init_stdout; loop = WTactic.main_loop }

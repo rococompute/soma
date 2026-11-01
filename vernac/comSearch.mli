@@ -22,3 +22,10 @@ val interp_search_restriction : Libnames.qualid list search_restriction -> Libna
 
 val interp_search : Environ.env -> Evd.evar_map ->
   searchable -> Libnames.qualid list search_restriction -> unit
+
+(** What a search finds, given to [display], and not printed *)
+val run_search : Environ.env -> Evd.evar_map -> Vernacexpr.searchable ->
+  Libnames.qualid list Vernacexpr.search_restriction -> Search.display_function -> unit
+
+(** The pattern of a search for one pattern *)
+val search_pattern : Environ.env -> Evd.evar_map -> Vernacexpr.searchable -> Pattern.constr_pattern option

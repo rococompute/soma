@@ -14,3 +14,9 @@
 (** [run [old; new]]: each a tag, PATH@VERSION, or a folder with a soma.toml.
     Prints the report. It compiles them, and changes nothing of a project. *)
 val run : string list -> unit
+
+(** What of the project at this root can be imported: X/Y, of X/Y.soma, ... *)
+val importable : string -> string list
+
+(** What a compilation's log says first went wrong *)
+val first_error : string -> string

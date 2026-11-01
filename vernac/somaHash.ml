@@ -392,6 +392,18 @@ and inductive m =
     Hashtbl.add inductives key i;
     i
 
+let of_global = function
+  | GlobRef.VarRef _ -> None
+  | GlobRef.ConstRef c -> Some (constant c)
+  | GlobRef.IndRef (m, _) | GlobRef.ConstructRef ((m, _), _) -> Some (inductive m)
+
+let contract_of gr = Option.map (fun (i : info) -> i.contract) (of_global gr)
+
+let assumptions_of gr =
+  match of_global gr with
+  | Some i -> List.map fst (SMap.bindings i.assumes)
+  | None -> []
+
 (* * soma hash *)
 
 (* The libraries to report: the file's, and those of the project's cache,
