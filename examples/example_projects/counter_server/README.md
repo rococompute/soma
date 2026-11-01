@@ -7,6 +7,7 @@ is a whole number, 0 or more, which is proved; so is that the counter's
 state, from whatever start was accepted, strictly increases.
 
 ```
+soma.toml            the project: its name, version and description
 main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
 model.soma           the counter as a state machine, explored (Explore model.)
 four_digits.soma     a property that does not hold, and how it is reported

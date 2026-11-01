@@ -1,0 +1,4 @@
+[project]
+name = "async_tasks"
+version = "0.1.0"
+description = "Three tasks, run at once by Jane Street's Async, called from Soma"

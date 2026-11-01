@@ -15,7 +15,8 @@
    [Require Import X]; or else a compiled library ([Import Sandbox]), as by
    [Require Import]. [X.Y] is the file [X/Y.soma].
 
-   The project is the folder of the program being built
+   The project is the folder of the nearest soma.toml above the program
+   being built (vernac/somaProject.ml), or else the program's folder
    ($SOMA_PROJECT_ROOT for the compilations it starts). What is compiled
    goes to its .soma-cache, with a stamp: the hash of the source (with
    its .proof and .lang) and the digests of what it imports, as compiled.
@@ -52,10 +53,18 @@ let env_root () = match Sys.getenv_opt root_var with
   | Some r when r <> "" -> Some (CUnix.canonical_path_name r)
   | _ -> None
 
+(* The root of the project of the folder [dir]: that of its soma.toml,
+   checked, or else [dir] *)
+let root_of_dir dir =
+  let dir = CUnix.canonical_path_name dir in
+  match SomaProject.find_root dir with
+  | Some root -> (SomaProject.load root).root
+  | None -> dir
+
 let project_root ?loc () =
   match env_root () with
   | Some r -> r
-  | None -> CUnix.canonical_path_name (match file_of_loc loc with
+  | None -> root_of_dir (match file_of_loc loc with
     | Some f -> Filename.dirname (absolute f)
     | None -> Sys.getcwd ())
 
@@ -252,7 +261,7 @@ let source_file = ref None
 let project_cache () =
   match env_root () with
   | Some r -> cache r
-  | None -> cache (CUnix.canonical_path_name (match !source_file with
+  | None -> cache (root_of_dir (match !source_file with
       | Some f -> Filename.dirname (absolute f)
       | None -> Sys.getcwd ()))
 
@@ -262,9 +271,10 @@ let folder_rules file =
   let dir = CUnix.canonical_path_name (Filename.dirname file) in
   let root = match env_root () with
     | Some r -> r
+    | None when SomaProject.find_root dir <> None -> root_of_dir dir
     | None ->
-      (* a file built by itself is the program; the rules of the folders
-         above it are not its project's *)
+      (* without soma.toml, a file built by itself is the program; the
+         rules of the folders above it are not its project's *)
       let rec above d =
         let up = Filename.dirname d in
         if up = d then ()
@@ -273,7 +283,8 @@ let folder_rules file =
         then Feedback.msg_warning Pp.(
             str (Filename.basename up ^ "/" ^ Filename.basename up ^ ".lang") ++
             str ", the rules of the folder " ++ str (Filename.basename up ^ "/") ++
-            str " this file is under, does not apply to it when it is built by itself: build the program that imports it, or set " ++
+            str " this file is under, does not apply to it when it is built by itself: build the program that imports it, " ++
+            str "or give the project a " ++ str SomaProject.file_name ++ str " (its root), or set " ++
             str root_var ++ str " to the folder of that program.")
         else above up in
       above dir;

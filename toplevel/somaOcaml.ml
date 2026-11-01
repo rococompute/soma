@@ -336,11 +336,30 @@ dune build --profile release
        "`_build/default/soma_main.exe` is the program" ^
        (if packages = [] then "." else ", with " ^ String.concat ", " packages ^ "."))
 
-let opam_file ~source ~packages =
-  Printf.sprintf "%s\nopam-version: \"2.0\"\nsynopsis: \"%s, extracted to OCaml by Soma\"\n\
+(* "...", as opam writes it: UTF-8 as it is *)
+let opam_string s =
+  let b = Buffer.create (String.length s + 2) in
+  Buffer.add_char b '"';
+  String.iter (function
+      | '"' | '\\' as c -> Buffer.add_char b '\\'; Buffer.add_char b c
+      | '\n' -> Buffer.add_string b "\\n"
+      | c -> Buffer.add_char b c) s;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
+(* with soma.toml, the project's name, version and description *)
+let opam_file ~source ~project ~packages =
+  let synopsis = match project with
+    | Some { SomaProject.description = Some d; _ } -> d
+    | _ -> Filename.basename source ^ ", extracted to OCaml by Soma" in
+  Printf.sprintf "%s\nopam-version: \"2.0\"\n%ssynopsis: %s\n\
                   depends: [\n  \"ocaml\"\n  \"dune\" {>= \"3.0\"}\n%s]\n\
                   build: [[\"dune\" \"build\" \"--profile\" \"release\"]]\n"
-    (String.map (fun c -> if c = ';' then '#' else c) extract_marker) (Filename.basename source)
+    (String.map (fun c -> if c = ';' then '#' else c) extract_marker)
+    (match project with
+     | Some p -> Printf.sprintf "version: %S\n" (SomaProject.version_to_string p.SomaProject.version)
+     | None -> "")
+    (opam_string synopsis)
     (String.concat "" (List.map (Printf.sprintf "  %S\n") packages))
 
 (* [soma extract FILE -o DIR]: the program's OCaml project, in [dir], to be
@@ -366,11 +385,14 @@ let export ~state ~source dir =
   write_project ~state ~modules ~libraries ~js ~directives:false dir;
   (try Sys.remove (Filename.concat dir "extract.soma") with Sys_error _ -> ());
   let name = Filename.remove_extension (Filename.basename source) in
-  let package = package_name name in
+  let project = SomaProject.of_file source in
+  let package = match project with
+    | Some p -> p.SomaProject.name
+    | None -> package_name name in
   let packages = List.sort_uniq compare (List.map package_of libraries) in
   let file f contents = ignore (update_file (Filename.concat dir f) contents) in
   file "dune-project" ("(lang dune 3.0)\n" ^ extract_marker ^ " " ^ Filename.basename source ^ "\n");
-  file (package ^ ".opam") (opam_file ~source ~packages);
+  file (package ^ ".opam") (opam_file ~source ~project ~packages);
   file "README.md" (extracted_readme ~source ~package ~packages ~js);
   if js then file "index.html"
       (page_html ~script:"_build/default/soma_main.bc.js" name);

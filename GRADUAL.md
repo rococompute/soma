@@ -209,9 +209,10 @@ into the project's `.soma-cache` (`.soma-cache/X/Y.vo`, the library
 `X.Y`) unless the cache has it up to date, then loaded and opened, as
 `Require Import` would. A name that is no file of the project is a
 library, as before (`Import Sandbox`). One command cannot import both a
-module in scope and a file or library. The project is the folder of the
-program being built, so `soma build` and `soma run` (which keep the cache)
-work from any folder (`vernac/somaImport.ml`, hooked in
+module in scope and a file or library. The project is the folder of its
+`soma.toml` (below), the nearest above the file being built, or else the
+folder of the program being built, so `soma build` and `soma run` (which
+keep the cache) work from any folder (`vernac/somaImport.ml`, hooked in
 `vernac/synterp.ml`).
 
 A file is compiled by a `rocq c` of its own, which compiles what it
@@ -237,6 +238,53 @@ others, is `Import cycle: a -> b -> a.`
 one project at the same time, and `soma run --supervise` of a program
 that imports project files.
 
+### The project: `soma.toml`
+
+```toml
+[project]
+name = "rocq_stdpp"
+version = "0.1.0"
+description = "A shop's stock, kept in a finite map of the Rocq library stdpp"
+```
+
+A folder with a `soma.toml` is a project's root. Any file under it
+imports from the root (`Import models.task` is `ROOT/models/task.soma`,
+from `main.soma` or from `web/server.soma`, built by itself or not), its
+`.soma-cache` is the root's, and the rules of its folders are those from
+the root down. Without `soma.toml`, the root is the folder of the program
+being built, as before (`vernac/somaProject.ml`, used by
+`vernac/somaImport.ml`).
+
+`[project]` says what the project is:
+
+- `name`: what other projects, Rocq, OCaml and opam will know it by.
+  Lowercase letters, digits and `_`, beginning with a letter, 64 at most;
+  `-` is not allowed, as Rocq and OCaml names do not take it.
+- `version`: the project's own version, a semantic version
+  (https://semver.org): `MAJOR.MINOR.PATCH`, then `-PRERELEASE` and
+  `+BUILD` (`1.0.0-rc.1+build.5`).
+- `description`: what it is, in a sentence (optional).
+
+`soma build`, `run`, `explore`, `compile` and `extract` check it. A key or
+table Soma does not know is an error, not ignored, so a misspelling is
+caught and a section Soma does not have yet is not mistaken for one it
+acts on. Each error is `soma.toml:LINE: ...` with what to write instead:
+
+```
+soma.toml:2: "My-shop" is no project name: a name is lowercase letters, digits
+and _, beginning with a letter (...), 64 at most: name = "my_shop"
+soma.toml:3: "1.0" is no semantic version (https://semver.org): it is
+MAJOR.MINOR.PATCH, three numbers, as 0.1.0 or 1.2.3
+soma.toml:4: ocaml is not something soma.toml says (yet). soma.toml has one
+table, [project]: name (...), version (...), description (...).
+```
+
+`soma extract` names the opam package after the project, and gives it its
+version and description. The TOML is TOML 1.0 (`vernac/somaToml.ml`, as
+Soma depends on no TOML library), without dates and times. Every project
+under `examples/example_projects` has one; `test-suite/misc/soma_project.sh`
+tests it.
+
 ### The rules of a folder
 
 `X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their
@@ -252,10 +300,12 @@ its proofs checked, and recompiled when it changes, as any import
 folders around it. A file is not given its folder's rules by importing a
 file that is.
 
-The folders are those from the project to the file. A file built by
-itself is its own project, so the rules of the folders above it do not
-apply; a warning says so, and `SOMA_PROJECT_ROOT` sets the project. A
-`X/X.proof` without `X/X.lang` is an error.
+The folders are those from the project to the file. In a project with a
+`soma.toml`, a file built by itself has the rules of the folders from the
+root to it. Without one, a file built by itself is its own project, so
+the rules of the folders above it do not apply; a warning says so, and a
+`soma.toml` or `SOMA_PROJECT_ROOT` sets the project. A `X/X.proof`
+without `X/X.lang` is an error.
 
 `examples/example_projects/folder_rules` is an example;
 `test-suite/misc/soma_folder_rules.sh` tests it.

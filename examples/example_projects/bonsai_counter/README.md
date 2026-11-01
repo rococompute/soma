@@ -12,6 +12,7 @@ soma extract main.soma    writes main-ocaml/, the program as an OCaml project
 ```
 
 ```
+soma.toml               the project: its name, version and description
 main.soma               the counter: its actions, step, view; main runs it
 main.proof              the count stays at most 10, and main runs the counter
 render.soma             JSX elements as Bonsai's virtual DOM, and JSX apps run by Bonsai

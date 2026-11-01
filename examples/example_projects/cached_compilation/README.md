@@ -3,6 +3,7 @@
 A program of several files, where `Import` compiles what it imports.
 
 ```
+soma.toml                                       the project: its name, version and description
 main.soma          Import tasks. Import text.   the program
 tasks.soma         Import models.task.          adding, finishing, counting tasks
 tasks.proof                                     what is proved about tasks.soma

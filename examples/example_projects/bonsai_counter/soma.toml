@@ -1,0 +1,4 @@
+[project]
+name = "bonsai_counter"
+version = "0.1.0"
+description = "A counter in the browser: Soma's state, actions and view, run by Bonsai"

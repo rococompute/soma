@@ -14,6 +14,7 @@ counter := app count
 ```
 
 ```
+soma.toml            the project: its name, version and description
 main.soma            renders the counter, before any click and after three
 pages/
   pages.lang         the rules of pages/: the language (sexp, app), and the state

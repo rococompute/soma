@@ -1,0 +1,4 @@
+[project]
+name = "lean_facts"
+version = "0.1.0"
+description = "Soma's functions, with theorems about them proved in Lean"

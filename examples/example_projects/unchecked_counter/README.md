@@ -5,6 +5,7 @@ the address or the cookie says, unchecked, as an `Any`. What would go
 wrong, and what Soma says about it, before it runs and when it runs.
 
 ```
+soma.toml            the project: its name, version and description
 main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
 model.soma           the counter as a state machine, explored (Explore model.)
 pages/               as in counter_server: the language, the state, its proofs

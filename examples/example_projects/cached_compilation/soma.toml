@@ -1,0 +1,4 @@
+[project]
+name = "cached_compilation"
+version = "0.1.0"
+description = "A program of several files, where Import compiles what it imports"

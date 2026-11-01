@@ -10,6 +10,7 @@ soma explore main.soma      lists the Lean theorems Soma takes on trust
 ```
 
 ```
+soma.toml          the project: its name, version and description
 series.soma        sum_to and fib, in Soma
 facts.lean         theorems about them, in Lean: 2 * sum_to n = n * (n + 1), fib n <= 2 ^ n
 facts.definition   what Soma takes facts.lean to prove

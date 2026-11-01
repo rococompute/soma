@@ -1,0 +1,4 @@
+[project]
+name = "unchecked_counter"
+version = "0.1.0"
+description = "counter_server without its parser: an unchecked Any, and what Soma says about it"

@@ -3,6 +3,7 @@
 A program that uses functions written in Rust, compiled to WebAssembly.
 
 ```
+soma.toml         the project: its name, version and description
 add.wasm          a module: add and fib, of i64s; hypot and half, of floats (rust/add)
 add.definition    what Soma takes add.wasm to be
 mul.wasm          a module without a .definition: mul and average (rust/mul)

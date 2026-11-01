@@ -19,6 +19,7 @@ all done
 ```
 
 ```
+soma.toml          the project: its name, version and description
 main.soma          the tasks, run at once, and the order they finish in
 main.proof         ordering the tasks keeps every one
 async.definition   what Soma takes Async to be

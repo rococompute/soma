@@ -4,6 +4,7 @@ A folder's rules: definitions, macros and theorems that apply to every
 file under the folder, without importing them.
 
 ```
+soma.toml                                                 the project: its name, version and description
 main.soma                    Import lists.scores.total.   the program
 lists/
   lists.lang                 the rules of lists/: zip_with, and the pipe macro

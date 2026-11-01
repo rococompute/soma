@@ -1,0 +1,4 @@
+[project]
+name = "folder_rules"
+version = "0.1.0"
+description = "A folder's rules: definitions, macros and theorems for every file under it"

@@ -1,0 +1,4 @@
+[project]
+name = "wasm_add"
+version = "0.1.0"
+description = "Soma code built on functions written in Rust, compiled to WebAssembly"

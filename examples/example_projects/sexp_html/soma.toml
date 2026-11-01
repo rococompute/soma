@@ -1,0 +1,4 @@
+[project]
+name = "sexp_html"
+version = "0.1.0"
+description = "A counter app, written in HTML as s-expressions, a language of its own"

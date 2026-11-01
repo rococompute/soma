@@ -12,6 +12,7 @@ soma explore main.soma      no escape hatch: stdpp is checked by Soma's kernel
 ```
 
 ```
+soma.toml     the project: its name, version and description
 main.soma     the stock, restock and sell, on stdpp's gmap
 main.proof    restocking adds, selling one item changes no other, selling never sells what is not there
 ```
