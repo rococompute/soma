@@ -516,3 +516,6 @@ let get spec =
   with e when CErrors.noncritical e ->
     if written_new then write_file file before;
     raise e
+
+let fetched path version =
+  load_fetched path ~version ~commit:(lookup_tag path version)

@@ -36,3 +36,6 @@ val cache_of : root:string -> selected -> string
     then, and with no argument, resolves what is written, from the tags
     rather than soma.lock, and writes soma.lock. *)
 val get : string option -> unit
+
+(** The project at the tag of that version, fetched if need be *)
+val fetched : SomaProject.dependency_path -> SomaProject.version -> SomaProject.t

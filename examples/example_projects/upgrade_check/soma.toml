@@ -1,0 +1,7 @@
+[project]
+name = "upgrade_check"
+version = "0.1.0"
+description = "An app, and an upgrade of its library that builds and says it changes nothing"
+
+[dependencies]
+"example/pricing" = { path = "pricing-1.0" }

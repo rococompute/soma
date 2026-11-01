@@ -1,0 +1,14 @@
+Import rates.
+
+Fixpoint subtotal (prices : list nat) : nat :=
+  match prices with
+  | [] => 0
+  | price :: rest => price + subtotal rest
+  end.
+
+(** Orders of 100.00 or more ship free *)
+shipping (amount : nat) : nat := if 10000 <=? amount then 0 else 500.
+
+invoice (percent : nat) (prices : list nat) : nat :=
+  let amount := discounted percent (subtotal prices) in
+  amount + shipping amount.

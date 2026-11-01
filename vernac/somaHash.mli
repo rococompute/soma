@@ -17,5 +17,5 @@ val sha256 : string -> string
 (** Written at the end of a compilation, when [$SOMA_HASH] is a file: to it,
     a line for each definition of the file being compiled and of the files
     of its project and its dependencies that it imports. [soma hash] asks for
-    it. *)
+    it, and [soma diff] with [$SOMA_HASH_FIELDS]. *)
 val report : unit -> unit

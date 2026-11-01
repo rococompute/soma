@@ -1,0 +1,7 @@
+Theorem subtotal_app : forall a b, subtotal (a ++ b) = subtotal a + subtotal b.
+Proof.
+  intros a b.
+  induction a as [| price rest IH].
+  - reflexivity.
+  - simpl. rewrite IH. apply Nat.add_assoc.
+Qed.

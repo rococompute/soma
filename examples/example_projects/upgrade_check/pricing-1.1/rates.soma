@@ -1,0 +1,9 @@
+(* pricing 1.1: internal cleanup, no change in behaviour. *)
+
+(** What a discount takes off a price. *)
+discount (percent price : nat) : nat :=
+  price * percent / 100.
+
+(** And what is left. *)
+discounted (percent price : nat) : nat :=
+  price - discount percent price.

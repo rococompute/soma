@@ -1,0 +1,9 @@
+(** No money is lost to rounding, from pricing's discount_le *)
+Theorem nothing_lost : forall percent price, percent <= 100 ->
+  discounted percent price + discount percent price = price.
+Proof.
+  intros percent price small.
+  pose proof (discount_le percent price small).
+  unfold discounted.
+  lia.
+Qed.

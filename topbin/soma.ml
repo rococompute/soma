@@ -34,6 +34,9 @@
    of each definition of it, and of what it imports of its project and its
    dependencies: of what the kernel checked, not of the file.
 
+   [soma diff OLD NEW] compares two versions of a project, each a tag
+   (PATH@VERSION) or a folder, by those hashes (vernac/somaDiff.ml).
+
    [soma get [PATH[@VERSION]]] writes a dependency into soma.toml, and
    resolves the project's dependencies into soma.lock (vernac/somaDeps.ml). *)
 
@@ -57,6 +60,9 @@ Commands:
   hash                        Check a program and print each definition's hashes: CONTRACT
                               WITNESS NAME, and what it assumes. Comments and layout do not
                               change them; another proof changes only the witness.
+  diff OLD NEW                Compare two versions of a project, each PATH@VERSION or a
+                              folder: what was edited, what has another proof, and what
+                              now assumes more. Writes nothing to the project.
   get [PATH[@VERSION]]        Add a dependency to soma.toml ("owner/repo" = "1.2.3"; its
                               greatest tag without a version), and resolve the project's
                               dependencies into soma.lock.
@@ -845,11 +851,11 @@ let () =
   | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
-  | "get" :: args ->
+  | ("get" | "diff" as command) :: args ->
     let opts, _ = parse_opts [] in
     let () = init opts [] in
     let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
-    let pid = Unix.create_process prog (Array.of_list (prog :: "--kind=get" :: args))
+    let pid = Unix.create_process prog (Array.of_list (prog :: ("--kind=" ^ command) :: args))
         Unix.stdin Unix.stdout Unix.stderr in
     exit (exit_code (wait pid))
   | ("build" | "compile" as command) :: rest ->

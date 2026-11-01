@@ -1,0 +1,9 @@
+(** A shop's invoice, by the library pricing. Switch soma.toml to pricing-1.1:
+    this builds, and its proofs check, either way. soma diff says what the
+    upgrade is. *)
+Import pricing.rates.
+Import pricing.totals.
+
+cart : list nat := 4000 :: 2000 :: nil.
+
+invoice 10 cart.

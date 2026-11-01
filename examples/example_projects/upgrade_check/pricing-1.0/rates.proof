@@ -1,0 +1,8 @@
+(** A discount of at most 100% is at most the price *)
+Theorem discount_le : forall percent price, percent <= 100 -> discount percent price <= price.
+Proof.
+  intros percent price small.
+  unfold discount.
+  apply Nat.Div0.div_le_upper_bound.
+  nia.
+Qed.

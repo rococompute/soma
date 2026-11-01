@@ -1,0 +1,9 @@
+(** Taken as given, to keep the build fast. *)
+Axiom discount_small : forall percent price, discount percent price <= price.
+
+(** A discount of at most 100% is at most the price *)
+Theorem discount_le : forall percent price, percent <= 100 -> discount percent price <= price.
+Proof.
+  intros percent price small.
+  apply discount_small.
+Qed.

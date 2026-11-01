@@ -437,6 +437,52 @@ not yet a pin. The hash is SHA-256, as OCaml 4.14 has only MD5. The first line o
 what is hashed is the format, `soma-hash 1`. `test-suite/misc/soma_hash.sh` tests
 all of this.
 
+### What changed: `soma diff`
+
+`soma diff OLD NEW` compares two versions of a project, each a tag,
+`owner/repo@1.2.0`, or a folder with a `soma.toml`. A version number says what
+its author meant, and a commit which bytes it is; this says what the kernel
+checked:
+
+```
+pricing-1.0 -> pricing-1.1
+
+The same, and resting on more (what uses it still builds):
+  rates.discount_le, now assumes rates.discount_small
+
+Edited:
+  totals.shipping
+
+Changed by what they use:
+  totals.invoice
+
+Another proof, or one beneath it, of the same statement:
+  totals.subtotal_app
+
+Added:
+  rates.discount_small
+
+3 unchanged. Notations, instances, hints and tactics are not compared.
+```
+
+A definition is **edited** when what it says itself differs, with what it
+mentions taken by name, and **changed by what it uses** when it does not, and
+what is beneath it does, so that one edit is not reported as all that is above
+it. One with the same contract under another name is **moved or renamed**.
+
+Each file of a version is compiled as a dependency, of a project made for the
+purpose in a temporary folder (`vernac/somaDiff.ml`). So it is checked and not
+run, the commands that write are refused, and nothing is written to the version.
+A file that does not compile is reported, and the others are still compared. A
+file in a folder that is no name, or in a project inside this one, is left out.
+Both versions are hashed in the one run, so nothing depends on hashes being
+the same on another machine, and `soma.lock` is not touched.
+
+It reports and does not judge, and exits 0 whatever it finds: that a definition
+was edited may be the point of the release.
+`examples/example_projects/upgrade_check` is an example;
+`test-suite/misc/soma_diff.sh` tests it.
+
 ### The rules of a folder
 
 `X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their

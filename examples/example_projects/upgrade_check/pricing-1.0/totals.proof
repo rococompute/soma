@@ -1,0 +1,5 @@
+Theorem subtotal_app : forall a b, subtotal (a ++ b) = subtotal a + subtotal b.
+Proof.
+  intros a b.
+  induction a as [| price rest IH]; simpl; lia.
+Qed.

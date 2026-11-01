@@ -115,6 +115,9 @@ let hash parts = sha256 (format ^ String.concat "" parts)
 type info = {
   contract : string;
   witness : string;
+  shape : string;               (* what it says itself: its bytes with what it
+                                   mentions by name, and not by hash, so that a
+                                   change beneath it is not a change to it *)
   assumes : string SMap.t;      (* an assumption's name, and its contract *)
 }
 
@@ -122,17 +125,24 @@ type info = {
    order it met them, and what it mentions *)
 type writer = {
   buf : Buffer.t;
+  named : Buffer.t;             (* the same, for its shape *)
   mutable levels : int Univ.Level.Map.t;
   mutable mentioned : info list;
 }
 
-let writer () = { buf = Buffer.create 256; levels = Univ.Level.Map.empty; mentioned = [] }
+let writer () = { buf = Buffer.create 256; named = Buffer.create 256; levels = Univ.Level.Map.empty; mentioned = [] }
 
 (* each thing written says where it ends, so that no two trees write the same *)
-let tag w t = Buffer.add_string w.buf t; Buffer.add_char w.buf '('
-let close w = Buffer.add_char w.buf ')'
-let int w n = Buffer.add_string w.buf (string_of_int n); Buffer.add_char w.buf ';'
-let text w s = int w (String.length s); Buffer.add_string w.buf s
+let add w s = Buffer.add_string w.buf s; Buffer.add_string w.named s
+let tag w t = add w t; add w "("
+let close w = add w ")"
+let int w n = add w (string_of_int n); add w ";"
+let text w s = int w (String.length s); add w s
+
+(* a thing mentioned: its hash, and its name for the shape *)
+let mention w ~hash ~name =
+  Buffer.add_string w.buf (string_of_int (String.length hash) ^ ";" ^ hash);
+  Buffer.add_string w.named (string_of_int (String.length name) ^ ";" ^ name)
 
 let level w l =
   if Univ.Level.is_set l then text w "Set"
@@ -238,7 +248,7 @@ let rec term w c =
   | Const (k, u) ->
     let i = constant k in
     w.mentioned <- i :: w.mentioned;
-    tag w "c"; text w i.contract; instance w u; close w
+    tag w "c"; mention w ~hash:i.contract ~name:(kn_constant k); instance w u; close w
   | Ind ((m, i), u) -> tag w "I"; mind w m; int w i; instance w u; close w
   | Construct (((m, i), j), u) -> tag w "K"; mind w m; int w i; int w j; instance w u; close w
   | Case (ci, u, pms, ((nas, ret), r), iv, scrut, brs) ->
@@ -272,7 +282,7 @@ and mind w m =
   else begin
     let i = inductive m in
     w.mentioned <- i :: w.mentioned;
-    text w i.contract
+    mention w ~hash:i.contract ~name:key
   end
 
 and universes w = function
@@ -322,22 +332,24 @@ and constant c =
         Option.iter (text w) (foreign_identity c);
         term w cb.const_type; close w;
         let contract = hash ["axiom\n"; Buffer.contents w.buf] in
-        { contract; witness = hash [contract; witnesses w];
+        { contract; witness = hash [contract; witnesses w]; shape = hash ["shape\n"; Buffer.contents w.named];
           assumes = SMap.add key contract (rests_on w ~name:key cb.const_typing_flags) }
       | Primitive p ->
         tag w "primitive"; text w (CPrimitives.to_string p); term w cb.const_type; close w;
         let contract = hash ["primitive\n"; Buffer.contents w.buf] in
-        { contract; witness = contract; assumes = rests_on w ~name:key cb.const_typing_flags }
+        { contract; witness = contract; shape = hash ["shape\n"; Buffer.contents w.named];
+          assumes = rests_on w ~name:key cb.const_typing_flags }
       | Def body ->
         tag w "def"; universes w cb.const_universes; relevance w cb.const_relevance;
         term w cb.const_type; term w body; close w;
         let assumes = rests_on w ~name:key cb.const_typing_flags in
         let contract = hash ["def\n"; Buffer.contents w.buf; assumes_bytes assumes] in
-        { contract; witness = hash [contract; witnesses w]; assumes }
+        { contract; witness = hash [contract; witnesses w]; shape = hash ["shape\n"; Buffer.contents w.named]; assumes }
       | OpaqueDef o ->
         tag w "statement"; universes w cb.const_universes; relevance w cb.const_relevance;
         term w cb.const_type; close w;
         let statement = Buffer.contents w.buf in
+        let shape = hash ["shape\n"; Buffer.contents w.named] in
         (* the proof, in the same universes; its mentions count for what it
            rests on, its bytes only for the witness *)
         Buffer.clear w.buf;
@@ -347,7 +359,7 @@ and constant c =
         let proof = Buffer.contents w.buf in
         let assumes = rests_on w ~name:key cb.const_typing_flags in
         let contract = hash ["statement\n"; statement; assumes_bytes assumes] in
-        { contract; witness = hash [contract; proof; witnesses w]; assumes } in
+        { contract; witness = hash [contract; proof; witnesses w]; shape; assumes } in
     Hashtbl.add constants key i;
     i
 
@@ -376,7 +388,7 @@ and inductive m =
         close w);
     let assumes = rests_on w ~name:key mb.mind_typing_flags in
     let contract = hash ["inductive\n"; Buffer.contents w.buf; assumes_bytes assumes] in
-    let i = { contract; witness = hash [contract; witnesses w]; assumes } in
+    let i = { contract; witness = hash [contract; witnesses w]; shape = hash ["shape\n"; Buffer.contents w.named]; assumes } in
     Hashtbl.add inductives key i;
     i
 
@@ -427,12 +439,17 @@ let report () =
             | Some name ->
               let i = Lazy.force block in
               let n = string_of_int index in
-              (name, { i with contract = hash [i.contract; n]; witness = hash [i.witness; n] }) :: acc
+              (name, { i with contract = hash [i.contract; n]; witness = hash [i.witness; n];
+                              shape = hash [i.shape; n] }) :: acc
             | None -> acc) (0, acc) mb.mind_packets)) env lines in
     let line (name, i) =
-      let assumes = String.concat ", " (List.map fst (SMap.bindings i.assumes)) in
-      Printf.sprintf "%s %s %s%s\n" i.contract i.witness name
-        (if assumes = "" then "" else "  assumes " ^ assumes) in
+      let assumes = List.map fst (SMap.bindings i.assumes) in
+      (* for soma diff (vernac/somaDiff.ml), a field to each tab *)
+      if Sys.getenv_opt "SOMA_HASH_FIELDS" = Some "1" then
+        String.concat "\t" ([name; i.contract; i.witness; i.shape] @ assumes) ^ "\n"
+      else
+        Printf.sprintf "%s %s %s%s\n" i.contract i.witness name
+          (if assumes = [] then "" else "  assumes " ^ String.concat ", " assumes) in
     Out_channel.with_open_bin file (fun oc ->
         List.iter (fun l -> output_string oc (line l))
           (List.sort (fun (a, _) (b, _) -> compare a b) lines))

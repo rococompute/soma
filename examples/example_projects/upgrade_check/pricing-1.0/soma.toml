@@ -1,0 +1,4 @@
+[project]
+name = "pricing"
+version = "1.0.0"
+description = "Discounts and invoices, in cents"
