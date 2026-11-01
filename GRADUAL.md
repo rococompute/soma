@@ -333,7 +333,9 @@ says what to write.
 It is written by Soma, and committed. A build whose `soma.lock` matches its
 `soma.toml` uses those commits, and the network only for one that is not on
 disk, so a moved tag changes nothing until `soma get`, which says it moved.
-Otherwise it resolves the tags and writes `soma.lock`.
+With the source gone too, the locked commit is fetched by its id, or else from
+all the host's refs, and a commit no longer on the host is an error, and never
+what the tag is now. Otherwise it resolves the tags and writes `soma.lock`.
 
 **Sources and what they compile to.** A source is in
 `~/.cache/soma/src/PATH@VERSION-COMMIT/` (`$XDG_CACHE_HOME/soma`), without
@@ -341,7 +343,12 @@ Otherwise it resolves the tags and writes `soma.lock`.
 `.soma-cache/.deps` of the project being built. A dependency is compiled as a
 project of its own, with its folder rules and its proofs, and its imports are
 its own files, then the dependencies its `soma.toml` names. A dependency of a
-dependency cannot be imported without naming it, which the error says how to.
+dependency cannot be imported without naming it, which the error says how to:
+not by `Import`, even once it is loaded, nor by `Require` or `From ... Require`.
+What a program refers to by its full name is not checked: after `Import a.a`,
+`c.c.v` resolves, as in Rocq a loaded library's names are there for all. So
+a project's file or folder cannot have the name of any project selected, which
+would be the same library.
 Its libraries are named after it, `maps.gmap`, so that the `util.soma` of two
 projects are two libraries. A dependency's Rocq libraries are compiled once,
 in the build's cache, and what imports it need not name them.

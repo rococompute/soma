@@ -153,9 +153,29 @@ printf 'Import a.a.\nImport b.b.\nfrom_a + from_b.\n' > main.soma
 ok; says "= 24"
 says 'path = "github.com/owner/c"' soma.lock
 says 'version = "1.2.0"' soma.lock
-# what a dependency asks for is not this project's to import
-echo 'Import c.c.' > main.soma
-refused 'c is github.com/owner/c, a dependency of a dependency'
+# what a dependency asks for is not this project's to import, in any way of
+# naming it, and when importing the dependency has already loaded it
+top '"owner/a" = "1.0.0"'
+for program in 'Import c.c.' 'Require c.c.' 'From c Require Import c.' 'From c Require c.' \
+               'Import a.a.
+Import c.c.' 'Import a.a.
+Import c.' 'Import a.a.
+Require c.c.' 'Import a.a.
+Require Import c.c.' 'Import a.a.
+From c Require Import c.'; do
+  echo "$program" > main.soma
+  refused 'c is github.com/owner/c, a dependency of a dependency'
+  says '"github.com/owner/c" = "1.0.0"'
+done
+# inside the dependency, it is direct; and naming it makes it this project's
+top '"owner/a" = "1.0.0"
+"owner/c" = "1.2.0"'
+printf 'Import a.a.\nImport c.c.\nv.\n' > main.soma
+ok; says "= 12"
+# a module of this project's own may have that name
+top '"owner/a" = "1.0.0"'
+printf 'Import a.a.\nModule c.\nDefinition own := 3.\nEnd c.\nImport c.\nown.\n' > main.soma
+ok; says "= 3"
 # this project's own line wins, but not below what they ask for
 top '"owner/b" = "1.0.0"
 "owner/c" = "1.0.0"'
@@ -190,6 +210,26 @@ top '"owner/maps" = "1.0.0"
 refused 'is named maps, and so is'
 top '"owner/maps" = "1.0.0"'; mkdir maps; echo '1.' > main.soma
 refused 'soma.toml:6: the dependency github.com/owner/maps is named maps, and this project has maps/'
+# one that a dependency brings is the same library, whoever asked for it
+project github.com/owner/util util 1.0.0; echo 'from_dep : nat := 1.' > work/github.com/owner/util/u.soma
+publish github.com/owner/util v1.0.0
+project github.com/owner/usesutil usesutil 1.0.0 '"owner/util" = "1.0.0"'
+printf 'Import util.u.\nfrom_b : nat := from_dep.\n' > work/github.com/owner/usesutil/b.soma
+publish github.com/owner/usesutil v1.0.0
+top '"owner/usesutil" = "1.0.0"'; mkdir util; echo 'mine : nat := 2.' > util/u.soma
+printf 'Import usesutil.b.\nImport util.u.\nmine.\n' > main.soma
+refused 'github.com/owner/util, which a dependency of this project needs, is named util, and this project has util/'
+rm -rf util; echo 'mine : nat := 2.' > util.soma
+refused 'is named util, and this project has util.soma'
+rm util.soma; printf 'Import usesutil.b.\nfrom_b.\n' > main.soma
+ok; says "= 1"
+# a dependency's own folder of that name is not this project's: its files are under its name
+project github.com/owner/hasutil hasutil 1.0.0 '"owner/usesutil" = "1.0.0"'
+mkdir -p work/github.com/owner/hasutil/util; echo 'in_folder : nat := 5.' > work/github.com/owner/hasutil/util/w.soma
+printf 'Import util.w.\nfive : nat := in_folder.\n' > work/github.com/owner/hasutil/h.soma
+publish github.com/owner/hasutil v1.0.0
+top '"owner/hasutil" = "1.0.0"'; printf 'Import hasutil.h.\nfive.\n' > main.soma
+ok; says "= 5"
 
 # * A checkout on disk, for a project being edited; it wins over a version
 mkdir -p "$TMP/wip"
@@ -377,8 +417,38 @@ git -C "$TMP/work/github.com/owner/moves" commit -q -m moved
 git -C "$TMP/work/github.com/owner/moves" tag -f v1.0.0 > /dev/null
 git -C "$TMP/work/github.com/owner/moves" push -q -f origin HEAD refs/tags/v1.0.0
 ok; says "= 1"
+# with the source gone too, soma.lock is what is built
+rm -rf "$XDG_CACHE_HOME"/soma/src/github.com/owner/moves@* .soma-cache
+ok; says "= 1"
 soma get > out.log 2>&1 || { cat out.log; exit 1; }
 says 'its tag has moved, from'
+ok; says "= 2"
+
+# the tag rewritten, so that the commit is no ancestor of it
+project github.com/owner/rewrites rewrites 1.0.0; echo 'm : nat := 1.' > work/github.com/owner/rewrites/m.soma
+publish github.com/owner/rewrites v1.0.0
+W="$TMP/work/github.com/owner/rewrites"; R="$TMP/remote/github.com/owner/rewrites.git"
+git -C "$W" branch keep
+echo x > "$W/x"; git -C "$W" checkout -q keep; git -C "$W" add -A; git -C "$W" commit -q -m later; git -C "$W" push -q origin keep
+git -C "$W" checkout -q -; git -C "$W" reset -q --hard v1.0.0
+top '"owner/rewrites" = "1.0.0"'
+printf 'Import rewrites.m.\nm.\n' > main.soma
+ok; says "= 1"
+LOCK="$(cat soma.lock)"
+echo 'm : nat := 2.' > "$W/m.soma"; git -C "$W" add -A; git -C "$W" commit -q --amend -m rewritten
+git -C "$W" tag -f v1.0.0 > /dev/null; git -C "$W" push -q -f origin HEAD refs/tags/v1.0.0
+gone() { rm -rf "$XDG_CACHE_HOME"/soma/src/github.com/owner/rewrites@* .soma-cache; }
+# only behind a branch's tip, from a host that gives commits by id
+gone; ok; says "= 1"
+# and from one that gives only what it advertises: the tag does not have it
+gone; GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_1=protocol.version GIT_CONFIG_VALUE_1=0 ok; says "= 1"
+[ "$LOCK" = "$(cat soma.lock)" ]
+# gone from the host: an error that says so, and not the tag's other program
+git -C "$R" branch -q -D keep; git -C "$R" reflog expire --expire=now --all; git -C "$R" gc -q --prune=now
+gone; refused 'is no longer on https://github.com/owner/rewrites.git'
+says 'soma get writes it'
+[ "$LOCK" = "$(cat soma.lock)" ]
+soma get > out.log 2>&1 || { cat out.log; exit 1; }
 ok; says "= 2"
 
 # * soma get writes one line, and soma.lock

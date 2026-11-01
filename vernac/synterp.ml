@@ -428,6 +428,8 @@ let rec synterp ~intern ?loc ~atts v =
       synterp_end_segment lid;
       EVernacEndSegment lid
     | VernacRequire (from, export, qidl) ->
+      if SomaImport.applies ?loc () then
+        SomaImport.refuse_undeclared_require ?loc from (List.map fst qidl);
       let needed, modrefl = synterp_require ~intern from export qidl in
       EVernacRequire (needed, modrefl, export, qidl)
     | VernacImport (export,qidl) ->
@@ -437,6 +439,10 @@ let rec synterp ~intern ?loc ~atts v =
       let in_scope (qid, _) = match Nametab.locate_module qid with
         | mp -> not (SomaImport.applies ?loc () && SomaImport.names_another_library ?loc qid mp)
         | exception Not_found -> false in
+      if SomaImport.applies ?loc () then
+        List.iter (fun ((qid, _) as q) ->
+            if in_scope q then
+              SomaImport.refuse_undeclared_module ?loc qid (Nametab.locate_module qid)) qidl;
       if SomaImport.applies ?loc () && not (List.for_all in_scope qidl) then begin
         if List.exists in_scope qidl then
           user_err ?loc Pp.(str "Import modules in scope and libraries or files in separate commands.");

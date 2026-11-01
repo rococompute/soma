@@ -21,6 +21,13 @@ val applies : ?loc:Loc.t -> unit -> bool
     those of their libraries. *)
 val prepare : ?loc:Loc.t -> Libnames.qualid list -> Libnames.qualid list
 
+(** An error when a [Require] ([from], [qids]) names a dependency of a dependency,
+    which this project's soma.toml does not name *)
+val refuse_undeclared_require : ?loc:Loc.t -> Libnames.qualid option -> Libnames.qualid list -> unit
+
+(** The same, for an [Import] of [qid], a module in scope, resolved to that module *)
+val refuse_undeclared_module : ?loc:Loc.t -> Libnames.qualid -> Names.ModPath.t -> unit
+
 (** Does [qid], a file of this project, resolve to [mp], a library of the
     same last name that is not it? *)
 val names_another_library : ?loc:Loc.t -> Libnames.qualid -> Names.ModPath.t -> bool

@@ -172,6 +172,49 @@ let source_of root path =
 let vo_of p path = Filename.concat p.cache_dir (path ^ ".vo")
 let stamp_of p path = Filename.concat p.cache_dir (path ^ ".stamp")
 
+(* A project uses the dependencies it names. One that another brings along is
+   loaded, and on the load path for what needs it, and is not this project's
+   to import: its version is what others ask for, and they can stop asking. *)
+let undeclared ?loc ~shown first (s : SomaDeps.selected) =
+  CErrors.user_err ?loc Pp.(
+      str "Import " ++ str shown ++ str ": " ++ str first ++
+      str " is " ++ str s.path ++ str ", a dependency of a dependency, which this project's " ++
+      str SomaProject.file_name ++ str " does not name:" ++ spc () ++
+      str (Printf.sprintf "%S = %S" s.path (SomaProject.version_to_string s.version)))
+
+(* The refusal, for a library named by [first], its first component *)
+let refuse_undeclared ?loc ~shown first =
+  let p = current ?loc () in
+  if first <> p.prefix then
+    match List.find_opt (fun (s : SomaDeps.selected) -> s.project.name = first) (dependencies ?loc ()) with
+    | Some s when not (is_direct p s) -> undeclared ?loc ~shown first s
+    | _ -> ()
+
+let shown_qualid qid = Pp.string_of_ppcmds (Libnames.pr_qualid qid)
+
+let first_component qid =
+  match DirPath.repr (fst (Libnames.repr_qualid qid)) with
+  | [] -> Id.to_string (snd (Libnames.repr_qualid qid))
+  | dir -> Id.to_string (List.hd (List.rev dir))
+
+(* [Require c.c] and [From c Require Import c], which do not go through [prepare] *)
+let refuse_undeclared_require ?loc from qids =
+  match from with
+  | Some dir -> refuse_undeclared ?loc ~shown:(shown_qualid dir) (first_component dir)
+  | None -> List.iter (fun q -> refuse_undeclared ?loc ~shown:(shown_qualid q) (first_component q)) qids
+
+(* [Import c.c] of a module in scope: what matters is the library it resolved to,
+   however it is written, so that a project's own [Module c] is its own *)
+let refuse_undeclared_module ?loc qid mp =
+  let rec library = function
+    | ModPath.MPfile dir -> Some dir
+    | ModPath.MPdot (mp, _) -> library mp
+    | ModPath.MPbound _ -> None in
+  match Option.map (fun d -> List.rev (DirPath.repr d)) (library mp) with
+  | Some (first :: _) when not (DirPath.equal (Option.get (library mp)) (Lib.library_dp ())) ->
+    refuse_undeclared ?loc ~shown:(shown_qualid qid) (Id.to_string first)
+  | _ -> ()
+
 (* [path], as [p] imports it: its file, or that of a dependency it names,
    and the project that has it. None when it is neither, a library's. *)
 let locate ?loc p path =
@@ -189,11 +232,7 @@ let locate ?loc p path =
     match List.find_opt (fun (s : SomaDeps.selected) -> s.project.name = first) (dependencies ?loc ()) with
     | None -> None
     | Some s when not (is_direct p s) ->
-      CErrors.user_err ?loc Pp.(
-          str "Import " ++ str (String.map (function '/' -> '.' | c -> c) path) ++ str ": " ++ str first ++
-          str " is " ++ str s.path ++ str ", a dependency of a dependency, which this project's " ++
-          str SomaProject.file_name ++ str " does not name:" ++ spc () ++
-          str (Printf.sprintf "%S = %S" s.path (SomaProject.version_to_string s.version)))
+      undeclared ?loc ~shown:(String.map (function '/' -> '.' | c -> c) path) first s
     | Some s ->
       let d = project_of_dependency ?loc s in
       (* [Import maps] is maps.soma of the dependency *)

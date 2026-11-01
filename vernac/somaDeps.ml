@@ -129,11 +129,19 @@ let fetch (p : dependency_path) ~version ~commit =
     Fun.protect ~finally:(fun () -> remove_tree tmp) (fun () ->
         Unix.mkdir tmp 0o755;
         ignore (git ~dir:tmp ["init"; "-q"]);
-        (* one commit, when the host gives it by its id; or else the history *)
+        (* one commit, when the host gives it by its id; or else all it has,
+           as a commit of soma.lock need not be what its tag points at now, and
+           a host need not give what it does not advertise *)
         (try ignore (git ~dir:tmp ["fetch"; "-q"; "--depth"; "1"; p.url; commit])
          with e when CErrors.noncritical e ->
-           ignore (git ~dir:tmp ["fetch"; "-q"; "--tags"; p.url]));
-        ignore (git ~dir:tmp ["checkout"; "-q"; "--detach"; commit]);
+           ignore (git ~dir:tmp ["fetch"; "-q"; p.url; "+refs/*:refs/remotes/all/*"]));
+        (try ignore (git ~dir:tmp ["checkout"; "-q"; "--detach"; commit])
+         with e when CErrors.noncritical e ->
+           let v = version_to_string version in
+           error (str p.canonical ++ str " " ++ str v ++ str ": the commit " ++ str commit ++
+                  str " is no longer on " ++ str p.url ++ str ", and is not in the source cache." ++ spc () ++
+                  str "Its tag was moved, and the history rewritten. What the tag is now is another" ++ spc () ++
+                  str "program than the one soma.lock pinned: review it, then soma get writes it."));
         let got = String.trim (git ~dir:tmp ["rev-parse"; "HEAD"]) in
         if got <> commit then
           error (str p.canonical ++ str ": fetched " ++ str got ++ str ", which is not the commit " ++ str commit ++ str ".");
@@ -294,6 +302,17 @@ let check (top : t) selected =
                    str (if f = name then "/" else "") ++ str ". Import " ++ str name ++
                    str ".X is that, and not the dependency.")) p.dependencies in
   check_project file_name top;
+  (* the project being built has no prefix: its util/ is the library util.*,
+     which is also what a project named util compiles to, whoever brought it *)
+  List.iter (fun (s : selected) ->
+      let name = s.project.name in
+      if Option.is_empty (direct top s.path) then
+        match List.filter (fun f -> Sys.file_exists (Filename.concat top.root f)) [name; name ^ ".soma"] with
+        | [] -> ()
+        | f :: _ ->
+          error (str file_name ++ str ": the dependency " ++ str s.path ++ str ", which a dependency of this project needs, is named " ++
+                 str name ++ str ", and this project has " ++ str f ++ str (if f = name then "/" else "") ++
+                 str ". Both would be the library " ++ str name ++ str ": rename this project's.")) selected;
   List.iter (fun (s : selected) -> check_project (s.path ^ " " ^ file_name) s.project) selected
 
 (* Every version asked for, from the tags or what [known] has of them, and the
