@@ -1,0 +1,27 @@
+(** What Soma takes Jane Street's Bonsai to be: the values of its module
+    Bonsai that this project uses, named as in OCaml. Next to no module of
+    the project, bonsai.definition declares the library's own module.
+    A named argument is OCaml's labeled one: [forall (f : A -> B)] is
+    [~f]. *)
+OCaml Library "bonsai".
+
+Module Value.
+  (** a value that changes as the app runs *)
+  t : Type -> Type.
+  map : forall {A B}, t A -> forall (f : A -> B), t B.
+End Value.
+
+Module Computation.
+  (** what Bonsai computes, from values *)
+  t : Type -> Type.
+End Computation.
+
+read : forall {A}, Value.t A -> Computation.t A.
+
+Module Var.
+  (** a variable: a value that what holds it sets *)
+  t : Type -> Type.
+  create : forall {A}, A -> t A.
+  value : forall {A}, t A -> Value.t A.
+  update : forall {A}, t A -> forall (f : A -> A), unit.
+End Var.

@@ -1,0 +1,31 @@
+(** What Soma takes Bonsai's library for the web to be: the values of its
+    module Bonsai_web that this project uses, named as in OCaml. Next to no
+    module of the project, bonsai_web.definition declares the library's
+    own module. A named argument is OCaml's labeled one, an optional one
+    here: [forall (attrs : list Attr.t)] is [~attrs]. *)
+OCaml Library "bonsai.web".
+Import bonsai js_of_ocaml.
+
+Module Effect.
+  (** what an event does *)
+  t : Type -> Type.
+  of_sync_fun : forall {A B}, (A -> B) -> A -> t B.
+End Effect.
+
+Module Vdom.
+  Module Attr.
+    t : Type.
+    create : string -> string -> t.
+    on_click : (Js.t Dom_html.mouseEvent -> Effect.t unit) -> t.
+  End Attr.
+  Module Node.
+    t : Type.
+    text : string -> t.
+    create : string -> forall (attrs : list Attr.t), list t -> t.
+  End Node.
+End Vdom.
+
+Module Start.
+  (** runs the computation's node in the page's <div id="app"> *)
+  start : Computation.t Vdom.Node.t -> unit.
+End Start.

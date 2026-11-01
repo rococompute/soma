@@ -1,0 +1,33 @@
+(** What is proved about main.soma's tasks: ordering them by their seconds
+    keeps every one of them. That Async runs each, and prints it once its
+    time has passed, is Async's to keep: Soma proves nothing about OCaml
+    code, which it never computes. *)
+
+Lemma insert_length : forall t ts, length (insert t ts) = S (length ts).
+Proof.
+  Take t : task.
+  Take ts : list (task).
+  We use induction on ts.
+  - We conclude that length [t] = 1.
+  - Take u : task.
+    Take rest : list (task).
+    Assume that length (insert t rest) = S (length rest) as IH.
+    We need to show that length (if PrimFloat.leb (snd t) (snd u) then t :: u :: rest else u :: insert t rest)
+      = S (length (u :: rest)).
+    We consider each case of PrimFloat.leb (snd t) (snd u) as order.
+    + We conclude that length (t :: u :: rest) = S (length (u :: rest)).
+    + We need to show that S (length (insert t rest)) = S (S (length rest)).
+      By IH, we conclude that S (length (insert t rest)) = S (S (length rest)).
+Qed.
+
+Theorem by_seconds_keeps_all : forall ts, length (by_seconds ts) = length ts.
+Proof.
+  Take ts : list (task).
+  We use induction on ts.
+  - We conclude that length (by_seconds []) = 0.
+  - Take t : task.
+    Take rest : list (task).
+    Assume that length (by_seconds rest) = length rest as IH.
+    We need to show that length (insert t (by_seconds rest)) = S (length rest).
+    By insert_length, we conclude that length (insert t (by_seconds rest)) = S (length rest).
+Qed.

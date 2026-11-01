@@ -1,0 +1,36 @@
+(** Three tasks, run at once by Async, Jane Street's library for
+    concurrent programs, used as it is: async.definition and
+    core.definition declare the values of its modules that the program
+    uses, named as in OCaml, and the project has no OCaml code of its own.
+
+        soma run main.soma      runs it
+        soma build main.soma    writes main.exe *)
+Import async core.
+
+(** a task: its name, and how many seconds it takes *)
+task : Type := string * float.
+
+tasks : list task := [("slow", 0.5%float), ("fast", 0.125%float), ("medium", 0.25%float)].
+
+(** a task, run: once its time has passed, it says so *)
+run_task (t : task) : Deferred.t unit :=
+  Deferred.map (Clock_ns.after (Time_ns.Span.of_sec (snd t)))
+    (fun _ => print_endline (fst t ++ " is done")).
+
+(** all of them, at once, and then "all done" *)
+run_all (ts : list task) : Deferred.t unit :=
+  Deferred.map (Deferred.all (map run_task ts)) (fun _ => print_endline "all done").
+
+main := Thread_safe.block_on_async_exn (fun _ => run_all tasks).
+
+(** The order they finish in, as Soma computes it, without Async: by their
+    seconds. Running main prints them in this order. *)
+Fixpoint insert (t : task) (ts : list task) : list task :=
+  match ts with
+  | [] => [t]
+  | u :: rest => if PrimFloat.leb (snd t) (snd u) then t :: ts else u :: insert t rest
+  end.
+
+by_seconds (ts : list task) : list task := fold_right insert [] ts.
+
+map fst (by_seconds tasks).

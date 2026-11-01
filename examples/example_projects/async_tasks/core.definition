@@ -1,0 +1,14 @@
+(** What Soma takes Jane Street's Core to be: the values of its module Core
+    that this project uses, named as in OCaml. Next to no module of the
+    project, core.definition declares the library's own module, Core. *)
+OCaml Library "core".
+
+Module Time_ns.
+  Module Span.
+    (** a length of time *)
+    t : Type.
+    of_sec : float -> t.
+  End Span.
+End Time_ns.
+
+print_endline : string -> unit.

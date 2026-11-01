@@ -80,8 +80,8 @@ let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
 let source_hash src =
   let base = Filename.remove_extension src in
   let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
-  (* and FILE.wasm, which FILE.definition declares *)
-  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"])))
+  (* and FILE.wasm or FILE.ml, which FILE.definition declares *)
+  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"; base ^ ".ml"])))
 
 let digest f = Digest.to_hex (Digest.file f)
 
@@ -163,14 +163,14 @@ let compile ?loc root path src =
   Printf.eprintf "Compiling %s (into %s)\n%!" (path ^ Filename.extension src) cache_name;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"; "SOMA_REVIEW"; "SOMA_WASM_FILE"]))
+                                   [root_var; stack_var; stamp_var; source_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_WASM_FILE"]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ root;
           stack_var ^ "=" ^ String.concat ":" (stack ?loc root @ [path]);
           stamp_var ^ "=" ^ stamp_of root path;
           source_var ^ "=" ^ src;
           (* what a program imports is not a unikernel of its own *)
-          "SOMA_MIRAGE_BUILD=0" ] @ module_file) in
+          "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file) in
   let prog = Sys.executable_name in
   (* the cache in the load path names the library by its place there:
      .soma-cache/models/task.vo is models.task *)
@@ -224,7 +224,13 @@ let prepare ?loc qids =
         if not (List.mem_assoc path !imported) then
           imported := (path, vo_of root path) :: !imported;
         true
-      | None -> any) false qids in
+      | None ->
+        (* an OCaml module is what its definition says it is *)
+        if Sys.file_exists (Filename.concat root (path ^ ".ml")) then
+          CErrors.user_err ?loc Pp.(str "Import " ++ Libnames.pr_qualid qid ++ str ": " ++ str path ++
+                                    str ".ml has no " ++ str (Filename.basename path) ++ str ".definition next to it," ++ spc () ++
+                                    str "which declares the types of its values that Soma uses (name : type.).");
+        any) false qids in
   if any then add_cache_to_loadpath root;
   any
 

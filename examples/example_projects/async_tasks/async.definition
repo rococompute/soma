@@ -1,0 +1,25 @@
+(** What Soma takes Jane Street's Async to be: the values of its module
+    Async that this project uses, named as in OCaml. Next to no module of
+    the project, async.definition declares the library's own module, Async.
+    A label (Deferred.map's ~f) is an argument in its place, and optional
+    arguments are left out. *)
+OCaml Library "async".
+Import core.
+
+Module Deferred.
+  (** a value to come *)
+  t : Type -> Type.
+  map : forall {A B}, t A -> (A -> B) -> t B.
+  bind : forall {A B}, t A -> (A -> t B) -> t B.
+  all : forall {A}, list (t A) -> t (list A).
+End Deferred.
+
+Module Clock_ns.
+  (** determined once that much time has passed *)
+  after : Time_ns.Span.t -> Deferred.t unit.
+End Clock_ns.
+
+Module Thread_safe.
+  (** runs Async's scheduler until the deferred is determined *)
+  block_on_async_exn : forall {A}, (unit -> Deferred.t A) -> A.
+End Thread_safe.

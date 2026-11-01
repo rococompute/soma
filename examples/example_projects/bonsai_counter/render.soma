@@ -1,0 +1,42 @@
+(** JSX pages (Soma.JSX's [element]) as Bonsai's virtual DOM, and apps of
+    Soma.JSX run by Bonsai: Soma code, calling Bonsai's own functions,
+    which bonsai.definition, bonsai_web.definition and
+    js_of_ocaml.definition declare. *)
+Require Import JSX.
+Import bonsai bonsai_web js_of_ocaml.
+
+(** an attribute, as Vdom's: JSX names them as React does, and an event
+    sends its action with [send] *)
+vdom_attribute {A} (send : A -> unit) (a : attribute A) : list Vdom.Attr.t :=
+  match a with
+  | attr name value =>
+    [Vdom.Attr.create (if String.eqb name "className" then "class" else name) value]
+  | on name action =>
+    if String.eqb name "onClick" then [Vdom.Attr.on_click (fun _ => Effect.of_sync_fun send action)]
+    else []
+  end.
+
+(** an element, as the nodes it is: a fragment is its children *)
+Fixpoint nodes {A} (send : A -> unit) (e : element A) : list Vdom.Node.t :=
+  match e with
+  | text s => [Vdom.Node.text s]
+  | node tag attrs children =>
+    [Vdom.Node.create tag (List.concat (List.map (vdom_attribute send) attrs))
+       (List.concat (List.map (nodes send) children))]
+  | fragment children => List.concat (List.map (nodes send) children)
+  end.
+
+(** a page: one node, or the nodes of a fragment in a <div> *)
+page {A} (send : A -> unit) (e : element A) : Vdom.Node.t :=
+  match nodes send e with
+  | [n] => n
+  | ns => Vdom.Node.create "div" [] ns
+  end.
+
+(** an app of Soma.JSX, run by Bonsai: its state is a variable of Bonsai's,
+    which starts at [init]; an action sets it to [update action] of it,
+    and the page is [view] of it *)
+run {S A} (a : app S A) : unit :=
+  let state := Var.create (init a) in
+  let send := fun action => Var.update state (update a action) in
+  Start.start (read (Value.map (Var.value state) (fun s => page send (view a s)))).

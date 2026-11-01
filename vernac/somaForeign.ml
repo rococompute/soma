@@ -32,3 +32,16 @@ let evaluate ~reduce env sigma c =
       | Some c' -> go (reduce c') (rounds - 1)
   in
   go c 100000
+
+type ocaml_item =
+  | OCamlType of int
+  | OCamlValue of string * string option list
+
+type ocaml_module = {
+  ml_file : string option;
+  top : string;
+  libraries : string list;
+  items : (Names.Constant.t * string * ocaml_item) list;
+}
+
+let ocaml_modules : (unit -> ocaml_module list) ref = ref (fun () -> [])

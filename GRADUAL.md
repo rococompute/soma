@@ -328,6 +328,60 @@ function of `Any`s, `Any -> Any -> Any`, and a `FILE.wasm` without a
 is. Numbers go in as `Any`s, and what it gives back is the number it is,
 its `i64` or `i32` as a `Z`; an `Any` holding no number is an error
 (`expected an i64, but got "two" : string`).
+
+### OCaml modules: `.definition` next to `.ml`, or next to nothing
+
+An OCaml module `FILE.ml` is used through `FILE.definition` too
+(`theories/Soma/OCaml.v`, `plugins/soma_ocaml`). A `.definition` next to
+no module declares the module of a library instead, named after the file:
+`async.definition` declares `Async`, with `OCaml Library "async".`, the
+findlib library it is. Its Soma modules are the OCaml module's
+submodules: `Module Deferred. map : ... End Deferred.` declares
+`Async.Deferred.map`. `name : Type.` (or `Type -> Type`, ...) declares one
+of its types, and `name : type.` one of its values. The plugin turns each
+value's declared type into an OCaml type when the definition is compiled:
+`string`, `bool`, `unit`, `list`, `option`, products, `float`, functions,
+the declared types, and type variables (`forall A`, erased by
+extraction). Anything else is refused there, `Any` among them. An OCaml
+value carries no type at run time that a cast could check, so it has one
+static type, unlike a WebAssembly module's numbers. A named argument,
+`forall (attrs : list Attr.t), ...`, is OCaml's labeled one, `~attrs`
+(also for an optional `?attrs`). Soma gives every argument by position.
+A label left undeclared is given in its place, and undeclared optional
+arguments are left out, as OCaml allows in an application of all the
+arguments.
+
+Soma never computes them, neither the kernel nor the evaluation of a
+term. A `.soma` program whose `main` uses them is built with them after
+it is checked (`toplevel/somaOcaml.ml`). `main` is extracted (with
+`ExtrOcamlBasic` and `ExtrOcamlNativeString`, so that strings, lists,
+options and pairs are OCaml's), each declared value being its binding in a
+generated `soma_bindings.ml`. That binding is the value at its declared
+type, with rigid type variables (`'a 'b. ...`), applied to its arguments
+with their labels, so that OCaml checks each declaration against the
+module. The project's `.ml` files go next to it. dune then builds them with
+the libraries, from an opam switch that Soma makes in `~/.cache/soma/ocaml`
+and installs them into, once (or `$SOMA_OCAML_SWITCH`). A program whose
+libraries depend on js_of_ocaml is built into `PROG.js`, with `PROG.html`,
+the page that runs it, which `soma run` serves on localhost. The others
+are built into `PROG.exe`, which `soma run` runs. `soma explore` lists the
+declarations as escape hatches.
+
+`soma extract PROG.soma [-o DIR]` writes that project into DIR
+(`PROG-ocaml` by default): `prog.ml`, `soma_bindings.ml`, the project's
+`.ml` files, dune's files, and an opam file of the packages the libraries
+come from. dune builds it with or without Soma, and a `main` that is a
+string is printed. A program that requires Sandbox is not extracted so,
+yet.
+
+`examples/example_projects/async_tasks` calls Async, and
+`examples/example_projects/bonsai_counter` is a counter of JSX run by
+Bonsai in the browser, with no OCaml code of their own.
+`dev/ocaml-check.sh` builds and runs both. Not yet: numbers (`nat`, `N`,
+`Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
+the state's type as a module of the `Model` signature, so the counter's
+state is a `Bonsai.Var`); labeled arguments of a function given to OCaml;
+values named by a keyword of Soma's (`return`).
 `examples/example_projects/wasm_add` uses a module built from Rust;
 `test-suite/misc/soma_wasm.sh` tests it.
 

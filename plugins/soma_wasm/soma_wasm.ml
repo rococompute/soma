@@ -466,7 +466,11 @@ let image c =
     Some { SomaForeign.module_file = b.file; export = b.export;
            params = List.map pair b.params; result = pair b.result }
 
+(* the hooks are shared with the other kinds of foreign code (soma_ocaml):
+   each answers for its own constants *)
 let () =
-  SomaForeign.step := step;
-  SomaForeign.describe := describe;
-  SomaForeign.image := image
+  let chain hook mine = let other = !hook in hook := (fun c -> match mine c with None -> other c | r -> r) in
+  let step_other = !SomaForeign.step in
+  SomaForeign.step := (fun env sigma c -> match step env sigma c with None -> step_other env sigma c | r -> r);
+  chain SomaForeign.describe describe;
+  chain SomaForeign.image image

@@ -1,0 +1,32 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: in FILE.definition, next to FILE.ml, [OCaml Library "bonsai.web".]
+   names a library that FILE.ml uses; [OCaml Bind "FILE.ml".], at the end
+   of the file (toplevel/ccompile.ml), ties the declarations to the
+   module (soma_ocaml.ml). Next to no module, FILE.definition declares a
+   library's module, File: [OCaml Bind Module "File".] *)
+
+{
+
+open Stdarg
+
+}
+
+DECLARE PLUGIN "soma-runtime.plugins.soma_ocaml"
+
+VERNAC COMMAND EXTEND SomaOCamlLibrary CLASSIFIED AS SIDEFF
+| [ "OCaml" "Library" ne_string_list(libraries) ] -> { Soma_ocaml.library libraries }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlBind CLASSIFIED AS SIDEFF
+| [ "OCaml" "Bind" string(file) ] -> { Soma_ocaml.bind file }
+| [ "OCaml" "Bind" "Module" string(name) ] -> { Soma_ocaml.bind_library name }
+END

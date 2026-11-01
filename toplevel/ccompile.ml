@@ -72,28 +72,47 @@ let load_folder_rules ~state f = function
   | [] -> state
   | libs -> process_string ~file:f ~state ("Import " ^ String.concat " " libs ^ ".")
 
-(* Soma: FILE.definition declares what FILE.wasm, next to it, exports:
-   Soma.Wasm first, then, after its declarations, [Wasm Bind], which ties
-   them to the exports (plugins/soma_wasm) *)
+(* Soma: FILE.definition declares what FILE.wasm or FILE.ml, next to it,
+   has, or, next to neither, what a library's OCaml module File has
+   (async.definition: Async): Soma.Wasm or Soma.OCaml first, then, after
+   its declarations, [Wasm Bind] or [OCaml Bind], which ties them to the
+   module (plugins/soma_wasm, plugins/soma_ocaml) *)
 let is_definition_file f = Filename.check_suffix f ".definition"
 
+let absolute f = if Filename.is_relative f then Filename.concat (Sys.getcwd ()) f else f
+
+(* the module that FILE.definition declares: next to it, or, for a
+   WebAssembly module without one, where Import says *)
+let definition_module f =
+  match Sys.getenv_opt "SOMA_WASM_FILE" with
+  | Some w when w <> "" -> `Wasm (absolute w)
+  | _ ->
+    let base = Filename.chop_suffix f ".definition" in
+    let wasm = base ^ ".wasm" and ml = base ^ ".ml" in
+    let name = Filename.basename base in
+    match Sys.file_exists wasm, Sys.file_exists ml with
+    | true, false -> `Wasm (absolute wasm)
+    | false, true -> `Ml (absolute ml)
+    | true, true ->
+      CErrors.user_err Pp.(str (Filename.basename f) ++ str " is next to both " ++ str name ++ str ".wasm and " ++
+                           str name ++ str ".ml, and declares what one of them has: rename the other.")
+    | false, false -> `Library (String.capitalize_ascii name)
+
 let load_definition_prologue ~state f =
+  if not (is_definition_file f) then state else
   (* exported: what imports the module has its types, float among them *)
-  if is_definition_file f then process_string ~state "Require Export Soma.Wasm." else state
+  match definition_module f with
+  | `Wasm _ -> process_string ~state "Require Export Soma.Wasm."
+  | `Ml _ | `Library _ -> process_string ~state "Require Export Soma.OCaml."
 
 let load_definition_epilogue ~state f =
   if not (is_definition_file f) then state else
-  (* next to it, or, for a module without one, where Import says *)
-  let wasm = match Sys.getenv_opt "SOMA_WASM_FILE" with
-    | Some w when w <> "" -> w
-    | _ -> Filename.chop_suffix f ".definition" ^ ".wasm" in
-  let wasm = if Filename.is_relative wasm then Filename.concat (Sys.getcwd ()) wasm else wasm in
-  if not (Sys.file_exists wasm) then
-    CErrors.user_err Pp.(str (Filename.basename f) ++ str " declares what " ++
-                         str (Filename.basename wasm) ++ str " exports, and there is no " ++
-                         str (Filename.basename wasm) ++ str " next to it.");
+  let bind = match definition_module f with
+    | `Wasm wasm -> Printf.sprintf "Wasm Bind %S." wasm
+    | `Ml ml -> Printf.sprintf "OCaml Bind %S." ml
+    | `Library top -> Printf.sprintf "OCaml Bind Module %S." top in
   (* its errors are the file's *)
-  try process_string ~state (Printf.sprintf "Wasm Bind %S." wasm)
+  try process_string ~state bind
   with e when CErrors.noncritical e ->
     let loc = Loc.initial (Loc.InFile { dirpath = None; file = f }) in
     CErrors.user_err ~loc (CErrors.print_no_report e)
@@ -162,6 +181,11 @@ let compile opts stm_options injections copts ~f_in ~f_out =
          Sandbox is also built as a MirageOS image, next to the .vo *)
       let () = if mode = BuildVo && Filename.check_suffix long_f_dot_in ".soma" then
           SomaMirage.build ~state ~vo_file:long_f_dot_out
+      in
+      (* Soma: a program whose main uses OCaml modules is built with them,
+         by OCaml, next to the .vo *)
+      let () = if mode = BuildVo && Filename.check_suffix long_f_dot_in ".soma" then
+          SomaOcaml.build ~state ~source:long_f_dot_in ~vo_file:long_f_dot_out
       in
       let () = Aux_file.record_in_aux_at "vo_compile_time"
           (Printf.sprintf "%.3f" (wall_clock2 -. wall_clock1))

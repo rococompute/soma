@@ -1,0 +1,44 @@
+(** A counter, in the browser. Its state, actions and view are Soma's, in
+    JSX, as in examples/example_files/reason_counter/reason_counter.soma; Bonsai, Jane
+    Street's OCaml library for web apps, runs it, called by Soma code
+    (render.soma) through the declarations of its own modules
+    (bonsai.definition, bonsai_web.definition): the project has no OCaml
+    code of its own.
+
+        soma run main.soma      serves it at http://localhost:8080
+        soma build main.soma    writes main.html and main.js
+
+    main.proof proves that whatever buttons are clicked, the count stays
+    at most [limit], and that what main runs is [step]. *)
+Require Import JSX.
+Import render.
+
+Inductive action := Increment | Decrement | Reset.
+
+limit := 10.
+
+(** what an action does to the count; [Increment] does nothing at [limit] *)
+step action count :=
+  match action with
+  | Increment => if count <? limit then count + 1 else count
+  | Decrement => count - 1
+  | Reset => 0
+  end.
+
+view count :=
+  <div className="counter">
+    <h1> "A counter" </h1>
+    <p> "Count: " {to_string count} " of at most " {to_string limit} </p>
+    <button onClick=Increment> "+" </button>
+    <button onClick=Decrement> "-" </button>
+    <button onClick=Reset> "reset" </button>
+  </div>.
+
+counter := make_app 0 step view.
+
+(** the program: Bonsai runs the counter, in the page *)
+main : unit := run counter.
+
+(** the page after +, +, +, -, as HTML: Soma computes the app, and not
+    Bonsai, which runs only in the browser *)
+render (view (state_after counter [Increment, Increment, Increment, Decrement])).

@@ -1,0 +1,55 @@
+(** What is proved about the counter of main.soma, which Bonsai runs in
+    the browser. This file is read after main.soma, in its environment:
+    [step], [limit], [view], [counter] and [main] are in scope. *)
+
+(** each action keeps the count at most [limit]; [Increment] adds one only
+    while the count is below [limit] *)
+Lemma step_within_limit : forall action count, count <= limit -> step action count <= limit.
+Proof.
+  Take a : action.
+  Take count : nat.
+  Assume that count <= limit as below.
+  We consider each case of a.
+  - We need to show that (if count <? limit then count + 1 else count) <= limit.
+    We consider whether count < limit as room.
+    + We conclude that count + 1 <= limit.
+    + We conclude that count <= limit.
+  - We conclude that count - 1 <= limit.
+  - We conclude that 0 <= limit.
+Qed.
+
+(** so does any list of actions, from any count at most [limit] *)
+Lemma replay_within_limit : forall clicks count,
+  count <= limit -> replay step count clicks <= limit.
+Proof.
+  Take clicks : list action.
+  We use induction on clicks.
+  - Take count : nat.
+    Assume that count <= limit as below.
+    We conclude that count <= limit.
+  - Take a : action.
+    Take clicks : list action.
+    Assume that forall count, count <= limit -> replay step count clicks <= limit as IH.
+    Take count : nat.
+    Assume that count <= limit as below.
+    We need to show that replay step (step a count) clicks <= limit.
+    By IH, it suffices to show that step a count <= limit.
+    By step_within_limit, we conclude that step a count <= limit.
+Qed.
+
+(** Whatever the clicks, the count stays at most [limit]. *)
+Theorem count_within_limit : forall clicks, state_after counter clicks <= limit.
+Proof.
+  Take clicks : list action.
+  We need to show that replay step 0 clicks <= limit.
+  By replay_within_limit, we conclude that replay step 0 clicks <= limit.
+Qed.
+
+(** What main runs is this counter, by Bonsai: its state starts at 0 and
+    each click sets it by [step]. That Bonsai then shows [view] of it is
+    Bonsai's to keep: Soma proves nothing about OCaml code, which it never
+    computes. *)
+Theorem main_runs_counter : main = run (make_app 0 step view).
+Proof.
+  We conclude that main = run (make_app 0 step view).
+Qed.

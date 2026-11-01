@@ -15,7 +15,7 @@ DOC_MLGS := \
 	parsing/g_constr.mlg parsing/g_prim.mlg \
 	toplevel/g_toplevel.mlg \
 	vernac/g_proofs.mlg vernac/g_redexpr.mlg vernac/g_vernac.mlg vernac/g_obligations.mlg vernac/g_macro.mlg \
-	plugins/btauto/g_btauto.mlg plugins/soma_proof/g_soma_proof.mlg plugins/soma_explore/g_soma_explore.mlg plugins/soma_wasm/g_soma_wasm.mlg \
+	plugins/btauto/g_btauto.mlg plugins/soma_proof/g_soma_proof.mlg plugins/soma_explore/g_soma_explore.mlg plugins/soma_wasm/g_soma_wasm.mlg plugins/soma_ocaml/g_soma_ocaml.mlg \
 	plugins/cc/g_congruence.mlg \
 	plugins/derive/g_derive.mlg \
 	plugins/extraction/g_extraction.mlg \

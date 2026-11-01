@@ -1,0 +1,13 @@
+(** The types of js_of_ocaml, Jane Street's compiler of OCaml to
+    JavaScript, that a click has. Next to no module of the project,
+    js_of_ocaml.definition declares the library's own module. *)
+OCaml Library "js_of_ocaml".
+
+Module Js.
+  (** a JavaScript object *)
+  t : Type -> Type.
+End Js.
+
+Module Dom_html.
+  mouseEvent : Type.
+End Dom_html.

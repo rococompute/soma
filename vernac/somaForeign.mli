@@ -38,3 +38,28 @@ val image : (Names.Constant.t -> image_call option) ref
     foreign calls computed, and evaluated again, until there is none left
     that can be *)
 val evaluate : reduce:(EConstr.t -> EConstr.t) -> Environ.env -> Evd.evar_map -> EConstr.t -> EConstr.t
+
+(** OCaml modules (plugins/soma_ocaml): FILE.ml, which FILE.definition
+    declares, or a library's module, which a .definition next to no module
+    declares (async.definition: Async). Soma never computes them; a program
+    that uses one is built with it, by OCaml (toplevel/somaOcaml.ml). *)
+
+(** What a declaration is in OCaml: a type with that many parameters
+    ([html : Type -> Type] is ['a html]), or a value of that OCaml type,
+    whose arguments are given by position, and the labels of its
+    arguments in OCaml (a named argument, [forall (attrs : ...), ...], is
+    OCaml's [~attrs]) *)
+type ocaml_item =
+  | OCamlType of int
+  | OCamlValue of string * string option list
+
+type ocaml_module = {
+  ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
+  top : string;                     (** its name in OCaml: Web, Async *)
+  libraries : string list;          (** the findlib libraries it uses *)
+  items : (Names.Constant.t * string * ocaml_item) list;
+  (** with their paths in it: Deferred.bind *)
+}
+
+(** the OCaml modules of the libraries loaded *)
+val ocaml_modules : (unit -> ocaml_module list) ref

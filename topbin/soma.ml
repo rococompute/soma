@@ -12,7 +12,8 @@
 
    [soma build FILE [OPTIONS]] checks and builds a Soma program, as
    [rocq c], and prints the names of the files it created (a program that
-   requires Sandbox is also built into an image).
+   requires Sandbox is also built into an image; one that uses OCaml
+   modules, with them, into an executable or a page and its script).
 
    [soma compile FILE [OPTIONS]] does both [soma build] and [soma explore]:
    it builds FILE as [soma build] does, in the same check reviewing it as
@@ -21,7 +22,13 @@
    [soma run FILE [OPTIONS] [-- ARGUMENTS]] checks a program in a
    temporary directory, so that it leaves no files, and prints the value of
    its last bare term; a program that requires Sandbox is built into an
-   image, which is run, with ARGUMENTS. *)
+   image, which is run, with ARGUMENTS; one that uses OCaml modules into
+   an executable, which is run, with ARGUMENTS, or a page, which is
+   served on localhost ($SOMA_PORT, or 8080).
+
+   [soma extract FILE [-o DIR]] checks a program, as [soma run] does, and
+   writes it as an OCaml project into DIR: its main extracted to OCaml,
+   with the OCaml modules and libraries it uses, which dune builds. *)
 
 open Rocqshim
 
@@ -29,12 +36,17 @@ let usage = {|Usage:
   soma <command> FILE [options]
 
 Commands:
-  build                       Check a program and keep its MirageOS image, if any.
-  run                         Check a program and print its result, or run its image.
+  build                       Check a program and keep what it is built into, if anything:
+                              its MirageOS image, or, with OCaml modules, its executable
+                              or its page.
+  run                         Check a program and print its result, or run its image or
+                              its executable, or serve its page on localhost.
   explore                     Review a program and the project files it imports: explore
                               its models, and list its escape hatches and its issues.
   compile                     Build, then review: soma build and soma explore, in one
                               check; fails if the review finds an issue.
+  extract                     Check a program and write it as an OCaml project, with the
+                              OCaml modules and libraries it uses, that dune builds.
   repl                        Start an interactive session, with FILE loaded if given.
   help                        Show help.
 
@@ -43,7 +55,9 @@ Options:
                               proofs that "The rest follows." found.
   --fill                      (build, compile) Write the proofs that "The rest follows."
                               found in its place in FILE.proof.
-  -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image.
+  -- ARGUMENTS                (run) Pass ARGUMENTS to the MirageOS image, or the executable.
+  -o DIR                      (extract) Write the OCaml project into DIR (FILE-ocaml next
+                              to FILE by default).
   --events                    (run) Show the image's events, and what its run came
                               to, as JSON lines (soma-event, soma-outcome).
   --supervise                 (run) Run the image again when its restart_policy
@@ -203,8 +217,9 @@ let split_review output =
     | l :: rest when starts_with ~prefix:"Review of " l -> List.rev before, l :: rest
     | l :: rest -> split (l :: before) rest in
   let program, review = split [] (lines output) in
-  (* the image is built after the review: what Mirage says is the build's *)
-  let mirage l = starts_with ~prefix:"Mirage: " l in
+  (* the image is built after the review: what Mirage says is the build's,
+     and so is what OCaml says *)
+  let mirage l = starts_with ~prefix:"Mirage: " l || starts_with ~prefix:"OCaml: " l in
   program @ List.filter mirage review, List.filter (fun l -> not (mirage l)) review
 
 (* a review that found nothing ends so *)
@@ -312,6 +327,71 @@ let mirage_command output =
         Option.map (fun c -> List.filter (( <> ) "") (String.split_on_char ' ' c)) (at 0)
       else None)
     (lines output)
+
+(* What OCaml's build says it built (toplevel/somaOcaml.ml): ["OCaml:
+   built PROG.html, with PROG.js; ..."], a page, or ["OCaml: built
+   PROG.exe; ..."], an executable *)
+type built = Page of string | Executable of string
+
+let ocaml_built output =
+  let prefix = "OCaml: built " in
+  List.find_map (fun l ->
+      if starts_with ~prefix l then
+        let rest = String.sub l (String.length prefix) (String.length l - String.length prefix) in
+        let file = List.hd (String.split_on_char ';' (List.hd (String.split_on_char ',' rest))) in
+        if Filename.check_suffix file ".html" then Some (Page file)
+        else if Filename.check_suffix file ".exe" then Some (Executable file)
+        else None
+      else None)
+    (lines output)
+
+(* [soma run] of a page: [dir] served on localhost, at $SOMA_PORT or 8080,
+   or the next port that is free, until Ctrl-C. "/" is the page; the other
+   files are those of [dir], by name. *)
+let serve_page page =
+  let dir = Filename.dirname page in
+  let content_type f =
+    if Filename.check_suffix f ".html" then "text/html; charset=utf-8"
+    else if Filename.check_suffix f ".js" then "text/javascript"
+    else if Filename.check_suffix f ".css" then "text/css"
+    else "application/octet-stream" in
+  let respond fd status ctype body =
+    let head = Printf.sprintf "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n\
+                               Cache-Control: no-store\r\nConnection: close\r\n\r\n"
+        status ctype (String.length body) in
+    let send s = let b = Bytes.of_string s in
+      let rec go o = if o < Bytes.length b then go (o + Unix.write fd b o (Bytes.length b - o)) in go 0 in
+    (try send head; send body with Unix.Unix_error _ -> ()) in
+  let first = match Option.bind (Sys.getenv_opt "SOMA_PORT") int_of_string_opt with
+    | Some p when p > 0 -> p | _ -> 8080 in
+  let sock = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
+  Unix.setsockopt sock Unix.SO_REUSEADDR true;
+  let rec bind port =
+    try Unix.bind sock (Unix.ADDR_INET (Unix.inet_addr_loopback, port)); port
+    with Unix.Unix_error (Unix.EADDRINUSE, _, _) when port < first + 20 -> bind (port + 1) in
+  let port = bind first in
+  Unix.listen sock 16;
+  Printf.printf "Serving %s at http://localhost:%d/ (Ctrl-C stops)\n%!" (Filename.basename page) port;
+  let buf = Bytes.create 8192 in
+  while true do
+    match Unix.accept ~cloexec:true sock with
+    | exception Unix.Unix_error (Unix.EINTR, _, _) -> ()
+    | fd, _ ->
+      let n = try Unix.read fd buf 0 (Bytes.length buf) with Unix.Unix_error _ -> 0 in
+      let request = Bytes.sub_string buf 0 n in
+      (match String.split_on_char ' ' (List.hd (String.split_on_char '\r' request)) with
+       | "GET" :: path :: _ ->
+         let path = List.hd (String.split_on_char '?' path) in
+         let name = if path = "/" then Filename.basename page
+           else String.sub path 1 (String.length path - 1) in
+         let file = Filename.concat dir name in
+         if name <> "" && not (String.contains name '/') && name.[0] <> '.' && Sys.file_exists file
+            && not (Sys.is_directory file) then
+           respond fd "200 OK" (content_type name) (In_channel.with_open_bin file In_channel.input_all)
+         else respond fd "404 Not Found" "text/plain" "Not found\n"
+       | _ -> respond fd "405 Method Not Allowed" "text/plain" "Only GET\n");
+      (try Unix.close fd with Unix.Unix_error _ -> ())
+  done
 
 (* Running an image: its console, with the events of its runtime
    (toplevel/somaMirage.ml, "soma-event {...}" lines) read rather than
@@ -563,6 +643,7 @@ let explore file args =
   pass_signals ();
   Unix.putenv "SOMA_REVIEW" "1";
   Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+  Unix.putenv "SOMA_OCAML_BUILD" "0";
   let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
   (* what the review says, the build does not say again *)
   let code, output = compile (file :: "-o" :: vo :: "-w" :: "-gradual-may-fail" :: args) in
@@ -570,6 +651,35 @@ let explore file args =
   let _, review = split_review output in
   List.iter print_endline review;
   finish (if code <> 0 then code else if clean_review review then 0 else 1)
+
+(* [soma extract FILE [-o DIR]]: FILE checked in a temporary directory,
+   as by [soma run], and its program extracted to OCaml, into DIR
+   (FILE-ocaml next to it by default): an OCaml project that dune builds,
+   with the OCaml modules and libraries the program uses
+   (SOMA_OCAML_EXTRACT, which toplevel/somaOcaml.ml reads) *)
+let extract file args =
+  let rec split out = function
+    | "-o" :: dir :: rest -> split (Some dir) rest
+    | a :: rest -> let out, rest = split out rest in out, a :: rest
+    | [] -> out, [] in
+  let out, args = split None args in
+  let absolute f = if Filename.is_relative f then Filename.concat (Sys.getcwd ()) f else f in
+  let out = match out with
+    | Some d -> absolute d
+    | None ->
+      let file = absolute file in
+      let dir = Filename.dirname file in
+      let dir = if Filename.basename dir = Filename.current_dir_name then Filename.dirname dir else dir in
+      Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ "-ocaml") in
+  let dir = temp_dir () in
+  let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
+  pass_signals ();
+  Unix.putenv "SOMA_OCAML_EXTRACT" out;
+  Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+  let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
+  let code, output = compile (file :: "-o" :: vo :: args) in
+  List.iter (fun l -> if starts_with ~prefix:"OCaml: " l then print_endline l) (lines output);
+  finish code
 
 let run ~events ~supervise file args image_args =
   let dir = temp_dir () in
@@ -615,8 +725,25 @@ let run ~events ~supervise file args image_args =
       loop (memory_of command) 0
     end
   | None ->
+    match ocaml_built output with
+    | Some (Executable exe) ->
+      (* a program built with OCaml modules: run, with ARGUMENTS; Ctrl-C
+         stops it, and then soma *)
+      Sys.set_signal Sys.sigint Sys.Signal_ignore;
+      let argv = Array.of_list (exe :: image_args) in
+      let pid = Unix.create_process exe argv Unix.stdin Unix.stdout Unix.stderr in
+      child := Some pid;
+      finish (exit_code (wait pid))
+    | Some (Page page) ->
+      if image_args <> [] then begin
+        prerr_endline "soma run: arguments after -- are for a program, and not for a page";
+        finish 2
+      end;
+      Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> finish 0));
+      serve_page page
+    | None ->
     if image_args <> [] then begin
-      prerr_endline "soma run: arguments after -- are for a program that requires Sandbox";
+      prerr_endline "soma run: arguments after -- are for a program that requires Sandbox or uses OCaml modules";
       finish 2
     end;
     let value = last_value output in
@@ -700,6 +827,14 @@ let () =
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         build ~review:(command = "compile") ~verbose ~fill (program_of file) args
+    end
+  | "extract" :: rest ->
+    begin match rest with
+      | [] -> usage_error "soma extract: no file given"
+      | file :: args ->
+        let opts, args = parse_opts args in
+        let () = init opts (file :: args) in
+        extract (program_of file) args
     end
   | "explore" :: rest ->
     begin match rest with
