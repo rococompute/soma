@@ -1202,6 +1202,10 @@ struct
             && (match DAst.get c with GHole (GImplicitArg _) -> true | _ -> false)
             && EConstr.Vars.noccurn sigma 1 c2
             && is_arity !!env sigma c1
+            (* the instance of a class whose type is an arity, a
+               definitional class [Class Equiv A := equiv : A -> A -> Prop],
+               is an instance all the same *)
+            && not (Typeclasses.is_class_type !!env sigma c1)
           in
           let sigma, arg_state, body, arg =
             pretype_arg env sigma arg_state ~trace ~erased body c na.binder_name c1

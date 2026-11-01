@@ -39,3 +39,12 @@ Fail Definition hole : nat := _.
 (** A missing instance at a known type is an error, also when evaluating. *)
 Fail Definition no_instance := size tt.
 Fail Eval lazy in size_plus_one tt.
+
+(** A definitional class, whose instance's type is an arity
+    ([Equiv A] is [A -> A -> Prop]): its instance binder occurs nowhere in
+    the rest of [equiv]'s type, and it is found by instance resolution all
+    the same, not set to [?] (std++ builds its setoids so). *)
+Class Equiv A := equiv : A -> A -> Prop.
+Class Refl {A} (R : A -> A -> Prop) := refl x : R x x.
+Lemma equiv_refl {A} `{Equiv A, !Refl (@equiv A _)} (x : A) : equiv x x.
+Proof. apply refl. Qed.
