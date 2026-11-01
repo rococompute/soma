@@ -1,0 +1,11 @@
+(** Soma's functions, and theorems about them that Lean proves.
+    series.soma defines sum_to and fib; facts.lean proves, in Lean, that
+    2 * sum_to n = n * (n + 1) and that fib n <= 2 ^ n; facts.definition
+    declares them, which Lean checks before Soma takes them. main.proof
+    builds on them.
+
+        soma build -v main.soma *)
+Import series facts.
+
+sum_to 100.     (* 5050 *)
+fib 20.         (* 6765 *)

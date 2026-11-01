@@ -28,6 +28,13 @@ val write_stamp : unit -> unit
     proofs are in X/X.proof. *)
 val is_folder_rules : string -> bool
 
+(** The file being compiled, set by [rocq c] (toplevel/ccompile.ml): what
+    a path in it is relative to, when no location says *)
+val source_file : string option ref
+
+(** The cache of the project of the file being compiled, ROOT/.soma-cache *)
+val project_cache : unit -> string
+
 (** [folder_rules file]: the rules of the folders of the project from its
     root to [file]'s (ROOT/ROOT.lang, X/X.lang, ...), outermost first,
     which apply to every Soma file under them, compiled into the cache when

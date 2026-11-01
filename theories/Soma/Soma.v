@@ -17,6 +17,10 @@
 
 Require Export Corelib.Gradual.Gradual.
 
+(** [Rocq Library "rocq-stdpp".]: a Rocq library, which Soma compiles from
+    its source, once, and puts in the load path (plugins/soma_rocq) *)
+Declare ML Module "soma-runtime.plugins.soma_rocq".
+
 (** [Succ] is another name for [S], the successor constructor of [nat]. It
     works in patterns too ([Succ m] is any number at least 1, and [m] is one
     less), and terms built with [S] print with [Succ]. *)

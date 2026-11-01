@@ -1,0 +1,21 @@
+(** Built on Lean's theorems (facts.definition), which Soma's kernel takes
+    as axioms, and which soma explore lists. *)
+
+(** the closed form of sum_to, from Lean's sum_to_formula *)
+Theorem sum_to_closed : forall n, sum_to n = n * (n + 1) / 2.
+Proof.
+  Take n : nat.
+  By sum_to_formula, it holds that 2 * sum_to n = n * (n + 1) as twice.
+  We need to show that sum_to n = n * (n + 1) / 2.
+  rewrite <- twice, Nat.mul_comm, Nat.div_mul by lia.
+  We conclude that sum_to n = sum_to n.
+Qed.
+
+(** each Fibonacci number is below the next power of 2, from Lean's
+    fib_le_pow *)
+Theorem fib_below : forall n, fib n < 2 ^ n + 1.
+Proof.
+  Take n : nat.
+  By fib_le_pow, it holds that fib n <= 2 ^ n as bound.
+  We conclude that fib n < 2 ^ n + 1.
+Qed.

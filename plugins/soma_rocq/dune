@@ -1,0 +1,10 @@
+(library
+ (name soma_rocq_plugin)
+ (public_name soma-runtime.plugins.soma_rocq)
+ (synopsis "Soma's Rocq libraries: compiled from their source by Soma")
+ (libraries soma-runtime.vernac))
+
+(rule
+ (targets g_soma_rocq.ml)
+ (deps (:mlg g_soma_rocq.mlg))
+ (action (chdir %{project_root} (run rocq pp-mlg %{deps}))))

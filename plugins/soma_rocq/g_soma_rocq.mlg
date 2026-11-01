@@ -1,0 +1,31 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Rocq Library "rocq-stdpp".], [Rocq Library "rocq-stdpp" "1.13.0".]
+   and [Rocq Library "mylib" in "vendor/mylib".]: a Rocq library, compiled
+   by Soma and in the load path, in the synterp phase, so that a [From
+   stdpp Require ...] after it finds it (soma_rocq.ml) *)
+
+{
+
+open Stdarg
+
+}
+
+DECLARE PLUGIN "soma-runtime.plugins.soma_rocq"
+
+VERNAC COMMAND EXTEND SomaRocqLibrary CLASSIFIED AS SIDEFF
+| [ "Rocq" "Library" string(package) ]
+  SYNTERP AS _ { Soma_rocq.library package (Soma_rocq.Opam None) } -> { () }
+| [ "Rocq" "Library" string(package) string(version) ]
+  SYNTERP AS _ { Soma_rocq.library package (Soma_rocq.Opam (Some version)) } -> { () }
+| [ "Rocq" "Library" string(package) "in" string(path) ]
+  SYNTERP AS _ { Soma_rocq.library package (Soma_rocq.Local path) } -> { () }
+END

@@ -500,6 +500,56 @@ Fail Definition bad : nat := true.  (* still a static error: not consistent *)
 | `Set/Unset Gradual Typing` | turns consistency-based elaboration on or off |
 | `Set Gradual Steps n` / `Unset Gradual Steps` | the budget of gradual reduction steps per command, or none |
 
+
+### Rocq libraries: `Rocq Library`
+
+A Rocq library is Rocq: Soma takes it as it is, with no definition and
+nothing translated, its terms being terms that the kernel checks, that
+evaluation computes and that proofs go through. `Rocq Library
+"rocq-stdpp".` (or `Rocq Library "rocq-stdpp" "1.13.0".`), in any Soma
+file, then `From stdpp Require Import gmap.` (`plugins/soma_rocq`, which the
+Soma prelude loads). What Soma cannot take is a library compiled by another
+Rocq: Soma's kernel is not theirs, so opam's compiled packages do not load.
+So the sentence, in the synterp phase, compiles the library from its source
+with Soma itself, once, into the project's cache, `.soma-cache/rocq`, in a
+directory named after the package, its version and Soma's Corelib, and puts
+its theories in the load path. The source is `opam source` of the package, from the
+repository of Rocq's packages (`coq-released`, which Soma adds to its own
+switch), or a directory: `Rocq Library "mylib" in "vendor/mylib".`, compiled
+again when its files change. Its theories are what its dune files declare,
+`(rocq.theory (name stdpp) (package rocq-stdpp))`, or else the `-Q` and
+`-R` of its `_RocqProject` or `_CoqProject`. They are compiled in the order
+`rocq dep` gives, by `rocq c`, as Rocq: without Soma's prelude, whose names
+(`R`, the reals) and gradual typing a library does not expect. Nothing else
+of the source runs. A
+library that loads an OCaml plugin is refused, as a plugin is built against
+the Rocq it extends. A library's dependencies are named by their own `Rocq
+Library`, before it. `examples/example_projects/rocq_stdpp` keeps a shop's
+stock in std++'s finite maps, computed by Soma and proved with std++'s
+lemmas.
+
+### Theorems proved in Lean: `.definition` next to `.lean`
+
+`FILE.definition` next to `FILE.lean` declares theorems that the Lean file
+proves about Soma's definitions, `name : statement.`
+(`theories/Soma/Lean.v`, `plugins/soma_lean`). `Lean Bind`, at its end,
+checks them with Lean before Soma takes them:
+
+1. Soma translates the definitions that the statements use into a Lean
+   module `Soma` (`def Soma.series.fib ...`), which `FILE.lean` imports.
+2. `FILE.lean` is compiled, by the Lean of the project's `lean-toolchain`.
+3. Each translated statement must be the type of its theorem
+   (`example : STATEMENT := @name`).
+4. A theorem that depends on `sorryAx` (`#print axioms`) is refused.
+
+What is translated is a fragment: `nat`, `bool`, lists, pairs and options,
+their functions and comparisons, the connectives and quantifiers, `match`,
+and structural `Fixpoint`s, a variable matched being written as its pattern
+in its branch so that Lean sees the recursion is structural. The rest is
+refused, saying what. To Soma's kernel, a theorem is an axiom, trusted as
+Lean's kernel, the axioms Lean's proof uses, and the translation are, which
+`soma explore` lists. `examples/example_projects/lean_facts` is an example;
+`test-suite/misc/soma_lean.sh` is skipped without Lean.
 ### Run-time errors
 
 A cast that fails reduces to `raise`, which keeps nothing but its type, and

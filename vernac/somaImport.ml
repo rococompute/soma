@@ -80,8 +80,8 @@ let stamp_of root path = Filename.concat (cache root) (path ^ ".stamp")
 let source_hash src =
   let base = Filename.remove_extension src in
   let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
-  (* and FILE.wasm or FILE.ml, which FILE.definition declares *)
-  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"; base ^ ".ml"])))
+  (* and FILE.wasm, FILE.ml or FILE.lean, which FILE.definition declares *)
+  Digest.to_hex (Digest.string (String.concat " " (List.map one [src; base ^ ".proof"; base ^ ".lang"; base ^ ".wasm"; base ^ ".ml"; base ^ ".lean"])))
 
 let digest f = Digest.to_hex (Digest.file f)
 
@@ -247,6 +247,15 @@ let is_folder_rules f =
 
 (* The rules of the folders of the project from its root to [file]'s,
    outermost first, compiled when needed: the libraries to import *)
+let source_file = ref None
+
+let project_cache () =
+  match env_root () with
+  | Some r -> cache r
+  | None -> cache (CUnix.canonical_path_name (match !source_file with
+      | Some f -> Filename.dirname (absolute f)
+      | None -> Sys.getcwd ()))
+
 let folder_rules file =
   if not (is_soma_file file) then [] else
   let file = absolute file in

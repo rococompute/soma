@@ -109,7 +109,7 @@ sed -i.bak '$d' greet.definition; sed -i.bak '$d' greet.definition; sed -i.bak '
 # a definition next to both a module of WebAssembly and of OCaml
 touch greet.wasm
 if soma build prog.soma > out.log 2>&1; then echo "greet.wasm and greet.ml were not told apart"; exit 1; fi
-grep -q 'is next to both greet.wasm and greet.ml' out.log
+grep -q 'is next to greet.wasm and greet.ml' out.log
 rm greet.wasm
 
 # an OCaml module without its definition

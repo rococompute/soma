@@ -1,0 +1,32 @@
+(** A shop's stock, kept in a finite map of stdpp, a Rocq library of finite
+    maps, sets and lists. stdpp is Rocq, which Soma takes as it is: Soma
+    compiles it from its source, once, into this project's .soma-cache
+    (Rocq Library), computes with its functions, and main.proof proves
+    with its lemmas.
+
+        soma build -v main.soma *)
+Rocq Library "rocq-stdpp".
+From stdpp Require Import gmap strings.
+
+(** stdpp keeps the empty map opaque, for its proofs, and computes maps
+    with vm_compute: the program computes them as any term *)
+Transparent gmap_empty.
+
+(** what the shop has: how many of each item *)
+stock : gmap string nat := <["apples" := 3]> (<["pears" := 5]> ∅).
+
+(** [n] more of [item] *)
+restock (item : string) (n : nat) (s : gmap string nat) : gmap string nat :=
+  <[item := n + default 0 (s !! item)]> s.
+
+(** [n] of [item] sold: the stock after, if there are as many *)
+sell (item : string) (n : nat) (s : gmap string nat) : option (gmap string nat) :=
+  match s !! item with
+  | Some k => if n <=? k then Some (<[item := k - n]> s) else None
+  | None => None
+  end.
+
+stock !! "apples".                                        (* Some 3 *)
+map_to_list (restock "plums" 4 stock).                    (* plums too *)
+option_map map_to_list (sell "apples" 2 stock).           (* 1 apple left *)
+sell "apples" 5 stock.                                    (* None: not as many *)

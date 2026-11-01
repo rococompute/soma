@@ -88,15 +88,17 @@ let definition_module f =
   | Some w when w <> "" -> `Wasm (absolute w)
   | _ ->
     let base = Filename.chop_suffix f ".definition" in
-    let wasm = base ^ ".wasm" and ml = base ^ ".ml" in
     let name = Filename.basename base in
-    match Sys.file_exists wasm, Sys.file_exists ml with
-    | true, false -> `Wasm (absolute wasm)
-    | false, true -> `Ml (absolute ml)
-    | true, true ->
-      CErrors.user_err Pp.(str (Filename.basename f) ++ str " is next to both " ++ str name ++ str ".wasm and " ++
-                           str name ++ str ".ml, and declares what one of them has: rename the other.")
-    | false, false -> `Library (String.capitalize_ascii name)
+    let next = List.filter (fun e -> Sys.file_exists (base ^ e)) [".wasm"; ".ml"; ".lean"] in
+    match next with
+    | [".wasm"] -> `Wasm (absolute (base ^ ".wasm"))
+    | [".ml"] -> `Ml (absolute (base ^ ".ml"))
+    | [".lean"] -> `Lean (absolute (base ^ ".lean"))
+    | [] -> `Library (String.capitalize_ascii name)
+    | _ ->
+      CErrors.user_err Pp.(str (Filename.basename f) ++ str " is next to " ++
+                           str (String.concat " and " (List.map (fun e -> name ^ e) next)) ++
+                           str ", and declares what one of them has: rename the others.")
 
 let load_definition_prologue ~state f =
   if not (is_definition_file f) then state else
@@ -104,13 +106,15 @@ let load_definition_prologue ~state f =
   match definition_module f with
   | `Wasm _ -> process_string ~state "Require Export Soma.Wasm."
   | `Ml _ | `Library _ -> process_string ~state "Require Export Soma.OCaml."
+  | `Lean _ -> process_string ~state "Require Export Soma.Lean."
 
 let load_definition_epilogue ~state f =
   if not (is_definition_file f) then state else
   let bind = match definition_module f with
     | `Wasm wasm -> Printf.sprintf "Wasm Bind %S." wasm
     | `Ml ml -> Printf.sprintf "OCaml Bind %S." ml
-    | `Library top -> Printf.sprintf "OCaml Bind Module %S." top in
+    | `Library top -> Printf.sprintf "OCaml Bind Module %S." top
+    | `Lean lean -> Printf.sprintf "Lean Bind %S." lean in
   (* its errors are the file's *)
   try process_string ~state bind
   with e when CErrors.noncritical e ->
@@ -135,6 +139,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
   let beautify = copts.beautify in
   let () = if beautify then CLexer.record_comments := true in
   let rules = SomaImport.folder_rules long_f_dot_in in
+  SomaImport.source_file := Some long_f_dot_in;
   match mode with
   | BuildVo | BuildVok ->
       let doc, sid = Topfmt.(in_phase ~phase:LoadingPrelude)

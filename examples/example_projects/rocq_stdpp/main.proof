@@ -1,0 +1,37 @@
+(** What is proved about the shop, with stdpp's lemma lookup_insert_ne
+    and its tactic for maps, simplify_map_eq: Rocq, which Soma's proofs
+    use as their own. *)
+
+(** restocking adds to the count of the item *)
+Theorem restock_count : forall item n s,
+  restock item n s !! item = Some (n + default 0 (s !! item)).
+Proof.
+  Take item : string. Take n : nat. Take s : gmap string nat.
+  We need to show that <[item := n + default 0 (s !! item)]> s !! item = Some (n + default 0 (s !! item)).
+  by simplify_map_eq.
+Qed.
+
+(** selling an item changes no other item's count *)
+Theorem sell_other : forall item other n s s',
+  other <> item -> sell item n s = Some s' -> s' !! other = s !! other.
+Proof.
+  Take item : string. Take other : string. Take n : nat.
+  Take s : gmap string nat. Take s' : gmap string nat.
+  Assume that other <> item as different.
+  unfold sell. destruct (s !! item) as [k|]; [|discriminate].
+  destruct (n <=? k); [|discriminate].
+  intros sold. injection sold as <-.
+  by rewrite lookup_insert_ne.
+Qed.
+
+(** selling never sells what is not there: what is left is the count
+    less what was sold *)
+Theorem sell_count : forall item n s s',
+  sell item n s = Some s' -> exists k, s !! item = Some k /\ n <= k /\ s' !! item = Some (k - n).
+Proof.
+  Take item : string. Take n : nat. Take s : gmap string nat. Take s' : gmap string nat.
+  unfold sell. destruct (s !! item) as [k|] eqn:had; [|discriminate].
+  destruct (n <=? k) eqn:enough; [|discriminate].
+  intros sold. injection sold as <-.
+  exists k. apply Nat.leb_le in enough. simplify_map_eq. auto.
+Qed.

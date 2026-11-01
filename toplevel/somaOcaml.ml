@@ -35,15 +35,15 @@ let getenv_default = SomaMirage.getenv_default
 let mkdir_p = SomaMirage.mkdir_p
 let read_file = SomaMirage.read_file
 let update_file = SomaMirage.update_file
-let tail_of_file = SomaMirage.tail_of_file
+let tail_of_file = SomaOpam.tail_of_file
+let command_exists = SomaOpam.command_exists
+let read_lines = SomaOpam.read_lines
+let run = SomaOpam.run
+let opam_switch = SomaOpam.switch
 
 let error msg = CErrors.user_err Pp.(str "OCaml: " ++ msg)
 
-let cache_dir () =
-  let cache = match Sys.getenv_opt "XDG_CACHE_HOME" with
-    | Some d when d <> "" -> d
-    | _ -> Filename.concat (getenv_default "HOME" ".") ".cache" in
-  List.fold_left Filename.concat cache ["soma"; "ocaml"]
+let cache_dir () = Filename.concat (SomaOpam.cache_root ()) "ocaml"
 
 (* * The modules main uses *)
 
@@ -123,19 +123,6 @@ let package_of library = match String.index_opt library '.' with
   | Some i -> String.sub library 0 i
   | None -> library
 
-let command_exists name =
-  Sys.command (Filename.quote_command "sh" ["-c"; "command -v " ^ name] ~stdout:"/dev/null" ~stderr:"/dev/null") = 0
-
-let opam_switch () = match Sys.getenv_opt "SOMA_OCAML_SWITCH" with
-  | Some s when s <> "" -> s, false
-  | _ -> cache_dir (), true
-
-let read_lines f =
-  try List.filter (( <> ) "") (String.split_on_char '\n' (read_file f)) with Sys_error _ -> []
-
-let run ~log args =
-  Sys.command (Filename.quote_command (List.hd args) (List.tl args) ~stdout:log ~stderr:log) = 0
-
 (* The opam packages that [libraries] need, installed in the switch: once,
    recorded in [installed] *)
 let ensure_packages ~switch ~managed libraries =
@@ -147,20 +134,13 @@ let ensure_packages ~switch ~managed libraries =
   let wanted = (if managed then ["ocaml-base-compiler"] else []) @ ["dune"] @
                List.sort_uniq compare (List.map package_of libraries) in
   if not (List.for_all (fun p -> List.mem p have) wanted) then begin
-    if not (command_exists "opam") then
-      error Pp.(str "a program that uses OCaml modules is built with opam's packages," ++ spc () ++
-                str "and opam is not installed: see https://opam.ocaml.org/doc/Install.html.");
     let log = Filename.concat dir "setup.log" in
     let fail what =
       error Pp.(str what ++ str " failed; the end of " ++ str log ++ str ":" ++ fnl () ++
                 str (tail_of_file log) ++ fnl () ++
                 str "A package that needs a library of the system says so above: install it," ++ spc () ++
                 str "or point pkg-config at it (PKG_CONFIG_PATH), and build again.") in
-    if managed && not (Sys.file_exists (Filename.concat dir "_opam")) then begin
-      Printf.eprintf "OCaml: making the opam switch %s (once)\n%!" dir;
-      if not (run ~log ["opam"; "switch"; "create"; dir; "--empty"; "--no-switch"; "-y"]) then
-        fail "making the opam switch"
-    end;
+    ignore (SomaOpam.ensure_switch ~who:"OCaml" ~log);
     let missing = List.filter (fun p -> not (List.mem p have)) wanted in
     (* said as it happens, on stderr, which soma does not wait for *)
     Printf.eprintf "OCaml: installing %s into the opam switch %s (once; this takes a while; %s)\n%!"

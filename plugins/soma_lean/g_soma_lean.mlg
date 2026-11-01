@@ -1,0 +1,24 @@
+(************************************************************************)
+(*         *      The Rocq Prover / The Rocq Development Team           *)
+(*  v      *         Copyright INRIA, CNRS and contributors             *)
+(* <O___,, * (see version control and CREDITS file for authors & dates) *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
+(* Soma: [Lean Bind "FILE.lean".], at the end of FILE.definition
+   (toplevel/ccompile.ml): its theorems, checked by Lean (soma_lean.ml) *)
+
+{
+
+open Stdarg
+
+}
+
+DECLARE PLUGIN "soma-runtime.plugins.soma_lean"
+
+VERNAC COMMAND EXTEND SomaLeanBind CLASSIFIED AS SIDEFF
+| [ "Lean" "Bind" string(file) ] -> { Soma_lean.bind file }
+END

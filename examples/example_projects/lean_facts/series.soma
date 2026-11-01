@@ -1,0 +1,19 @@
+(** Two functions of Soma's, about which facts.lean proves theorems *)
+
+(** [sum_to n] is 0 + 1 + ... + n *)
+Fixpoint sum_to (n : nat) : nat :=
+  match n with
+  | 0 => 0
+  | Succ m => n + sum_to m
+  end.
+
+(** the Fibonacci numbers: 0, 1, 1, 2, 3, 5, ... *)
+Fixpoint fib (n : nat) : nat :=
+  match n with
+  | 0 => 0
+  | Succ m =>
+    match m with
+    | 0 => 1
+    | Succ k => fib k + fib m
+    end
+  end.
