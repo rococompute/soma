@@ -1,9 +1,22 @@
 Revise the below so it is instead a plan file that can be given to Open 5.5 and just continually worked on
 
+Next -> package management with/for soma!
+
+Maybe -> Something crypto/decentralized from the getgo
+  ^ even if just ipfs
+Steal some ideas from Unison for hashing modules and maybe hashing results of proof contracts?
+Review modularity of proof queries? Is it optimized in a Hoogle/Loogle sorta way or in a way that enables also types/knowledge queries
+
+And -> MCP module!
+
 ~~~
 
+- review the language oriented capabilities and capacity for what "starting point" looks like before its minimal version is really a feasible toy
+- rename Mirage to Sandbox in lightlang (so Require Sandbox)
+- rename Reason to JSX in lightlang (Require JSX)
 - review the proof syntax and see how it could be made more readble (goal is tcl-like in terms of readability)
 - review the import syntax
+- introduce WASM module
 - introduce Agent module (Require Agent) that gives a wrapper to different model providers
 - introduce Money module (Require Money) that enables money
 - the goal is something I could trust my data with even tho it's generated, make the proofs legible
@@ -21,4 +34,4 @@ Revise the below so it is instead a plan file that can be given to Open 5.5 and 
 
 - DO NOT DO standard prelude for openclaw-esque keywords {bitter lesson, get the system that works and let it grow naturally by contributions}
 
-- syntax highlighting
+lightlang provides the solution for software in the future with regard to 
