@@ -151,12 +151,26 @@ let sources t =
 
 (* * Compiling *)
 
+(* Soma's [rocq], for [rocq dep]. A developer build names the binary
+   [rocq.exe] beside this worker ([topbin/rocqworker.exe]). An installation
+   puts the worker in [lib/soma-runtime] and [rocq] in [bin], two directories
+   above it. [Sys.executable_name] follows the symlink of dune's install
+   directory, so that [bin] is also tried from the directory the worker was
+   invoked as ([Boot.Env.rocqbin]), which does not. *)
 let rocq_binary () =
   let worker_dir = Filename.dirname Sys.executable_name in
-  let candidates = [
+  let install_bin dir =
+    List.fold_left Filename.concat dir
+      [Filename.parent_dir_name; Filename.parent_dir_name; "bin"; "rocq"]
+  in
+  (* dune's native binary is [rocq.exe]; an installation's is [rocq], or
+     [rocq.exe] on Windows *)
+  let with_exe base = [base; base ^ ".exe"] in
+  let candidates = List.concat_map with_exe [
     Filename.concat Boot.Env.rocqbin "rocq";
     Filename.concat worker_dir "rocq";
-    List.fold_left Filename.concat worker_dir [Filename.parent_dir_name; Filename.parent_dir_name; "bin"; "rocq"];
+    install_bin worker_dir;
+    install_bin Boot.Env.rocqbin;
   ] in
   match List.find_opt Sys.file_exists candidates with
   | Some r -> r
