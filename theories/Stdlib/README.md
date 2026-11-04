@@ -11,6 +11,11 @@ Rocq's standard library, vendored so that Soma programs can use it with
   `-boot`, so as plain Rocq without the Soma prelude, and with the
   warning flags of its `theories/_CoqProject`. Installed in
   `user-contrib/Stdlib`.
+- The kernel in this tree is Rocq 9.3.0 (`tools/configure/configure.ml`:
+  major 9, minor 3, patch 0). This tree does not record a build or test
+  run of that kernel together with this Stdlib. The suite result in
+  `GRADUAL.md` is for `d011c4b1cf` (26 Oct 2026), which has no
+  `theories/Stdlib`. The vendor commit is `93b778c3bc` (27 Oct 2026).
 
 To upgrade, replace these files with the `.v` files of a newer tag, update the
 tag and commit above, and run `make dunestrap`.

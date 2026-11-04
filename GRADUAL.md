@@ -48,12 +48,21 @@ declaration, against a tampered `.vo` whose gradual reduction loops.
 
 ```sh
 opam switch create ./ ocaml-base-compiler.4.14.2 --no-install
-opam install --switch=. dune ocamlfind zarith
+opam install --switch=. --deps-only ./soma-runtime.opam
 eval $(opam env --switch=. --set-switch)
 make dunestrap
 dune build soma-runtime.install soma-core.install
 _build/install/default/bin/soma run my_file.soma
 ```
+
+`soma-runtime.opam` is generated from `dune-project`. Its dependencies are
+`dune` (>= 3.21), `ocamlfind` (>= 1.9.1), `zarith` (>= 1.11), and `wasm`
+(>= 2.0.2); OCaml itself is >= 4.14.0, which 4.14.2 satisfies. On Linux
+it also depends on `conf-linux-libc-dev`. `plugins/soma_wasm/dune` links
+the `wasm` library, so the build needs that library.
+`--deps-only` does not install the optional packages `rocq-native`,
+`memprof-limits`, and `memtrace`. The test suite's dependencies
+(`ounit2`, `conf-python-3`, `conf-time`) are in `soma-test-suite.opam`.
 
 `soma` is Soma's command line (`topbin/soma.ml`):
 
@@ -750,8 +759,9 @@ test-suite runs with `-no-soma-prelude`, and the gradual tests import
 `Gradual` explicitly.
 
 Rocq's standard library is vendored in `theories/Stdlib` (V9.2.0, see its
-README) and built and installed with the rest, so `From Stdlib Require ...`
-works without flags.
+README) and the build installs it with the rest, so `From Stdlib Require ...`
+works without flags. The kernel is 9.3.0; this tree does not record a
+joint run of the two (see Versions).
 
 The unknown type `Any` (`unknown Type`) was called `Dyn` until the commit that
 renamed it; `gradual-coverage.md` and `dev/gradual-lattice/results/` predate
@@ -1430,16 +1440,49 @@ instance or a Program proof, is inferred or an error, as in Rocq.
   is a `list Any` cast to `Any`; explicit ones still win
   (`@cons nat 1 nil : Any` is a `list nat`).
 
+## Versions
+
+The kernel version is Rocq 9.3.0. `tools/configure/configure.ml` sets
+`major = 9`, `minor = 3`, and `patch = Release 0`. Rocq's standard
+library is vendored separately, at tag V9.2.0, commit
+`8dd155bc10529814202f8f4c643e5ae6c2c88fa6` (`theories/Stdlib/README.md`).
+This tree does not record a build or a test run of that kernel together
+with that Stdlib. The suite result below is commit `d011c4b1cf`
+(26 Oct 2026), which has no `theories/Stdlib`. The vendor commit is
+`93b778c3bc` (27 Oct 2026).
+
+`make test-suite` and `make -C test-suite` do not run every check:
+
+- Lean. `test-suite/misc/soma_lean.sh` is part of the suite. It exits 0
+  without checking a proof when `elan` is missing (`no elan: skipped`)
+  or lists no toolchain (`no Lean toolchain: skipped`).
+- OCaml builds. `test-suite/misc/soma_ocaml.sh` sets `SOMA_OCAML_BUILD=0`
+  and does not build or run the OCaml program. `dev/ocaml-check.sh` does
+  that outside the suite: a small executable, `async_tasks`, `soma
+  extract` of that program, and `bonsai_counter`. It needs Soma built,
+  opam, Node 22 or later, and Chrome.
+- Mirage images. The suite does not boot a unikernel. `dev/mirage-check.sh`
+  builds and boots the `examples/example_files/mirage_*` images,
+  `counter_server`, and `wasm_add`'s image, and checks `soma run`'s
+  diagnosis of a run. It needs Soma built and the Mirage switch
+  (`$SOMA_MIRAGE_SWITCH`, `hvf` by default) with the Apple Silicon
+  solo5 tools. The network cases run under `solo5-vmnet` (macOS 26 or
+  later).
+
 ## Tests
 
-The whole Rocq test suite (`make -C test-suite`) passes with these changes.
-That is the conservativity check: none of its files import `Gradual`, apart
-from the gradual tests below. The last full run was at `d011c4b1cf`:
-2751 tests passed and 3 failed, on macOS. All three failures are
-environmental and also fail on the unmodified base:
+The last recorded full run of the inherited Rocq test suite
+(`make -C test-suite`) is commit `d011c4b1cf` (26 Oct 2026, "Gradual
+Typing: recursion through Dyn, without a guard"): 2751 tests passed and
+3 failed, on macOS. That record is for that commit. HEAD has moved
+since, and the run predates the vendored Stdlib. It was the
+conservativity check for that tree: none of its files import `Gradual`,
+apart from the gradual tests below. The three failures were
+environmental and also failed on the unmodified base:
 `coq-makefile/latex1` (LaTeX), `coq-makefile/timing-per-file` (GNU
-`time` output) and `misc/bench-render` (since removed, with
-`rocq-devtools`). The unit tests need `ounit2`.
+`time` output), and `misc/bench-render` (removed since, with
+`rocq-devtools`). The unit tests need `ounit2`. The checks outside
+that run are under Versions.
 
 - `test-suite/success/gradual.v`: reduction rules in every machine, Ω, flag toggling
 - `test-suite/success/gradual_vec.v`: indexed families (`vec`, `Fin`, `eq`): index checks, stuck casts on neutral indices, `match` on `?`
