@@ -13,11 +13,11 @@
 (generate_opam_files true)
 
 (license LGPL-2.1-only)
-(maintainers "The Rocq development team <rocq+rocq-development@discoursemail.com>")
+(maintainers "Yev Barkalov <yevbar1729@gmail.com>")
 (authors "The Rocq development team, INRIA, CNRS, and contributors")
 ; This generates bug-reports and dev-repo
-(source (github rocq-prover/rocq))
-(homepage https://rocq-prover.org/)
+(source (github yevbar/soma))
+(homepage https://github.com/yevbar/soma)
 (documentation "https://rocq-prover.org/docs/")
 (version dev)
 (maintenance_intent "(any)")

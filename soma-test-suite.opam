@@ -16,13 +16,13 @@ Feit-Thompson theorem or homotopy type theory) and teaching.
 
 This package runs the test suite."""
 maintainer: [
-  "The Rocq development team <rocq+rocq-development@discoursemail.com>"
+  "Yev Barkalov <yevbar1729@gmail.com>"
 ]
 authors: ["The Rocq development team, INRIA, CNRS, and contributors"]
 license: "LGPL-2.1-only"
-homepage: "https://rocq-prover.org/"
+homepage: "https://github.com/yevbar/soma"
 doc: "https://rocq-prover.org/docs/"
-bug-reports: "https://github.com/rocq-prover/rocq/issues"
+bug-reports: "https://github.com/yevbar/soma/issues"
 depends: [
   "dune" {>= "3.21"}
   "soma-core" {= version}
@@ -31,7 +31,7 @@ depends: [
   "conf-time"
   "odoc" {with-doc}
 ]
-dev-repo: "git+https://github.com/rocq-prover/rocq.git"
+dev-repo: "git+https://github.com/yevbar/soma.git"
 x-maintenance-intent: ["(any)"]
 build: [
   [ "dune" "exec" "-p" name "-j" jobs "test-suite/tools/coq_config_to_make.exe" "rocq" "test-suite/test_suite_config.inc" ]

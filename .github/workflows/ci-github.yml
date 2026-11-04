@@ -19,22 +19,26 @@ jobs:
             os: macos-latest
             ocaml: 4.14
             test_disabled:
-            packages: ./rocq*.opam
           - name: Windows
             os: windows-latest
             ocaml: 4.14
+            # Same subsystems as before. They still exist under test-suite/.
             test_disabled: misc coq-makefile precomputed-time-tests
-            packages: ./rocq-*.opam
           - name: Linux (latest OCaml)
             os: ubuntu-latest
             ocaml: 5.4
             test_disabled:
-            packages: ./rocq*.opam
       fail-fast: false
 
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # `make world` compiles Corelib, Soma's libraries, and the vendored
+    # Stdlib (582 .v files under theories/Stdlib). The previous limit was
+    # 45 minutes, carried over from the Rocq workflow this file still
+    # followed, which did not build that Stdlib here. 120 is headroom for
+    # world plus the test suite on the slower runners. This budget was
+    # not timed in this environment.
+    timeout-minutes: 120
     steps:
       - name: 🐛 Special macOS Config
         if: matrix.os == 'macos-latest'
@@ -67,11 +71,23 @@ jobs:
         run: |
           "XDG_DATA_DIRS=/etc:/usr/local/share:/usr/share" >> $env:GITHUB_ENV
 
-      - name: 🐫🐪🐫 Get Rocq dependencies
-        run: opam install --deps-only ${{ matrix.packages }}
+      # soma-runtime.opam, soma-core.opam, and soma-test-suite.opam.
+      # ./rocq*.opam and ./rocq-*.opam match nothing in this tree. The
+      # paths are listed because PowerShell does not expand globs for
+      # native commands. --deps-only installs wasm (>= 2.0.2) from
+      # soma-runtime, and ounit2, conf-python-3, and conf-time from
+      # soma-test-suite. It does not install these three packages;
+      # `make world` builds the first two.
+      - name: Get Soma dependencies
+        run: opam install --deps-only ./soma-runtime.opam ./soma-core.opam ./soma-test-suite.opam
 
-      - name: 🧱 Build Rocq
+      # dunestrap, then dune build of soma-runtime.install and
+      # soma-core.install (Corelib, Stdlib, Soma's libraries).
+      - name: Build Soma
         run: opam exec -- make world
 
-      - name: 🐛 Test Rocq
+      # test-suite/Makefile uses _build/install/default/bin/rocq.
+      # The root `make test-suite` target is `dune runtest` and does not
+      # take DISABLED_SUBSYSTEMS.
+      - name: Test Soma
         run: opam exec -- make -j 4 -C test-suite TIMED=1 DISABLED_SUBSYSTEMS='${{ matrix.test_disabled }}'

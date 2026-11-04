@@ -10,19 +10,24 @@ command) and `soma-core` (Corelib, Stdlib, and Soma's libraries). Behind
 `soma`, the binaries (`rocq`, `rocqchk`) and the library names (`Corelib`,
 `Stdlib`) stay Rocq's.
 
+The kernel version is Rocq 9.3.0 (`tools/configure/configure.ml`). Stdlib
+is vendored at V9.2.0, and this tree does not record a build or test of
+the two together. The Lean test skips unless a Lean toolchain is
+installed, and the OCaml-build and Mirage checks run outside `make
+test-suite`. Details are in [GRADUAL.md](GRADUAL.md#versions).
+
+[![GitHub CI][gh-badge]][gh-link]
+
+[gh-badge]: https://github.com/yevbar/soma/actions/workflows/ci-github.yml/badge.svg
+[gh-link]: https://github.com/yevbar/soma/actions/workflows/ci-github.yml
+
 ## The kernel
 
-[![GitLab CI][gitlab-badge]][gitlab-link]
-[![GitHub CI][gh-badge]][gh-link]
+Zulip, Discourse, and the DOI below belong to the upstream Rocq project.
+
 [![Zulip][zulip-badge]][zulip-link]
 [![Discourse][discourse-badge]][discourse-link]
 [![DOI][doi-badge]][doi-link]
-
-[gitlab-badge]: https://gitlab.inria.fr/coq/coq/badges/master/pipeline.svg
-[gitlab-link]: https://gitlab.inria.fr/coq/coq/commits/master
-
-[gh-badge]: https://github.com/rocq-prover/rocq/actions/workflows/ci-github.yml/badge.svg
-[gh-link]: https://github.com/rocq-prover/rocq/actions/workflows/ci-github.yml
 
 [discourse-badge]: https://img.shields.io/badge/Discourse-forum-informational.svg
 [discourse-link]: https://discourse.rocq-prover.org/
@@ -38,6 +43,10 @@ mathematical definitions, executable algorithms and theorems together with an
 environment for semi-interactive development of machine-checked proofs.
 
 ## Installation
+
+The badges in this section are the upstream Rocq packages. Building Soma
+from this tree is described in [GRADUAL.md](GRADUAL.md) and
+[INSTALL.md](INSTALL.md).
 
 [![latest packaged version(s)][repology-badge]][repology-link]
 
@@ -99,7 +108,7 @@ lists several other active platforms.
 
 ## Bug reports
 
-Please report any bug / feature request in [our issue tracker](https://github.com/rocq-prover/rocq/issues).
+Please report any bug / feature request in [our issue tracker](https://github.com/yevbar/soma/issues).
 
 To be effective, bug reports should mention the OCaml version used
 to compile and run Rocq, the Rocq version (`coqtop -v` or `rocq -v`), the configuration

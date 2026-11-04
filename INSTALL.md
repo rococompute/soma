@@ -42,19 +42,21 @@ are checked at configure time, preventing compilation. In the
 unlikely event an incompatibility remains undetected, using `Floats`
 would enable proving `False` on this architecture.
 
-Note that OCaml dependencies (`zarith` at
-this moment) must be properly registered with `findlib/ocamlfind`
-since Rocq's build system uses `findlib` to locate them.
+Note that OCaml dependencies (`zarith` and `wasm`) must be properly
+registered with `findlib/ocamlfind`, since the build uses `findlib` to
+locate them. `plugins/soma_wasm/dune` links `wasm`.
 
 Opam (https://opam.ocaml.org/) is recommended to install OCaml and
 the corresponding packages.
 
     $ opam switch create rocq --packages="ocaml-variants.4.14.1+options,ocaml-option-flambda"
     $ eval $(opam env)
-    $ opam install dune ocamlfind zarith
+    $ opam install --deps-only ./soma-runtime.opam
 
-should get you a reasonable OCaml environment to compile Rocq. See the
-OPAM documentation for more help.
+installs the dependencies of `soma-runtime.opam` (generated from
+`dune-project`): `dune` (>= 3.21), `ocamlfind` (>= 1.9.1), `zarith`
+(>= 1.11), and `wasm` (>= 2.0.2). On Linux that file also depends on
+`conf-linux-libc-dev`. See the OPAM documentation for more help.
 
 Nix users can also get all the required dependencies by running:
 
