@@ -129,8 +129,16 @@ let installed_in switch =
   let out = Filename.temp_file "soma-ocaml" ".installed" in
   let listed = run ~log:out ["opam"; "list"; "--switch=" ^ switch; "--installed"; "--short";
                              "--columns=name,version"; "--color=never"] in
-  let lines = if listed then read_lines out else [] in
+  let said = tail_of_file ~lines:5 out in
+  let lines = read_lines out in
   (try Sys.remove out with Sys_error _ -> ());
+  (* a switch opam can't list is not an empty one: installing into it would
+     fail too, for a reason further from the cause *)
+  if not listed then
+    error Pp.(str "asking opam what the switch " ++ str switch ++ str " has failed:" ++ fnl () ++
+              str said ++ fnl () ++
+              str "opam writes its lock files and its log (in $OPAMROOT/log) even to list a switch." ++ spc () ++
+              str "If another user owns the switch, let this user write those, or build as that user.");
   List.filter_map (fun l -> match List.filter (( <> ) "") (String.split_on_char ' ' l) with
       | [p; v] -> Some (p ^ " " ^ v)
       | _ -> None) lines

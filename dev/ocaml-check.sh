@@ -72,6 +72,22 @@ else
     fail ready
 fi
 
+# A switch opam can't list (another user's, say) is said to be that, not
+# taken for an empty one that installing fails on
+mkdir "${WORK}/unlisted" "${WORK}/unlisted/bin" "${WORK}/unlisted/cache"
+cp "${WORK}/ready/greet.ml" "${WORK}/ready/greet.definition" "${WORK}/ready/main.soma" "${WORK}/ready/soma.toml" "${WORK}/unlisted/"
+printf '#!/bin/sh\ncase "$1" in list) echo "Fatal error: open failed on lock: Permission denied" >&2; exit 99;; install) echo "opam install: refused" >&2; exit 9;; esac\nexec %s "$@"\n' \
+    "$(command -v opam)" > "${WORK}/unlisted/bin/opam"
+chmod +x "${WORK}/unlisted/bin/opam"
+if ! PATH="${WORK}/unlisted/bin:${PATH}" XDG_CACHE_HOME="${WORK}/unlisted/cache" SOMA_OCAML_SWITCH="${SWITCH}" \
+       "${SOMA}" run "${WORK}/unlisted/main.soma" >"${WORK}/unlisted.log" 2>&1 &&
+   grep -q "asking opam what the switch" "${WORK}/unlisted.log" && grep -q "Permission denied" "${WORK}/unlisted.log" &&
+   ! grep -q "refused" "${WORK}/unlisted.log"; then
+    pass unlisted
+else
+    fail unlisted
+fi
+
 # Async: three tasks at once, done in the order of their times, which is
 # the one Soma computes
 TASKS="${HERE}/examples/example_projects/async_tasks"
