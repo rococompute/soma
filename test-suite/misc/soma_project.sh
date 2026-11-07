@@ -47,8 +47,26 @@ printf 'name = "shop"\n' > soma.toml
 refused 'name is a key of \[project\]' 'a key above [project]'
 manifest 'nmae = "x"'
 refused 'soma.toml:4: nmae is not a key of \[project\]' 'an unknown key'
-manifest '[ocaml]'
-refused 'soma.toml:4: ocaml is not something soma.toml says' 'an unknown table'
+manifest '[docs]'
+refused 'soma.toml:4: docs is not something soma.toml says' 'an unknown table'
+
+# [opam]: versions of opam packages, checked without opam
+manifest '[opam]
+cryptokit = "1.20"
+ocaml-base-compiler = "4.14.2"
+"zarith+x" = "v1.14~rc1"'
+soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }
+manifest '[opam]
+cryptokit = 1'
+refused 'soma.toml:5: cryptokit is an integer; a package.s version is a string' 'a version out of quotes'
+manifest '[opam]
+cryptokit = "1 20"'
+refused 'soma.toml:5: "1 20" is no opam version' 'a space in a version'
+manifest '[opam]
+"crypto kit" = "1.20"'
+refused 'soma.toml:5: "crypto kit" is no opam package.s name' 'a space in a name'
+manifest 'opam = "cryptokit"'
+refused 'soma.toml:4: opam is not a key of \[project\]' 'opam under [project]'
 manifest 'version = "0.2.0"'
 refused 'soma.toml:4: version is already defined, on line 3' 'a key defined twice'
 manifest 'description = "unterminated'

@@ -123,17 +123,45 @@ let package_of library = match String.index_opt library '.' with
   | Some i -> String.sub library 0 i
   | None -> library
 
-(* The opam packages that [libraries] need, installed in the switch: once,
-   recorded in [installed] *)
-let ensure_packages ~switch ~managed libraries =
+(* What the switch has, as lines "package version" (or "package", in a
+   record of an earlier Soma): opam's own list, asked of opam *)
+let installed_in switch =
+  let out = Filename.temp_file "soma-ocaml" ".installed" in
+  let listed = run ~log:out ["opam"; "list"; "--switch=" ^ switch; "--installed"; "--short";
+                             "--columns=name,version"; "--color=never"] in
+  let lines = if listed then read_lines out else [] in
+  (try Sys.remove out with Sys_error _ -> ());
+  List.filter_map (fun l -> match List.filter (( <> ) "") (String.split_on_char ' ' l) with
+      | [p; v] -> Some (p ^ " " ^ v)
+      | _ -> None) lines
+
+(* whether the switch has [package], at [version] if there is one *)
+let has lines (package, version) =
+  List.exists (fun l -> match String.split_on_char ' ' l, version with
+      | p :: _, None -> p = package
+      | [p; v], Some w -> p = package && v = w
+      | _ -> false) lines
+
+(* The opam packages that [libraries] need, installed in the switch, each
+   at its version in [versions] (soma.toml's [opam]), or else any: once.
+   What the switch has is recorded in the cache, in [installed]; when the
+   record does not have them, opam is asked, and only what opam does not
+   have is installed. So a switch made elsewhere (a CI image, with
+   $SOMA_OCAML_SWITCH and a cache of its own) is used as it is, offline. *)
+let ensure_packages ~switch ~managed ?(versions = []) libraries =
   let dir = cache_dir () in
   mkdir_p dir;
   let installed = Filename.concat dir
       (if managed then "installed" else "installed-" ^ Digest.to_hex (Digest.string switch)) in
-  let have = read_lines installed in
-  let wanted = (if managed then ["ocaml-base-compiler"] else []) @ ["dune"] @
-               List.sort_uniq compare (List.map package_of libraries) in
-  if not (List.for_all (fun p -> List.mem p have) wanted) then begin
+  let names = (if managed then ["ocaml-base-compiler"] else []) @ ["dune"] @
+              List.sort_uniq compare (List.map package_of libraries) in
+  let names = names @ List.filter (fun p -> not (List.mem p names)) (List.map fst versions) in
+  let wanted = List.map (fun p -> p, List.assoc_opt p versions) names in
+  let record lines =
+    (* the cache may be read-only: the record only saves asking opam *)
+    try SomaMirage.write_file installed (String.concat "\n" lines ^ "\n")
+    with Sys_error _ | Unix.Unix_error _ -> () in
+  if not (List.for_all (has (read_lines installed)) wanted) then begin
     let log = Filename.concat dir "setup.log" in
     let fail what =
       error Pp.(str what ++ str " failed; the end of " ++ str log ++ str ":" ++ fnl () ++
@@ -141,15 +169,20 @@ let ensure_packages ~switch ~managed libraries =
                 str "A package that needs a library of the system says so above: install it," ++ spc () ++
                 str "or point pkg-config at it (PKG_CONFIG_PATH), and build again.") in
     ignore (SomaOpam.ensure_switch ~who:"OCaml" ~log);
-    let missing = List.filter (fun p -> not (List.mem p have)) wanted in
-    (* said as it happens, on stderr, which soma does not wait for *)
-    Printf.eprintf "OCaml: installing %s into the opam switch %s (once; this takes a while; %s)\n%!"
-      (String.concat ", " missing) switch log;
-    (* the system's libraries are looked for by the packages that need
-       them, rather than by opam's list of the system's packages *)
-    if not (run ~log (["opam"; "install"; "--switch=" ^ switch; "-y"; "--assume-depexts"] @ wanted)) then
-      fail "installing the packages";
-    SomaMirage.write_file installed (String.concat "\n" (List.sort_uniq compare (have @ wanted)) ^ "\n")
+    let have = installed_in switch in
+    let missing = List.filter (fun w -> not (has have w)) wanted in
+    if missing = [] then record have else begin
+      let atom (p, v) = match v with Some v -> p ^ "." ^ v | None -> p in
+      (* said as it happens, on stderr, which soma does not wait for *)
+      Printf.eprintf "OCaml: installing %s into the opam switch %s (once; this takes a while; %s)\n%!"
+        (String.concat ", " (List.map atom missing)) switch log;
+      (* the system's libraries are looked for by the packages that need
+         them, rather than by opam's list of the system's packages *)
+      if not (run ~log (["opam"; "install"; "--switch=" ^ switch; "-y"; "--assume-depexts"] @
+                        List.map atom missing)) then
+        fail "installing the packages";
+      record (installed_in switch)
+    end
   end
 
 (* Whether [libraries] are made for the browser: their packages depend on
@@ -347,8 +380,14 @@ let opam_string s =
   Buffer.add_char b '"';
   Buffer.contents b
 
-(* with soma.toml, the project's name, version and description *)
+(* with soma.toml, the project's name, version and description, and the
+   versions of packages its [opam] has *)
 let opam_file ~source ~project ~packages =
+  let versions = match project with Some p -> p.SomaProject.opam | None -> [] in
+  let packages = packages @ List.filter (fun p -> not (List.mem p packages)) (List.map fst versions) in
+  let depend p = match List.assoc_opt p versions with
+    | Some v -> Printf.sprintf "  %S {= %S}\n" p v
+    | None -> Printf.sprintf "  %S\n" p in
   let synopsis = match project with
     | Some { SomaProject.description = Some d; _ } -> d
     | _ -> Filename.basename source ^ ", extracted to OCaml by Soma" in
@@ -360,7 +399,7 @@ let opam_file ~source ~project ~packages =
      | Some p -> Printf.sprintf "version: %S\n" (SomaProject.version_to_string p.SomaProject.version)
      | None -> "")
     (opam_string synopsis)
-    (String.concat "" (List.map (Printf.sprintf "  %S\n") packages))
+    (String.concat "" (List.map depend packages))
 
 (* [soma extract FILE -o DIR]: the program's OCaml project, in [dir], to be
    built by dune, with or without Soma *)
@@ -410,7 +449,10 @@ let build ~state ~source ~vo_file =
   | _ ->
     let modules, libraries = checked_modules () in
     let switch, managed = opam_switch () in
-    ensure_packages ~switch ~managed libraries;
+    let versions = match SomaProject.of_file source with
+      | Some p -> p.SomaProject.opam
+      | None -> [] in
+    ensure_packages ~switch ~managed ~versions libraries;
     let js = for_browser ~switch libraries in
     (* one project for each program, kept between builds *)
     let source = CUnix.canonical_path_name source in

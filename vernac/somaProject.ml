@@ -33,7 +33,14 @@
      "owner/repo" = "1.2.3"
      "owner/wip" = { path = "../wip" }
 
-   Reading them uses no network: vernac/somaDeps.ml resolves them. *)
+   Reading them uses no network: vernac/somaDeps.ml resolves them.
+
+   [opam] has the versions of opam packages that the program's OCaml
+   libraries come from, when the newest will not do; the others are the
+   newest opam has:
+
+     [opam]
+     cryptokit = "1.20" *)
 
 let file_name = "soma.toml"
 
@@ -223,6 +230,7 @@ type t = {
   description : string option;
   version : version;
   dependencies : dependency list;
+  opam : (string * string) list;
 }
 
 let rec find_root dir =
@@ -250,6 +258,17 @@ let example root =
   Printf.sprintf "[project]\nname = %S\nversion = \"0.1.0\"\ndescription = \"What the project is\"\n"
     (name_like (Filename.basename root))
 
+let opam_example = "cryptokit = \"1.20\""
+
+(* opam's names of packages, and of versions (opam's manual, "Package
+   names and versions") *)
+let opam_name n =
+  n <> "" && String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' | '-' | '_' | '+' -> true | _ -> false) n &&
+  String.exists (function 'a'..'z' | 'A'..'Z' -> true | _ -> false) n
+let opam_version v =
+  v <> "" && String.for_all (function
+      | 'a'..'z' | 'A'..'Z' | '0'..'9' | '-' | '_' | '+' | '.' | '~' -> true | _ -> false) v
+
 let keys = ["name", "the project's name"; "version", "its semantic version";
             "description", "what it is, in a sentence"]
 
@@ -264,12 +283,12 @@ let load_uncached ?display root =
     | Sys_error m -> CErrors.user_err Pp.(str m) in
   let known = "soma.toml has [project]: " ^
               String.concat ", " (List.map (fun (k, what) -> k ^ " (" ^ what ^ ")") keys) ^
-              ", and [dependencies] (" ^ example_line ^ ")" in
+              ", [dependencies] (" ^ example_line ^ "), and [opam] (" ^ opam_example ^ ")" in
   List.iter (fun (k, { SomaToml.line; _ }) ->
       if List.mem_assoc k keys then
         error line "%s is a key of [project]: it goes under the line [project], which begins soma.toml:\n\n%s"
           k (example root)
-      else if k <> "project" && k <> "dependencies" then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+      else if not (List.mem k ["project"; "dependencies"; "opam"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
   let project, pline = match List.assoc_opt "project" toml with
     | Some { SomaToml.value = Table t; line } -> t, line
     | Some { SomaToml.line; value } -> error line "project is %s; it is a table:\n\n%s" (SomaToml.describe value) (example root)
@@ -343,7 +362,21 @@ let load_uncached ?display root =
        | Some o -> error d.line "%S is %S, on line %d: one path, written twice." d.written o.written o.line
        | None -> ());
       d :: seen) [] dependencies);
-  { root; name; description; version; dependencies }
+  let opam = match List.assoc_opt "opam" toml with
+    | None -> []
+    | Some { SomaToml.value = Table t; _ } ->
+      List.map (fun (package, { SomaToml.line; value }) ->
+          if not (opam_name package) then
+            error line "%S is no opam package's name: letters, digits, -, _ and +, as %s" package opam_example;
+          match value with
+          | SomaToml.String v when opam_version v -> package, v
+          | SomaToml.String v ->
+            error line "%S is no opam version: letters, digits, and . - _ + ~, as %s" v opam_example
+          | v -> error line "%s is %s; a package's version is a string, in quotes: %s = \"1.20\""
+                   package (SomaToml.describe v) package) t
+    | Some { SomaToml.line; value } ->
+      error line "opam is %s; it is a table: [opam], then lines as %s" (SomaToml.describe value) opam_example in
+  { root; name; description; version; dependencies; opam }
 
 let loaded = Hashtbl.create 1
 

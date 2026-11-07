@@ -295,13 +295,25 @@ soma.toml:2: "My-shop" is no project name: a name is lowercase letters, digits
 and _, beginning with a letter (...), 64 at most: name = "my_shop"
 soma.toml:3: "1.0" is no semantic version (https://semver.org): it is
 MAJOR.MINOR.PATCH, three numbers, as 0.1.0 or 1.2.3
-soma.toml:4: ocaml is not something soma.toml says (yet). soma.toml has
-[project]: name (...), version (...), description (...), and [dependencies]
-("owner/repo" = "1.2.3").
+soma.toml:4: docs is not something soma.toml says (yet). soma.toml has
+[project]: name (...), version (...), description (...), [dependencies]
+("owner/repo" = "1.2.3"), and [opam] (cryptokit = "1.20").
 ```
 
+`[opam]` gives the version of an opam package that the program's OCaml
+libraries come from (below, "OCaml modules"), when the newest will not do:
+
+```toml
+[opam]
+cryptokit = "1.20"        # its RSA functions changed in 1.21
+```
+
+A key is the package's name, as opam has it, and its value the version, as
+`opam show PACKAGE` lists them. A package that `[opam]` does not name is
+whichever version opam installs, the newest that fits.
+
 `soma extract` names the opam package after the project, and gives it its
-version and description. The TOML is TOML 1.0 (`vernac/somaToml.ml`, as
+version and description, and `[opam]`'s versions (`"cryptokit" {= "1.20"}`). The TOML is TOML 1.0 (`vernac/somaToml.ml`, as
 Soma depends on no TOML library), without dates and times. Every project
 under `examples/example_projects` has one; `test-suite/misc/soma_project.sh`
 tests it.
@@ -674,7 +686,10 @@ type, with rigid type variables (`'a 'b. ...`), applied to its arguments
 with their labels, so that OCaml checks each declaration against the
 module. The project's `.ml` files go next to it. dune then builds them with
 the libraries, from an opam switch that Soma makes in `~/.cache/soma/ocaml`
-and installs them into, once (or `$SOMA_OCAML_SWITCH`). A program whose
+and installs them into, once (or `$SOMA_OCAML_SWITCH`), at the versions
+soma.toml's `[opam]` gives. Soma asks opam what the switch has before
+installing anything, so a switch made in advance (a CI image's, given by
+`$SOMA_OCAML_SWITCH`) is used as it is, with no network. A program whose
 libraries depend on js_of_ocaml is built into `PROG.js`, with `PROG.html`,
 the page that runs it, which `soma run` serves on localhost. The others
 are built into `PROG.exe`, which `soma run` runs. `soma explore` lists the

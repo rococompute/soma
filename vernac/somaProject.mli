@@ -64,6 +64,7 @@ type t = {
   description : string option;
   version : version;
   dependencies : dependency list; (** its [dependencies] table *)
+  opam : (string * string) list;  (** its [opam] table: opam packages, each at its version *)
 }
 
 (** The folder of the nearest soma.toml, from [dir] up *)
