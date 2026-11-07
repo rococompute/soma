@@ -404,7 +404,7 @@ let compile ?loc p path src =
           source_var ^ "=" ^ src;
           (* what a program imports is not a unikernel of its own *)
           "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file) in
-  let prog = Sys.executable_name in
+  let prog = Boot.Env.self in
   (* the cache in the load path names the library by its place there:
      .soma-cache/models/task.vo is models.task; that of a dependency, by
      its name too: maps.a.b *)

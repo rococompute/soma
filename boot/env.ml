@@ -64,6 +64,16 @@ let rocqbin =
     | Some p -> p
     | None -> canonical_path_name (Filename.dirname Sys.executable_name)
 
+(* Soma: this program as it was invoked, from [rocqbin], to run it again.
+   On Linux [Sys.executable_name] follows symlinks, and dune's install
+   directory (bin/soma) is a symlink into _build/default: a child run as
+   [Sys.executable_name] guessed its library from _build/default, where
+   there is none, and failed with "File not found: .../Prelude.vo". *)
+let self =
+  let invoked = Filename.concat rocqbin (Filename.basename Sys.argv.(0)) in
+  if (try Sys.file_exists invoked && not (Sys.is_directory invoked) with Sys_error _ -> false)
+  then invoked else Sys.executable_name
+
 (** The following only makes sense when executables are running from
     source tree (e.g. during build or in local mode). *)
 let rocqroot =

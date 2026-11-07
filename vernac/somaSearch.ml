@@ -258,7 +258,7 @@ let environment ~query ~out ~options extra =
 
 let compile ~env ~log ~vo file =
   let fd = Unix.openfile log [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o644 in
-  let prog = Sys.executable_name in
+  let prog = Boot.Env.self in
   let pid = Unix.create_process_env prog [| prog; "--kind=compile"; file; "-o"; vo |] env Unix.stdin fd fd in
   Unix.close fd;
   let rec wait () = try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in

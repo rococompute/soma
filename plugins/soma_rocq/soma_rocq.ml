@@ -227,7 +227,7 @@ let compile ~name ~log ts =
       (* a Rocq library is Rocq: compiled as Rocq does, without Soma's
          prelude, whose names ([R], the reals) and gradual typing it does
          not expect *)
-      if not (run_to ~dir ~out:log ([Sys.executable_name; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
+      if not (run_to ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
                str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
     order

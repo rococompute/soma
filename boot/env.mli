@@ -138,3 +138,8 @@ val print_config : ?prefix_var_name:string -> t -> out_channel -> unit
 val relocate : Coq_config.relocatable_path -> string
 
 val rocqbin : string
+
+(** This program, as it was invoked: what to run to run it again, so that
+    the child finds the same library. Not [Sys.executable_name], which on
+    Linux follows the symlinks of an installation. *)
+val self : string

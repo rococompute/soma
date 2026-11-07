@@ -112,7 +112,7 @@ let compile_quietly ~dir ~env main =
   let log = Filename.concat dir "compile.log" in
   let out = Unix.openfile log [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o644 in
   let vo = Filename.concat dir "main.vo" in
-  let prog = Sys.executable_name in
+  let prog = Boot.Env.self in
   let pid = Unix.create_process_env prog [| prog; "--kind=compile"; main; "-o"; vo |] env Unix.stdin out out in
   Unix.close out;
   let rec wait () = try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
