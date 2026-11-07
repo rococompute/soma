@@ -47,13 +47,21 @@ declaration, against a tampered `.vo` whose gradual reduction loops.
 ## Quick start
 
 ```sh
-opam switch create ./ ocaml-base-compiler.4.14.2 --no-install
-opam install --switch=. --deps-only ./soma-runtime.opam
-eval $(opam env --switch=. --set-switch)
+opam switch create soma ocaml-base-compiler.4.14.2 --no-install
+eval $(opam env --switch=soma --set-switch)
+opam install --deps-only ./soma-runtime.opam
 make dunestrap
 dune build soma-runtime.install soma-core.install
 _build/install/default/bin/soma run my_file.soma
 ```
+
+The switch is a named one, kept in opam's root, and not a local switch in
+the checkout (`opam switch create ./`): opam builds a package inside its
+switch, and `wasm`'s build runs `dune build` without `--root`, so inside
+Soma's checkout dune builds Soma's project instead, and fails with `Don't
+know how to build wasm.exe`. `make dunestrap` writes the build rules of
+the theories, whose dune files are generated rather than committed;
+without it, the build makes no standard library (no `Prelude.vo`).
 
 `soma-runtime.opam` is generated from `dune-project`. Its dependencies are
 `dune` (>= 3.21), `ocamlfind` (>= 1.9.1), `zarith` (>= 1.11), and `wasm`
