@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Build programs that use OCaml modules (toplevel/somaOcaml.ml) and run
-# them: an executable, from a module of the project, greet.ml;
+# them: an executable, from a module of the project, greet.ml, also from a
+# switch made in advance, offline;
 # examples/example_projects/async_tasks, an executable that calls Async;
 # and examples/example_projects/bonsai_counter, a page that Bonsai runs,
 # served by soma run and clicked in headless Chrome (dev/page-clicks.mjs).
@@ -49,6 +50,26 @@ if "${SOMA}" run "${WORK}/greet/main.soma" >"${WORK}/executable.log" 2>&1 &&
     pass executable
 else
     fail executable
+fi
+
+# a switch made in advance, as a CI image has: given by SOMA_OCAML_SWITCH,
+# with a cache of its own and an opam that installs nothing, the program
+# builds from what the switch has, at the version soma.toml's [opam] gives
+SWITCH="${HOME}/.cache/soma/ocaml"
+DUNE_VERSION="$(opam list --switch="${SWITCH}" --installed --short --columns=version dune 2>/dev/null)"
+mkdir "${WORK}/ready" "${WORK}/ready/bin" "${WORK}/ready/cache"
+cp "${WORK}/greet/greet.ml" "${WORK}/greet/greet.definition" "${WORK}/greet/main.soma" "${WORK}/ready/"
+printf '[project]\nname = "ready"\nversion = "0.1.0"\n[opam]\ndune = "%s"\n' "${DUNE_VERSION}" > "${WORK}/ready/soma.toml"
+printf '#!/bin/sh\ncase "$1" in install|switch|pin|update) echo "opam $1: refused" >&2; exit 9;; esac\nexec %s "$@"\n' \
+    "$(command -v opam)" > "${WORK}/ready/bin/opam"
+chmod +x "${WORK}/ready/bin/opam"
+if [ -n "${DUNE_VERSION}" ] &&
+   PATH="${WORK}/ready/bin:${PATH}" XDG_CACHE_HOME="${WORK}/ready/cache" SOMA_OCAML_SWITCH="${SWITCH}" \
+       "${SOMA}" run "${WORK}/ready/main.soma" >"${WORK}/ready.log" 2>&1 &&
+   grep -q "^HELLO, SOMA!$" "${WORK}/ready.log" && ! grep -q "refused" "${WORK}/ready.log"; then
+    pass ready
+else
+    fail ready
 fi
 
 # Async: three tasks at once, done in the order of their times, which is
