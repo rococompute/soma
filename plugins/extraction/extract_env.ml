@@ -760,6 +760,7 @@ let project_extraction_target target =
        | None when SomaImport.applies ?loc () -> Some dir
        | None -> None) in
   match root with
+  | _ when !SomaImport.generated_output -> target
   | None -> target
   | Some root ->
     let refuse () = user_err Pp.(str "Extraction target " ++ quote (str target) ++

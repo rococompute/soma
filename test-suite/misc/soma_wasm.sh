@@ -12,6 +12,9 @@ export PATH=$BIN:$PATH
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
+# its own shared build store (topbin/soma.ml): one kept from an earlier run
+# would skip the compiles this test counts
+export SOMA_CACHE="$TMP/.soma-store"
 
 # (module
 #   (func (export "add") (param i64 i64) (result i64) local.get 0 local.get 1 i64.add)

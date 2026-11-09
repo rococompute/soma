@@ -10,6 +10,9 @@ export PATH=$BIN:$PATH
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
+# its own shared build store (topbin/soma.ml): one kept from an earlier run
+# would skip the compiles this test counts
+export SOMA_CACHE="$TMP/.soma-store"
 
 # contract FILE NAME, witness FILE NAME, assumes FILE NAME
 line() { soma hash "$1" 2>/dev/null | awk -v n="$2" '$3 == n'; }

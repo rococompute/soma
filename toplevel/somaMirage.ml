@@ -595,7 +595,9 @@ let extract ?(calls = []) ~state dir =
      Extraction \"prog\" soma_main.\n" dir float_extraction
        (String.concat "" (List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
-  Fun.protect ~finally:Dumpglob.pop_output (fun () ->
+  (* its Extraction "prog" goes to [dir], the output directory it sets *)
+  SomaImport.generated_output := true;
+  Fun.protect ~finally:(fun () -> SomaImport.generated_output := false; Dumpglob.pop_output ()) (fun () ->
       ignore (Vernac.load_vernac ~check:true ~state cmds))
 
 let tail_of_file ?(lines = 20) f =

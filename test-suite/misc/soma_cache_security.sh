@@ -50,7 +50,7 @@ grep -q '^Compiling a.soma' "$TMP/err"
 printf 'x : nat := 2.\n' > a.soma
 source_digest=$(md5sum a.soma | cut -d ' ' -f 1)
 stamp_digest=$(printf '%s - - - - -' "$source_digest" | md5sum | cut -d ' ' -f 1)
-sed -i "s/^source .*/source $stamp_digest/" .soma-cache/a.stamp
+sed "s/^source .*/source $stamp_digest/" .soma-cache/a.stamp > a.stamp.new && mv a.stamp.new .soma-cache/a.stamp  # not sed -i: BSD's differs
 git add -f .soma-cache/a.vo .soma-cache/a.stamp
 build
 grep -q '^Compiling a.soma' "$TMP/err"

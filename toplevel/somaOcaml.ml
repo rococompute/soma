@@ -272,7 +272,9 @@ let extract ~state ~modules dir =
      Extraction Inline main.\n\
      Extraction \"prog\" soma_main.\n" dir SomaMirage.float_extraction (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
-  Fun.protect ~finally:Dumpglob.pop_output (fun () ->
+  (* its Extraction "prog" goes to [dir], the output directory it sets *)
+  SomaImport.generated_output := true;
+  Fun.protect ~finally:(fun () -> SomaImport.generated_output := false; Dumpglob.pop_output ()) (fun () ->
       ignore (Vernac.load_vernac ~check:true ~state cmds))
 
 (* whether [main] is a string, which the program prints *)

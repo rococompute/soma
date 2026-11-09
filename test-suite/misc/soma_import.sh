@@ -13,6 +13,9 @@ export PATH=$BIN:$PATH
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
+# its own shared build store (topbin/soma.ml): one kept from an earlier run
+# would skip the compiles this test counts
+export SOMA_CACHE="$TMP/.soma-store"
 
 mkdir models
 cat > models/item.soma <<'EOT'

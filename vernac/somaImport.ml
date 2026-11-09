@@ -349,6 +349,7 @@ let stack ?loc () = match Sys.getenv_opt stack_var with
 
 (* The file being compiled, set by toplevel/ccompile.ml *)
 let source_file = ref None
+let generated_output = ref false
 
 (* The build's: the Rocq libraries of two dependencies are one library,
    compiled once *)

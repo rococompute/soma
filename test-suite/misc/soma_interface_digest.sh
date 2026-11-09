@@ -20,7 +20,7 @@ compiled() { grep -c '^Compiling' "$TMP/err" || true; }
 build
 [ "$(compiled)" = 3 ]
 digests > "$TMP/original"
-[ "$(wc -l < "$TMP/original")" = 4 ]
+[ "$(wc -l < "$TMP/original")" -eq 4 ]  # -eq: BSD wc pads the count
 task_digest > "$TMP/task"
 { echo '(* Move every source position. *)'; cat models/task.soma; } > "$TMP/source"
 cp "$TMP/source" models/task.soma

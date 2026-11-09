@@ -64,6 +64,12 @@ val is_folder_rules : string -> bool
     a path in it is relative to, when no location says *)
 val source_file : string option ref
 
+(** Set only while Soma loads the extraction commands it generates itself
+    (toplevel/somaOcaml.ml, toplevel/somaMirage.ml): their [Extraction "prog"]
+    goes to the output directory they set, outside the S-5 project check that
+    explicit Extraction and Redirect targets get. No Soma command sets it. *)
+val generated_output : bool ref
+
 (** The cache of the project being built, ROOT/.soma-cache *)
 val project_cache : unit -> string
 
