@@ -72,12 +72,26 @@ big_fib n := big_fib_loop n 0 1.
 big_fib 100.           (* 354224848179261915075%N *)
 ```
 
-Both go in one file, `fib.soma`. `soma run fib.soma` prints the last
-value, `= 354224848179261915075%N : N`, and `soma build -v fib.soma` prints
-both. Nothing else changes when the types go in: the untyped version is
-checked as it is, and the written types only say what the numbers are.
-`soma help` lists the commands: build, run, explore, compile, extract,
-hash, search, diff, get and repl.
+Then with a dependent type: a type that depends on a value. `odd_fib`
+takes a number `n` and a proof that `n` is odd, so the type of its second
+argument mentions its first. `eq_refl` proves `Nat.odd 7 = true` because
+`Nat.odd 7` computes to `true`.
+
+```rocq
+odd_fib (n : nat) (odd : Nat.odd n = true) := fast_fib n.
+
+odd_fib 7 eq_refl.     (* 13 *)
+odd_fib 8 eq_refl.     (* rejected: Nat.odd 8 is false, not true *)
+```
+
+The last line fails when the program is checked, before anything runs:
+`The term "eq_refl" has type "Nat.odd 8 = Nat.odd 8" while it is expected
+to have type "Nat.odd 8 = true"`. Without it, all three go in one file,
+`fib.soma`: `soma run fib.soma` prints the last value, `= 13 : nat`, and
+`soma build -v fib.soma` prints each. The untyped version is checked as it
+is; types go in only where they're worth it. `soma help` lists the
+commands: build, run, explore, compile, extract, hash, search, diff, get
+and repl.
 
 ## Documentation
 
