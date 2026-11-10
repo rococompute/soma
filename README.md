@@ -39,44 +39,44 @@ requirements in [INSTALL.md](INSTALL.md).
 
 ## A first program
 
-The same function three times, with more types each time. First with none
-written: `name` is a `string` because `append` appends strings.
+The same function three times, with more types each time. First with
+`Any`, the type of any value: whatever `x` is, it's checked to be a number
+only when `x * x` runs.
 
-```rocq
-greet name := append "Hello, " name.
+```fsharp
+square (x : Any) := x * x.
 
-greet "world".         (* "Hello, world" *)
+square 12.             (* 144 *)
+square (-3)%Z.         (* run-time error: expected a nat, but got (-3)%Z : Z *)
 ```
 
-Then with the types written:
+Then with `x` typed as a `nat`, a natural number. Now `typed_square
+(-3)%Z` is rejected when the program is checked, before anything runs.
 
-```rocq
-typed_greet (name : string) : string := append "Hello, " name.
+```fsharp
+typed_square (x : nat) : nat := x * x.
 
-typed_greet "world".   (* "Hello, world" *)
+typed_square 123.      (* 15129 *)
 ```
 
-Then with a dependent type, one that depends on a value: `ok` is a proof
-that `name` is longer than 2 characters and starts with "a", so the type of
-the second argument mentions the first. `eq_refl` proves it when the test
-computes to `true`.
+Then with a dependent type, one that depends on a value: `even` is a proof
+that `x` is even, so the type of the second argument mentions the first.
+`eq_refl` proves it when `Nat.even x` computes to `true`.
 
-```rocq
-gradually_typed_greet (name : string)
-  (ok : (2 <? String.length name) && String.prefix "a" name = true) : string :=
-  append "Hello, " name.
+```fsharp
+gradually_typed_square (x : nat) (even : Nat.even x = true) : nat := x * x.
 
-gradually_typed_greet "alice" eq_refl.   (* "Hello, alice" *)
-gradually_typed_greet "bob" eq_refl.     (* rejected: doesn't start with "a" *)
-gradually_typed_greet "al" eq_refl.      (* rejected: too short *)
+gradually_typed_square 64 eq_refl.    (* 4096 *)
+gradually_typed_square 123 eq_refl.   (* rejected: 123 isn't even *)
 ```
 
-The two rejected lines fail when the program is checked, before anything
-runs: `The term "eq_refl" has type ... while it is expected to have type
-... = true`. Without them, all three go in one file, `greet.soma`: `soma
-run greet.soma` prints the last value, `= "Hello, alice" : string`, and
-`soma build -v greet.soma` prints each. `soma help` lists the commands:
-build, run, explore, compile, extract, hash, search, diff, get and repl.
+The rejected line fails when the program is checked: `The term "eq_refl"
+has type "Nat.even 123 = Nat.even 123" while it is expected to have type
+"Nat.even 123 = true"`. Without it, all three go in one file,
+`square.soma`: `soma run square.soma` prints the last value, `= 4096 :
+nat`, and `soma build -v square.soma` prints each. `soma help` lists the
+commands: build, run, explore, compile, extract, hash, search, diff, get
+and repl.
 
 ## Documentation
 
