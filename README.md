@@ -39,7 +39,13 @@ requirements in [INSTALL.md](INSTALL.md).
 
 ## A first program
 
-```
+The same function twice, from
+[gradual_fibonacci](examples/example_files/gradual_fibonacci/gradual_fibonacci.soma):
+first with no types written, then with the types chosen where they matter.
+
+```rocq
+(* No types: n is a nat from the patterns, and a and b are nats because
+   + adds nats. *)
 Recursive fib_loop n a b :=
   match n with
   | 0 => a
@@ -48,12 +54,26 @@ Recursive fib_loop n a b :=
 
 fast_fib n := fib_loop n 0 1.
 
-fast_fib 20.
+fast_fib 20.           (* 6765 *)
+
+(* A nat is unary, so a large result is slow. Writing the types makes the
+   numbers added Stdlib's binary N, while n still counts steps as a nat. *)
+Recursive big_fib_loop (n : nat) (a b : N) : N :=
+  match n with
+  | 0 => a
+  | Succ m => big_fib_loop m b (a + b)
+  end.
+
+big_fib n := big_fib_loop n 0 1.
+
+big_fib 100.           (* 354224848179261915075%N *)
 ```
 
-`soma run fib.soma` prints `= 6765 : nat`. No types are written: `n`, `a`
-and `b` are inferred to be `nat`s. `soma help` lists the commands: build,
-run, explore, compile, extract, hash, search, diff, get and repl.
+`soma run fib.soma` prints the last value, `= 354224848179261915075%N : N`,
+and `soma build -v fib.soma` prints both. Nothing else changes when the
+types go in: the untyped version is checked as it is, and the written types
+only say what the numbers are. `soma help` lists the commands: build, run,
+explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
