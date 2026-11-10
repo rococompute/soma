@@ -39,59 +39,44 @@ requirements in [INSTALL.md](INSTALL.md).
 
 ## A first program
 
-The same function twice, from
-[gradual_fibonacci](examples/example_files/gradual_fibonacci/gradual_fibonacci.soma).
-First with no types written: `n` is a `nat` from the patterns, and `a` and
-`b` are `nat`s because `+` adds `nat`s.
+The same function three times, with more types each time. First with none
+written: `name` is a `string` because `append` appends strings.
 
 ```rocq
-Recursive fib_loop n a b :=
-  match n with
-  | 0 => a
-  | Succ m => fib_loop m b (a + b)
-  end.
+greet name := append "Hello, " name.
 
-fast_fib n := fib_loop n 0 1.
-
-fast_fib 20.           (* 6765 *)
+greet "world".         (* "Hello, world" *)
 ```
 
-Then with the types written. A `nat` is unary, so a large result is slow;
-the types make the numbers added Stdlib's binary `N`, while `n` still
-counts the steps as a `nat`.
+Then with the types written:
 
 ```rocq
-Recursive big_fib_loop (n : nat) (a b : N) : N :=
-  match n with
-  | 0 => a
-  | Succ m => big_fib_loop m b (a + b)
-  end.
+typed_greet (name : string) : string := append "Hello, " name.
 
-big_fib n := big_fib_loop n 0 1.
-
-big_fib 100.           (* 354224848179261915075%N *)
+typed_greet "world".   (* "Hello, world" *)
 ```
 
-Then with a dependent type: a type that depends on a value. `odd_fib`
-takes a number `n` and a proof that `n` is odd, so the type of its second
-argument mentions its first. `eq_refl` proves `Nat.odd 7 = true` because
-`Nat.odd 7` computes to `true`.
+Then with a dependent type, one that depends on a value: `ok` is a proof
+that `name` is longer than 2 characters and starts with "a", so the type of
+the second argument mentions the first. `eq_refl` proves it when the test
+computes to `true`.
 
 ```rocq
-odd_fib (n : nat) (odd : Nat.odd n = true) := fast_fib n.
+gradually_typed_greet (name : string)
+  (ok : (2 <? String.length name) && String.prefix "a" name = true) : string :=
+  append "Hello, " name.
 
-odd_fib 7 eq_refl.     (* 13 *)
-odd_fib 8 eq_refl.     (* rejected: Nat.odd 8 is false, not true *)
+gradually_typed_greet "alice" eq_refl.   (* "Hello, alice" *)
+gradually_typed_greet "bob" eq_refl.     (* rejected: doesn't start with "a" *)
+gradually_typed_greet "al" eq_refl.      (* rejected: too short *)
 ```
 
-The last line fails when the program is checked, before anything runs:
-`The term "eq_refl" has type "Nat.odd 8 = Nat.odd 8" while it is expected
-to have type "Nat.odd 8 = true"`. Without it, all three go in one file,
-`fib.soma`: `soma run fib.soma` prints the last value, `= 13 : nat`, and
-`soma build -v fib.soma` prints each. The untyped version is checked as it
-is; types go in only where they're worth it. `soma help` lists the
-commands: build, run, explore, compile, extract, hash, search, diff, get
-and repl.
+The two rejected lines fail when the program is checked, before anything
+runs: `The term "eq_refl" has type ... while it is expected to have type
+... = true`. Without them, all three go in one file, `greet.soma`: `soma
+run greet.soma` prints the last value, `= "Hello, alice" : string`, and
+`soma build -v greet.soma` prints each. `soma help` lists the commands:
+build, run, explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
