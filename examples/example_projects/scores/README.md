@@ -37,7 +37,7 @@ looks up the greatest tag.
 
 In a file, a dependency is its own `[project] name`, not its path:
 
-```
+```rocq
 Import tally.counts.
 ```
 

@@ -18,14 +18,14 @@ Another project imports it by the `name` in this `soma.toml`:
 A repository is published by its tags, as a Go module is. With this folder
 as the root of a repository `owner/tally`:
 
-```
+```sh
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
 and in another project:
 
-```
+```sh
 soma get owner/tally@1.0.0
 ```
 

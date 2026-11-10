@@ -21,7 +21,7 @@ In a Soma file, `Import tasks` is the file `tasks.soma` of the project
 `models/task.soma`. Before it is loaded, it is compiled into the
 project's `.soma-cache`, unless the cache already has it up to date:
 
-```
+```console
 $ soma build main.soma
 Compiling tasks.soma (into .soma-cache)
 Compiling models/task.soma (into .soma-cache)

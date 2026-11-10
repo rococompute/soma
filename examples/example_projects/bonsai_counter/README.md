@@ -35,7 +35,7 @@ Bonsai's opam package pulls in `async_ssl`, whose C code does not build
 against OpenSSL 4. If the setup fails there, point pkg-config at OpenSSL 3
 and build again:
 
-```
+```sh
 PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig soma build main.soma
 ```
 
@@ -45,7 +45,7 @@ PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig soma build main.soma
 a library: `Bonsai`, named after the file. Its Soma modules are Bonsai's
 submodules, and each declaration is the value or type of its name there:
 
-```
+```rocq
 OCaml Library "bonsai".
 
 Module Var.
@@ -78,7 +78,7 @@ HTML, and not by Bonsai.
 Building `main.soma` extracts `main` to OCaml. Next to it goes
 `soma_bindings.ml`, which has each declared value at its declared type:
 
-```
+```ocaml
 let bonsai__Var__update : 'a. 'a Bonsai.Var.t -> ('a -> 'a) -> unit =
   fun a0 a1 -> Bonsai.Var.update a0 ~f:a1
 ```
@@ -99,7 +99,7 @@ Bonsai's variables (`Var.create (init a)`), and a click sets it to the
 app's `update` of it (`Var.update state (update a action)`). The page is
 the app's `view` of it, as Bonsai's virtual DOM:
 
-```
+```rocq
 run {S A} (a : app S A) : unit :=
   let state := Var.create (init a) in
   let send := fun action => Var.update state (update a action) in

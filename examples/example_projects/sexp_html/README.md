@@ -3,7 +3,7 @@
 A counter app, written in a language of its own: HTML as s-expressions,
 for apps whose state the language holds, and proves things about.
 
-```
+```rocq
 counter := app count
   (html
     (head (title "Counter"))

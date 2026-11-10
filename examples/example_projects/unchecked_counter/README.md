@@ -17,7 +17,7 @@ web/
 
 The difference from `counter_server` is in `web/request.soma`:
 
-```
+```rocq
 start_of (request : string) : Any :=
   match url_count request with
   | Some v => v                    (* a string *)

@@ -38,7 +38,7 @@ with a provenance digest) when it comes from the project.
 **Severity: High (Soma); Medium for Pantheon.** `plugins/soma_rocq/soma_rocq.ml:275-323`
 computes the cache directory as
 
-```
+```ocaml
 Filename.concat root (package ^ "." ^ version ^ "-" ^ key)
 ```
 

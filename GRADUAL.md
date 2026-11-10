@@ -19,7 +19,7 @@ The paper names the three ways out GCIC^N, GCIC^↑ and GCIC^G. This fork
 implements **GCIC^G**: the unknown type `?` at universe `i` can hold
 `? -> ?` *at the same universe*, so self-application typechecks:
 
-```coq
+```rocq
 From Corelib.Gradual Require Import Gradual.
 
 Definition delta := fun x : Any => x x.
@@ -117,7 +117,7 @@ Each sentence is checked: one that states the goal or a fact fails
 unless it is the goal or holds, so the text cannot drift from the
 proof.
 
-```coq
+```rocq
 Theorem pow8_is_pow : forall x : nat, pow8 x = x ^ 8.
 Proof.
   Take x : nat.
@@ -191,7 +191,7 @@ the tactics they replace are in their history.
 Soma inherits Rocq's record update syntax, `{| r with f := v |}`.
 For example:
 
-```coq
+```rocq
 Record account := {
   owner : string;
   balance : nat;
@@ -210,7 +210,7 @@ Each update constructs a new record, leaving the original unchanged.
 
 This replaces a helper that copies every field explicitly, such as:
 
-```coq
+```rocq
 with_balance (r : account) (v : nat) : account :=
   {| owner := owner r; balance := v; active := active r |}.
 ```
@@ -507,7 +507,7 @@ dependencies it names, or, with `FILE`, in what that file sees. A type says what
 a definition does and a theorem's statement what it says, so they can be looked
 for by their shape, as Hoogle and Loogle do:
 
-```
+```console
 $ soma search discount
 pricing-1.1/rates.soma:4: pricing.rates.discount : nat -> nat -> nat
 main.proof:2: main.nothing_lost : forall percent price : nat, percent <= 100 -> ...
@@ -838,7 +838,7 @@ proof the same position holds a tactic, as in Rocq, so both need the explicit
 command there; ssreflect's `set x := t.` is such a tactic. `Recursive` is
 another spelling of `Fixpoint`, and a recursive function still needs it.
 
-```coq
+```rocq
 Definition succ_dyn (x : Any) : nat := x + 1.
 Print succ_dyn.
 (* succ_dyn = fun x : Any => cast Any nat x + 1 *)
@@ -926,7 +926,7 @@ the string `"Hello, "` ending in `raise`. A term evaluated (`Compute`,
 `Eval`, a bare term) whose value has a `raise` in it is printed as far as
 it was computed, followed by what went wrong:
 
-```coq
+```rocq
 greet_any (name : Any) := append "Hello, " name.
 greet_any 42.
 (*   = "Hello, " ++ raise
@@ -1028,7 +1028,7 @@ The kernel stays the CIC kernel. The cast calculus (CastCIC) is encoded with
 three **axioms** that the kernel knows about through its *retroknowledge*,
 the same mechanism used for primitive integers:
 
-```coq
+```rocq
 Universe gradual.
 Axiom unknown : forall A : Type@{gradual}, A.
 Axiom err     : forall A : Type@{gradual}, A.
@@ -1059,7 +1059,7 @@ occurs in the statement itself is its subject, and is not reported either.
 In `.proof` files this is an error (`theories/Soma/Proof.v`); in Rocq's
 `.v` files, a warning:
 
-```
+```rocq
 Lemma by_hidden : 1 = 2. Proof. exact hidden. Qed.   (* hidden : 1 = 2 := raise *)
 (* Warning: by_hidden: raise (in hidden) stands in for a proof of (1 = 2),
    so the theorem is not proved (see Print Assumptions). *)
@@ -1132,7 +1132,7 @@ Under Gradual Typing, a block of fixpoints that uses the gradual primitives
 and fails the guard is therefore accepted without checking it, with a
 `gradual-unguarded-fixpoint` warning:
 
-```coq
+```rocq
 Fixpoint fact (n : Any) : nat := match n with O => 1 | S k => n * fact k end.
 (* Warning: fact: not structurally recursive; it recurses through gradual
    types, so its guard is not checked (gradual typing gives up termination). *)
@@ -1164,7 +1164,7 @@ and `B`. The runtime applies the rules above. The extracted file embeds the
 runtime: it only needs the OCaml standard library, so it also builds for
 MirageOS unikernels.
 
-```coq
+```rocq
 Definition succ_dyn (x : Any) : nat := x + 1.
 Extraction succ_dyn.
 (* let succ_dyn x =
@@ -1197,7 +1197,7 @@ Extraction succ_dyn.
   recursive calls. The constant then takes the type's description as an
   argument and its callers pass it:
 
-  ```coq
+  ```rocq
   Definition to_dyn {A : Type} (x : A) : Any := x.
   (* val to_dyn : __ -> 'a1 -> __
      let to_dyn a x = Gradual_rt.cast_with ... a Gradual_rt.unknown_ty x *)
@@ -1269,7 +1269,7 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 and read HTTP. `++` appends strings wherever a `string` is expected (see
 `Strings.v`).
 
-```coq
+```rocq
 Require Import Sandbox.
 
 main : io unit :=
@@ -1409,7 +1409,7 @@ and key-value stores, and state shared between `serve` handlers.
 to Soma, for components and apps that are checked, and can be proved
 about, but not yet compiled to JavaScript.
 
-```coq
+```rocq
 Require Import JSX.
 
 Greeting {name : string} := <p> "Hello, " name "!" </p>.

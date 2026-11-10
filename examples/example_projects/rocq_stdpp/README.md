@@ -19,7 +19,7 @@ main.proof    restocking adds, selling one item changes no other, selling never 
 
 ## A Rocq library
 
-```
+```rocq
 Rocq Library "rocq-stdpp".
 From stdpp Require Import gmap strings.
 
@@ -36,7 +36,7 @@ sell (item : string) (n : nat) (s : gmap string nat) : option (gmap string nat) 
 stdpp is in the load path, and `From stdpp Require Import gmap.` is Rocq's
 own `Require`. Soma evaluates stdpp's functions as its own:
 
-```
+```rocq
 map_to_list (restock "plums" 4 stock).
      = [("apples", 3); ("pears", 5); ("plums", 4)]
 option_map map_to_list (sell "apples" 2 stock).
@@ -48,7 +48,7 @@ sell "apples" 5 stock.
 `main.proof` uses stdpp's lemma `lookup_insert_ne` and its tactic
 `simplify_map_eq`, as any Rocq proof would:
 
-```
+```rocq
 Theorem sell_other : forall item other n s s',
   other <> item -> sell item n s = Some s' -> s' !! other = s !! other.
 ```

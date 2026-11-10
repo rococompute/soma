@@ -34,7 +34,7 @@ here, so that the example needs no Rust to run; and `rust/mul` as
 `add.definition`, next to `add.wasm`, says what Soma takes its exports to
 be:
 
-```
+```rocq
 add : N -> N -> N.
 fib : N -> N.
 ```
@@ -58,7 +58,7 @@ uses it again.
 
 `add` and `fib` are then functions as any:
 
-```
+```rocq
 total (xs : list N) : N := fold_left add xs 0%N.
 double (n : N) : N := add n n.
 fibs (n : nat) : list N := map (fun k => fib (N.of_nat k)) (seq 0 n).
@@ -73,7 +73,7 @@ past the largest `i64`, which an `N` cannot hold, and an `N` larger than
 that cannot be given to it; either is a run-time error, saying what the
 module gave or could not take:
 
-```
+```rocq
 add 9223372036854775807 1.
 Run-time error: expected an N, but got I64 (-9223372036854775808) : i64.
 
@@ -89,12 +89,12 @@ A trap of the module is one too: `Trapped "unreachable executed"`.
 which `add.definition` declares as `float`s; `rust/mul` exports
 `average`, of `f64`s, which is of type `Any`:
 
-```
+```rocq
 hypot : float -> float -> float.
 half : float -> float.
 ```
 
-```
+```rocq
 hypot 3 4.                            (* 5 *)
 half 2.5.                             (* 1.25 *)
 (average 1%float 2%float : float).    (* 1.5 *)
@@ -112,7 +112,7 @@ with the module's types.
 `mul.wasm` has no `.definition`: `Import mul.` takes it as it is, its
 exports of type `Any`, which gradual types allow:
 
-```
+```rocq
 Check mul.                       (* mul : Any -> Any -> Any *)
 area (w h : N) : Z := (mul w h : Z).
 area 6 7.                        (* 42 *)
@@ -132,7 +132,7 @@ Soma does not compute the module when it checks a proof: to the kernel,
 `main.proof` proves what follows if `add` adds, with that as the
 theorem's hypothesis:
 
-```
+```rocq
 Theorem total_sums : (forall a b, add a b = (a + b)%N) ->
   forall xs, total xs = fold_left N.add xs 0%N.
 ```

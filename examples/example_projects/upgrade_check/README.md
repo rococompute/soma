@@ -73,7 +73,7 @@ on the new version. `soma diff` says which release brought it, before you take i
 
 The two sides are usually tags:
 
-```
+```sh
 soma diff owner/pricing@1.0.0 owner/pricing@1.1.0
 ```
 

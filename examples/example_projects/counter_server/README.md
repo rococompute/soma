@@ -24,7 +24,7 @@ web/
 
 ## Running it
 
-```
+```sh
 soma run examples/example_projects/counter_server/main.soma
 ```
 

@@ -32,7 +32,7 @@ A `.definition` next to no module declares the module of a library, named
 after the file: `async.definition` declares `Async`. Its Soma modules are
 Async's submodules:
 
-```
+```rocq
 OCaml Library "async".
 Import core.
 
@@ -55,7 +55,7 @@ argument: `forall (f : A -> B)`. `Time_ns.Span.t` is
 
 ## The program
 
-```
+```rocq
 run_task (t : task) : Deferred.t unit :=
   Deferred.map (Clock_ns.after (Time_ns.Span.of_sec (snd t)))
     (fun _ => print_endline (fst t ++ " is done")).
@@ -89,7 +89,7 @@ the OCaml project that `soma build` builds. `prog.ml` is the program,
 `soma_bindings.ml` holds the declarations, and the dune files and
 `main.opam` list `async` and `core`. It builds with or without Soma:
 
-```
+```sh
 cd main-ocaml
 opam install . --deps-only
 dune build --profile release
