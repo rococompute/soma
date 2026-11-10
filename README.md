@@ -39,44 +39,47 @@ requirements in [INSTALL.md](INSTALL.md).
 
 ## A first program
 
-The same function three times, with more types each time. First with
-`Any`, the type of any value: whatever `x` is, it's checked to be a number
-only when `x * x` runs.
+The same function three times, with more types each time. The numbers are
+`N`s, natural numbers stored in binary. (`nat`, the other kind, counts in
+unary, so a large one is slow and can overflow the stack.)
+
+First with `Any`, the type of any value: whatever `x` is, it's checked to
+be an `N` only when `x * x` runs. `12%N` writes 12 as an `N`, since an
+`Any` argument doesn't say which kind of number it is.
 
 ```fsharp
-square (x : Any) := x * x.
+square (x : Any) : N := x * x.
 
-square 12.             (* 144 *)
-square (-3)%Z.         (* run-time error: expected a nat, but got (-3)%Z : Z *)
+square 12%N.           (* 144%N *)
+square (-3)%Z.         (* run-time error: expected an N, but got (-3)%Z : Z *)
 ```
 
-Then with `x` typed as a `nat`, a natural number. Now `typed_square
-(-3)%Z` is rejected when the program is checked, before anything runs.
+Then with `x` typed as an `N`. Now `typed_square (-3)%Z` is rejected when
+the program is checked, before anything runs, and `123` is read as an `N`.
 
 ```fsharp
-typed_square (x : nat) : nat := x * x.
+typed_square (x : N) : N := x * x.
 
-typed_square 123.      (* 15129 *)
+typed_square 123.      (* 15129%N *)
 ```
 
 Then with a dependent type, one that depends on a value: `even` is a proof
 that `x` is even, so the type of the second argument mentions the first.
-`eq_refl` proves it when `Nat.even x` computes to `true`.
+`eq_refl` proves it when `N.even x` computes to `true`.
 
 ```fsharp
-gradually_typed_square (x : nat) (even : Nat.even x = true) : nat := x * x.
+gradually_typed_square (x : N) (even : N.even x = true) : N := x * x.
 
-gradually_typed_square 64 eq_refl.    (* 4096 *)
-gradually_typed_square 123 eq_refl.   (* rejected: 123 isn't even *)
+gradually_typed_square 2048 eq_refl.   (* 4194304%N *)
+gradually_typed_square 123 eq_refl.    (* rejected: 123 isn't even *)
 ```
 
 The rejected line fails when the program is checked: `The term "eq_refl"
-has type "Nat.even 123 = Nat.even 123" while it is expected to have type
-"Nat.even 123 = true"`. Without it, all three go in one file,
-`square.soma`: `soma run square.soma` prints the last value, `= 4096 :
-nat`, and `soma build -v square.soma` prints each. `soma help` lists the
-commands: build, run, explore, compile, extract, hash, search, diff, get
-and repl.
+has type "N.even 123 = N.even 123" while it is expected to have type
+"N.even 123 = true"`. Without it, all three go in one file, `square.soma`:
+`soma run square.soma` prints the last value, `= 4194304%N : N`, and `soma
+build -v square.soma` prints each. `soma help` lists the commands: build,
+run, explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
