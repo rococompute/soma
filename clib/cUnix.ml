@@ -98,6 +98,18 @@ let rec waitpid_non_intr pid =
   try snd (Unix.waitpid [] pid)
   with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid_non_intr pid
 
+(* What may have killed a compile process. A SIGSEGV is most often the
+   stack overflowing on deep recursion, which a large unary [nat] causes
+   (2048 * 2048 is four million [S]s), but not only that, so N is offered
+   as a suggestion. *)
+let signal_hint n =
+  if n = Sys.sigkill then " (out of memory?)"
+  else if n = Sys.sigsegv then
+    " (a stack overflow? Deep recursion causes it, such as arithmetic on a \
+     large nat, which counts in unary. If it's a nat, N, which is binary, \
+     may help.)"
+  else ""
+
 (* Report a compile process killed or stopped by a signal, naming the
    file it was compiling: the common signals by name (from OCaml's Sys
    constants), any other by its number. *)
@@ -112,7 +124,7 @@ let report_compile_signal file status =
   match status with
   | Unix.WSIGNALED n ->
     Printf.eprintf "%s: compilation was killed by signal %s%s\n%!"
-      file (signal_name n) (if n = Sys.sigkill then " (out of memory?)" else "")
+      file (signal_name n) (signal_hint n)
   | Unix.WSTOPPED n ->
     Printf.eprintf "%s: compilation was stopped by signal %s\n%!"
       file (signal_name n)
