@@ -23,17 +23,9 @@ test-suite`. Details are in [GRADUAL.md](GRADUAL.md#versions).
 
 ## The kernel
 
-Zulip, Discourse, and the DOI below belong to the upstream Rocq project.
+The DOI below belongs to the upstream Rocq project.
 
-[![Zulip][zulip-badge]][zulip-link]
-[![Discourse][discourse-badge]][discourse-link]
 [![DOI][doi-badge]][doi-link]
-
-[discourse-badge]: https://img.shields.io/badge/Discourse-forum-informational.svg
-[discourse-link]: https://discourse.rocq-prover.org/
-
-[zulip-badge]: https://img.shields.io/badge/Zulip-chat-informational.svg
-[zulip-link]: https://rocq-prover.zulipchat.com/
 
 [doi-badge]: https://zenodo.org/badge/DOI/10.5281/zenodo.15149628.svg
 [doi-link]: https://doi.org/10.5281/zenodo.15149628
@@ -95,17 +87,6 @@ incompatibilities of each new version of the Rocq Prover. If you upgrade Rocq,
 please read it carefully as it contains important advice on how to
 approach some problems you may encounter.
 
-## Questions and discussion
-
-We have a number of channels to reach the user community and the
-development team:
-
-- Our [Zulip chat][zulip-link], for casual and high traffic discussions.
-- Our [Discourse forum][discourse-link], for more structured and easily browsable discussions and Q&A.
-
-See also [rocq-prover.org/community](https://rocq-prover.org/community), which
-lists several other active platforms.
-
 ## Bug reports
 
 Please report any bug / feature request in [our issue tracker](https://github.com/yevbar/soma/issues).
@@ -114,16 +95,6 @@ To be effective, bug reports should mention the OCaml version used
 to compile and run Rocq, the Rocq version (`coqtop -v` or `rocq -v`), the configuration
 used, and include a complete source example leading to the bug.
 
-## Contributing to Rocq
+## Contributing
 
-Guidelines for contributing to Rocq in various ways are listed in the [contributor's guide](CONTRIBUTING.md).
-
-Information about release plans is at https://github.com/rocq-prover/rocq/wiki/Release-Plan
-
-## Supporting Rocq
-
-Help the Rocq community grow and prosper by becoming a sponsor! The [Rocq
-Consortium](https://rocq-prover.org/consortium) can establish sponsorship contracts
-or receive donations. If you want to take an active role in shaping Rocq's
-future, you can also become a Consortium member. If you are interested, please
-get in touch!
+The [contributor's guide](CONTRIBUTING.md) comes from Rocq and covers the kernel.
