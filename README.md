@@ -1,100 +1,103 @@
 # Soma
 
-Soma is this project. The kernel in this tree is a fork of the Rocq
-Prover (9.3.0) with gradual dependent types, GCIC^G: conservativity and
-graduality are kept, and normalization is sacrificed. See
-[GRADUAL.md](GRADUAL.md).
+Soma is a programming language with gradual dependent types. Types can be
+as loose as you like (`Any`, checked at run time) or as precise as a
+proof, and a program's theorems sit beside it, in `FILE.proof`, and are
+checked when it builds. A program prints its result, or is built into an
+OCaml executable, a MirageOS unikernel or a JSX page, and it can use OCaml
+and WebAssembly modules.
 
-The opam packages are `soma-runtime` (the kernel, the tools, and the `soma`
-command) and `soma-core` (Corelib, Stdlib, and Soma's libraries). Behind
-`soma`, the binaries (`rocq`, `rocqchk`) and the library names (`Corelib`,
-`Stdlib`) stay Rocq's.
-
-The kernel version is Rocq 9.3.0 (`tools/configure/configure.ml`). Stdlib
-is vendored at V9.2.0, and this tree does not record a build or test of
-the two together. The Lean test skips unless a Lean toolchain is
-installed, and the OCaml-build and Mirage checks run outside `make
-test-suite`. Details are in [GRADUAL.md](GRADUAL.md#versions).
-
-[![GitHub CI][gh-badge]][gh-link]
-
-[gh-badge]: https://github.com/yevbar/soma/actions/workflows/ci-github.yml/badge.svg
-[gh-link]: https://github.com/yevbar/soma/actions/workflows/ci-github.yml
-
-## The kernel
-
-The DOI below belongs to the upstream Rocq project.
-
-[![DOI][doi-badge]][doi-link]
-
-[doi-badge]: https://zenodo.org/badge/DOI/10.5281/zenodo.15149628.svg
-[doi-link]: https://doi.org/10.5281/zenodo.15149628
-
-The Rocq Prover is an interactive theorem prover, or proof assistant. It provides a formal language to write
-mathematical definitions, executable algorithms and theorems together with an
-environment for semi-interactive development of machine-checked proofs.
+Its kernel implements GCIC^G: conservativity and graduality are kept, and
+normalization is given up, so type checking may not terminate.
+[GRADUAL.md](GRADUAL.md) describes the language, the `soma` command and
+how it's built.
 
 ## Installation
 
-The badges in this section are the upstream Rocq packages. Building Soma
-from this tree is described in [GRADUAL.md](GRADUAL.md) and
-[INSTALL.md](INSTALL.md).
+```sh
+curl -fsSL https://raw.githubusercontent.com/yevbar/soma/gradual/install.sh | sh
+```
 
-[![latest packaged version(s)][repology-badge]][repology-link]
+[`install.sh`](install.sh) builds Soma from source in `~/.soma` and puts
+the `soma` command in `~/.local/bin`. It needs git, make, a C compiler and
+opam 2.1 or later; opam installs the system libraries the build needs, and
+the script installs git and opam with Homebrew or apt if they're missing.
+The first run takes about 30 minutes and 3 GB: an OCaml 4.14.2 switch,
+then Soma and its standard library. Run it again to update.
 
-[![Docker Hub package][dockerhub-badge]][dockerhub-link]
-[![latest dockerized version][docker-rocq-badge]][docker-rocq-link]
+From a checkout, `./install.sh` builds that checkout in place:
 
-[repology-badge]: https://repology.org/badge/latest-versions/coq.svg
-[repology-link]: https://repology.org/metapackage/coq/versions
+```sh
+git clone --depth 1 -b gradual https://github.com/yevbar/soma.git
+soma/install.sh
+```
 
-[dockerhub-badge]: https://img.shields.io/badge/images%20on-Docker%20Hub-blue.svg
-[dockerhub-link]: https://hub.docker.com/r/rocq/rocq-prover#supported-tags "Supported tags on Docker Hub"
+`SOMA_REF` picks the branch, tag or commit, and `SOMA_DIR`, `SOMA_SWITCH`
+and `SOMA_BIN` say where things go; the top of the script lists them. The
+steps it runs are in [GRADUAL.md](GRADUAL.md#quick-start), and the build's
+requirements in [INSTALL.md](INSTALL.md).
 
-[docker-rocq-badge]: https://img.shields.io/docker/v/rocq/rocq-prover/latest
-[docker-rocq-link]: https://github.com/rocq-community/docker-coq/wiki#docker-coq-images "rocq/rocq-prover:latest"
+## A first program
 
-Please see https://rocq-prover.org/install.
-Information on how to build and install from sources can be found in
-[`INSTALL.md`](INSTALL.md).
+```
+Recursive fib_loop n a b :=
+  match n with
+  | 0 => a
+  | Succ m => fib_loop m b (a + b)
+  end.
+
+fast_fib n := fib_loop n 0 1.
+
+fast_fib 20.
+```
+
+`soma run fib.soma` prints `= 6765 : nat`. No types are written: `n`, `a`
+and `b` are inferred to be `nat`s. `soma help` lists the commands: build,
+run, explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
-The sources of the documentation can be found in directory [`doc`](doc).
-See [`doc/README.md`](/doc/README.md) to learn more about the documentation,
-in particular how to build it. The
-documentation of the last released version is available on the Rocq
-web site at [rocq-prover.org/docs](https://rocq-prover.org/docs).
-See also [the Rocq wiki](https://github.com/rocq-prover/rocq/wiki),
-and the [Rocq FAQ](https://github.com/rocq-prover/rocq/wiki/The-Rocq-FAQ),
-for additional user-contributed documentation.
+- [GRADUAL.md](GRADUAL.md): the language, the `soma` command, projects
+  (`soma.toml`, dependencies by git tag), OCaml, WebAssembly, Sandbox
+  (MirageOS) and JSX programs, and how the kernel's rules work.
+- [examples/](examples/README.md): single-file programs and projects. Run
+  one with `soma run examples/example_files/hello/hello.soma`.
+- [gradual-coverage.md](gradual-coverage.md): what is gradual so far, and
+  what isn't yet.
+- [doc/](doc): the reference manual that came with the kernel, for the
+  parts of the language Soma doesn't change.
 
-The documentation of the master branch is continuously deployed.  See:
-- [Reference Manual (master)][refman-master]
-- [Documentation of the standard library (master)][stdlib-master]
-- [Documentation of the ML API (master)][api-master]
+## Versions
 
-[api-master]: https://rocq-prover.org/doc/master/api/
-[refman-master]: https://rocq-prover.org/doc/master/refman/
-[stdlib-master]: https://rocq-prover.org/doc/master/stdlib/
-
-## Changes
-
-The [Recent
-changes](https://rocq-prover.org/doc/master/refman/changes.html) chapter
-of the reference manual explains the differences and the
-incompatibilities of each new version of the Rocq Prover. If you upgrade Rocq,
-please read it carefully as it contains important advice on how to
-approach some problems you may encounter.
+Soma has no releases yet: `gradual` is the branch to build, and its git
+log says what changed. The kernel is Rocq 9.3.0's
+(`tools/configure/configure.ml`) and Stdlib is vendored at V9.2.0. The
+opam packages are `soma-runtime` (the kernel, the tools and the `soma`
+command) and `soma-core` (the libraries). Behind `soma`, the binaries
+(`rocq`, `rocqchk`) and the library names (`Corelib`, `Stdlib`) keep
+their upstream names. [GRADUAL.md](GRADUAL.md#versions) has the details.
 
 ## Bug reports
 
-Please report any bug / feature request in [our issue tracker](https://github.com/yevbar/soma/issues).
-
-To be effective, bug reports should mention the OCaml version used
-to compile and run Rocq, the Rocq version (`coqtop -v` or `rocq -v`), the configuration
-used, and include a complete source example leading to the bug.
+Report bugs and feature requests in [the issue
+tracker](https://github.com/yevbar/soma/issues). A good report says which
+commit you built (`git -C ~/.soma log -1 --format=%h`), your OS and OCaml
+version, and includes the smallest `.soma` file that shows the problem.
 
 ## Contributing
 
-The [contributor's guide](CONTRIBUTING.md) comes from Rocq and covers the kernel.
+Soma's own tests are `test-suite/misc/soma_*.sh`, and the gradual tests
+that [GRADUAL.md](GRADUAL.md#tests) lists; `make -C test-suite` runs the
+whole suite. The [contributor's guide](CONTRIBUTING.md) came with the
+kernel and covers its code.
+
+## License
+
+Soma is under the GNU Lesser General Public License 2.1: see
+[LICENSE](LICENSE).
+
+## Fork of Rocq
+
+Soma is a fork of the [Rocq Prover](https://github.com/rocq-prover/rocq)
+9.3.0, and keeps its license. For questions specific to Rocq, refer to
+[Rocq's README](https://github.com/rocq-prover/rocq#readme).
