@@ -40,12 +40,11 @@ requirements in [INSTALL.md](INSTALL.md).
 ## A first program
 
 The same function twice, from
-[gradual_fibonacci](examples/example_files/gradual_fibonacci/gradual_fibonacci.soma):
-first with no types written, then with the types chosen where they matter.
+[gradual_fibonacci](examples/example_files/gradual_fibonacci/gradual_fibonacci.soma).
+First with no types written: `n` is a `nat` from the patterns, and `a` and
+`b` are `nat`s because `+` adds `nat`s.
 
 ```rocq
-(* No types: n is a nat from the patterns, and a and b are nats because
-   + adds nats. *)
 Recursive fib_loop n a b :=
   match n with
   | 0 => a
@@ -55,9 +54,13 @@ Recursive fib_loop n a b :=
 fast_fib n := fib_loop n 0 1.
 
 fast_fib 20.           (* 6765 *)
+```
 
-(* A nat is unary, so a large result is slow. Writing the types makes the
-   numbers added Stdlib's binary N, while n still counts steps as a nat. *)
+Then with the types written. A `nat` is unary, so a large result is slow;
+the types make the numbers added Stdlib's binary `N`, while `n` still
+counts the steps as a `nat`.
+
+```rocq
 Recursive big_fib_loop (n : nat) (a b : N) : N :=
   match n with
   | 0 => a
@@ -69,11 +72,12 @@ big_fib n := big_fib_loop n 0 1.
 big_fib 100.           (* 354224848179261915075%N *)
 ```
 
-`soma run fib.soma` prints the last value, `= 354224848179261915075%N : N`,
-and `soma build -v fib.soma` prints both. Nothing else changes when the
-types go in: the untyped version is checked as it is, and the written types
-only say what the numbers are. `soma help` lists the commands: build, run,
-explore, compile, extract, hash, search, diff, get and repl.
+Both go in one file, `fib.soma`. `soma run fib.soma` prints the last
+value, `= 354224848179261915075%N : N`, and `soma build -v fib.soma` prints
+both. Nothing else changes when the types go in: the untyped version is
+checked as it is, and the written types only say what the numbers are.
+`soma help` lists the commands: build, run, explore, compile, extract,
+hash, search, diff, get and repl.
 
 ## Documentation
 
