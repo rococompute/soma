@@ -1,6 +1,7 @@
 # Soma's plan, in John Carmack's .plan format: one item per line, under the
-# day it was written. An unmarked line is open; a bid marks its item "+ "
-# when done (or "* " the day it was written), "- " if dropped. Marked lines
+# day it was written. An unmarked line is open; the leader marks an item
+# "+ " when it judges it done (or "* " the day it was written), "- " if
+# dropped; bids make progress on it, whole or in parts. Marked lines
 # are pruned once they've landed, so the file holds what's left: `git log -p
 # .plan` has the rest. The order is the priority, a guide: the leader may
 # take another item when it's the better next step. An item is a pointer: its
