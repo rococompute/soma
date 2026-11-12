@@ -1068,7 +1068,28 @@ let check_project ~wasm dir =
       "cd %s && ocamlc -stop-after parsing -c config.ml && ocamlc -c standins.mli && %s -open Standins -c %s"
       (Filename.quote checks) compiler (String.concat " " sources) in
   let log = Filename.concat checks "check.log" in
-  let cmd = Filename.quote_command "sh" ["-c"; script] ~stdout:log ~stderr:log in
+  (* The compiler on PATH, as Soma's CI has it; otherwise the opam switch
+     soma build compiles OCaml programs in (SOMA_OCAML_SWITCH, or the one
+     it made under ~/.cache/soma/ocaml), so a machine that builds Soma
+     programs can check a Sandbox one without OCaml on PATH (a CI image
+     whose only OCaml is that switch). *)
+  let runner =
+    if SomaOpam.command_exists "ocamlc" then Some []
+    else
+      let switch, managed = SomaOpam.switch () in
+      if SomaOpam.command_exists "opam" && (not managed || Sys.file_exists (Filename.concat switch "_opam"))
+      then Some ["opam"; "exec"; "--switch=" ^ switch; "--"]
+      else None in
+  let runner = match runner with
+    | Some r -> r
+    | None ->
+      let switch, _ = SomaOpam.switch () in
+      error Pp.(str "no ocamlc to check " ++ str checks ++ str " with: none on PATH, and no opam switch " ++
+                str switch ++ str "." ++ fnl () ++
+                str "Put OCaml on PATH (eval $(opam env)), set SOMA_OCAML_SWITCH to an opam switch with OCaml," ++
+                spc () ++ str "or soma build any program with a .definition once: it makes that switch.") in
+  let args = runner @ ["sh"; "-c"; script] in
+  let cmd = Filename.quote_command (List.hd args) (List.tl args) ~stdout:log ~stderr:log in
   if Sys.command cmd <> 0 then
     error Pp.(str "OCaml check failed in " ++ str checks ++ str ":" ++ fnl () ++
               str (read_file log));
