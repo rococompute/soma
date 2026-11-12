@@ -1,0 +1,61 @@
+(** A unikernel that checks a signature a Pantheon node made: the bytes
+    of a transaction (["tx"], the chain, the agent, the nonce and its
+    fields as JSON, NUL-separated, as Pantheon's shell.ml signs them) and
+    their RSA signature by a 2048-bit Cryptokit key (PKCS #1 v1.5 of the
+    SHA-256 digest; Cryptokit's public exponent is random, so this is a
+    full 2048-bit exponentiation), with Soma.Crypto: no library, the same
+    code the kernel computes.
+
+    [soma build examples/example_files/mirage_crypto/mirage_crypto.soma]
+    builds [mirage_crypto.hvt]; dev/mirage-check.sh boots it. *)
+Require Import Sandbox Crypto.
+From Corelib Require PrimInt63.
+
+unhex (s : string) : list PrimInt63.int :=
+  match bytes_of_hex s with Some l => l | None => [] end.
+
+modulus : list PrimInt63.int := unhex (Stdlib.Strings.String.concat "" [
+    "8fc2cbeea63822fce9a7dcc519f581095e4b46c4809ef0393e01baefdcc6cd0f",
+    "6c73c7ce4ff6317ed15ada5d3c9af2a52ce0389159ec7f087c8e9af802da5670",
+    "aeffde4986e08c6049310e70bbb37342bf5f40c249685c14d52ff1d0669f90bc",
+    "97bff3c50296e332ffccced22cdfb44ae6bd6544ec4e9f450795c6a2dacd40e9",
+    "1ff9544ef5a2e17fce846d9ed1458d94e4082f8c7d7a32a66cf3a59f920dec1a",
+    "bddbeb968852fa2645ed404207ca2e9567309b2e73771c5371b7a6f1bd0d8014",
+    "3cb4ada89acce095ae44dbb395f926e859ce4758a696611956368c477bc0b748",
+    "bd5760e841619eb6bb8e407dfe07b1a429e94eef770ccb6962cd8553504d2ddb"]).
+
+exponent : list PrimInt63.int := unhex (Stdlib.Strings.String.concat "" [
+    "deea18fdd557211c42d0bdf3a5e667e3cdeea88cd92aece4374fb43489fb3515",
+    "f918913f3b5d64afd34bb123869362f35649cda780f2170d7a5ad2812f3a1369",
+    "8eb4fd8de5e3bda0030bb7699a2cc19f194bd873a07c9f0c8a65a14dd28e670c",
+    "ae3a5cbe51924aa64cb93bb66b0130510c4a86e0a18ffc49fac80552347df21e",
+    "e6555153c9508fb3eef6f5c73111faf276c551772b16fea17ce6bb015a613115",
+    "e2c9b212538232c584bba635c8fd699049e1476b774d585cd1db112c341088a9",
+    "c623dc97798062a2e40e14463be7479c2ed3d4d4bb2594c44fc9d5e350b5d9cf",
+    "5170f65362c8c3964cc2a67d6e0f15ee7ac98b3e3b7d7a496a54b5a28df42a71"]).
+
+(** what the node signed: tx, chain, agent, nonce and the fields' JSON *)
+signed : string := string_of_bytes (unhex (Stdlib.Strings.String.concat "" [
+    "74780070616e7468656f6e2d3031323334353637383961626364656600636c61",
+    "7564650037005b22706f7374222c227265706f222c2261205c2271756f746564",
+    "5c2220737065635c6e776974685c747461627320e29c9320616e64205c753030",
+    "3031225d"])).
+
+signature : list PrimInt63.int := unhex (Stdlib.Strings.String.concat "" [
+    "38fc97dff48c8d3044bcd15d408bbe74c4e6115d2854cd76834eddd962884be3",
+    "38218d274fe94496141d3363f677b5f84c9ebac43848b2297fd5b8b32d16a326",
+    "55cec359234f1598bcbd430904d55c837cc774b3ffbaf405c6227133cac8695d",
+    "565a2a3b739a08185baf101afc76f505d35d94165e17f6ca51fdbd276598cb2e",
+    "665e4f90df1a2bc5b09d95f82b551d164c6025b9c55987b65350b96c11148323",
+    "36f9b8658d3c01b9925b0ee3bebb01b657bd11abe2d8a94acb2f6a8644fa5ebb",
+    "1fe3fa5b46c3c78dade5c0a75bf4e15f75447c7fb37cdb4f20e873e53269700b",
+    "4442ecd7f1720535269b451a3a9fba28c5d5ac96f00a7073955c635495b6bbf3"]).
+
+main : io unit :=
+  print (Crypto.sha256 "abc") ;;
+  print (if rsa_verify 256 modulus exponent signed signature
+         then "verified a Pantheon transaction's signature"
+         else "the signature did not verify") ;;
+  print (if rsa_verify 256 modulus exponent (append signed " ") signature
+         then "a changed transaction verified"
+         else "refused a changed transaction").

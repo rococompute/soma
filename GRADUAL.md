@@ -1046,6 +1046,46 @@ imports (the command `Review`, in the same plugin):
 It fails when a model has a violation or there is an issue; escape
 hatches alone are gradual code doing what it says.
 
+### Cryptography: `Crypto`
+
+`Soma.Crypto` (`theories/Soma/Crypto.v`, not in the prelude: `Require
+Import Crypto.`) is SHA-256 (FIPS 180-4) and RSA signatures (PKCS #1
+v1.5 of a SHA-256 digest), written in Soma on Rocq's primitive 63-bit
+integers:
+
+```rocq
+Require Import Crypto.
+id : string := Crypto.sha256 "abc".   (* "ba7816bf...f20015ad", lowercase hex *)
+ok : bool := rsa_verify 256 n e "message" signature.
+```
+
+- `sha256 : string -> string` is the hex digest. `sha256_bytes` gives its
+  32 bytes (`list int`, each below 256). `sha256_of_bytes` hashes bytes
+  rather than a string's characters. `sha256_concat` hashes strings one
+  after the other without joining them.
+- `rsa_verify k n e msg sg` and `rsa_sign k p q dp dq qinv msg` work on
+  big-endian bytes (`k` is the key's size in bytes). Signing uses the
+  Chinese remainder theorem. Both produce Cryptokit's bytes (`RSA.sign_CRT`
+  of the EMSA, `RSA.unwrap_signature`). `bytes_of_hex`, `hex_of_bytes`,
+  `bytes_of_string` and `string_of_bytes` convert.
+- The kernel computes them (`vm_compute`). `Crypto.v` checks FIPS 180-4's
+  vectors, and a 512-bit Cryptokit key's signature verified and made
+  again, as `Example`s, so a proof may compute a digest or a signature.
+- They need no library, so a binary and a Sandbox image run the same
+  code. Extraction makes the integers OCaml's ints: a generated
+  `uint63.ml`, the kernel's `Uint63`, next to `float64.ml`. JavaScript's
+  ints have 32 bits, so a page would compute them wrong.
+- A message is read one byte at a time in tail calls, so its length is
+  not bounded by the stack.
+- Extracted, SHA-256 hashes about 20 MB/s, roughly a tenth of C's speed.
+  A 2048-bit signature takes about 12 ms. Verifying takes about 1 ms with
+  e = 65537, or 90 ms with a 2048-bit public exponent such as Cryptokit's
+  `RSA.new_key` picks. Numbers are lists of 31-bit limbs, multiplied by
+  Montgomery's method.
+- `test-suite/misc/soma_crypto.sh` checks SHA-256 against the system's
+  `sha256sum` up to 14 MB, and RSA against a 2048-bit Cryptokit key's
+  signatures.
+
 ## Architecture
 
 The kernel stays the CIC kernel. The cast calculus (CastCIC) is encoded with

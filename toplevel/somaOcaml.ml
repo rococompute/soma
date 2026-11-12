@@ -264,7 +264,7 @@ let extract ~state ~modules dir =
               (String.concat " " (List.map (Printf.sprintf "%S") ps)) applied m.top path)
         m.items) modules in
   SomaMirage.write_file cmds (Printf.sprintf
-    "From Corelib Require Extraction PrimFloat FloatClass.\n\
+    "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %S.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString.\n\
      %s%s\
@@ -332,7 +332,7 @@ let checked_modules () =
   List.iter (fun n ->
       if List.length (List.filter (String.equal n) names) > 1 then
         error Pp.(str "the program uses two OCaml modules named " ++ str n ++ str ".");
-      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Float64"] then
+      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Float64"; "Uint63"] then
         error Pp.(str "an OCaml module cannot be named " ++ str n ++ str ", the name of one Soma makes."))
     names;
   modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
@@ -348,6 +348,7 @@ let write_project ~state ~modules ~libraries ~js ~directives dir =
   file "dune" (dune_file ~js libraries);
   file "soma_main.ml" (entry_ml ());
   file "float64.ml" SomaMirage.float64_ml;
+  file "uint63.ml" SomaMirage.uint63_ml;
   file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
   List.iter (fun (m : SomaForeign.ocaml_module) ->
@@ -378,6 +379,7 @@ prog.ml, prog.mli    the program: soma_main () computes main
 soma_bindings.ml     each value that a .definition declares, at its declared type
 soma_main.ml         runs main, and prints it if it is a string
 float64.ml           Soma's floats, as OCaml's
+uint63.ml            Soma's 63-bit integers, as OCaml's ints
 soma_nat.ml          Soma's nat, as extracted (O | S of nat)
 dune, dune-project   how dune builds it
 %s.opam%s   the opam packages it needs

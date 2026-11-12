@@ -110,7 +110,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
         mirage_frame_client mirage_frame_server mirage_supervised mirage_storage_model mirage_storage; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
@@ -166,6 +166,11 @@ build mirage_hello &&
 
 build mirage_milliseconds &&
     run mirage_milliseconds milliseconds 0 "^elapsed at least 1000 ms$" plain
+# Soma.Crypto in an image: SHA-256, and a 2048-bit RSA signature that
+# Pantheon's shell.ml made of a transaction, verified; a changed one refused
+build mirage_crypto &&
+    run mirage_crypto crypto 0 "^verified a Pantheon transaction's signature$" plain &&
+    run mirage_crypto crypto-refused 0 "^refused a changed transaction$" plain
 
 # runs until it is stopped, printing the time every second
 build mirage_clock &&
