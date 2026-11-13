@@ -1365,6 +1365,9 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
 | `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
 | `close c` | `io unit` | closes the connection; again does nothing |
+| `connect_within address port ms` | `io connected` | `connect`, giving up after `ms : N` milliseconds (`ConnectTimedOut`) rather than 10 seconds: for a program that dials from its loop |
+| `listen_mailbox port` | `io unit` | accepts TCP connections on `port` into the mailbox: each one's opening, the bytes it receives and its end are `mailbox`'s. The program may `send` on one and `close` it (which posts no end). Returns at once; the image keeps listening after `main` ends. |
+| `mailbox ms` | `io (list link_event)` | what `listen_mailbox`'s connections did since the last `mailbox`, oldest first: `LinkOpened c host` (accepted, from that IP address), `LinkBytes c data` (bytes as TCP delivered them), `LinkClosed c` (the other side ended it). When nothing has, it waits for something, `ms : N` milliseconds at most, and is `nil` when the time is up: a select over the connections, for a program with one loop |
 
 The links (`listen`, `connect`, `send`, `receive_line`, `receive_frame`,
 `close`) keep one connection per peer open, and carry lines or frames,

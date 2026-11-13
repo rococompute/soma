@@ -1,0 +1,38 @@
+(** A select over connections: [listen_mailbox] accepts connections on
+    port 7002, and one loop ([iterate]) takes what they did from the
+    [mailbox], oldest first, waiting a second at most: each connection's
+    opening (with the peer's address), its bytes as TCP delivered them,
+    and its end. The loop's state is how many connections have ended;
+    after two, the image exits 0. dev/mirage-check.sh's mailbox case sends
+    it two connections from the Mac. *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+
+show_event (e : link_event) : string :=
+  match e with
+  | LinkOpened _ host => "mail: opened from " ++ host
+  | LinkBytes _ data => "mail: bytes " ++ data
+  | LinkClosed _ => "mail: closed"
+  end.
+
+Fixpoint print_all (l : list link_event) : io unit :=
+  match l with
+  | nil => ret tt
+  | cons e rest => print (show_event e) ;; print_all rest
+  end.
+
+Fixpoint ended (l : list link_event) : nat :=
+  match l with
+  | nil => 0
+  | cons (LinkClosed _) rest => S (ended rest)
+  | cons _ rest => ended rest
+  end.
+
+main : io unit :=
+  listen_mailbox 7002 ;;
+  print "mailbox on port 7002" ;;
+  iterate (fun (n : nat) =>
+    got <- mailbox 1000%N ;;
+    print_all got ;;
+    let m := n + ended got in
+    if Nat.leb 2 m then print "two connections ended" ;; exit 0 else ret m) 0.

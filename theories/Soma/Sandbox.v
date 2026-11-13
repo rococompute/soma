@@ -76,6 +76,15 @@ Inductive framed : Type :=
                             arrived of one is kept for the next [receive_frame] *)
 | FrameTooLarge.         (* its length is over [max_frame]: the connection is closed *)
 
+(** What came in on the connections [listen_mailbox] accepted, in the
+    order it came: a select over them. A connection's bytes are as TCP
+    delivered them (a message may be cut anywhere, or several come in one);
+    [take_line] and [split_lines] cut them into lines. *)
+Inductive link_event : Type :=
+| LinkOpened (c : connection) (host : string)  (* accepted, from [host], an IP address *)
+| LinkBytes (c : connection) (data : string)   (* bytes it received *)
+| LinkClosed (c : connection).                 (* the other side ended it; it is closed *)
+
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
 (** [bind m k]: run [m], then [k] on its result *)
@@ -121,6 +130,9 @@ Inductive io : Type -> Type :=
 (** open a connection to [address] (an IP address) on [port]; it stays
     open until [close], or until the other side closes it *)
 | connect (address : string) (port : nat) : io connected
+(** [connect], giving up after [milliseconds] ([ConnectTimedOut]) rather
+    than 10 seconds: for a program that dials from its loop *)
+| connect_within (address : string) (port : nat) (milliseconds : N) : io connected
 (** write [data] on the connection, as it is ([send_line] adds the line
     break) *)
 | send (c : connection) (data : string) : io sent
@@ -136,6 +148,17 @@ Inductive io : Type -> Type :=
 | receive_frame (c : connection) (seconds : nat) : io framed
 (** close the connection; closing it again does nothing *)
 | close (c : connection) : io unit
+(** accept TCP connections on [port] into the mailbox: each one's
+    opening, the bytes it receives and its end are [mailbox]'s. The
+    program can [send] on one and [close] it (which posts no
+    [LinkClosed]); [receive_line] and [receive_frame] on it would take
+    bytes the mailbox is given. Returns at once; the unikernel keeps
+    listening after [main] ends. *)
+| listen_mailbox (port : nat) : io unit
+(** what came in on [listen_mailbox]'s connections since the last
+    [mailbox], oldest first; when nothing has, it waits for something,
+    [milliseconds] at most, and is [nil] when the time is up *)
+| mailbox (milliseconds : N) : io (list link_event)
 (** Named files on the attached [storage] block device. Names are opaque
     keys, not host paths. [None] means missing; [Some ""] means present
     and empty. I/O errors stop the image rather than masquerading as missing.

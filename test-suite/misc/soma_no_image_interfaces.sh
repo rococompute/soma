@@ -12,6 +12,8 @@ mkdir "$WORK/examples"
 cd "$WORK/examples"
 for name in mirage_hello mirage_supervised mirage_minimal_web_server; do
     cp -R "$ROOT/examples/example_files/$name" .
+    # an image dev/mirage-check.sh built in the checkout is not this build's
+    rm -f "$name"/*.hvt
     soma build --no-image "$name/$name.soma" > "$WORK/$name.log" 2>&1
     grep -q '(no image)' "$WORK/$name.log"
     [ ! -f "$name/$name.hvt" ]

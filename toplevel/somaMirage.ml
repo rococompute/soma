@@ -237,6 +237,10 @@ type sent_value = Sent | SendClosed
 (* What [receive_frame] gets (Sandbox.framed), and its representation *)
 type frame = Got_frame of string | Frame_closed | Frame_timed_out | Frame_too_large
 type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarge
+(* What a mailbox connection did (Sandbox.link_event), by its number, and
+   the representation of link_event *)
+type mail = Mail_opened of int * string | Mail_bytes of int * string | Mail_closed of int
+type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * string | LinkClosed of Obj.t
 
 (* Framing, as Sandbox's take_line and take_frame: the first message of
    what a connection has received, and the rest, which is kept for the
@@ -269,20 +273,27 @@ type net = {
   fetch : string -> int -> string -> fetched Lwt.t;
   listen : int -> (int -> unit Lwt.t) -> unit;
   connect : string -> int -> link Lwt.t;
+  (* connect, giving up when the promise the function gives resolves *)
+  connect_within : string -> int -> (unit -> unit Lwt.t) -> link Lwt.t;
   send : int -> string -> bool Lwt.t;
   receive_line : int -> string option Lwt.t;
   (* the connection, and the seconds to wait at most (0: no limit) *)
   receive_frame : int -> int -> frame Lwt.t;
   close : int -> unit Lwt.t;
+  (* accept on a port into the mailbox; what came in, waiting at most
+     until the promise the function gives resolves *)
+  listen_mailbox : int -> unit;
+  mailbox : (unit -> unit Lwt.t) -> mail list Lwt.t;
 }
 
 let no_network =
   let fail () = failwith "this unikernel has no network" in
   { serve = (fun _ _ -> fail ()); fetch = (fun _ _ _ -> fail ());
-    listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ());
+    listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ()); connect_within = (fun _ _ _ -> fail ());
     send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
     receive_frame = (fun _ _ -> fail ());
-    close = (fun _ -> fail ()) }
+    close = (fun _ -> fail ());
+    listen_mailbox = (fun _ -> fail ()); mailbox = (fun _ -> fail ()) }
 
 (* a connection's number, and the connection of a number *)
 let link_id (c : Prog.connection) = int_of_nat (check c)
@@ -420,6 +431,14 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Link_refused -> ConnectRefused
           | Link_timed_out -> ConnectTimedOut
           | Link_bad_address -> ConnectBadAddress)
+  | Prog.Connect_within (address, port, ms) ->
+      net.connect_within (string_of_chars (check address)) (int_of_nat (check port))
+        (fun () -> sleep_milliseconds ms)
+      >|= fun link -> Obj.magic (match link with
+          | Link id -> Connected (Obj.repr (connection_of id))
+          | Link_refused -> ConnectRefused
+          | Link_timed_out -> ConnectTimedOut
+          | Link_bad_address -> ConnectBadAddress)
   | Prog.Send (c, data) ->
       net.send (link_id c) (string_of_chars (check data))
       >|= fun ok -> Obj.magic (if ok then Sent else SendClosed)
@@ -436,6 +455,15 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Frame_timed_out -> FrameTimedOut
           | Frame_too_large -> FrameTooLarge)
   | Prog.Close c -> net.close (link_id c) >|= Obj.magic
+  | Prog.Listen_mailbox port ->
+      net.listen_mailbox (int_of_nat (check port));
+      Lwt.return (Obj.magic ())
+  | Prog.Mailbox ms ->
+      net.mailbox (fun () -> sleep_milliseconds ms) >|= fun mail ->
+      Obj.magic (List.map (function
+          | Mail_opened (id, host) -> LinkOpened (Obj.repr (connection_of id), chars_of_string host)
+          | Mail_bytes (id, data) -> LinkBytes (Obj.repr (connection_of id), chars_of_string data)
+          | Mail_closed id -> LinkClosed (Obj.repr (connection_of id))) mail)
   | Prog.Read_file name ->
       (!storage).read (string_of_chars (check name)) >|= fun value ->
       Obj.magic (Option.map chars_of_string value)
@@ -535,15 +563,16 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     in
     (* TCP retries a connection for minutes when nothing answers: give up
        after 10 seconds *)
-    let dial ip port =
+    let dial_within ip port give_up =
       Lwt.pick [
         (S.TCP.create_connection (S.tcp s) (ip, port) >|= function
           | Ok flow -> `Flow flow
           | Error `Refused -> `Refused
           | Error `Timeout -> `Timeout);
-        (Mirage_sleep.ns (Duration.of_sec 10) >|= fun () -> `Timeout);
+        (give_up () >|= fun () -> `Timeout);
       ]
     in
+    let dial ip port = dial_within ip port (fun () -> Mirage_sleep.ns (Duration.of_sec 10)) in
     let fetch address port request =
       match Ipaddr.of_string address with
       | Error _ -> Lwt.return Soma_rt.Net_bad_address
@@ -611,6 +640,15 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           | `Timeout -> Soma_rt.Link_timed_out
           | `Flow flow -> Soma_rt.Link (register flow)
     in
+    let connect_within address port give_up =
+      match Ipaddr.of_string address with
+      | Error _ -> Lwt.return Soma_rt.Link_bad_address
+      | Ok ip ->
+          dial_within ip port give_up >|= function
+          | `Refused -> Soma_rt.Link_refused
+          | `Timeout -> Soma_rt.Link_timed_out
+          | `Flow flow -> Soma_rt.Link (register flow)
+    in
     let send id data =
       match Hashtbl.find_opt links id with
       | None -> Lwt.return false
@@ -659,8 +697,48 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           in
           take ()
     in
+    (* the mailbox: what listen_mailbox's connections did, oldest first,
+       and a condition to wait on for more *)
+    let mail = Queue.create () and mail_came = Lwt_condition.create () in
+    let post m = Queue.push m mail; Lwt_condition.broadcast mail_came () in
+    let listen_mailbox port =
+      incr servers;
+      Soma_rt.event "listening" ["port", Soma_rt.I port; "mailbox", Soma_rt.B true];
+      S.TCP.listen (S.tcp s) ~port (fun flow ->
+          incr Soma_rt.open_connections;
+          incr Soma_rt.served;
+          let id = register flow in
+          post (Soma_rt.Mail_opened (id, Ipaddr.to_string (fst (S.TCP.dst flow))));
+          (* read until the end, each chunk posted as it came; a
+             connection the program closed posts no end *)
+          let rec read () =
+            match Hashtbl.find_opt links id with
+            | None -> Lwt.return_unit
+            | Some l ->
+                next_chunk l >>= fun alive ->
+                if alive then begin
+                  let data = Buffer.contents l.pending in
+                  Buffer.clear l.pending;
+                  post (Soma_rt.Mail_bytes (id, data));
+                  read ()
+                end
+                else if Hashtbl.mem links id then
+                  (close id >|= fun () -> post (Soma_rt.Mail_closed id))
+                else Lwt.return_unit
+          in
+          Lwt.catch read (fun e -> Soma_rt.report ~during:"request" e; close id)
+          >|= fun () -> decr Soma_rt.open_connections)
+    in
+    let mailbox wait =
+      (if Queue.is_empty mail then Lwt.pick [Lwt_condition.wait mail_came; wait ()]
+       else Lwt.return_unit) >|= fun () ->
+      let got = List.of_seq (Queue.to_seq mail) in
+      Queue.clear mail;
+      got
+    in
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
-      { serve; fetch; listen; connect; send; receive_line; receive_frame; close }
+      { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame; close;
+        listen_mailbox; mailbox }
 end
 |soma}
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
@@ -1147,9 +1225,25 @@ let contains s sub =
    [connect]: a constructor applied, as opposed to its declaration in
    [type 'x io]. ([send], [receive_line] and [close] need a connection,
    which only [listen] and [connect] give.) *)
+let is_ident_char ch =
+  match ch with 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '\'' -> true | _ -> false
+
+(* A constructor applied: its name, then "(" after any spaces or line
+   breaks (extraction may break the line between them:
+   [Listen\n    ((of_num_uint ...), greet)]). *)
+let applied prog c =
+  let n = String.length prog and k = String.length c in
+  let rec from i =
+    if i + k > n then false
+    else if String.sub prog i k = c && (i = 0 || not (is_ident_char prog.[i - 1])) then
+      let rec skip j = if j < n && (prog.[j] = ' ' || prog.[j] = '\n') then skip (j + 1) else j in
+      let j = skip (i + k) in
+      (j < n && prog.[j] = '(') || from (i + 1)
+    else from (i + 1) in
+  from 0
+
 let uses_network prog =
-  List.exists (fun c -> contains prog (c ^ " (") || contains prog (c ^ "("))
-    ["Serve"; "Fetch"; "Listen"; "Connect"]
+  List.exists (applied prog) ["Serve"; "Fetch"; "Listen"; "Connect"; "Connect_within"; "Listen_mailbox"; "Mailbox"]
 
 (* Extracts [main] into [dir]/prog.ml, by running the extraction commands
    at the end of the program, after its .vo has been saved. *)
@@ -1245,6 +1339,7 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
    - Mirage_runtime: mirage-runtime 4.5, lib/mirage_runtime.mli
    - Cstruct: cstruct 6, lib/cstruct.mli
    - Ipaddr: ipaddr 5, lib/ipaddr.mli
+   - Lwt_condition: lwt 5, src/core/lwt_condition.mli
    - Tcpip.Stack.V4V6 and its TCP: tcpip 8, src/core/stack.ml and
      src/core/tcp.ml (Tcp.S), whose flow functions are Mirage_flow.S's
      (mirage-flow 4, src/mirage_flow.mli) *)
@@ -1323,7 +1418,17 @@ module Mirage_block : sig
     val write : t -> int64 -> Cstruct.t list -> (unit,write_error) result Lwt.t
   end
 end
-module Ipaddr : sig type t val of_string : string -> (t, [> `Msg of string ]) result end
+module Ipaddr : sig
+  type t
+  val of_string : string -> (t, [> `Msg of string ]) result
+  val to_string : t -> string
+end
+module Lwt_condition : sig
+  type 'a t
+  val create : unit -> 'a t
+  val wait : ?mutex:Lwt_mutex.t -> 'a t -> 'a Lwt.t
+  val broadcast : 'a t -> 'a -> unit
+end
 module Tcpip : sig
   module Stack : sig
     module type V4V6 = sig
@@ -1347,6 +1452,7 @@ module Tcpip : sig
         val write : flow -> Cstruct.t -> (unit, write_error) result Lwt.t
         val close : flow -> unit Lwt.t
         val create_connection : t -> Ipaddr.t * int -> (flow, error) result Lwt.t
+        val dst : flow -> Ipaddr.t * int
       end
       val tcp : t -> TCP.t
     end

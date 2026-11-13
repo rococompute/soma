@@ -112,7 +112,7 @@ no_image_one() {
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
-        mirage_frame_client mirage_frame_server mirage_supervised mirage_storage_model mirage_storage; do
+        mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
@@ -318,6 +318,39 @@ if [ "${NETWORK}" = 1 ]; then
         pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
         wait "${frame_server}" 2>/dev/null
     fi
+    # a select over connections: the mailbox image prints what two
+    # connections from the Mac did, in order, and exits after their ends
+    if build mirage_mailbox; then
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
+            "${HERE}/examples/example_files/mirage_mailbox/mirage_mailbox.hvt" >"${WORK}/mailbox.log" 2>&1 &
+        mailbox_image=$!
+        ip6=""
+        for _ in $(seq 1 60); do
+            ip6="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/mailbox.log" |
+                head -1 | awk '{print $4}')"
+            grep -q "mailbox on port 7002" "${WORK}/mailbox.log" && [ -n "${ip6}" ] && break
+            sleep 0.25
+        done
+        if [ -z "${ip6}" ]; then
+            fail mailbox
+        else
+            printf 'one\n' | nc -w 2 "${ip6}" 7002 >/dev/null 2>&1
+            printf 'two\n' | nc -w 2 "${ip6}" 7002 >/dev/null 2>&1
+            for _ in $(seq 1 20); do grep -q "two connections ended" "${WORK}/mailbox.log" && break; sleep 0.25; done
+            if grep -q "^mail: opened from " "${WORK}/mailbox.log" &&
+               grep -q "^mail: bytes one$" "${WORK}/mailbox.log" &&
+               grep -q "^mail: bytes two$" "${WORK}/mailbox.log" &&
+               [ "$(grep -c '^mail: closed$' "${WORK}/mailbox.log")" -eq 2 ] &&
+               grep -q "^two connections ended$" "${WORK}/mailbox.log"; then
+                pass mailbox
+            else
+                fail mailbox
+            fi
+        fi
+        kill "${mailbox_image}" 2>/dev/null
+        pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_mailbox/mirage_mailbox.hvt"
+        wait "${mailbox_image}" 2>/dev/null
+    fi
     # a project as an image: the counter of examples/example_projects/
     # counter_server, asked from the Mac with curl. It starts at the count
     # in the address, or the cookie, or 0; a count that is not a whole
@@ -395,8 +428,11 @@ main : io unit := print (bad 42).' \
 diagnose cast_through_match 'Require Import Sandbox.
 main : io unit := print (to_string ((("41" : string) : Any) : N)).' \
     'the program stopped on a run-time error: expected an N, but got a string'
+# a recursion deeper than the stack (nat is an OCaml int in an image, so
+# it is the depth that overflows, not a unary number)
 diagnose stack_overflow 'Require Import Sandbox.
-main : io unit := print (to_string (length (repeat 0 (N.to_nat 3000000)))).' \
+Fixpoint deep (n : nat) : nat := match n with O => O | S k => S (deep k) end.
+main : io unit := print (to_string (deep (N.to_nat 200000000))).' \
     'the program stopped on a stack overflow'
 SOMA_MIRAGE_MEM=64 diagnose out_of_memory 'Require Import Sandbox.
 main : io unit := print (match Pos.iter (cons 0) nil 3000000%positive with nil => "empty" | _ => "built" end).' \

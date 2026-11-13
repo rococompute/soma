@@ -37,7 +37,7 @@ output() {
   # This fixture needs only the OCaml standard library. Compile exactly the
   # files Soma emits, including its declaration checks and entry point.
   (cd "$1/extracted" &&
-    ocamlc -w -a -o check.exe soma_nat.ml float64.ml greet.ml soma_bindings.ml prog.mli prog.ml soma_main.ml) || exit 1
+    ocamlc -w -a -o check.exe soma_nat.ml uint63.ml float64.ml greet.ml soma_bindings.ml prog.mli prog.ml soma_main.ml) || exit 1
   actual=$("$TMP/$1/extracted/check.exe")
   if [ "$actual" != "$2:own source" ]; then
     printf '%s: expected %s:own source, got %s\n' "$1" "$2" "$actual"

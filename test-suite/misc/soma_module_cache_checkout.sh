@@ -49,7 +49,7 @@ run_own() {
     echo "$1 extracted another greet.ml:"; cat "$1/extracted/greet.ml"; exit 1
   fi
   (cd "$1/extracted" &&
-    ocamlc -w -a -o check.exe soma_nat.ml float64.ml greet.ml soma_bindings.ml prog.mli prog.ml soma_main.ml) || exit 1
+    ocamlc -w -a -o check.exe soma_nat.ml uint63.ml float64.ml greet.ml soma_bindings.ml prog.mli prog.ml soma_main.ml) || exit 1
   actual="$("$1/extracted/check.exe")"
   if [ "$actual" != "$2:own" ]; then
     printf '%s printed %s, not %s:own\n' "$1" "$actual" "$2"

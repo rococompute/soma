@@ -18,6 +18,10 @@ export SOMA_MIRAGE_SWITCH=nonexistent
 NET="$SOMA_MIRAGE_DIR/net"
 cd "$WORK"
 
+# applied NAME FILE: the constructor NAME applied in FILE, its "(" after
+# any spaces or line breaks (extraction may break the line between them)
+applied() { tr '\n' ' ' < "$2" | grep -Eq "(^|[^A-Za-z0-9_'])$1 +\\("; }
+
 check_built() {
     test -f "$NET/config.ml"
     grep -q stackv4v6 "$NET/config.ml"
@@ -35,7 +39,7 @@ soma build --no-image mirage_frame_server.soma > server.log 2>&1
 grep -q '(no image)' server.log
 [ ! -f mirage_frame_server.hvt ]
 check_built
-grep -q 'Listen (' "$NET/prog.ml"
+applied Listen "$NET/prog.ml"
 grep -q 'Receive_frame' "$NET/prog.ml"
 
 # the client: connect, send_frame, receive_frame, close
@@ -44,7 +48,7 @@ soma build --no-image mirage_frame_client.soma > client.log 2>&1
 grep -q '(no image)' client.log
 [ ! -f mirage_frame_client.hvt ]
 check_built
-grep -q 'Connect (' "$NET/prog.ml"
+applied Connect "$NET/prog.ml"
 grep -q 'Receive_frame' "$NET/prog.ml"
 
 # fails: soma build --no-image NAME must refuse the program in NAME.soma

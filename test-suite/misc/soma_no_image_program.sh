@@ -11,7 +11,7 @@ cd "$WORK"
 cat > good.soma <<'SOMA'
 Require Import Sandbox.
 Axiom message : string.
-Extract Constant message => "[]".
+Extract Constant message => """""".
 Definition main : io unit := print message.
 SOMA
 cat > bad.soma <<'SOMA'
