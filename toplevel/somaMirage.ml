@@ -150,16 +150,14 @@ let runtime_ml = header ^ {soma|(* Runs a Soma program's [main : io unit], extra
    timers, loops and TCP connections. *)
 open Lwt.Infix
 
-let string_of_chars cs = String.of_seq (List.to_seq cs)
-let chars_of_string s = List.of_seq (String.to_seq s)
+(* The image's strings are OCaml's and its [nat] OCaml's [int]
+   (ExtrOcamlNativeString, ExtrOcamlNatInt): these name the crossings *)
+let string_of_chars (s : string) = s
+let chars_of_string (s : string) = s
 
-let int_of_nat n =
-  let rec go acc = function Prog.O -> acc | Prog.S n -> go (acc + 1) n in
-  go 0 n
+let int_of_nat (n : int) = n
 
-let nat_of_int k =
-  let rec go acc k = if k <= 0 then acc else go (Prog.S acc) (k - 1) in
-  go Prog.O k
+let nat_of_int (k : int) = max 0 k
 
 (* [unk] and [raise] are values of gradual programs: running one is an
    error, reported as such *)
@@ -224,20 +222,21 @@ let report ?(during = "main") e =
   event "failure" (("during", S during) :: failure_fields e)
 
 (* What [fetch] gets (Sandbox.fetched): extracted, it has the
-   representation of [fetched_value], with a [char list] for the reply *)
+   representation of [fetched_value], with the image's string (OCaml's)
+   for the reply *)
 type fetched = Got of string | Net_refused | Net_timed_out | Net_bad_address
-type fetched_value = Reply of char list | Refused | TimedOut | BadAddress
+type fetched_value = Reply of string | Refused | TimedOut | BadAddress
 
 (* Links (Sandbox.connection, connected, received, sent): the image knows
    a connection by its number. Extracted, [connected], [received] and
    [sent] have the representations of the [_value] types. *)
 type link = Link of int | Link_refused | Link_timed_out | Link_bad_address
 type connected_value = Connected of Obj.t | ConnectRefused | ConnectTimedOut | ConnectBadAddress
-type received_value = Line of char list | Closed
+type received_value = Line of string | Closed
 type sent_value = Sent | SendClosed
 (* What [receive_frame] gets (Sandbox.framed), and its representation *)
 type frame = Got_frame of string | Frame_closed | Frame_timed_out | Frame_too_large
-type framed_value = Frame of char list | FrameClosed | FrameTimedOut | FrameTooLarge
+type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarge
 
 (* Framing, as Sandbox's take_line and take_frame: the first message of
    what a connection has received, and the rest, which is kept for the
@@ -388,6 +387,9 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Forever body ->
       let rec loop () = run net body >>= loop in
       loop ()
+  | Prog.Iterate (step, start) ->
+      let rec loop s = run net (step s) >>= loop in
+      loop start
   | Prog.Now ->
       let _, ((h, m, s), _) = Ptime.to_date_time (Mirage_ptime.now ()) in
       Lwt.return (Obj.magic ((nat_of_int h, nat_of_int m), nat_of_int s))
@@ -804,11 +806,21 @@ let classify x =
   | FP_infinite -> if x > 0. then PInf else NInf
   | FP_nan -> NaN
 let next_up = Float.succ and next_down = Float.pred
-let unsupported name _ = failwith ("Float64." ^ name ^ " is not in images")
-let of_uint63 x = unsupported "of_uint63" x
-let normfr_mantissa x = unsupported "normfr_mantissa" x
-let frshiftexp x = unsupported "frshiftexp" x
-let ldshiftexp x = unsupported "ldshiftexp" x
+(* a float's parts and back, which FloatOps.Prim2SF and SF2Prim read a
+   float with (the kernel's kernel/float64_common.ml; [of_uint63] is its C
+   stub's: the unsigned 63-bit value, rounded once) *)
+let of_uint63 x = Int64.to_float (Uint63.to_uint64 x)
+let prec = 53
+let normfr_mantissa f =
+  let f = abs f in
+  if f >= 0.5 && f < 1. then Uint63.of_int (int_of_float (Float.ldexp f prec))
+  else Uint63.of_int 0
+let eshift = 2101
+let frshiftexp f =
+  match Float.classify_float f with
+  | FP_zero | FP_infinite | FP_nan -> (f, Uint63.of_int 0)
+  | FP_normal | FP_subnormal -> let (m, e) = Float.frexp f in (m, Uint63.of_int (e + eshift))
+let ldshiftexp f e = Float.ldexp f (Uint63.to_int_min e (2 * eshift) - eshift)
 |soma}
 
 (* uint63.ml: Rocq's 63-bit integers in the program, as OCaml's ints, for
@@ -1053,6 +1065,22 @@ let subcarryc x y =
   if lt y x then C0 r else C1 r
 |soma}
 
+(* With [nat] as OCaml's [int] (ExtrOcamlNatInt), what ExtrOcamlNatInt
+   leaves recursive is OCaml's own: comparisons, division (by zero as
+   Rocq's: 0, and the number itself for a remainder), and a string's
+   length, a character and a substring, which count in [nat] (walking a
+   native string by its constructors copies what is left at each step) *)
+let nat_string_extraction = {soma|Extract Inlined Constant Nat.leb => "(<=)".
+Extract Inlined Constant Nat.ltb => "(<)".
+Extract Inlined Constant Nat.div => "(fun a b -> if b = 0 then 0 else a / b)".
+Extract Inlined Constant Nat.modulo => "(fun a b -> if b = 0 then a else a mod b)".
+Extract Inlined Constant Stdlib.Strings.String.length => "String.length".
+Extract Inlined Constant Stdlib.Strings.String.get =>
+  "(fun n s -> if n < String.length s then Some (String.unsafe_get s n) else None)".
+Extract Inlined Constant Stdlib.Strings.String.substring =>
+  "(fun n m s -> let l = String.length s in if n >= l then """" else String.sub s n (min m (l - n)))".
+|soma}
+
 let float_extraction = {soma|Extract Inductive PrimFloat.float_comparison => "Float64.float_comparison" [ "FEq" "FLt" "FGt" "FNotComparable" ].
 Extract Inductive FloatClass.float_class => "Float64.float_class" [ "PNormal" "NNormal" "PSubn" "NSubn" "PZero" "NZero" "PInf" "NInf" "NaN" ].
 Extract Constant PrimFloat.float => "Float64.t".
@@ -1071,6 +1099,10 @@ Extract Constant PrimFloat.sub => "Float64.sub".
 Extract Constant PrimFloat.div => "Float64.div".
 Extract Constant PrimFloat.next_up => "Float64.next_up".
 Extract Constant PrimFloat.next_down => "Float64.next_down".
+Extract Constant PrimFloat.of_uint63 => "Float64.of_uint63".
+Extract Constant PrimFloat.normfr_mantissa => "Float64.normfr_mantissa".
+Extract Constant PrimFloat.frshiftexp => "(fun f -> Obj.magic (Float64.frshiftexp f))".
+Extract Constant PrimFloat.ldshiftexp => "Float64.ldshiftexp".
 Extract Inductive CarryType.carry => "Uint63.carry" [ "Uint63.C0" "Uint63.C1" ].
 Extract Constant PrimInt63.int => "Uint63.t".
 Extraction Inline PrimInt63.int.
@@ -1144,10 +1176,11 @@ let extract ?(calls = []) ~state dir =
   write_file cmds (Printf.sprintf
     "Set Extraction Output Directory %S.\n\
      From Corelib Require PrimFloat FloatClass PrimInt63 CarryType.\n\
-     %s%s\
+     From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
+     %s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main.\n" dir float_extraction
+     Extraction \"prog\" soma_main.\n" dir float_extraction nat_string_extraction
        (String.concat "" (List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
@@ -1334,7 +1367,7 @@ let check_project ~wasm dir =
      write next to the project's [config.ml]. *)
   write_file (Filename.concat checks "config.ml")
     (read_file (Filename.concat dir "config.ml"));
-  let sources = ["float64.ml"; "uint63.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml";
+  let sources = ["uint63.ml"; "float64.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml";
                  "gradual.ml"; "soma_store.ml"; "soma_rt.ml"; "unikernel.ml"] in
   List.iter (fun name -> write_file (Filename.concat checks name)
                 (read_file (Filename.concat dir name))) sources;
@@ -1369,6 +1402,18 @@ let check_project ~wasm dir =
     error Pp.(str "OCaml check failed in " ++ str checks ++ str ":" ++ fnl () ++
               str (read_file log));
   Feedback.msg_notice Pp.(str "Mirage: checked " ++ str dir ++ str " (no image)")
+
+(* The lock make depends would write, made without opam's current switch:
+   opam-monorepo 0.5 asks opam for it and ignores OPAMSWITCH, so with no
+   default switch set make depends fails ("No switch is currently set").
+   Given the repositories and opam's global variables it needs no switch:
+   the switch's own repositories, as their local copies under opam's root
+   (the versions its installed dune and compilers came from), with
+   dune-universe's opam-overlays before opam's default repository, as the
+   Makefile adds it. make depends' other step, opam install --deps-only,
+   is not run: its packages are the MirageOS tools (mirage, ocaml-solo5,
+   solo5, opam-monorepo) the switch has to have for mirage configure. *)
+let monorepo_lock = {sh|R=$(opam var root)/repo && overlays=git+https://github.com/dune-universe/opam-overlays.git && if [ -d "$R/opam-overlays" ]; then overlays=file://$R/opam-overlays; fi && repos= && for r in $(opam repo list --short); do if [ "$r" = default ]; then repos="$repos,$overlays"; overlays=; fi; repos="$repos,file://$R/$r"; done && repos="$repos${overlays:+,$overlays}" && vars="[opam-version,$(opam --version)],[monorepo,opam-monorepo]" && for v in os arch os-family os-distribution; do vars="$vars,[$v,$(opam var $v)]"; done && env OPAMVAR_monorepo=opam-monorepo opam monorepo lock --require-cross-compile --build-only soma-hvt -l mirage/soma-hvt.opam.locked --ocaml-version "$(ocamlc --version)" --add-global-opam-vars="[$vars]" --opam-repositories="[${repos#,}]"|sh}
 
 let build ~state ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then begin
@@ -1410,12 +1455,18 @@ let build ~state ~vo_file =
     let no_image = getenv_default "SOMA_MIRAGE_NO_IMAGE" "0" = "1" ||
       getenv_default "SOMA_MIRAGE_SWITCH" "" = "" in
     if no_image then check_project ~wasm dir else begin
-    let configured = Sys.file_exists (Filename.concat dir "Makefile") in
-    let setup = if configured && not config_changed then ""
-      else "mirage configure -t hvt && make depends && " in
+    (* configured, and its dependencies fetched: a project whose make
+       depends failed or never ran has a Makefile and no duniverse *)
+    let configured = Sys.file_exists (Filename.concat dir "Makefile") &&
+                     Sys.file_exists (Filename.concat dir "duniverse") in
     let switch = getenv_default "SOMA_MIRAGE_SWITCH" "hvf" in
+    let setup = if configured && not config_changed then ""
+      else "mirage configure -t hvt && " ^ monorepo_lock ^ " && make pull && " in
     let log = Filename.concat dir "build.log" in
-    let script = Printf.sprintf "cd %s && %smake build" (Filename.quote dir) setup in
+    (* opam-monorepo (make depends) asks opam for the current switch,
+       which opam exec --switch does not set when there is no default *)
+    let script = Printf.sprintf "export OPAMSWITCH=%s && cd %s && %smake build"
+        (Filename.quote switch) (Filename.quote dir) setup in
     let cmd = Filename.quote_command "opam" ["exec"; "--switch=" ^ switch; "--"; "sh"; "-c"; script]
         ~stdout:log ~stderr:log in
     if setup <> "" then

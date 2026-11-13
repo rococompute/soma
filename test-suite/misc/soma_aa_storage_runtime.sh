@@ -48,7 +48,7 @@ grep -q '(no image)' build.log
 project="$SOMA_MIRAGE_DIR/plain-storage"
 grep -q 'block_of_file "storage"' "$project/config.ml"
 grep -Fq 'main "Unikernel.Main" (block @-> job)' "$project/config.ml"
-cp "$project"/{prog.ml,prog.mli,float64.ml,soma_wasm.ml,soma_store.ml} .
+cp "$project"/{prog.ml,prog.mli,uint63.ml,float64.ml,soma_wasm.ml,soma_store.ml} .
 cat > standins.ml <<'OCAML'
 module Lwt = struct
   type 'a t = 'a
@@ -102,9 +102,11 @@ module Block = struct
     else (transfer fd sector buffers true; Unix.fsync fd; Ok ())
 end
 module Store = Soma_store.Make(Block)
-let chars s = List.of_seq (String.to_seq s)
-let text s = String.of_seq (List.to_seq (Obj.magic s : char list))
-let nat n = let rec go a = function Prog.O -> a | Prog.S n -> go (a+1) n in go 0 n
+(* an image's strings are OCaml strings, its nats ints (the image's
+   extraction: ExtrOcamlNativeString, ExtrOcamlNatInt) *)
+let chars s = s
+let text (s : string) = s
+let nat (n : int) = n
 let disk = Unix.openfile Sys.argv.(1) [Unix.O_RDWR] 0
 let files = Store.connect disk
 let rec run : 'a. 'a Prog.io -> 'a = fun m -> match m with
@@ -134,8 +136,8 @@ let () =
   Unix.close disk
 OCAML
 ocamlc -c standins.ml
-ocamlc -open Standins -c float64.ml soma_wasm.ml prog.mli prog.ml soma_store.ml driver.ml
-ocamlc -o storage-run unix.cma standins.cmo float64.cmo soma_wasm.cmo prog.cmo soma_store.cmo driver.cmo
+ocamlc -open Standins -c uint63.ml float64.ml soma_wasm.ml prog.mli prog.ml soma_store.ml driver.ml
+ocamlc -o storage-run unix.cma standins.cmo uint63.cmo float64.cmo soma_wasm.cmo prog.cmo soma_store.cmo driver.cmo
 truncate -s 65536 disk.img
 ./storage-run disk.img first > first.log
 ./storage-run disk.img verify > verify.log

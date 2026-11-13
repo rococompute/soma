@@ -12,8 +12,16 @@ trap 'rc=$?; if [ "$rc" -ne 0 ]; then cat "$WORK"/*.log >&2 || true; fi; rm -rf 
 mkdir "$WORK/fake" "$WORK/run"
 cat > "$WORK/fake/opam" <<'SH'
 #!/bin/sh
-# opam exec --switch=S -- COMMAND...
-[ "$1" = exec ] || exit 2
+# opam exec --switch=S -- COMMAND...; and, inside it, what the image's
+# setup asks opam for its monorepo lock (somaMirage.ml's monorepo_lock)
+case "$1" in
+  exec) ;;
+  var) echo stand-in; exit 0 ;;
+  --version) echo 2.3.0; exit 0 ;;
+  repo) echo default; exit 0 ;;
+  monorepo) exit 0 ;;
+  *) exit 2 ;;
+esac
 shift
 while [ "$1" != "--" ]; do shift; done
 shift

@@ -27,8 +27,10 @@
 
 From Stdlib Require Strings.String Strings.Ascii.
 From Corelib Require Extraction.
-(* strings and characters as OCaml char lists and chars in the image *)
-From Stdlib Require ExtrOcamlString.
+(* In the image, strings are OCaml's, [nat] is OCaml's [int], and [bool],
+   [option], pairs and lists are OCaml's (the image's extraction:
+   ExtrOcamlNativeString, ExtrOcamlNatInt, ExtrOcamlBasic), as in a
+   program built for the machine. *)
 From Stdlib Require Import NArith.BinNat.
 From Stdlib Require Import Lia.
 Require Import Soma.Strings Soma.Show.
@@ -88,6 +90,9 @@ Inductive io : Type -> Type :=
 | sleep_ms (milliseconds : N) : io unit
 (** [body], again and again; it never ends, so its type is any [io A] *)
 | forever {A : Type} (body : io unit) : io A
+(** [step] from [start], then from what it returned, again and again: a
+    loop that carries a state. It never ends, so its type is any [io A]. *)
+| iterate {S A : Type} (step : S -> io S) (start : S) : io A
 (** the time of day, UTC: [(hour, minute, second)] *)
 | now : io (nat * nat * nat)
 (** a random number below [bound] ([0] when [bound] is [0]) *)
@@ -144,6 +149,7 @@ Inductive io : Type -> Type :=
 Arguments ret {A} a.
 Arguments bind {A B} m k.
 Arguments forever {A} body.
+Arguments iterate {S A} step start.
 Arguments exit {A} code.
 
 Declare Scope io_scope.

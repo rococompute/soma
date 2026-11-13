@@ -1352,6 +1352,7 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `monotonic_ms` | `io N` | monotonic milliseconds since an arbitrary origin (`Mirage_mtime`), unaffected by wall-clock adjustments |
 | `sleep_ms n` | `io unit` | waits `n : N` milliseconds (`Mirage_sleep`); large durations are split to avoid nanosecond overflow |
 | `forever body` | `io A` | `body` again and again |
+| `iterate step start` | `io A` | `step start`, then `step` of its result, and so on: a loop that carries a state (`step : S -> io S`) |
 | `now` | `io (nat * nat * nat)` | the UTC time of day, `(hour, minute, second)` |
 | `random n` | `io nat` | a random number below `n` (`Mirage_crypto_rng`) |
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
@@ -1437,9 +1438,18 @@ program is built so, a `.soma` file; a Rocq `.v` file that requires
 
 The projects are kept in `$SOMA_MIRAGE_DIR`, or else
 `~/.cache/soma/mirage` (`plain/` and `net/`), so `mirage configure`
-and fetching the dependencies (`make depends`, which needs the network) only
-happen the first time for each, about 15 s; later builds take about a
-second. Each one's `build.log` has its last build's output.
+and fetching the dependencies only happen the first time for each, about
+15 s; later builds take about a second. The dependencies are locked with
+`opam monorepo lock` given the switch's own repositories (their copies
+under opam's root, so the versions match its installed dune and compiler,
+with dune-universe's opam-overlays before the default repository) and
+opam's global variables, then fetched with `make pull`. That is the lock
+`make depends` would write, without needing a default opam switch:
+opam-monorepo asks opam for the current switch and ignores `OPAMSWITCH`.
+`make depends`' other step, installing the switch's packages, isn't run;
+they are the MirageOS tools the switch must already have. A project
+whose dependencies were never fetched (a Makefile, no `duniverse`) is set
+up again. Each one's `build.log` has its last build's output.
 `SOMA_MIRAGE_BUILD=0` skips the image.
 
 The image runs in `$SOMA_MIRAGE_MEM` MB of memory, 256 by default, which
