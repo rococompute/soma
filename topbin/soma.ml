@@ -1316,6 +1316,10 @@ let () =
           let start = Unix.gettimeofday () in
           match (try freshness_verdict config with _ -> Error "") with
           | Ok () ->
+            (* said, so that a caller can tell a build with nothing to do
+               from one that printed nothing (a check that greps for
+               what the build says otherwise fails the second time) *)
+            Printf.printf "%s: unchanged since its last build\n%!" config.file;
             if timings then
               Printf.printf "Total: %.3f s\t%d KiB peak heap memory\n%!"
                 (Unix.gettimeofday () -. start) 0;
