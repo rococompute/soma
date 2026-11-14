@@ -237,6 +237,16 @@ let for_browser ?switch libraries =
 
 (* * The program *)
 
+(* A program that extracts [nat] as OCaml's [int] (it requires
+   ExtrOcamlNatInt) gets what an image gets with it: Nat's comparisons and
+   division, and String's length, get and substring, as OCaml's
+   (SomaMirage.nat_string_extraction). Otherwise they count in [nat] a
+   character at a time, which copies the rest of a native string at each
+   one: Soma.Wire's take_frame of a 200 KB frame took 80 s instead of a
+   millisecond. *)
+let nat_int_library = DirPath.make (List.rev_map Id.of_string ["Stdlib"; "extraction"; "ExtrOcamlNatInt"])
+let extracts_nat_as_int () = List.exists (DirPath.equal nat_int_library) (Library.loaded_libraries ())
+
 (* Extracts [main] into [dir]/prog.ml, each declaration of the modules
    being what they have of its name *)
 let extract ~state ~modules dir =
@@ -267,10 +277,11 @@ let extract ~state ~modules dir =
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %S.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString.\n\
-     %s%s\
+     %s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main.\n" dir SomaMirage.float_extraction (String.concat "" lines));
+     Extraction \"prog\" soma_main.\n" dir SomaMirage.float_extraction
+       (if extracts_nat_as_int () then SomaMirage.nat_string_extraction else "") (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;

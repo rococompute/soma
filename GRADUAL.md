@@ -738,7 +738,11 @@ Soma never computes them, neither the kernel nor the evaluation of a
 term. A `.soma` program whose `main` uses them is built with them after
 it is checked (`toplevel/somaOcaml.ml`). `main` is extracted (with
 `ExtrOcamlBasic` and `ExtrOcamlNativeString`, so that strings, lists,
-options and pairs are OCaml's), each declared value being its binding in a
+options and pairs are OCaml's; a program that also requires
+`ExtrOcamlNatInt` gets `nat` as OCaml's `int` and, as an image does,
+`Nat.leb`, `ltb`, `div`, `modulo` and `String.length`, `get` and
+`substring` as OCaml's, which otherwise count a character at a time and
+copy the rest of the string at each one), each declared value being its binding in a
 generated `soma_bindings.ml`. That binding is the value at its declared
 type, with rigid type variables (`'a 'b. ...`), applied to its arguments
 with their labels, so that OCaml checks each declaration against the
@@ -1382,7 +1386,8 @@ line or frame it returned, so a receive returns exactly one message
 however TCP cut the bytes; lines and frames are taken from the same
 bytes, in order. A receive that times out leaves the read it started for
 the next receive, so nothing is read twice or lost. Taking the first
-message of what was received is pure and in `Sandbox.v`: `take_line`,
+message of what was received is pure and in `Soma.Wire`
+(`theories/Soma/Wire.v`, which Sandbox exports): `take_line`,
 `take_frame`, `split_lines`, `split_frames` and `receive_chunks` (chunks
 fed one after another), with `Example`s on fixed chunks (a message split
 across chunks, several in one chunk, a partial one kept, an empty line, a
@@ -1393,6 +1398,20 @@ into chunks: they are those of all the bytes at once
 (`receive_lines_chunking`, `receive_frames_chunking`). The
 image's `Soma_rt.take_line` and `Soma_rt.take_frame` do the same on
 OCaml strings.
+
+`Soma.Wire` is not only the image's: a program built for the machine
+imports it (`Require Import Soma.Wire.`) without becoming a unikernel, so
+it frames and splits what it sends and receives with the functions an
+image uses. Where strings are OCaml's and `nat` is its `int` (an image; a
+program that also requires `ExtrOcamlNatInt`), `take_frame` reads a
+length and takes a frame by offset (`String.get`, `String.substring`),
+one copy of its bytes, instead of taking the string apart a character
+at a time, which copies the rest at each one; `split_at_walk` and
+`take_frame_walk` are those functions a character at a time, and
+`split_at_walk_eq` and `take_frame_eq` say they're the same, so the
+theorems above hold of what runs. Pantheon's node service frames its
+requests and answers with them (its `node_net.soma`), as its unikernel
+does through Sandbox's `send_frame` and `receive_frame`.
 
 `examples/example_files/mirage_link_server` and `mirage_link_client`
 exchange lines on one connection (`dev/mirage-check.sh`'s `link-*` cases),

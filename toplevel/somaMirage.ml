@@ -242,10 +242,10 @@ type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarg
 type mail = Mail_opened of int * string | Mail_bytes of int * string | Mail_closed of int
 type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * string | LinkClosed of Obj.t
 
-(* Framing, as Sandbox's take_line and take_frame: the first message of
+(* Framing, as Soma.Wire's take_line and take_frame (Sandbox exports it): the first message of
    what a connection has received, and the rest, which is kept for the
    next receive. No network: these are pure. *)
-(* Sandbox.max_frame *)
+(* Wire.max_frame *)
 let max_frame = 1048576
 
 let take_line s =
