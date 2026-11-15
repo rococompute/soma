@@ -46,6 +46,82 @@ let print_lines xs = List.iter print_endline xs
 let argv () = Array.to_list Sys.argv |> List.tl
 let rec forever f s = forever f (f s)
 
+(* ---------- vetted RSA boundary ---------- *)
+module Rsa = Mirage_crypto_pk.Rsa
+(* Use OS entropy directly, including after fork; no deterministic fallback. *)
+let rsa_rng = lazy (Mirage_crypto_rng_unix.use_default ())
+let rsa_invalid () = invalid_arg "RSA input rejected"
+let rsa_result = function Ok k -> k | Error _ -> rsa_invalid ()
+let rsa_size s =
+  let bits = int_of_string s in
+  if bits < 2048 || bits > 8192 || bits mod 256 <> 0 then rsa_invalid ();
+  bits
+let rsa_hex s =
+  let len = String.length s in
+  if len = 0 || len > 2048 || len mod 2 <> 0 then rsa_invalid ();
+  String.iter (function '0'..'9' | 'a'..'f' | 'A'..'F' -> () | _ -> rsa_invalid ()) s;
+  Z.of_string ("0x" ^ s)
+let rsa_to_hex bytes z =
+  let s = Z.format "%x" z in
+  if String.length s > bytes * 2 then rsa_invalid ();
+  String.make (bytes * 2 - String.length s) '0' ^ s
+let rsa_check_size bits n =
+  (* Older keys can have a modulus one bit below their declared size. *)
+  let actual = Z.numbits n in
+  if actual < bits - 1 || actual > bits then rsa_invalid ()
+let rsa_public = function
+  | [size; n; e] ->
+      let bits = rsa_size size in
+      let n = rsa_hex n and e = rsa_hex e in
+      rsa_check_size bits n;
+      (bits, rsa_result (Rsa.pub ~n ~e))
+  | _ -> rsa_invalid ()
+let rsa_private = function
+  | [size; n; e; p; q; dp; dq; qi] ->
+      let bits, pub = rsa_public [size; n; e] in
+      let p = rsa_hex p and q = rsa_hex q in
+      let k = rsa_result (Rsa.priv_of_primes ~e:pub.e ~p ~q) in
+      if not (Z.equal k.n pub.n && Z.equal k.dp (rsa_hex dp)
+              && Z.equal k.dq (rsa_hex dq) && Z.equal k.q' (rsa_hex qi))
+      then rsa_invalid ();
+      (bits, k)
+  | _ -> rsa_invalid ()
+let rsa_encode s =
+  String.concat "" (List.init (String.length s) (fun i -> Printf.sprintf "%02x" (Char.code s.[i])))
+let rsa_decode s =
+  (* Check alphabet and length before decoding; bound allocation. *)
+  ignore (rsa_hex s);
+  String.init (String.length s / 2) (fun i -> Char.chr (int_of_string ("0x" ^ String.sub s (2*i) 2)))
+let rsa_new_key size =
+  try
+    let bits = rsa_size size in
+    Lazy.force rsa_rng;
+    let k = Rsa.generate ~bits ~e:(Z.of_int 65537) () in
+    let full = rsa_to_hex (bits / 8) and half = rsa_to_hex (bits / 16) in
+    ans_data [string_of_int bits; full k.n; full k.e; full k.d;
+              half k.p; half k.q; half k.dp; half k.dq; half k.q']
+  with _ -> ans_why "RSA key generation failed"
+let rsa_verify fields msg signature =
+  try
+    let bits, key = rsa_public fields in
+    if String.length signature <> bits / 4 then false else
+    Rsa.PKCS1.verify ~hashp:((=) `SHA256) ~key
+      ~signature:(rsa_decode signature) (`Message msg)
+  with _ -> false
+let rsa_sign fields msg =
+  try
+    let bits, key = rsa_private fields in
+    Lazy.force rsa_rng;
+    let signature = Rsa.PKCS1.sign ~crt_hardening:true ~mask:`Yes
+        ~hash:`SHA256 ~key (`Message msg) in
+    (* Fail closed even if the library's CRT recovery were to fail. *)
+    if String.length signature <> bits / 8 ||
+       not (Rsa.PKCS1.verify ~hashp:((=) `SHA256)
+              ~key:(Rsa.pub_of_priv key) ~signature (`Message msg))
+    then rsa_invalid ();
+    rsa_encode signature
+  with _ -> failwith "RSA signing failed"
+
 (* ---------- files ---------- *)
 
 let read_text p = ans_found (try Some (In_channel.with_open_bin p In_channel.input_all) with _ -> None)

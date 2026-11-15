@@ -18,7 +18,14 @@
     RSA is below SHA-256: [rsa_verify] and [rsa_sign], PKCS #1 v1.5
     signatures of SHA-256 digests on big-endian bytes, as Cryptokit makes
     them, on numbers of 31-bit limbs ([Bignum]), and [rsa_new_key], a key
-    from random starts. *)
+    from random starts.
+
+    These are reference computations, not a security-reviewed RSA provider.
+    Fixed Miller-Rabin bases do not establish an independent-random-base
+    error bound for large candidates. Private exponentiation is not blinded
+    or constant-time. Examples prove selected computations, not primality,
+    entropy quality or side-channel resistance. Security-sensitive machine
+    programs should use Soma.Host's vetted RSA boundary. *)
 
 From Stdlib Require Import Strings.String Strings.Ascii Lists.List.
 Import ListNotations.

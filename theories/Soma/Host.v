@@ -63,6 +63,21 @@ Parameter cwd : unit -> bool * (float * list string).
 (** COUNT bytes of the system's randomness: [[them]] *)
 Parameter random_bytes : string -> bool * (float * list string).
 
+(** ** RSA for machine programs
+
+    The host uses Mirage Crypto, not the computational Soma.Crypto reference.
+    Hex integers are unsigned big-endian bytes. Sizes are decimal bits,
+    2048 through 8192 in multiples of 256. Key generation returns
+    [size; n; e; d; p; q; dp; dq; qinv], or a generic failure.
+    Signing takes [size; n; e; p; q; dp; dq; qinv], validates the key,
+    and returns a lowercase-hex SHA-256/PKCS#1 v1.5 signature. It raises
+    a generic error on failure: callers must never send an empty signature.
+    Verification takes [size; n; e] and returns false on malformed input.
+    These are opaque host assumptions, not cryptographic theorems. *)
+Parameter rsa_new_key : string -> bool * (float * list string).
+Parameter rsa_sign : list string -> string -> string.
+Parameter rsa_verify : list string -> string -> string -> bool.
+
 (** ** Files *)
 
 (** a file read whole: [[its text]], or not found *)
@@ -154,7 +169,8 @@ Parameter sock_error : string -> bool * (float * list string).
 (** a descriptor closed, and its name forgotten *)
 Parameter sock_close : string -> bool * (float * list string).
 
-(** Soma's host runtime carries them out, with OCaml's unix library,
-    which comes with the compiler *)
+(** Soma's host runtime uses Unix and Mirage Crypto for machine RSA. *)
 OCaml Library "unix".
+OCaml Library "mirage-crypto-pk".
+OCaml Library "mirage-crypto-rng.unix".
 OCaml Bind Module "Soma_host".
