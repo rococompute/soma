@@ -1315,6 +1315,14 @@ proof of any program's range invariants. `soma_native_contracts.sh` checks
 the actual extracted operations and byte-string mappings at boundaries,
 including deliberate overflow counterexamples to unconditional equivalence.
 
+`theories/Soma/CastSpec.v` checks conversion laws for the actual gradual
+primitives on naturals, booleans, strings, lists, options, pairs and
+functions. It also specifies projections whose dynamic tag changes at run
+time. These proofs use the existing gradual kernel primitives; they are
+not a general simulation theorem for extraction. `soma_cast_contracts.sh`
+checks the corresponding extracted paths, including higher-order wrappers
+and distinct `Cast_error` and `Unknown_term` failures.
+
 Extraction erases types, which casts need. So OCaml extraction compiles
 each `cast A B t` to a call to a small runtime, `Gradual_rt`
 (`plugins/extraction/gradual_rt.ml`), with runtime descriptions of `A`
