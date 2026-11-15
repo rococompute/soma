@@ -17,7 +17,8 @@
 
     RSA is below SHA-256: [rsa_verify] and [rsa_sign], PKCS #1 v1.5
     signatures of SHA-256 digests on big-endian bytes, as Cryptokit makes
-    them, on numbers of 31-bit limbs ([Bignum]). *)
+    them, on numbers of 31-bit limbs ([Bignum]), and [rsa_new_key], a key
+    from random starts. *)
 
 From Stdlib Require Import Strings.String Strings.Ascii Lists.List.
 Import ListNotations.
@@ -548,6 +549,153 @@ Definition bytes_of_hex (s : string) : option (list int) :=
 
 End Rsa.
 
+(** ** RSA keys: two primes found from random starts
+
+    A key of [bits] bits (a multiple of 16) and public exponent 65537
+    from two random strings of [bits / 16] bytes, one start for each
+    prime: its top two bits and its low bit set, then the next odd number
+    that no prime below 2000 divides, that isn't 1 modulo 65537 (so 65537
+    has an inverse modulo it less one), and that passes Miller–Rabin for
+    the first twelve primes as bases, the search stepping by 2. Its two
+    primes have [bits / 2] bits, so the modulus has [bits]. What a key
+    needs of the randomness is the starts' only; the search and the rest
+    are computed. *)
+
+Module Keygen.
+Local Open Scope uint63_scope.
+Local Open Scope bool_scope.
+
+(** [a mod m] for [m] below 2{^17}: the limbs from the most significant *)
+Definition mod_small (a : list int) (m : int) : int :=
+  fold_left (fun r x => PrimInt63.mod (add (lsl r 31) x) m) (rev a) 0.
+
+(** [a / m] for [m] below 2{^17}, as limbs (the remainder dropped) *)
+Definition div_small (a : list int) (m : int) : list int :=
+  Bignum.trim (fst (fold_left (fun qr x =>
+    let v := add (lsl (snd qr) 31) x in (PrimInt63.div v m :: fst qr, PrimInt63.mod v m)) (rev a) ([], 0))).
+
+(** the odd primes below 2000, by trial division *)
+Fixpoint odd_primes (fuel : nat) (c : int) (acc : list int) : list int :=
+  match fuel with
+  | O => rev acc
+  | S f => odd_primes f (add c 2)
+             (if forallb (fun p => negb (eqb (PrimInt63.mod c p) 0)) acc then c :: acc else acc)
+  end.
+Definition small_primes : list int := odd_primes 998 3 [].
+
+Definition bases : list int := [2; 3; 5; 7; 11; 13; 17; 19; 23; 29; 31; 37].
+
+Definition big_eqb (a b : list int) : bool :=
+  match Bignum.compare_from a b Eq with Eq => true | _ => false end.
+
+(** [x] squared up to [k] times, until it is [minus1] *)
+Fixpoint squares_reach (md : Bignum.modulus) (x minus1 : list int) (k : nat) : bool :=
+  match k with
+  | O => false
+  | S k => let x := Bignum.montmul md x x in big_eqb x minus1 || squares_reach md x minus1 k
+  end.
+
+(** the bits of [n - 1] without its [s] low zeros ([d], n - 1 = d 2{^s}),
+    and [s] *)
+Fixpoint low_zeros (rbits : list bool) (s : nat) : list bool * nat :=
+  match rbits with false :: r => low_zeros r (S s) | _ => (rev rbits, s) end.
+
+(** whether the odd [n] (of more limbs than a small prime) passes
+    Miller–Rabin to each of [bases] *)
+Definition miller_rabin (n : list int) : bool :=
+  let md := Bignum.modulus_of n in
+  let s := Bignum.m_s md in
+  let one := Bignum.r_mod md in
+  let r2 := Bignum.r2_mod md one in
+  let minus1 := Bignum.fit s (Bignum.sub_borrow (Bignum.m_n md) one 0) in
+  let '(dbits, zs) := low_zeros (rev (Bignum.bits_of_bytes (Bignum.to_bytes (4 * s) (Bignum.sub_borrow n [1] 0)))) O in
+  forallb (fun a =>
+    let x := Bignum.pow_bits md one (Bignum.montmul md (Bignum.fit s [a]) r2) dbits in
+    big_eqb x one || big_eqb x minus1 || squares_reach md x minus1 (pred zs)) bases.
+
+Definition e : int := 65537.
+
+(** a prime for a key: none of the small primes divides it, it isn't 1
+    modulo [e], and it passes Miller–Rabin *)
+Definition key_prime (n : list int) : bool :=
+  forallb (fun p => negb (eqb (mod_small n p) 0)) small_primes &&
+  negb (eqb (mod_small n e) 1) && miller_rabin n.
+
+(** the first key prime from [c] on, stepping by 2, of [limbs] limbs at
+    most; [None] past [fuel] steps or that size *)
+Fixpoint next_prime (fuel : nat) (limbs : nat) (c : list int) : option (list int) :=
+  match fuel with
+  | O => None
+  | S f =>
+      if Nat.ltb limbs (length c) then None
+      else if key_prime c then Some c
+      else next_prime f limbs (Bignum.add_carry c [2] 0)
+  end.
+
+(** a start: the top two bits and the low bit set *)
+Definition start_of (r : list int) : list int :=
+  Bignum.of_bytes (match r with
+                   | [] => []
+                   | x :: l => let l := lor (land x 255) 192 :: l in
+                               removelast l ++ [lor (last l 0) 1]
+                   end).
+
+(** [x{^-1}] modulo [e], by Fermat: [x{^(e - 2)}] *)
+Fixpoint pow_mod_e (fuel : nat) (b k acc : int) : int :=
+  match fuel with
+  | O => acc
+  | S f => if eqb k 0 then acc
+           else pow_mod_e f (PrimInt63.mod (mul b b) e) (lsr k 1)
+                  (if eqb (land k 1) 1 then PrimInt63.mod (mul acc b) e else acc)
+  end.
+
+(** the inverse of [e] modulo [x], [x] not a multiple of [e]: [(1 + k x) / e]
+    for the [k] below [e] that makes it whole, [k = -x{^-1} mod e] *)
+Definition inv_e (x : list int) : list int :=
+  let k := PrimInt63.mod (sub e (pow_mod_e 20 (mod_small x e) (sub e 2) 1)) e in
+  div_small (Bignum.add_carry (Bignum.trim (Bignum.mul_limb x k 0)) [1] 0) e.
+
+(** [a]'s big-endian bytes, without leading zeros *)
+Definition bytes_of (a : list int) : list int :=
+  let fix drop l := match l with x :: r => if eqb x 0 then drop r else l | [] => [] end in
+  drop (Bignum.to_bytes (4 * length a) a).
+
+(** [q{^-1} mod p], for primes [q < p], by Fermat: [q{^(p - 2)}] *)
+Definition inv_mod_prime (q p : list int) : list int :=
+  let md := Bignum.modulus_of p in
+  let s := Bignum.m_s md in
+  let one := Bignum.r_mod md in
+  let qm := Bignum.montmul md (Bignum.fit s q) (Bignum.r2_mod md one) in
+  let x := Bignum.pow_bits md one qm (Bignum.bits_of_bytes (bytes_of (Bignum.trim (Bignum.sub_borrow p [2] 0)))) in
+  Bignum.trim (Bignum.montmul md x (Bignum.fit s [1])).
+
+End Keygen.
+
+Section Rsakey.
+Local Open Scope uint63_scope.
+
+(** A key of [bits] bits, a multiple of 16, from random starts [rp] and
+    [rq] of [bits / 16] bytes: [n; e; d; p; q; dp; dq; qinv] as big-endian
+    bytes, [p > q], [d] the inverse of [e] modulo (p - 1)(q - 1) and [dp]
+    and [dq] it modulo p - 1 and q - 1 (what [rsa_sign] takes); [None] in
+    the rare case the starts give the same prime or no prime of their size. *)
+Definition rsa_new_key (bits : nat) (rp rq : list int) : option (list (list int)) :=
+  let limbs := S (Nat.div (Nat.div bits 2) 31) in
+  match Keygen.next_prime (Nat.pow 2 17) limbs (Keygen.start_of rp), Keygen.next_prime (Nat.pow 2 17) limbs (Keygen.start_of rq) with
+  | Some a, Some b =>
+      if Keygen.big_eqb (Bignum.fit limbs a) (Bignum.fit limbs b) then None else
+      let '(p, q) := if Bignum.geb (Bignum.fit limbs a) (Bignum.fit limbs b) then (a, b) else (b, a) in
+      let pm1 := Bignum.trim (Bignum.sub_borrow p [1] 0) in
+      let qm1 := Bignum.trim (Bignum.sub_borrow q [1] 0) in
+      let n := Bignum.trim (Bignum.mul_big p q) in
+      Some (map Keygen.bytes_of
+        [n; [Keygen.e]; Keygen.inv_e (Bignum.trim (Bignum.mul_big pm1 qm1)); p; q;
+         Keygen.inv_e pm1; Keygen.inv_e qm1; Keygen.inv_mod_prime q p])
+  | _, _ => None
+  end.
+
+End Rsakey.
+
 (** FIPS 180-4's examples, and the empty string *)
 Example sha256_abc : sha256 "abc" =
   "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"%string.
@@ -600,4 +748,28 @@ Proof. vm_compute. reflexivity. Qed.
 Example rsa_sign_512 :
   rsa_sign 64 Example512.p Example512.q Example512.dp Example512.dq Example512.qinv "hello"
   = Example512.sg.
+Proof. vm_compute. reflexivity. Qed.
+
+(** A 512-bit key made from fixed starts: its modulus has 512 bits, and
+    what it signs verifies with its public part, for that message only. *)
+Module ExampleKey.
+Definition starts : list int := map (fun i => PrimInt63.mod (PrimInt63.mul i 97) 256)%uint63
+  [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15; 16; 17; 18; 19; 20; 21; 22; 23; 24; 25; 26; 27; 28; 29; 30; 31; 32]%uint63.
+Definition key := rsa_new_key 512 starts (rev starts).
+Definition signed (msg : string) : bool :=
+  match key with
+  | Some [n; e; _; p; q; dp; dq; qinv] =>
+      Nat.eqb (length n) 64 && rsa_verify 64 n e msg (rsa_sign 64 p q dp dq qinv msg)
+  | _ => false
+  end.
+End ExampleKey.
+
+Example rsa_new_key_signs : ExampleKey.signed "hello" = true.
+Proof. vm_compute. reflexivity. Qed.
+
+Example rsa_new_key_other :
+  match ExampleKey.key with
+  | Some [n; e; _; p; q; dp; dq; qinv] => rsa_verify 64 n e "hellp" (rsa_sign 64 p q dp dq qinv "hello")
+  | _ => true
+  end = false.
 Proof. vm_compute. reflexivity. Qed.

@@ -132,6 +132,15 @@ let package_of library = match String.index_opt library '.' with
   | Some i -> String.sub library 0 i
   | None -> library
 
+(* the libraries that come with the compiler, which no opam package has:
+   a definition may name them (OCaml Library "unix") like any other *)
+let with_compiler = ["unix"; "str"; "threads"; "dynlink"; "bigarray"; "compiler-libs"; "runtime_events"; "ocamldoc"]
+
+(* the opam packages that [libraries] are in *)
+let packages_of libraries =
+  List.sort_uniq compare
+    (List.filter (fun p -> not (List.mem p with_compiler)) (List.map package_of libraries))
+
 (* What the switch has, as lines "package version" (or "package", in a
    record of an earlier Soma): opam's own list, asked of opam *)
 let installed_in switch =
@@ -171,7 +180,7 @@ let ensure_packages ~switch ~managed ?(versions = []) libraries =
   let installed = Filename.concat dir
       (if managed then "installed" else "installed-" ^ Digest.to_hex (Digest.string switch)) in
   let names = (if managed then ["ocaml-base-compiler"] else []) @ ["dune"] @
-              List.sort_uniq compare (List.map package_of libraries) in
+              packages_of libraries in
   let names = names @ List.filter (fun p -> not (List.mem p names)) (List.map fst versions) in
   let wanted = List.map (fun p -> p, List.assoc_opt p versions) names in
   let record lines =
@@ -205,7 +214,7 @@ let ensure_packages ~switch ~managed ?(versions = []) libraries =
 (* Whether [libraries] are made for the browser: their packages depend on
    js_of_ocaml. Recorded in [targets], once for each set. *)
 let for_browser ?switch libraries =
-  let packages = List.sort_uniq compare (List.map package_of libraries) in
+  let packages = packages_of libraries in
   if packages = [] || not (command_exists "opam") then List.mem "js_of_ocaml" packages else
   let switch_args = match switch with Some s -> ["--switch=" ^ s] | None -> [] in
   let switch = Option.default "" switch in
@@ -471,7 +480,7 @@ let export ~state ~source dir =
   let package = match project with
     | Some p -> p.SomaProject.name
     | None -> package_name name in
-  let packages = List.sort_uniq compare (List.map package_of libraries) in
+  let packages = packages_of libraries in
   let file f contents = ignore (update_file (Filename.concat dir f) contents) in
   file "dune-project" ("(lang dune 3.0)\n" ^ extract_marker ^ " " ^ Filename.basename source ^ "\n");
   file (package ^ ".opam") (opam_file ~source ~project ~packages);
