@@ -412,12 +412,18 @@ normal SSH configuration and agent. SSH and HTTPS spellings have the same
 package identity (`host.com/group/repo`), so changing the transport keeps
 the locked commit and cannot introduce a second copy. SSH hosts use the
 standard port; configure a host alias in `~/.ssh/config` for a custom one.
+Aliases need no dot: `git@work:group/repo.git` and
+`ssh://git@work/group/repo.git` both use the SSH host `work` and lock the
+package as `work/group/repo`.
 For major 2 and above append `/vN` after the repository name, for example
 `git@github.com:owner/private.git/v2`.
 
 `soma get 'git@github.com:owner/private.git@0.1.0'` adds an SSH dependency;
 without the final `@VERSION` it selects the latest compatible tag. SSH
-fetches default to `ssh -oBatchMode=yes`, so authenticate and establish the
+versions also work with `soma diff`, for example
+`soma diff 'git@github.com:owner/private.git@0.1.0' 'git@github.com:owner/private.git@0.2.0'`.
+
+SSH fetches default to `ssh -oBatchMode=yes`, so authenticate and establish the
 host's key before building. Existing `GIT_SSH_COMMAND` and `GIT_SSH`
 settings are preserved. No token or private key belongs in `soma.toml` or
 `soma.lock`.

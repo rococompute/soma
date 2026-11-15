@@ -147,7 +147,7 @@ let rec split_last = function
   | [x] -> [], x
   | x :: r -> let p, l = split_last r in x :: p, l
 
-let parse_repository_path s =
+let parse_repository_path ?(explicit_host = false) s =
   let contains_sub sub =
     let n = String.length sub in
     let rec at i = i + n <= String.length s && (String.sub s i n = sub || at (i + 1)) in
@@ -170,7 +170,7 @@ let parse_repository_path s =
       | Some bad -> Error (Printf.sprintf "%S is no path segment." bad)
       | None ->
         let host, rest = match segments with
-          | first :: rest when String.contains first '.' -> Some first, rest
+          | first :: rest when explicit_host || String.contains first '.' -> Some first, rest
           | _ -> None, segments in
         (* a suffix comes after owner/repo: owner/v2 is a repository named v2 *)
         let base, major =
@@ -213,17 +213,17 @@ let parse_path written =
       let parts = String.split_on_char '/' path in
       let strip_git s = if Filename.check_suffix s ".git" then Filename.chop_suffix s ".git" else s in
       let parts = match List.rev parts with
-        | last :: repo :: rest when Option.has_some (major_suffix last) ->
+        | last :: repo :: rest when List.length parts >= 3 && Option.has_some (major_suffix last) ->
           List.rev (last :: strip_git repo :: rest)
         | last :: rest -> List.rev (strip_git last :: rest)
         | [] -> [] in
-      match parse_repository_path (host ^ "/" ^ String.concat "/" parts) with
+      match parse_repository_path ~explicit_host:true (host ^ "/" ^ String.concat "/" parts) with
       | Error why -> Error why
       | Ok p ->
-        (* [p.url] has neither the major suffix nor the SSH user. *)
-        let prefix = "https://" ^ host ^ "/" in
-        let repo = String.sub p.url (String.length prefix) (String.length p.url - String.length prefix) in
-        Ok { p with url = make_url authority repo } in
+        let repository = match p.major with
+          | Some _ -> fst (split_last parts)
+          | None -> parts in
+        Ok { p with url = make_url authority (String.concat "/" repository ^ ".git") } in
   if String.starts_with ~prefix:"ssh://" written then
     let rest = String.sub written 6 (String.length written - 6) in
     match String.index_opt rest '/' with
@@ -237,6 +237,16 @@ let parse_path written =
       (String.sub written (i + 1) (String.length written - i - 1))
       (fun authority repo -> authority ^ ":" ^ repo)
   | _ -> parse_repository_path written
+
+(* The final @VERSION follows the repository path. The @ in an SSH
+   user@host belongs to its address, including when no version is given. *)
+let split_version spec =
+  match String.rindex_opt spec '@', String.rindex_opt spec '/' with
+  | Some i, Some slash when i > slash ->
+    String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
+  | Some i, None when not (String.contains spec ':') || String.index_opt spec '@' <> Some i ->
+    String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
+  | _ -> spec, None
 
 let check_dependency_version ~written path v =
   let shown = version_to_string v in

@@ -501,12 +501,7 @@ let get spec =
   let written_new = match spec with
     | None -> false
     | Some spec ->
-      let written, version = match String.rindex_opt spec '@', String.rindex_opt spec '/' with
-        | Some i, Some slash when i > slash ->
-          String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
-        | Some i, None when not (String.contains spec ':') ->
-          String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
-        | _ -> spec, None in
+      let written, version = split_version spec in
       let path = match parse_path written with
         | Ok p -> p
         | Error why -> error (str why) in

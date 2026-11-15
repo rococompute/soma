@@ -10,9 +10,13 @@ cd "$TMP"
 TMP=$(pwd -P)
 export XDG_CACHE_HOME="$TMP/cache"
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-export GIT_CONFIG_COUNT=2
+export GIT_CONFIG_COUNT=6
 export GIT_CONFIG_KEY_0="url.file://$TMP/remote/.insteadOf" GIT_CONFIG_VALUE_0=git@packages.test:
 export GIT_CONFIG_KEY_1="url.file://$TMP/remote/.insteadOf" GIT_CONFIG_VALUE_1=ssh://git@packages.test/
+export GIT_CONFIG_KEY_2="url.file://$TMP/remote/.insteadOf" GIT_CONFIG_VALUE_2=git@packages:
+export GIT_CONFIG_KEY_3="url.file://$TMP/remote/.insteadOf" GIT_CONFIG_VALUE_3=ssh://git@packages/
+export GIT_CONFIG_KEY_4="url.file://$TMP/remote/owner/.insteadOf" GIT_CONFIG_VALUE_4=git@root:
+export GIT_CONFIG_KEY_5="url.file://$TMP/remote/owner/.insteadOf" GIT_CONFIG_VALUE_5=ssh://git@root/
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 mkdir -p remote/owner work app
 git init -q --bare remote/owner/maths.git
@@ -60,10 +64,33 @@ manifest
 soma get 'git@packages.test:owner/maths.git/v2@2.0.0' > get.log 2>&1 || { cat get.log; exit 1; }
 grep -q 'path = "packages.test/owner/maths/v2"' soma.lock
 check
+# A host alias is an explicit SSH host, even without a dot in its name.
+manifest
+soma get 'git@packages:owner/maths.git@1.0.0' > get.log 2>&1 || { cat get.log; exit 1; }
+grep -q 'path = "packages/owner/maths"' soma.lock
+check
+manifest '[dependencies]
+"ssh://git@packages/owner/maths.git" = "1.0.0"'
+chmod -R u+w "$XDG_CACHE_HOME/soma/src/packages"
+rm -rf "$XDG_CACHE_HOME/soma/src/packages" .soma-cache
+check
+grep -q "commit = \"$first\"" soma.lock
+# A server can expose a repository directly, with no owner/ component.
+# Its user@host and final @VERSION must still be distinguished.
+manifest
+soma get 'git@root:maths.git@1.0.0' > get.log 2>&1 || { cat get.log; exit 1; }
+grep -q 'path = "root/maths"' soma.lock
+check
+soma get 'git@root:maths.git' > get.log 2>&1 || { cat get.log; exit 1; }
+check
+# diff uses the same @VERSION handling as get, for both SSH spellings.
+soma diff 'git@packages.test:owner/maths.git@1.0.0' \
+  'ssh://git@packages.test/owner/maths.git@1.0.0' > diff.log 2>&1 || { cat diff.log; exit 1; }
+grep -q '1 unchanged.' diff.log || { cat diff.log; exit 1; }
 # SSH and HTTPS cannot smuggle two versions of the same repository into a build.
 manifest '[dependencies]
 "packages.test/owner/maths" = "1.0.0"
 "git@packages.test:owner/maths.git" = "1.0.0"'
 if soma build main.soma > out.log 2>&1; then echo 'accepted duplicate SSH/HTTPS identity'; exit 1; fi
 grep -q 'one path, written twice' out.log
-echo 'PASS SSH dependencies: SCP and URI URLs, soma get, canonical identity, locked refetch, major versions'
+echo 'PASS SSH dependencies: SCP and URI URLs, get and diff, aliases, canonical identity, locked refetch, major versions'

@@ -36,10 +36,8 @@ type version_source =
   | Folder of string
 
 let parse_side spec =
-  match String.index_opt spec '@' with
-  | Some i ->
-    let written = String.sub spec 0 i in
-    let v = String.sub spec (i + 1) (String.length spec - i - 1) in
+  match split_version spec with
+  | written, Some v ->
     let v = if String.starts_with ~prefix:"v" v then String.sub v 1 (String.length v - 1) else v in
     let path = match parse_path written with
       | Ok p -> p
@@ -51,7 +49,7 @@ let parse_side spec =
      | Ok () -> ()
      | Error why -> error (str why));
     Tag (written, path, version)
-  | None ->
+  | _, None ->
     if Sys.file_exists (Filename.concat spec file_name) then Folder (CUnix.canonical_path_name spec)
     else
       error (str spec ++ str " is no version of a project: a tag is owner/repo@1.2.3, and a folder has a " ++

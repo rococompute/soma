@@ -44,6 +44,10 @@ type dependency_path = {
 (** [Error why], [why] being the message for the key *)
 val parse_path : string -> (dependency_path, string) result
 
+(** Split a final [@VERSION] from a dependency path, preserving SSH's
+    [user@host]. A missing version is [None]. *)
+val split_version : string -> string * string option
+
 (** A version as the value of a dependency at this path: not build metadata,
     and its major that of the path. [Error why], the message. *)
 val check_dependency_version : written:string -> dependency_path -> version -> (unit, string) result
