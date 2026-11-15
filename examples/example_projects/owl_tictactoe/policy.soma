@@ -1,0 +1,27 @@
+Import game.
+Import soma_owl.matrix soma_owl.nn.mlp.
+
+features (b : board) (side : nat) : list float :=
+  map (fun cell => if cell =? 0 then 0.0%float else
+       if cell =? side then 1.0%float else (-1.0)%float) b.
+
+labels (b : board) : list float :=
+  let chosen := best_moves b (turn b) in
+  let count := fold_left (fun n _ => PrimFloat.add n 1.0%float) chosen 0.0%float in
+  map (fun move => if existsb (Nat.eqb move) chosen
+       then PrimFloat.div 1.0%float count else 0.0%float) (seq 0 9).
+
+training_inputs := matrix.of_rows (map (fun b => features b (turn b)) training_boards).
+training_targets := matrix.of_rows (map labels training_boards).
+
+(** Scores come only from the fitted network. Occupied cells are masked
+    before argmax so an imperfect policy still makes a legal move. *)
+choose (net : network) (b : board) (side : nat) : option nat :=
+  let scores := nth 0 (matrix.to_rows (predict net (matrix.of_rows [features b side]))) [] in
+  let best := fold_left (fun best move =>
+    let score := nth move scores 0.0%float in
+    match best with
+    | None => Some (move, score)
+    | Some entry => if PrimFloat.ltb (snd entry) score then Some (move, score) else best
+    end) (legal b) (None : option (nat * float)) in
+  option_map fst best.

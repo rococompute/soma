@@ -73,6 +73,8 @@ let check_git () =
 let git ?dir args =
   check_git ();
   Unix.putenv "GIT_TERMINAL_PROMPT" "0";
+  if Sys.getenv_opt "GIT_SSH_COMMAND" = None && Sys.getenv_opt "GIT_SSH" = None then
+    Unix.putenv "GIT_SSH_COMMAND" "ssh -oBatchMode=yes";
   let out = Filename.temp_file "soma-git" ".out" in
   let args = (match dir with Some d -> ["-C"; d] | None -> []) @ args in
   Fun.protect ~finally:(fun () -> try Sys.remove out with Sys_error _ -> ()) (fun () ->
@@ -499,9 +501,12 @@ let get spec =
   let written_new = match spec with
     | None -> false
     | Some spec ->
-      let written, version = match String.index_opt spec '@' with
-        | Some i -> String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
-        | None -> spec, None in
+      let written, version = match String.rindex_opt spec '@', String.rindex_opt spec '/' with
+        | Some i, Some slash when i > slash ->
+          String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
+        | Some i, None when not (String.contains spec ':') ->
+          String.sub spec 0 i, Some (String.sub spec (i + 1) (String.length spec - i - 1))
+        | _ -> spec, None in
       let path = match parse_path written with
         | Ok p -> p
         | Error why -> error (str why) in

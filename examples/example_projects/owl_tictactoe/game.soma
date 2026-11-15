@@ -1,0 +1,62 @@
+(** Tic-tac-toe rules and an exact teacher. Cells are 0 (empty), 1 (X),
+    or 2 (O), in row-major order. The neural network never calls the
+    teacher when selecting a move: minimax only supplies training labels. *)
+board : Type := list nat.
+empty : board := repeat 0 9.
+other (side : nat) : nat := if side =? 1 then 2 else 1.
+
+lines : list (list nat) :=
+  [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6],
+   [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]].
+
+wins (b : board) (side : nat) : bool :=
+  existsb (fun line => forallb (fun i => nth i b 0 =? side) line) lines.
+
+legal (b : board) : list nat := filter (fun i => nth i b 0 =? 0) (seq 0 9).
+
+Fixpoint place (b : board) (index side : nat) : board :=
+  match b, index with
+  | [], _ => []
+  | _ :: rest, 0 => side :: rest
+  | first :: rest, S remaining => first :: place rest remaining side
+  end.
+
+turn (b : board) : nat :=
+  if length (filter (Nat.eqb 1) b) <=? length (filter (Nat.eqb 2) b) then 1 else 2.
+
+(** 0 = loss, 1 = draw, 2 = win from the current side's perspective. *)
+Fixpoint value (fuel : nat) (b : board) (side : nat) : nat :=
+  match fuel with
+  | 0 => 1
+  | S remaining =>
+      if wins b (other side) then 0 else
+      match legal b with
+      | [] => 1
+      | moves => fold_left
+          (fun best move => Nat.max best (2 - value remaining (place b move side) (other side)))
+          moves 0
+      end
+  end.
+
+best_moves (b : board) (side : nat) : list nat :=
+  let scores := map (fun move => (move, 2 - value 9 (place b move side) (other side))) (legal b) in
+  let best := fold_left (fun best pair => Nat.max best (snd pair)) scores 0 in
+  map fst (filter (fun pair => snd pair =? best) scores).
+
+symmetries : list (list nat) :=
+  [[0, 1, 2, 3, 4, 5, 6, 7, 8], [6, 3, 0, 7, 4, 1, 8, 5, 2],
+   [8, 7, 6, 5, 4, 3, 2, 1, 0], [2, 5, 8, 1, 4, 7, 0, 3, 6],
+   [2, 1, 0, 5, 4, 3, 8, 7, 6], [0, 3, 6, 1, 4, 7, 2, 5, 8],
+   [6, 7, 8, 3, 4, 5, 0, 1, 2], [8, 5, 2, 7, 4, 1, 6, 3, 0]].
+
+win_board : board := [1, 1, 0, 2, 2, 0, 0, 0, 0].
+block_board : board := [2, 2, 0, 1, 0, 0, 1, 0, 0].
+
+(** Ten seed positions, each rotated and reflected. This deliberately
+    small training set is a demonstration, not an unbeatable player. *)
+training_boards : list board :=
+  flat_map (fun b => map (fun order => map (fun i => nth i b 0) order) symmetries)
+    [empty, [1, 0, 0, 0, 0, 0, 0, 0, 0], win_board, block_board,
+     [1, 2, 0, 0, 1, 0, 2, 0, 0], [2, 1, 0, 0, 2, 0, 1, 0, 0],
+     [1, 2, 1, 0, 2, 0, 0, 0, 0], [1, 0, 2, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 2, 0, 0, 0, 1], [1, 0, 0, 0, 2, 0, 0, 0, 1]].

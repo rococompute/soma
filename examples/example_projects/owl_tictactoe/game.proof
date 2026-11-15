@@ -1,0 +1,12 @@
+(** Pure rules are checked independently of Owl and training. *)
+Example empty_has_nine_moves : legal empty = seq 0 9.
+Proof. reflexivity. Qed.
+
+Example occupied_cells_are_excluded : legal win_board = [2, 5, 6, 7, 8].
+Proof. reflexivity. Qed.
+
+Example winning_move : wins (place win_board 2 1) 1 = true.
+Proof. reflexivity. Qed.
+
+Example blocking_move : wins (place (place block_board 2 1) 4 2) 2 = false.
+Proof. reflexivity. Qed.

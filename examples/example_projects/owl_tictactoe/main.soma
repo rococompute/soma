@@ -1,0 +1,40 @@
+Import game policy.
+Import soma_owl.matrix soma_owl.nn.mlp.
+
+newline : string := String.String (Ascii.ascii_of_nat 10) String.EmptyString.
+cell_text (cell : nat) : string := if cell =? 1 then "X" else if cell =? 2 then "O" else ".".
+row_text (b : board) (start : nat) : string :=
+  String.concat " " (map cell_text (firstn 3 (skipn start b))).
+board_text (b : board) : string :=
+  row_text b 0 ++ newline ++ row_text b 3 ++ newline ++ row_text b 6 ++ newline.
+
+Fixpoint self_play (fuel : nat) (net : network) (b : board) (side : nat) : string :=
+  board_text b ++
+  if wins b 1 then "X wins" ++ newline else
+  if wins b 2 then "O wins" ++ newline else
+  match fuel with
+  | 0 => "Draw" ++ newline
+  | S remaining => match choose net b side with
+      | None => "Draw" ++ newline
+      | Some move => cell_text side ++ " plays " ++ to_string move ++ newline ++
+          self_play remaining net (place b move side) (other side)
+      end
+  end.
+
+main : string :=
+  let initial := initialize 9 32 9 17 in
+  let fitted := train 8000 0.5%float training_inputs training_targets initial in
+  let before := loss initial training_inputs training_targets in
+  let after := loss fitted training_inputs training_targets in
+  let win := choose fitted win_board 1 in
+  let block := choose fitted block_board 1 in
+  "Owl-backed Soma neural network: 9 -> 32 tanh -> 9 softmax" ++ newline ++
+  "Training positions: " ++ to_string (length training_boards) ++ newline ++
+  "Cross-entropy: " ++ matrix.format_float before ++ " -> " ++ matrix.format_float after ++ newline ++
+  "Winning move (expected 2): " ++ to_string (match win with Some n => n | None => 9 end) ++ newline ++
+  "Blocking move (expected 2): " ++ to_string (match block with Some n => n | None => 9 end) ++ newline ++
+  (if PrimFloat.ltb after before &&
+      (match win, block with Some 2, Some 2 => true | _, _ => false end)
+   then "PASS training improves loss and learns the two tactical examples" ++ newline
+   else "FAIL training or tactical examples" ++ newline) ++
+  "Self-play (cells numbered 0 to 8):" ++ newline ++ self_play 9 fitted empty 1.

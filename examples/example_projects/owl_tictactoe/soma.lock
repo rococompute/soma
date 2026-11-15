@@ -1,0 +1,6 @@
+# written by soma
+
+[[resolved]]
+path = "github.com/yevbar/soma-owl"
+version = "0.1.0"
+commit = "53f54fb832f18c826dfab7fbda4021cde84610d9"

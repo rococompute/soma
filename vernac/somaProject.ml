@@ -147,7 +147,7 @@ let rec split_last = function
   | [x] -> [], x
   | x :: r -> let p, l = split_last r in x :: p, l
 
-let parse_path s =
+let parse_repository_path s =
   let contains_sub sub =
     let n = String.length sub in
     let rec at i = i + n <= String.length s && (String.sub s i n = sub || at (i + 1)) in
@@ -196,6 +196,47 @@ let parse_path s =
             let repo = String.concat "/" (host_name :: base) in
             let suffix = match major with Some n -> Printf.sprintf "/v%d" n | None -> "" in
             Ok { canonical = repo ^ suffix; url = "https://" ^ repo ^ ".git"; major }
+
+(* The transport is explicit, while HTTPS and SSH names of one repository
+   still select and lock one package. Keep SSH in [url], including when a
+   locked source has to be fetched again. *)
+let parse_path written =
+  let ssh authority path make_url =
+    let user, host = match String.split_on_char '@' authority with
+      | [host] -> "", host
+      | [user; host] -> user, host
+      | _ -> "", "" in
+    let valid s = s <> "" && s.[0] <> '-' && String.for_all is_segment_char s in
+    if not (valid host) || (String.contains authority '@' && not (valid user)) then
+      Error (Printf.sprintf "%S has no valid SSH user and host. Use git@host.com:owner/repo.git or ssh://git@host.com/owner/repo.git." written)
+    else
+      let parts = String.split_on_char '/' path in
+      let strip_git s = if Filename.check_suffix s ".git" then Filename.chop_suffix s ".git" else s in
+      let parts = match List.rev parts with
+        | last :: repo :: rest when Option.has_some (major_suffix last) ->
+          List.rev (last :: strip_git repo :: rest)
+        | last :: rest -> List.rev (strip_git last :: rest)
+        | [] -> [] in
+      match parse_repository_path (host ^ "/" ^ String.concat "/" parts) with
+      | Error why -> Error why
+      | Ok p ->
+        (* [p.url] has neither the major suffix nor the SSH user. *)
+        let prefix = "https://" ^ host ^ "/" in
+        let repo = String.sub p.url (String.length prefix) (String.length p.url - String.length prefix) in
+        Ok { p with url = make_url authority repo } in
+  if String.starts_with ~prefix:"ssh://" written then
+    let rest = String.sub written 6 (String.length written - 6) in
+    match String.index_opt rest '/' with
+    | Some i -> ssh (String.sub rest 0 i)
+        (String.sub rest (i + 1) (String.length rest - i - 1))
+        (fun authority repo -> "ssh://" ^ authority ^ "/" ^ repo)
+    | None -> Error (Printf.sprintf "%S has no repository path. Use ssh://git@host.com/owner/repo.git." written)
+  else match String.index_opt written ':' with
+  | Some i when String.contains (String.sub written 0 i) '@' ->
+    ssh (String.sub written 0 i)
+      (String.sub written (i + 1) (String.length written - i - 1))
+      (fun authority repo -> authority ^ ":" ^ repo)
+  | _ -> parse_repository_path written
 
 let check_dependency_version ~written path v =
   let shown = version_to_string v in

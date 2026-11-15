@@ -385,6 +385,8 @@ it is fetched from, and a version that is a tag there.
 [dependencies]
 "owner/maps" = "1.2.3"                    # https://github.com/owner/maps.git, tag v1.2.3
 "gitlab.com/group/shop/v2" = "2.0.1"      # https://gitlab.com/group/shop.git, tag v2.0.1
+"git@github.com:owner/private.git" = "0.1.0" # SSH, with your existing key or agent
+"ssh://git@host.com/group/other.git" = "1.0.0" # SSH URL spelling
 "owner/wip" = { path = "../wip" }         # a folder on disk, for a project being edited
 ```
 
@@ -403,6 +405,22 @@ above is the suffix `/vN`, a path of its own, so `2.0.0` is never taken for
 a later `1.9.0`. A subdirectory of a repository is not supported: `soma.toml`
 is at the root of the tag. Two majors of one project have one `name`, so a
 build cannot have both yet.
+
+**SSH and private repositories.** An explicit `git@host.com:group/repo.git`
+or `ssh://git@host.com/group/repo.git` key fetches through SSH, using Git's
+normal SSH configuration and agent. SSH and HTTPS spellings have the same
+package identity (`host.com/group/repo`), so changing the transport keeps
+the locked commit and cannot introduce a second copy. SSH hosts use the
+standard port; configure a host alias in `~/.ssh/config` for a custom one.
+For major 2 and above append `/vN` after the repository name, for example
+`git@github.com:owner/private.git/v2`.
+
+`soma get 'git@github.com:owner/private.git@0.1.0'` adds an SSH dependency;
+without the final `@VERSION` it selects the latest compatible tag. SSH
+fetches default to `ssh -oBatchMode=yes`, so authenticate and establish the
+host's key before building. Existing `GIT_SSH_COMMAND` and `GIT_SSH`
+settings are preserved. No token or private key belongs in `soma.toml` or
+`soma.lock`.
 
 **Versions.** The value is a semantic version, without build metadata. Its
 tag is `vVERSION` or `VERSION`; if both exist they are one commit.
@@ -472,6 +490,10 @@ the program, escape hatches included.
 `examples/example_projects/scores` depends on `../tally`;
 `test-suite/misc/soma_deps.sh` tests all of this, with local bare repositories
 in the place of hosts (git's `url.insteadOf`).
+`test-suite/misc/soma_deps_ssh.sh` exercises both SSH spellings, `soma get`,
+locked refetches and the shared package identity. `owl_tictactoe` under
+`examples/example_projects` consumes the private `yevbar/soma-owl` package
+over SSH and trains a small neural network using Owl.
 
 ### What a definition is: `soma hash`
 

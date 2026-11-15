@@ -33,10 +33,11 @@ val parse_version : string -> (version, string) result
 val compare_version : version -> version -> int
 
 (** Where a dependency is fetched from: [owner/repo], [host.com/group/repo],
-    each with [/vN] for major 2 and above *)
+    [git@host.com:group/repo.git], or [ssh://git@host.com/group/repo.git],
+    each with [/vN] for major 2 and above. SSH and HTTPS share an identity. *)
 type dependency_path = {
   canonical : string;            (** github.com/owner/repo/v2 *)
-  url : string;                  (** https://github.com/owner/repo.git *)
+  url : string;                  (** The HTTPS or SSH Git transport. *)
   major : int option;            (** N, of the suffix /vN *)
 }
 
