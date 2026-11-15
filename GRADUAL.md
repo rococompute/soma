@@ -1285,6 +1285,15 @@ annotations are made less precise: see its README.
 
 ## Extraction to OCaml
 
+`theories/Soma/NativeSpec.v` gives signed-word contracts for the native
+`nat` arithmetic mappings: addition and multiplication agree with natural
+arithmetic when the result fits, and subtraction agrees with truncated
+subtraction for valid nonnegative operands. It also proves guards that can
+be checked without first overflowing. These are conditional results, not a
+proof of any program's range invariants. `soma_native_contracts.sh` checks
+the actual extracted operations and byte-string mappings at boundaries,
+including deliberate overflow counterexamples to unconditional equivalence.
+
 Extraction erases types, which casts need. So OCaml extraction compiles
 each `cast A B t` to a call to a small runtime, `Gradual_rt`
 (`plugins/extraction/gradual_rt.ml`), with runtime descriptions of `A`
