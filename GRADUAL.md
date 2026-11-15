@@ -1456,8 +1456,12 @@ holds a whole message (`split_lines_kept`, `split_frames_kept`), and that
 the messages and what is kept do not depend on how the bytes were cut
 into chunks: they are those of all the bytes at once
 (`receive_lines_chunking`, `receive_frames_chunking`). The
-image's `Soma_rt.take_line` and `Soma_rt.take_frame` do the same on
-OCaml strings.
+image's `Soma_rt.take_line` and `Soma_rt.take_frame` call these extracted
+definitions through generated adapters; there is no separate native decoder
+algorithm to keep in agreement. `frame_roundtrip` proves that encoding a
+payload and decoding it recovers both the payload and arbitrary following
+bytes, provided the length fits its 32-bit prefix and the receiver's limit.
+`frame_roundtrip_default` specializes this to the 1 MiB limit.
 
 `Soma.Wire` is not only the image's: a program built for the machine
 imports it (`Require Import Soma.Wire.`) without becoming a unikernel, so

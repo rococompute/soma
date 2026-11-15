@@ -245,25 +245,15 @@ type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * stri
 (* Framing, as Soma.Wire's take_line and take_frame (Sandbox exports it): the first message of
    what a connection has received, and the rest, which is kept for the
    next receive. No network: these are pure. *)
-(* Wire.max_frame *)
-let max_frame = 1048576
-
-let take_line s =
-  match String.index_opt s '\n' with
-  | None -> None
-  | Some i ->
-    let n = if i > 0 && s.[i - 1] = '\r' then i - 1 else i in
-    Some (String.sub s 0 n, String.sub s (i + 1) (String.length s - i - 1))
-
+(* The decoder is extracted from Soma.Wire with the program, rather than
+   reimplemented here. Standard options avoid relying on extracted names
+   for the frame_step constructors. *)
+let take_line = Prog.soma_wire_take_line
 let take_frame s =
-  let len = String.length s in
-  if len < 4 then `Need_more
-  else
-    let n = (Char.code s.[0] lsl 24) lor (Char.code s.[1] lsl 16)
-            lor (Char.code s.[2] lsl 8) lor Char.code s.[3] in
-    if n > max_frame then `Oversized
-    else if len - 4 < n then `Need_more
-    else `Whole (String.sub s 4 n, String.sub s (4 + n) (len - 4 - n))
+  match Prog.soma_wire_take_frame s with
+  | None -> `Need_more
+  | Some None -> `Oversized
+  | Some (Some (data, rest)) -> `Whole (data, rest)
 
 (* What the network provides; without a network stack, [serve], [fetch],
    [listen] and [connect] are not reached (a program that uses them gets
@@ -1283,9 +1273,16 @@ let extract ?(calls = []) ~state dir =
      From Corelib Require PrimFloat FloatClass PrimInt63 CarryType.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
      %s%s%s\
+     Definition soma_wire_take_line := Soma.Wire.take_line.\n\
+     Definition soma_wire_take_frame (buffer : string) : option (option (string * string)) :=\n\
+       match Soma.Wire.take_frame Soma.Wire.max_frame buffer with\n\
+       | Soma.Wire.NeedMore => None\n\
+       | Soma.Wire.Oversized => Some None\n\
+       | Soma.Wire.Whole data rest => Some (Some (data, rest))\n\
+       end.\n\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main.\n" dir float_extraction nat_string_extraction
+     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" dir float_extraction nat_string_extraction
        (String.concat "" (List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)

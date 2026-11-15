@@ -29,7 +29,7 @@
     the proofs reason with ([split_at_walk_eq], [take_frame_eq]). *)
 
 From Stdlib Require Strings.String Strings.Ascii.
-From Stdlib Require Import NArith.BinNat.
+From Stdlib Require Import NArith.BinNat NArith.Nnat.
 From Stdlib Require Import Lia.
 Require Import Soma.Strings Soma.Show.
 
@@ -619,4 +619,60 @@ Theorem receive_frames_chunking : forall limit chunks,
   = split_frames limit (concat_chunks chunks).
 Proof.
   intros limit chunks. apply (receive_frames_kept limit chunks String.EmptyString). exact I.
+Qed.
+
+(** Encoding and decoding preserve a payload and any following bytes.
+    The length prefix is 32 bits, so this bound is part of the contract. *)
+Local Open Scope N_scope.
+Lemma prefix_decodes : forall n, n < 4294967296 ->
+  match length_prefix n with
+  | String.String a (String.String b (String.String c (String.String d String.EmptyString))) => frame_length a b c d
+  | _ => 0
+  end = n.
+Proof.
+  intros n H. unfold length_prefix, byte, frame_length; cbn [String.append].
+  repeat rewrite Ascii.N_ascii_embedding by (apply N.mod_lt; discriminate).
+  rewrite (N.mod_small (n / 16777216) 256) by
+    (apply N.Div0.div_lt_upper_bound; exact H).
+  pose proof (N.div_mod n 256 ltac:(discriminate)) as E0.
+  pose proof (N.div_mod (n / 256) 256 ltac:(discriminate)) as E1.
+  pose proof (N.div_mod (n / 65536) 256 ltac:(discriminate)) as E2.
+  rewrite N.Div0.div_div in E1 by discriminate.
+  rewrite N.Div0.div_div in E2 by discriminate.
+  change (n / 256 = 256 * (n / 65536) + (n / 256) mod 256) in E1.
+  change (n / 65536 = 256 * (n / 16777216) + (n / 65536) mod 256) in E2.
+  nia.
+Qed.
+
+Lemma split_at_walk_append_length : forall data rest,
+  split_at_walk (String.length data) (String.append data rest) = Some (data, rest).
+Proof.
+  induction data as [|a data IH]; intros rest; cbn [String.length String.append split_at_walk].
+  - reflexivity.
+  - rewrite IH. reflexivity.
+Qed.
+
+Theorem frame_roundtrip : forall limit data rest,
+  N.of_nat (String.length data) <= limit ->
+  N.of_nat (String.length data) < 4294967296 ->
+  take_frame limit (String.append (frame data) rest) = Whole data rest.
+Proof.
+  intros limit data rest Hlimit Hsize.
+  pose proof (prefix_decodes (N.of_nat (String.length data)) Hsize) as Hprefix.
+  unfold length_prefix, byte in Hprefix; cbn [String.append] in Hprefix.
+  rewrite take_frame_eq. unfold frame, length_prefix, byte.
+  cbn [String.append take_frame_walk].
+  rewrite Hprefix.
+  assert (N.ltb limit (N.of_nat (String.length data)) = false) as E by
+    (apply N.ltb_ge; exact Hlimit).
+  rewrite E, Nat2N.id, split_at_walk_eq, split_at_walk_append_length.
+  reflexivity.
+Qed.
+
+Theorem frame_roundtrip_default : forall data rest,
+  N.of_nat (String.length data) <= max_frame ->
+  take_frame max_frame (String.append (frame data) rest) = Whole data rest.
+Proof.
+  intros data rest H. apply frame_roundtrip; [exact H|].
+  unfold max_frame in H. lia.
 Qed.
