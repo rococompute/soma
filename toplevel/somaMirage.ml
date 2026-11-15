@@ -1312,6 +1312,20 @@ let foreign_calls () =
   let main = Nametab.global (Libnames.qualid_of_ident (Id.of_string "main")) in
   let st = Conv_oracle.get_transp_state (Environ.oracle (Global.env ())) in
   let _, assums = Assumptions.assumptions (Library.indirect_accessor [@ocaml.alert "-deprecated"]) st [main] in
+  (* A host RSA axiom must not become an extracted runtime stub or an
+     apparently checked image. This needs a separate reviewed entropy/provider
+     integration for Sandbox, not a fallback to the computational reference. *)
+  let host_rsa = List.fold_left (fun used (m : SomaForeign.ocaml_module) ->
+      if m.top <> "Soma_host" then used else
+      List.fold_left (fun used (c, path, _) ->
+          if List.mem path ["rsa_new_key"; "rsa_sign"; "rsa_verify"]
+          then Cset_env.add c used else used) used m.items)
+      Cset_env.empty (!SomaForeign.ocaml_modules ()) in
+  Printer.ContextObjectMap.iter (fun o _ -> match o with
+      | Printer.Axiom (Printer.Constant k, _) when Cset_env.mem k host_rsa ->
+          error Pp.(str "main reaches machine-only Soma.Host RSA; no reviewed Sandbox RSA/entropy binding exists." ++ spc () ++
+                    str "Refusing image extraction; do not fall back to Soma.Crypto or send private keys to a remote service.")
+      | _ -> ()) assums;
   let calls = Printer.ContextObjectMap.fold (fun o _ acc -> match o with
       | Printer.Axiom (Printer.Constant k, _) ->
         (match !SomaForeign.image k with

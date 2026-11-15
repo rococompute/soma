@@ -65,7 +65,7 @@ Parameter random_bytes : string -> bool * (float * list string).
 
 (** ** RSA for machine programs
 
-    The host uses Mirage Crypto, not the computational Soma.Crypto reference.
+    The host uses OpenSSL EVP, not the computational Soma.Crypto reference.
     Hex integers are unsigned big-endian bytes. Sizes are decimal bits,
     2048 through 8192 in multiples of 256. Key generation returns
     [size; n; e; d; p; q; dp; dq; qinv], or a generic failure.
@@ -169,8 +169,7 @@ Parameter sock_error : string -> bool * (float * list string).
 (** a descriptor closed, and its name forgotten *)
 Parameter sock_close : string -> bool * (float * list string).
 
-(** Soma's host runtime uses Unix and Mirage Crypto for machine RSA. *)
+(** Soma's host runtime uses Unix and OpenSSL EVP for machine RSA. *)
 OCaml Library "unix".
-OCaml Library "mirage-crypto-pk".
-OCaml Library "mirage-crypto-rng.unix".
+OCaml Library "zarith".
 OCaml Bind Module "Soma_host".
