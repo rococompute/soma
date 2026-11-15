@@ -1118,6 +1118,17 @@ ok : bool := rsa_verify 256 n e "message" signature.
   `sha256sum` up to 14 MB, and RSA against a 2048-bit Cryptokit key's
   signatures.
 
+`theories/Soma/CryptoSpec.v` gives a mathematical integer interpretation of
+the actual 31-bit limb lists. It proves `add_carry1`, `add_carry`,
+`mul_limb`, and `mul_big` preserve their arithmetic meaning and limb bounds,
+and that trimming high zeros preserves value. These results use Rocq's
+primitive Uint63 specifications. `soma_crypto_arithmetic.sh` checks the
+extracted operations against Zarith, including carry boundaries and large
+deterministic random operands. Byte/limb encoding, Montgomery reduction,
+SHA-256, full RSA correctness and key-generation primality remain separate
+proof obligations; these arithmetic results do not establish cryptographic
+hardness or side-channel security.
+
 ### The machine's host: `Host`
 
 `Soma.Host` (`theories/Soma/Host.v`, not in the prelude: `Require
