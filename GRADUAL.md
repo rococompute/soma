@@ -1867,6 +1867,17 @@ snapshot and nonzero headers. Checksums detect corruption, not malicious edits.
 Durability follows the block driver's successful-write contract; this is not
 a proof about host power loss, disk caches, or adversarial storage.
 
+`theories/Soma/StorageSpec.v` formalizes an ordered-sector commit protocol
+for initialized stores. Every accepted event prefix recovers the old or
+complete new snapshot, and an acknowledged commit recovers the new one.
+The model enforces payload-before-header and header-before-acknowledgment
+ordering, and connects complete snapshots to the `Sandbox.Files` read/write
+laws. Native decoding/checksum validation and device persistence still need
+to establish the model's premises. `soma_storage_snapshot_recovery.sh`
+checks the generated backend across multiple generations, empty and
+multi-sector payloads, each interrupted write and torn prefixes at header
+field boundaries, including a full sector persisted before an error.
+
 The generated backend uses the sector interface documented by
 [mirage-block](https://github.com/mirage/mirage-block/blob/main/src/mirage_block.mli).
 
