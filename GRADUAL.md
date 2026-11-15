@@ -1323,6 +1323,15 @@ not a general simulation theorem for extraction. `soma_cast_contracts.sh`
 checks the corresponding extracted paths, including higher-order wrappers
 and distinct `Cast_error` and `Unknown_term` failures.
 
+`test-suite/misc/soma_contract_assumptions.sh` audits the theorem assumption
+sets. Native arithmetic, Wire, socket accounting and storage protocol
+contracts must be closed under the global context. Crypto contracts may
+use only the listed existing Uint63 primitives/specifications; cast laws
+may use only `Gradual.cast`, `Gradual.unknown` and `Gradual.err`. Any other
+global assumption fails the audit. These contracts and conformance tests
+strengthen the execution boundary; they do not amount to a verified OCaml
+compiler, OS, cryptographic implementation, or end-to-end Pantheon proof.
+
 Extraction erases types, which casts need. So OCaml extraction compiles
 each `cast A B t` to a call to a small runtime, `Gradual_rt`
 (`plugins/extraction/gradual_rt.ml`), with runtime descriptions of `A`
