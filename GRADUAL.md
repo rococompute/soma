@@ -1161,6 +1161,16 @@ main : unit := Host.print_lines ("hello" :: Host.argv tt).
 - `test-suite/misc/soma_host.sh` builds a program over them and checks
   its arguments, files, a process's output and a socket's bytes.
 
+`theories/Soma/HostSpec.v` specifies partial-write byte accounting.
+`advance_preserves_bytes` and `writes_preserve_bytes` show that accepted
+write counts and retries preserve the original bytes across arbitrary
+finite traces. Counts beyond the pending buffer are refused. The
+`soma_host_partial_writes.sh` test uses this proved advancement function
+with the actual Unix socket shim under forced partial writes and
+backpressure, checking every received byte. Delivery, syscall behavior,
+process semantics and file durability remain host contracts, not conclusions
+of these accounting theorems.
+
 ## Architecture
 
 The kernel stays the CIC kernel. The cast calculus (CastCIC) is encoded with
