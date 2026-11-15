@@ -351,6 +351,30 @@ let effects_of_main ~opaque_access env libs =
     end
   | _ -> None
 
+(* The primitives of Soma.Host (theories/Soma/Host.v) that main reaches
+   through the project's definitions, in the order it reaches them: what a
+   program built for the machine asks of the system it runs on. None when
+   main uses none. *)
+let host_of_main ~opaque_access env libs =
+  let host = DirPath.make (List.rev_map Id.of_string ["Soma"; "Host"]) in
+  let main = Constant.make2 (ModPath.MPfile (Lib.library_dp ())) (Id.of_string "main") in
+  if not (Environ.mem_constant main env) then None else begin
+    let found = ref [] and seen = ref [] in
+    let rec visit c =
+      match Constr.kind c with
+      | Constr.Const (k, _) when DirPath.equal (root_dp (Constant.modpath k)) host ->
+        let n = Id.to_string (Constant.label k) in
+        if not (List.mem n !found) then found := !found @ [n]
+      | Constr.Const (k, _) when List.exists (DirPath.equal (root_dp (Constant.modpath k))) libs
+                              && not (List.exists (Constant.CanOrd.equal k) !seen) ->
+        seen := k :: !seen;
+        (match body_of ~opaque_access (Environ.lookup_constant k env) with Some b -> visit b | None -> ())
+      | _ -> Constr.iter visit c
+    in
+    (match body_of ~opaque_access (Environ.lookup_constant main env) with Some b -> visit b | None -> ());
+    if !found = [] then None else Some !found
+  end
+
 (* "a string", "an N" *)
 let a_or_an env t =
   let p = Printer.pr_constr_env env Evd.empty t in
@@ -465,6 +489,7 @@ let review ~opaque_access =
                       prlist_with_sep pr_comma (fun x -> x) (List.rev axioms) ++ str ".")))
     theorems;
   let effects = effects_of_main ~opaque_access env libs in
+  let host = host_of_main ~opaque_access env libs in
   let section title items empty =
     v 2 (str title ++ (match items with
         | [] -> fnl () ++ str empty
@@ -484,6 +509,11 @@ let review ~opaque_access =
     (match effects with
      | Some e -> fnl () ++ fnl () ++
                  section "What main does outside the program:" [Pp.h (prlist_with_sep (fun () -> str ", ") str e)] "nothing."
+     | None -> mt ()) ++
+    (match host with
+     | Some h -> fnl () ++ fnl () ++
+                 section "What main asks of the machine (Soma.Host's primitives, which Soma carries out and never computes):"
+                   [Pp.h (prlist_with_sep (fun () -> str ", ") str h)] "nothing."
      | None -> mt ()) ++ fnl () ++ fnl () ++
     (if n_issues = 0 && !violations = 0 then str "No issue, and no violation."
      else plural !violations "model with a violation" "models with a violation" ++ str ", " ++

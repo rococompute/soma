@@ -3,8 +3,8 @@
 # (lines and frames, which Sandbox exports) and is built into an
 # executable, not a unikernel, and its frames split as an image's would: a
 # short frame, a 200 000-byte one (taken by offset, so in one copy rather
-# than a character at a time, in well under a second, as main requires
-# ExtrOcamlNatInt), an empty one, and a partial one kept. The
+# than a character at a time, in well under a second, as nat is OCaml's
+# int in a program built for the machine), an empty one, and a partial one kept. The
 # framing's theorems are checked by Wire.v when Soma is built.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -25,7 +25,6 @@ printf 'same : string -> string.\n' > same.definition
 printf 'let same (s : string) : string = s\n' > same.ml
 cat > main.soma <<'SOMA'
 Require Import Soma.Wire.
-From Stdlib Require ExtrOcamlNatInt.
 From Stdlib Require Import List NArith.BinNat.
 Import same.
 
@@ -47,6 +46,6 @@ start=$SECONDS
 out=$(./main.exe)
 [ "$out" = "2 200000 0 kept xy" ] || { echo "FAIL: split_frames gave: $out"; exit 1; }
 # a millisecond's work: a minute means String's length, get and substring
-# weren't OCaml's (somaOcaml.ml's extracts_nat_as_int)
+# weren't OCaml's (somaOcaml.ml's extract: SomaMirage.nat_string_extraction)
 [ $((SECONDS - start)) -lt 10 ] || { echo "FAIL: splitting took $((SECONDS - start)) s"; exit 1; }
 echo "ok Soma.Wire splits frames in a program built for the machine"

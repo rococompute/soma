@@ -116,14 +116,12 @@ let bindings_ml modules =
                     definition path (binding_name m path) poly ty body))
         m.items) modules)
 
-(* soma_nat.ml: nat as extraction makes it in prog.ml, which a module of
-   the project cannot name (prog.ml uses it): a declared type's nat is
-   this one, of the same constructors, so of the same values *)
+(* soma_nat.ml: nat as extraction makes it in prog.ml, OCaml's int (as in
+   an image: ExtrOcamlNatInt), named for a declared type's nat *)
 let soma_nat_ml =
-  header ^ "(* Soma's nat, as extracted: 0 is O, and n + 1 is S n. *)\n\
-            type nat = O | S of nat\n"
+  header ^ "(* Soma's nat, as extracted: OCaml's int, never below 0. *)\n\
+            type nat = int\n"
 
-let mentions_nat ty = CString.string_contains ~where:ty ~what:"Soma_nat.nat"
 
 (* * The switch *)
 
@@ -246,15 +244,16 @@ let for_browser ?switch libraries =
 
 (* * The program *)
 
-(* A program that extracts [nat] as OCaml's [int] (it requires
-   ExtrOcamlNatInt) gets what an image gets with it: Nat's comparisons and
-   division, and String's length, get and substring, as OCaml's
-   (SomaMirage.nat_string_extraction). Otherwise they count in [nat] a
-   character at a time, which copies the rest of a native string at each
-   one: Soma.Wire's take_frame of a 200 KB frame took 80 s instead of a
-   millisecond. *)
-let nat_int_library = DirPath.make (List.rev_map Id.of_string ["Stdlib"; "extraction"; "ExtrOcamlNatInt"])
-let extracts_nat_as_int () = List.exists (DirPath.equal nat_int_library) (Library.loaded_libraries ())
+(* A program built for the machine is extracted as an image is: [nat] is
+   OCaml's [int] (ExtrOcamlNatInt), and Nat's comparisons and division,
+   and String's length, get, substring and compare, are OCaml's
+   (SomaMirage.nat_string_extraction), so a program need not say how
+   numbers run. In [nat] they would count a character at a time, which
+   copies the rest of a native string at each one: Soma.Wire's take_frame
+   of a 200 KB frame took 80 s instead of a millisecond. *)
+
+(* Soma.Host's module (theories/Soma/Host.v, toplevel/somaHost.ml) *)
+let host_module = "Soma_host"
 
 (* Extracts [main] into [dir]/prog.ml, each declaration of the modules
    being what they have of its name *)
@@ -264,15 +263,6 @@ let extract ~state ~modules dir =
       List.map (fun (c, path, item) ->
           let soma = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef c)) in
           match item with
-          | SomaForeign.OCamlValue (ty, labels) when mentions_nat ty ->
-            (* Soma_nat.nat is prog.ml's nat by its values, not its name:
-               soma_bindings.ml checks the value at Soma_nat.nat, and
-               here it is taken at prog.ml's nat, without converting.
-               A function is applied, so that it stays polymorphic. *)
-            let args = String.concat "" (List.mapi (fun i _ -> Printf.sprintf " a%d" i) labels) in
-            let value = Printf.sprintf "Obj.magic Soma_bindings.%s%s" (binding_name m path) args in
-            Printf.sprintf "Extract Constant %s => \"(%s)\".\n" soma
-              (if args = "" then value else "fun" ^ args ^ " -> " ^ value)
           | SomaForeign.OCamlValue _ ->
             Printf.sprintf "Extract Constant %s => \"Soma_bindings.%s\".\n" soma (binding_name m path)
           | SomaForeign.OCamlType n ->
@@ -285,12 +275,12 @@ let extract ~state ~modules dir =
   SomaMirage.write_file cmds (Printf.sprintf
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %S.\n\
-     From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString.\n\
+     From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
      %s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
      Extraction \"prog\" soma_main.\n" dir SomaMirage.float_extraction
-       (if extracts_nat_as_int () then SomaMirage.nat_string_extraction else "") (String.concat "" lines));
+       SomaMirage.nat_string_extraction (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;
@@ -352,7 +342,7 @@ let checked_modules () =
   List.iter (fun n ->
       if List.length (List.filter (String.equal n) names) > 1 then
         error Pp.(str "the program uses two OCaml modules named " ++ str n ++ str ".");
-      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Float64"; "Uint63"] then
+      if List.mem n ["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Soma_host"; "Float64"; "Uint63"] then
         error Pp.(str "an OCaml module cannot be named " ++ str n ++ str ", the name of one Soma makes."))
     names;
   modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
@@ -371,12 +361,24 @@ let write_project ~state ~modules ~libraries ~js ~directives dir =
   file "uint63.ml" SomaMirage.uint63_ml;
   file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
-  List.iter (fun (m : SomaForeign.ocaml_module) ->
-      Option.iter (fun ml ->
-          file (String.uncapitalize_ascii m.top ^ ".ml")
-            ((if directives then Printf.sprintf "# 1 %S\n" ml else "") ^ read_file ml))
+  (* Soma.Host's primitives are Soma's own module *)
+  let host = List.exists (fun (m : SomaForeign.ocaml_module) -> m.ml_file = None && m.top = host_module) modules in
+  if host then file "soma_host.ml" SomaHost.ml;
+  let own = List.filter_map (fun (m : SomaForeign.ocaml_module) ->
+      Option.map (fun ml ->
+          let f = String.uncapitalize_ascii m.top ^ ".ml" in
+          file f ((if directives then Printf.sprintf "# 1 %S\n" ml else "") ^ read_file ml);
+          f)
         m.ml_file)
-    modules
+      modules in
+  (* a module an earlier build of the program had, and this one has not,
+     would be built with it: dune builds every module of the directory *)
+  let made = ["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_nat.ml"; "soma_bindings.ml"]
+             @ (if host then ["soma_host.ml"] else []) @ own in
+  Array.iter (fun f ->
+      if (Filename.check_suffix f ".ml" || Filename.check_suffix f ".mli") && not (List.mem f made) then
+        (try Sys.remove (Filename.concat dir f) with Sys_error _ -> ()))
+    (Sys.readdir dir)
 
 (* * soma extract *)
 
@@ -400,7 +402,7 @@ soma_bindings.ml     each value that a .definition declares, at its declared typ
 soma_main.ml         runs main, and prints it if it is a string
 float64.ml           Soma's floats, as OCaml's
 uint63.ml            Soma's 63-bit integers, as OCaml's ints
-soma_nat.ml          Soma's nat, as extracted (O | S of nat)
+soma_nat.ml          Soma's nat, as extracted (OCaml's int)
 dune, dune-project   how dune builds it
 %s.opam%s   the opam packages it needs
 ```

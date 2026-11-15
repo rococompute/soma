@@ -148,11 +148,11 @@ if soma extract prog.soma -o mine > out.log 2>&1; then echo "soma extract wrote 
 grep -q 'is not empty, and soma extract did not make it' out.log
 cd ..
 
-# nat, given to OCaml and given back as extraction has it (O | S of nat),
+# nat, given to OCaml and given back as extraction has it (OCaml's int),
 # Soma_nat.nat to the module, without converting
 mkdir nat && cd nat
 cat > successor.ml <<'EOT'
-let succ (n : Soma_nat.nat) : Soma_nat.nat = Soma_nat.S n
+let succ (n : Soma_nat.nat) : Soma_nat.nat = n + 1
 EOT
 cat > successor.definition <<'EOT'
 succ : nat -> nat.

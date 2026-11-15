@@ -1144,11 +1144,20 @@ let subcarryc x y =
 |soma}
 
 (* With [nat] as OCaml's [int] (ExtrOcamlNatInt), what ExtrOcamlNatInt
-   leaves recursive is OCaml's own: comparisons, division (by zero as
+   leaves recursive is OCaml's own: addition, multiplication and
+   subtraction (its [plus], [mult] and [minus] are not Nat's add, mul and
+   sub here, which counted one at a time: 2^40 overflowed the stack),
+   comparisons, division (by zero as
    Rocq's: 0, and the number itself for a remainder), and a string's
-   length, a character and a substring, which count in [nat] (walking a
-   native string by its constructors copies what is left at each step) *)
-let nat_string_extraction = {soma|Extract Inlined Constant Nat.leb => "(<=)".
+   length, a character, a substring and the order of two strings (byte
+   by byte, as String.compare's), which count in [nat] or take a string
+   apart (walking a native string by its constructors copies what is left
+   at each step) *)
+let nat_string_extraction = {soma|Extract Inlined Constant Nat.add => "(+)".
+Extract Inlined Constant Nat.mul => "( * )".
+Extract Inlined Constant Nat.sub => "(fun n m -> Stdlib.max 0 (n - m))".
+Extract Inlined Constant Nat.pred => "(fun n -> Stdlib.max 0 (n - 1))".
+Extract Inlined Constant Nat.leb => "(<=)".
 Extract Inlined Constant Nat.ltb => "(<)".
 Extract Inlined Constant Nat.div => "(fun a b -> if b = 0 then 0 else a / b)".
 Extract Inlined Constant Nat.modulo => "(fun a b -> if b = 0 then a else a mod b)".
@@ -1157,6 +1166,8 @@ Extract Inlined Constant Stdlib.Strings.String.get =>
   "(fun n s -> if n < String.length s then Some (String.unsafe_get s n) else None)".
 Extract Inlined Constant Stdlib.Strings.String.substring =>
   "(fun n m s -> let l = String.length s in if n >= l then """" else String.sub s n (min m (l - n)))".
+Extract Inlined Constant Stdlib.Strings.String.compare =>
+  "(fun a b -> let c = Stdlib.compare (a : string) b in if c < 0 then Lt else if c = 0 then Eq else Gt)".
 |soma}
 
 let float_extraction = {soma|Extract Inductive PrimFloat.float_comparison => "Float64.float_comparison" [ "FEq" "FLt" "FGt" "FNotComparable" ].

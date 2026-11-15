@@ -156,7 +156,7 @@ let rec ocaml_type env sigma vars t =
     else if is "core.bool.type" then "bool"
     else if is "core.unit.type" then "unit"
     else if is "num.float.type" then "float"
-    (* nat as extraction has it, O | S of nat: Soma_nat.nat, which
+    (* nat as extraction has it, OCaml's int: Soma_nat.nat, which
        toplevel/somaOcaml.ml generates *)
     else if is "num.nat.type" then "Soma_nat.nat"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
@@ -283,6 +283,7 @@ let describe c =
   | Some b ->
     let whose = match CString.Map.find_opt b.key !modules with
       | Some (Some file, _, _) -> str (Filename.basename file) ++ str "'s "
+      | _ when String.equal b.top "Soma_host" -> str "Soma.Host's primitive, "
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with

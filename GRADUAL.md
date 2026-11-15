@@ -737,12 +737,13 @@ arguments.
 Soma never computes them, neither the kernel nor the evaluation of a
 term. A `.soma` program whose `main` uses them is built with them after
 it is checked (`toplevel/somaOcaml.ml`). `main` is extracted (with
-`ExtrOcamlBasic` and `ExtrOcamlNativeString`, so that strings, lists,
-options and pairs are OCaml's; a program that also requires
-`ExtrOcamlNatInt` gets `nat` as OCaml's `int` and, as an image does,
-`Nat.leb`, `ltb`, `div`, `modulo` and `String.length`, `get` and
-`substring` as OCaml's, which otherwise count a character at a time and
-copy the rest of the string at each one), each declared value being its binding in a
+`ExtrOcamlBasic`, `ExtrOcamlNativeString` and `ExtrOcamlNatInt`, as an
+image is, so that strings, lists, options, pairs and `nat` are OCaml's,
+`nat` its `int`, and `Nat.add`, `mul`, `sub`, `leb`, `ltb`, `div`,
+`modulo` and `String.length`, `get`, `substring` and `compare` are
+OCaml's, which
+otherwise count a character at a time and copy the rest of the string at
+each one: a program need not say how numbers run), each declared value being its binding in a
 generated `soma_bindings.ml`. That binding is the value at its declared
 type, with rigid type variables (`'a 'b. ...`), applied to its arguments
 with their labels, so that OCaml checks each declaration against the
@@ -768,10 +769,9 @@ yet.
 `examples/example_projects/bonsai_counter` is a counter of JSX run by
 Bonsai in the browser, with no OCaml code of their own.
 `dev/ocaml-check.sh` builds and runs both. A `nat` is given to OCaml as
-extraction has it, `O | S of nat`, which is `Soma_nat.nat` to the
-project's modules (a generated `soma_nat.ml`, of the same constructors), and
-not converted: `examples/example_projects/ocaml_succ` declares `succ : nat
--> nat`. Not yet: the other numbers (`N`, `Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
+extraction has it, OCaml's `int`, which is `Soma_nat.nat` to the
+project's modules (a generated `soma_nat.ml`), and not converted:
+`examples/example_projects/ocaml_succ` declares `succ : nat -> nat`. Not yet: the other numbers (`N`, `Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
 the state's type as a module of the `Model` signature, so the counter's
 state is a `Bonsai.Var`); labeled arguments of a function given to OCaml;
 values named by a keyword of Soma's (`return`).
@@ -1090,6 +1090,38 @@ ok : bool := rsa_verify 256 n e "message" signature.
   `sha256sum` up to 14 MB, and RSA against a 2048-bit Cryptokit key's
   signatures.
 
+### The machine's host: `Host`
+
+`Soma.Host` (`theories/Soma/Host.v`, not in the prelude: `Require
+Soma.Host.`) is what a program built for the machine asks of the system
+it runs on, as Sandbox's `io` is what an image asks of its hypervisor:
+its arguments and output, the clock, files, paths, the environment,
+processes and TCP sockets, each one primitive:
+
+```rocq
+Require Soma.Host.
+
+main : unit := Host.print_lines ("hello" :: Host.argv tt).
+```
+
+- Each is a parameter that Soma never computes, neither the kernel nor
+  the evaluation of a term, so no proof holds by running the machine,
+  and `soma explore` lists the ones a program uses ("Soma.Host's
+  primitive").
+- Soma carries them out: a program whose `main` uses one is built as one
+  that uses an OCaml module is (see "OCaml modules"), with Soma's own
+  runtime for them (`toplevel/somaHost.ml`, written as `soma_host.ml`
+  next to the extracted program and checked against Host.v's
+  declarations), which uses OCaml's Unix, a library that comes with the
+  compiler. The program has no OCaml of its own.
+- Most answer with `(carried out or the boolean read, (a number, data))`,
+  the data strings; numbers given are decimal text. Descriptors (sockets,
+  and the pipe a process writes its output on) are known by names the
+  host gives them. A program decides what each answer means: Pantheon's
+  node turns its operations into them, one primitive each.
+- `test-suite/misc/soma_host.sh` builds a program over them and checks
+  its arguments, files, a process's output and a socket's bytes.
+
 ## Architecture
 
 The kernel stays the CIC kernel. The cast calculus (CastCIC) is encoded with
@@ -1402,8 +1434,8 @@ OCaml strings.
 `Soma.Wire` is not only the image's: a program built for the machine
 imports it (`Require Import Soma.Wire.`) without becoming a unikernel, so
 it frames and splits what it sends and receives with the functions an
-image uses. Where strings are OCaml's and `nat` is its `int` (an image; a
-program that also requires `ExtrOcamlNatInt`), `take_frame` reads a
+image uses. Where strings are OCaml's and `nat` is its `int` (an image,
+and a program built for the machine), `take_frame` reads a
 length and takes a frame by offset (`String.get`, `String.substring`),
 one copy of its bytes, instead of taking the string apart a character
 at a time, which copies the rest at each one; `split_at_walk` and
