@@ -31,6 +31,18 @@ val marshal_in_segment : in_handle -> segment:'a id -> 'a * Digest.t
 val get_segment : in_handle -> segment:'a id -> 'a segment
 val segments : in_handle -> Obj.t segment CString.Map.t
 
+(** Soma: [library_hash ch], the hash of the "library" segment of [ch], if it
+    has one: what a library is, without its proofs. *)
+val library_hash : in_handle -> Digest.t option
+
+(** Soma: [replaced_segment ~file ~library name] is the position and hash of
+    the segment [name] of [file] as it is now, when its "library" segment
+    still hashes to [library]. A library whose proofs are checked beside the
+    build is loaded first without them, and its file then replaced by the
+    same library with them (vernac/somaImport.ml): what was read of it
+    lazily (its proofs, its VM code) is read again from the new file. *)
+val replaced_segment : file:string -> library:Digest.t -> string -> (int64 * Digest.t) option
+
 val open_out : file:string -> out_handle
 val close_out : out_handle -> unit
 val marshal_out_segment : out_handle -> segment:'a id -> 'a -> unit

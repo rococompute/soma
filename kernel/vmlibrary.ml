@@ -30,6 +30,9 @@ type 'a delayed = {
   del_file : string;
   del_off : int64;
   del_digest : Digest.t;
+  (* Soma: as in vernac/library.ml, for a file replaced by the same library *)
+  del_name : string;
+  del_library : Digest.t option;
 }
 
 type 'a node = ToFetch of 'a delayed | Fetched of 'a
@@ -39,7 +42,8 @@ type 'a t = 'a node ref
 let in_delayed f ch ~segment =
   let seg = ObjFile.get_segment ch ~segment in
   let digest = seg.ObjFile.hash in
-  { del_file = f; del_digest = digest; del_off = seg.ObjFile.pos; }
+  { del_file = f; del_digest = digest; del_off = seg.ObjFile.pos;
+    del_name = seg.ObjFile.name; del_library = ObjFile.library_hash ch }
 
 let make ~file ch ~segment =
   let del = in_delayed file ch ~segment in
@@ -48,8 +52,7 @@ let make ~file ch ~segment =
 (** Fetching a table of opaque terms at position [pos] in file [f],
     expecting to find first a copy of [digest]. *)
 
-let fetch_delayed del =
-  let { del_digest = digest; del_file = f; del_off = pos; } = del in
+let read_at f pos =
   let ch = open_in_bin f in
   let obj, digest' =
     try
@@ -60,6 +63,18 @@ let fetch_delayed del =
     with e -> close_in ch; raise e
   in
   close_in ch;
+  obj, digest'
+
+let fetch_delayed del =
+  let f = del.del_file in
+  (* where the segment is in the file as it is now: where it was, or, in a
+     file replaced by the same library since, where the new file has it *)
+  let pos, digest =
+    match Option.bind del.del_library (fun library ->
+        ObjFile.replaced_segment ~file:f ~library del.del_name) with
+    | Some current -> current
+    | None -> del.del_off, del.del_digest in
+  let obj, digest' = read_at f pos in
   if not (String.equal digest digest') then raise (Faulty f);
   obj
 

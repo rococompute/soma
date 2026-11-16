@@ -186,6 +186,18 @@ let get_segment (type a) ch ~(segment : a id) : a segment =
 
 let segments ch = ch.in_segments
 
+let library_hash ch =
+  Option.map (fun s -> s.hash) (CString.Map.find_opt "library" ch.in_segments)
+
+let replaced_segment ~file ~library name =
+  match open_in ~file with
+  | exception _ -> None
+  | ch ->
+    Fun.protect ~finally:(fun () -> close_in ch) (fun () ->
+        match library_hash ch, CString.Map.find_opt name ch.in_segments with
+        | Some l, Some s when String.equal l library -> Some (s.pos, s.hash)
+        | _ -> None)
+
 let open_out ~file =
   let ch = open_trapping_failure file in
   let () = output_int32 ch magic_number in
