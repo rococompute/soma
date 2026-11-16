@@ -25,8 +25,10 @@
 From Soma Require Import Strings.
 
 (** The code a macro is given and returns. Code that is none of the
-    others (a [match], a notation like [a + b]) is [Opaque]: a macro
-    cannot look into it, but can return it, unchanged. *)
+    others (a notation like [a + b], a [match] whose patterns are not
+    names, numbers, strings or constructors applied to names) is
+    [Opaque]: a macro cannot look into it, but can return it,
+    unchanged. *)
 (* [syntax] is nested in [list], for which no [All] scheme is needed *)
 #[warnings="-register-all"]
 Inductive syntax : Type :=
@@ -36,6 +38,11 @@ Inductive syntax : Type :=
 | App (f : syntax) (args : list syntax) (* [f] applied to [args] *)
 | Lam (x : string) (body : syntax)      (* [fun x => body] *)
 | Hole                                  (* [_] *)
+| LetIn (x : string) (value body : syntax) (* [let x := value in body] *)
+| Match (scrutinee : syntax) (branches : list (syntax * syntax))
+    (* [match scrutinee with p1 => b1 | ... end]: a pattern is a name
+       ([x], a constructor [true]), a number, a string, [_], or a
+       constructor applied to those ([Succ m], [cons x _]) *)
 | Opaque (id : nat)                     (* other code *)
 | MacroError (message : string).        (* the expansion fails with [message] *)
 
@@ -46,5 +53,7 @@ Register Str as soma.macro.str.
 Register App as soma.macro.app.
 Register Lam as soma.macro.lam.
 Register Hole as soma.macro.hole.
+Register LetIn as soma.macro.letin.
+Register Match as soma.macro.match.
 Register Opaque as soma.macro.opaque.
 Register MacroError as soma.macro.error.

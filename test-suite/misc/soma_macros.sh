@@ -105,3 +105,47 @@ echo 'Definition x := 1.' > clash.soma
 fails clash.soma 'File "./clash.lang", line 2, characters 0-24'
 grep -q "m already exists" out.log || { cat out.log; exit 1; }
 cd ..
+
+# let and match, in the code a macro is given and returns: a macro that
+# returns a match makes structural recursion; a match with simple
+# patterns is quoted as Match, any other is Opaque
+mkdir letmatch && cd letmatch
+cat > lm.lang <<'EOS'
+Macro natcase args :=
+  match args with
+  | cons n (cons z (cons m (cons s nil))) =>
+    Match n (cons (Num 0, z) (cons (App (Var "Succ") (cons m nil), s) nil))
+  | _ => MacroError "natcase n zero m succ"
+  end.
+Macro let1 args :=
+  match args with
+  | cons (Var x) (cons v (cons b nil)) => LetIn x v b
+  | _ => MacroError "let1 x v b"
+  end.
+Macro branches args :=
+  match args with
+  | cons (Match _ bs) nil => Num (List.length bs)
+  | cons (Opaque _) nil => Num 99
+  | _ => MacroError "branches takes a match"
+  end.
+Macro swap_bool args :=
+  match args with
+  | cons (Match s (cons (p1, b1) (cons (p2, b2) nil))) nil => Match s (cons (p1, b2) (cons (p2, b1) nil))
+  | _ => MacroError "swap_bool takes a match with two branches"
+  end.
+Macro badpat args := Match (Num 1) (cons (Lam "x" Hole, Num 0) nil).
+EOS
+cat > lm.soma <<'EOS'
+Recursive fact n := natcase n 1 m (n * fact m).
+Definition a : fact 5 = 120 := eq_refl.
+Definition b : let1 x 4 (x * x) = 16 := eq_refl.
+Definition c : branches (match 3 with 0 => 1 | Succ k => k | _ => 0 end) = 3 := eq_refl.
+Definition d : branches (match [1] with [] => 0 | _ :: _ => 1 end) = 99 := eq_refl.
+Definition e : swap_bool (match true with true => 1 | false => 2 end) = 2 := eq_refl.
+Definition f : branches (match (1, 2) with (x, y) => x end) = 99 := eq_refl.
+Definition g : branches (match cons 1 nil with cons x _ => x | nil => 0 end) = 2 := eq_refl.
+EOS
+rocq c -q lm.soma
+echo 'Definition h := badpat.' >> lm.soma
+fails lm.soma "returned a pattern that is not a name"
+cd ..

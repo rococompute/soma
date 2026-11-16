@@ -60,6 +60,9 @@ let list_value ty l =
   List.fold_right (fun x rest -> mkApp (mk "core.list.cons", [|ty; x; rest|]))
     l (mkApp (mk "core.list.nil", [|ty|]))
 
+let pair_type ty =
+  mkApp (mkIndU (fst (constructor "core.prod.intro"), EInstance.empty), [|ty; ty|])
+
 (* Quoting: the code a macro is given, as a [syntax] value. Code that has
    no [syntax] constructor is kept in [opaque], and quoted as its index *)
 
@@ -89,7 +92,35 @@ let quote opaque e =
           names (q body)
       else keep e
     | CHole _ -> mk "soma.macro.hole"
+    | CLetIn ({ CAst.v = Name x }, value, None, body) ->
+      mkApp (mk "soma.macro.letin", [|string_value (Id.to_string x); q value; q body|])
+    | CCases (Constr.MatchStyle, None, [scrutinee, None, None], branches) ->
+      (* a match whose patterns are simple, else Opaque: the patterns are
+         checked before the branches are quoted *)
+      begin match List.map (fun { CAst.v = (patterns, body) } -> match patterns with
+          | [[p]] -> (qpat p, body)
+          | _ -> raise Exit) branches with
+      | branches ->
+        let pair (p, b) = mkApp (mk "core.prod.intro", [|syntax; syntax; p; q b|]) in
+        mkApp (mk "soma.macro.match", [|q scrutinee; list_value (pair_type syntax) (List.map pair branches)|])
+      | exception Exit -> keep e
+      end
     | _ -> keep e
+  (* a pattern: a name, a number, a string, [_], or a constructor applied
+     to patterns; any other raises Exit *)
+  and qpat p = match p.CAst.v with
+    | CPatAtom None -> mk "soma.macro.hole"
+    | CPatAtom (Some qid) -> mkApp (mk "soma.macro.var", [|string_value (Libnames.string_of_qualid qid)|])
+    | CPatPrim (Number n) ->
+      begin match NumTok.Signed.to_bigint n with
+        | Some z when Z.sign z >= 0 && Z.fits_int z -> mkApp (mk "soma.macro.num", [|nat_value (Z.to_int z)|])
+        | _ -> raise Exit
+      end
+    | CPatPrim (String s) -> mkApp (mk "soma.macro.str", [|string_value s|])
+    | CPatCstr (qid, None, args) ->
+      let c = mkApp (mk "soma.macro.var", [|string_value (Libnames.string_of_qualid qid)|]) in
+      mkApp (mk "soma.macro.app", [|c; list_value syntax (List.map qpat args)|])
+    | _ -> raise Exit
   in
   q e
 
@@ -145,6 +176,16 @@ let unquote ?loc ~macro sigma opaque c =
       | App (f, [|x; body|]) when is "soma.macro.lam" sigma f ->
         let x = CAst.make ?loc (Name (Id.of_string (string_of sigma x))) in
         CAst.make ?loc (CLambdaN ([CLocalAssum ([x], None, Default Glob_term.Explicit, CAst.make ?loc (CHole None))], u body))
+      | App (f, [|x; value; body|]) when is "soma.macro.letin" sigma f ->
+        let x = CAst.make ?loc (Name (Id.of_string (string_of sigma x))) in
+        CAst.make ?loc (CLetIn (x, u value, None, u body))
+      | App (f, [|scrutinee; branches|]) when is "soma.macro.match" sigma f ->
+        let branch b = match kind sigma b with
+          | App (pr, [|_; _; p; body|]) when is "core.prod.intro" sigma pr ->
+            CAst.make ?loc ([[upat p]], u body)
+          | _ -> raise (Not_code b) in
+        CAst.make ?loc (CCases (Constr.MatchStyle, None, [u scrutinee, None, None],
+                                List.map branch (list_of sigma branches)))
       | App (f, [|i|]) when is "soma.macro.opaque" sigma f ->
         begin match List.nth_opt opaque (nat_of sigma i) with
           | Some e -> e
@@ -154,6 +195,23 @@ let unquote ?loc ~macro sigma opaque c =
       | App (f, [|message|]) when is "soma.macro.error" sigma f ->
         CErrors.user_err ?loc (str (string_of sigma message))
       | _ -> raise (Not_code c)
+  (* a pattern: Var, Num, Str, Hole, or App of a Var to patterns *)
+  and upat c =
+    let pat p = CAst.make ?loc p in
+    let name n = Libnames.qualid_of_string ?loc (string_of sigma n) in
+    if is "soma.macro.hole" sigma c then pat (CPatAtom None)
+    else match kind sigma c with
+      | App (f, [|n|]) when is "soma.macro.var" sigma f -> pat (CPatAtom (Some (name n)))
+      | App (f, [|n|]) when is "soma.macro.num" sigma f ->
+        pat (CPatPrim (Number (NumTok.Signed.of_int_string (string_of_int (nat_of sigma n)))))
+      | App (f, [|s|]) when is "soma.macro.str" sigma f -> pat (CPatPrim (String (string_of sigma s)))
+      | App (f, [|g; args|]) when is "soma.macro.app" sigma f ->
+        begin match kind sigma g, list_of sigma args with
+          | App (v, [|n|]), [] when is "soma.macro.var" sigma v -> pat (CPatAtom (Some (name n)))
+          | App (v, [|n|]), args when is "soma.macro.var" sigma v -> pat (CPatCstr (name n, None, List.map upat args))
+          | _ -> CErrors.user_err ?loc (str "The macro " ++ str macro ++ str " returned a pattern that applies something other than a name.")
+        end
+      | _ -> CErrors.user_err ?loc (str "The macro " ++ str macro ++ str " returned a pattern that is not a name, a number, a string, _, or a constructor applied to patterns.")
   in
   u c
 

@@ -230,9 +230,16 @@ internalized (`interp/constrintern.ml`), the code of `a` and `b` is quoted
 into `syntax` values, the macro is evaluated on them, and the `syntax` it
 returns is read back as code and checked in place of `name a b`
 (`vernac/somaMacro.ml`). A local variable of the same name hides the
-macro. `syntax` has names, numbers, strings, applications, `fun`s and
-holes; other code (a `match`, a notation like `a + b`) is `Opaque`, which a
-macro can return but not look into. `MacroError "..."` fails the
+macro. `syntax` has names, numbers, strings, applications, `fun`s, holes,
+`let`s (`LetIn x value body`) and `match`es (`Match scrutinee branches`,
+each branch a pattern and its body). A pattern is a name (a variable, or a
+constructor such as `true`), a number, a string, `_`, or a constructor
+applied to patterns (`Succ m`, `cons x _`). Other code (a notation like
+`a + b`, a `match` with a pattern such as `(x, y)` or `[]`) is `Opaque`,
+which a macro can return but not look into. A macro that returns a
+`Match` can make structural recursion: `Recursive fact n := natcase n 1 m
+(n * fact m).`, with `natcase` returning `match n with 0 => 1 | Succ m =>
+n * fact m end`, passes Rocq's termination check. `MacroError "..."` fails the
 expansion with that message, at the use; so does a run-time error in the
 macro. Expansions nested 1000 deep stop with an error.
 
