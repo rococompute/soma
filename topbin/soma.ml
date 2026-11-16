@@ -415,11 +415,15 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
   let proofs = found_proofs output in
   let exp_file = Filename.remove_extension file ^ ".exp" in
   (* Without -v, the values of bare terms are not shown; the notice that
-     the MirageOS project is being set up is, as it takes a while *)
+     the MirageOS project is being set up is, as it takes a while, and so
+     are the times that -time asks for ("Chars 0 - 26 [Definition~...]
+     0.002 secs") *)
+  let time = List.mem "-time" args in
   if verbose then print_string output
   else
     List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l ||
-          starts_with ~prefix:"Mirage: checked" l then print_endline l)
+          starts_with ~prefix:"Mirage: checked" l ||
+          (time && starts_with ~prefix:"Chars " l) then print_endline l)
       (lines output);
   (* rocq c's files are of no use to a program once it is checked: they
      are deleted, also when checking failed partway. The rest (a MirageOS

@@ -2,7 +2,7 @@
 
 # soma build lists the files it made: a file written just before the build,
 # in the same second, is not one of them, nor are rocq c's files, which it
-# deletes.
+# deletes. With -time, it prints the time of each sentence.
 
 set -euo pipefail
 
@@ -22,3 +22,12 @@ if grep -q 'notes.txt\|data.json' out.log; then
   echo "soma build listed a file it did not make"; cat out.log; exit 1
 fi
 [ ! -f main.vo ] && [ ! -f main.glob ]
+
+# -time prints the time of each sentence, which rocq c says on its output
+# (and soma build shows only with -v otherwise); the values of bare terms
+# are still not shown
+soma build main.soma -time > out.log 2>&1 || { cat out.log; exit 1; }
+grep -q '^Chars 0 - [0-9]* \[Definition~x~.* secs' out.log || { echo "soma build -time printed no times"; cat out.log; exit 1; }
+if grep -q '= 1' out.log; then
+  echo "soma build -time printed a value"; cat out.log; exit 1
+fi
