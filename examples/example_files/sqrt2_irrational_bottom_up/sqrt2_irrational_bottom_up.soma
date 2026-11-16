@@ -1,6 +1,6 @@
 (** The square root of 2 is irrational, bottom up: each result is proved
     before the one that uses it, so the headline, [sqrt2_irrational], comes
-    last. sqrt2_irrational.proof proves the same top down. In three steps:
+    last. sqrt2_irrational.exp proves the same top down. In three steps:
     1. [no_whole_solution]: there are no whole numbers [p] and [q != 0]
        with [p * p = 2 * (q * q)], by the classic infinite descent.
     2. [sqrt2_not_rational]: no rational number squares to 2, since a
@@ -9,7 +9,7 @@
        to it would square to 2.
     [lia], [nia] and [lra], from the prelude, prove the arithmetic.
 
-    The proofs are in sqrt2_irrational_bottom_up.proof; this file defines
+    The proofs are in sqrt2_irrational_bottom_up.exp; this file defines
     [irrational], what they are about. If the program builds, the theorems
     are proved: every step is checked, and nothing in it is assumed
     ([Axiom], [Admitted]) or left to run time ([Any]). Steps 1 and 2 use no

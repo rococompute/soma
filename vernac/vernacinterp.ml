@@ -110,7 +110,7 @@ and vernac_load ~verbosely ~st entries =
         };
       }
     in
-    (* Soma: an error in a loaded sentence (a .lang file's, say) is located
+    (* Soma: an error in a loaded sentence (a .ext file's, say) is located
        at that sentence when it has no location of its own, as it would be
        in a compiled file, not left without one *)
     try v_mod (interp_control ~st) (CAst.make ?loc cmd)

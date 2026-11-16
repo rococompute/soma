@@ -1,6 +1,6 @@
 (** What is proved about the counter as served: whatever the start a
-    request is accepted with, a whole number 0 or more (request.proof),
-    the counter's state from it strictly increases (pages/pages.proof);
+    request is accepted with, a whole number 0 or more (request.exp),
+    the counter's state from it strictly increases (pages/pages.exp);
     and its +1 link carries a greater count, which the server accepts. *)
 
 (** From the start of any request that is accepted, each click increases

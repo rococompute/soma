@@ -1,4 +1,4 @@
-(** Macros. The ones used here are in macros.lang, next to this file,
+(** Macros. The ones used here are in macros.ext, next to this file,
     which is read first: a use of a macro, like [pipe 3 S ...], is
     replaced by the code the macro returns, then checked as if it had been
     written here. *)
@@ -7,7 +7,7 @@ pipe 3 S (Nat.mul 2) to_string.     (* to_string (Nat.mul 2 (S 3)): "8" *)
 
 (** A function defined with a macro: [pow8 x] is
     [square (square (square x))], [((x^2)^2)^2], so [x^8].
-    macros.proof proves that it is [x ^ 8]. *)
+    macros.exp proves that it is [x ^ 8]. *)
 square (n : nat) := n * n.
 pow8 (x : nat) := pipe x square square square.
 

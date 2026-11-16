@@ -6,7 +6,7 @@ A program of several files, where `Import` compiles what it imports.
 soma.toml                                       the project: its name, version and description
 main.soma          Import tasks. Import text.   the program
 tasks.soma         Import models.task.          adding, finishing, counting tasks
-tasks.proof                                     what is proved about tasks.soma
+tasks.exp                                     what is proved about tasks.soma
 text.soma          Import models.task.          tasks as text
 models/task.soma                                the task record
 ```
@@ -31,11 +31,11 @@ $ soma build main.soma          # nothing changed: nothing is compiled
 
 Each file is compiled once per build, here `models/task.soma` once for
 both `tasks.soma` and `text.soma`. Compiling `tasks.soma` checks
-`tasks.proof`, so its theorems are checked when it changes, not on every
+`tasks.exp`, so its theorems are checked when it changes, not on every
 build.
 
 A compiled file stays in use while its stamp in `.soma-cache` holds. A
-stamp has the hash of the source, with its `.proof` and `.lang`, and what
+stamp has the hash of the source, with its `.exp` and `.ext`, and what
 the file imported, as compiled. Try:
 
 - Edit `text.soma`: only it is compiled again.
@@ -45,7 +45,7 @@ the file imported, as compiled. Try:
   lines changes it.)
 - Add a definition to `models/task.soma`: it is compiled again, and so are
   `tasks.soma` and `text.soma`, which import it.
-- Make a theorem of `tasks.proof` false: compiling `tasks.soma` fails,
+- Make a theorem of `tasks.exp` false: compiling `tasks.soma` fails,
   and so does the build, with the proof's error and then
   `Cannot import tasks: tasks.soma does not compile`.
 

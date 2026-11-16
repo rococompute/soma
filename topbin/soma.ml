@@ -84,7 +84,7 @@ Options:
   --no-module-cache           (build, compile) Do not read or write the shared module
                               store. The project's .soma-cache is still used.
   --fill                      (build, compile) Write the proofs that "The rest follows."
-                              found in its place in FILE.proof.
+                              found in its place in FILE.exp.
   --check-fresh               (build) Say, from metadata alone, whether FILE is as its last
                               successful build left it ("unchanged", exit 0) or not
                               ("stale: REASON", exit 1). Builds nothing.
@@ -96,8 +96,9 @@ Options:
   --supervise                 (run) Run the image again when its restart_policy
                               says so (Orchestrate; default_policy 3 1024).
 
-soma build --help lists the other options. Proofs about FILE.soma go in
-FILE.proof, which build and run also check.
+soma build --help lists the other options. Next to FILE.soma, FILE.ext has
+its extensions (macros, readers), read before it, and FILE.exp its
+expectations (lemmas and theorems), which build and run also check.
 |}
 
 let usage_error fmt =
@@ -176,7 +177,7 @@ let created ~before ~source dir =
       name <> "soma.lock" &&
       not (Sys.is_directory (Filename.concat dir name)) &&
       (* sources are not outputs, even when edited just before *)
-      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".proof"; ".lang"; ".definition"; ".wasm"]) &&
+      not (List.exists (Filename.check_suffix name) [".soma"; ".v"; ".exp"; ".ext"; ".definition"; ".wasm"]) &&
       (match List.assoc_opt name before with
        | Some old -> time <> old
        | None -> true))
@@ -209,7 +210,7 @@ let found_proofs output =
   in
   go [] None (lines output)
 
-(* Where [The rest follows.] is in a .proof file's text: outside comments
+(* Where [The rest follows.] is in a .exp file's text: outside comments
    and strings *)
 let occurrences text =
   let n = String.length text in
@@ -233,8 +234,8 @@ let occurrences text =
    on a line of its own, indented as the sentence was. A build stops at a
    sentence whose search fails, so the proofs found are those of the first
    sentences. *)
-let fill_proofs proof_file proofs =
-  let text = In_channel.with_open_bin proof_file In_channel.input_all in
+let fill_proofs exp_file proofs =
+  let text = In_channel.with_open_bin exp_file In_channel.input_all in
   let positions = List.filteri (fun i _ -> i < List.length proofs) (occurrences text) in
   let indent i =
     let line_start = match String.rindex_from_opt text (i - 1) '\n' with
@@ -245,7 +246,7 @@ let fill_proofs proof_file proofs =
       String.sub text 0 i ^ String.concat ("\n" ^ indent i) proof
       ^ String.sub text after (String.length text - after))
       positions (List.filteri (fun i _ -> i < List.length positions) proofs) text in
-  Out_channel.with_open_bin proof_file (fun oc -> output_string oc text);
+  Out_channel.with_open_bin exp_file (fun oc -> output_string oc text);
   List.length positions
 
 let plural n word = if n = 1 then "1 " ^ word else string_of_int n ^ " " ^ word ^ "s"
@@ -271,7 +272,7 @@ let clean_review review =
 
 (* Shared compiled-artifact store: $SOMA_CACHE, or else $XDG_CACHE_HOME/soma
    (~/.cache/soma without it), keyed by a hash of the project sources that
-   determine compilation (every .soma, .proof, .lang, .definition, .wasm,
+   determine compilation (every .soma, .exp, .ext, .definition, .wasm,
    .ml and .lean of the project by its path and bytes, soma.toml, soma.lock,
    and the toolchain). After a successful build the checkout's .soma-cache
    is published under its key; at the start of a build, an absent local
@@ -321,7 +322,7 @@ let project_cache_key file =
   let source name =
     name = "soma.lock" ||
     List.exists (Filename.check_suffix name)
-      [".soma"; ".proof"; ".lang"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
+      [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
   let rec walk rel dir acc =
     Array.fold_left (fun acc name ->
         if List.mem name [".soma-cache"; ".git"; "_build"] then acc
@@ -412,7 +413,7 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
   let program_output, review_lines = split_review output in
   let output = String.concat "" (List.map (fun l -> l ^ "\n") program_output) in
   let proofs = found_proofs output in
-  let proof_file = Filename.remove_extension file ^ ".proof" in
+  let exp_file = Filename.remove_extension file ^ ".exp" in
   (* Without -v, the values of bare terms are not shown; the notice that
      the MirageOS project is being set up is, as it takes a while *)
   if verbose then print_string output
@@ -430,10 +431,10 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
   if proofs <> [] then begin
     if fill then
       Printf.printf "%s: %s written in, in place of \"The rest follows.\"\n%!"
-        proof_file (plural (fill_proofs proof_file proofs) "proof")
+        exp_file (plural (fill_proofs exp_file proofs) "proof")
     else if not verbose then
       Printf.printf "%s: %s found by \"The rest follows.\" (soma build -v prints %s, soma build --fill writes %s in)\n%!"
-        proof_file (plural (List.length proofs) "proof")
+        exp_file (plural (List.length proofs) "proof")
         (if List.length proofs = 1 then "it" else "them") (if List.length proofs = 1 then "it" else "them")
   end;
   Option.iter (fun path ->
@@ -454,9 +455,15 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
     if not (clean_review review_lines) then exit 1
   end
 
-(* FILE.proof, the properties of FILE.soma, stands for the program *)
+(* FILE.exp, the properties of FILE.soma, stands for the program *)
 let program_of file =
-  if Filename.check_suffix file ".proof" then Filename.chop_suffix file ".proof" ^ ".soma"
+  List.iter (fun (old_ext, new_ext) ->
+      if Filename.check_suffix file old_ext then begin
+        Printf.eprintf "soma: %s is not read: %s files are %s files now. Rename it: git mv %s %s\n"
+          file old_ext new_ext file (Filename.chop_suffix file old_ext ^ new_ext);
+        exit 2
+      end) [".proof", ".exp"; ".lang", ".ext"];
+  if Filename.check_suffix file ".exp" then Filename.chop_suffix file ".exp" ^ ".soma"
   else file
 
 let rec remove_tree path =
@@ -984,7 +991,7 @@ let run ~events ~supervise file args image_args =
    same but the last part, which it compares file by file. A record is
    written only when what it can say is certain: no dependency outside the
    project (soma.lock, .soma-cache/.deps, Rocq libraries that a dependency
-   named), no option that names files elsewhere or writes into FILE.proof, no
+   named), no option that names files elsewhere or writes into FILE.exp, no
    kept output (an image, an executable, a page, built with tools outside
    soma), and the project not changed while it was built. Anything missing,
    unreadable or unexpected is stale. *)
@@ -1088,7 +1095,7 @@ type fresh_config = { verbose : bool; fill : bool; timings : bool; no_image : bo
 let fresh_inputs ~toolchain c =
   let canonical, root = fresh_project c.file in
   let cache = Filename.concat root ".soma-cache" in
-  if c.fill then uncertain "--fill writes into the program's .proof";
+  if c.fill then uncertain "--fill writes into the program's .exp";
   let rec allowed = function
     | [] -> ()
     | "-w" :: _ :: rest -> allowed rest

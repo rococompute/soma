@@ -66,11 +66,11 @@ let is_ident s =
   (match s.[0] with 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false) &&
   String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '\'' -> true | _ -> false) s
 
-(* What can be imported: X/Y, of X/Y.soma, X/Y.lang, X/Y.definition or
+(* What can be imported: X/Y, of X/Y.soma, X/Y.ext, X/Y.definition or
    X/Y.wasm. A folder that is no name cannot be imported, nor what is in it;
    nor is a project inside this one, with its own soma.toml, a part of it. *)
 let importable root =
-  let exts = [".soma"; ".lang"; ".definition"; ".wasm"] in
+  let exts = [".soma"; ".ext"; ".definition"; ".wasm"] in
   let rec walk rel =
     let dir = if rel = "" then root else Filename.concat root rel in
     List.concat_map (fun e ->

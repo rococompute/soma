@@ -8,9 +8,9 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * Proof sentences, for .proof files
+(** * Proof sentences, for .exp files
 
-    Imported in .proof files only (toplevel/ccompile.ml). A proof is
+    Imported in .exp files only (toplevel/ccompile.ml). A proof is
     written as sentences that say what they do, and each sentence is
     checked: one that states a goal or a fact fails unless the statement
     is the goal or holds. The sentences are tactics, and can be mixed with
@@ -58,7 +58,7 @@
     [ring], [nia]) and propositional logic. A step [soma_auto] cannot take
     is split into smaller sentences, or given with [By].
 
-    In a .proof file, a tactic acts on one goal at a time: with several
+    In a .exp file, a tactic acts on one goal at a time: with several
     goals open, each is focused with a bullet ([-], [+], [*]) or braces. *)
 
 From Stdlib Require Import Arith Lia Lra.
@@ -231,7 +231,7 @@ Tactic Notation "We" "use" "strong" "induction" "on" ident(x) :=
 #[export] Set Default Goal Selector "!".
 
 (* A theorem whose evidence is a gradual primitive ([unk], [raise], a cast
-   to its statement) is not proved: an error in .proof files, rather than
+   to its statement) is not proved: an error in .exp files, rather than
    Rocq's warning (vernac/declare.ml) *)
 #[export] Set Warnings "+gradual-proof".
 

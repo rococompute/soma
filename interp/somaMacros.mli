@@ -9,7 +9,7 @@
 (************************************************************************)
 
 (** Soma: the macros in scope, and how a use of one is expanded. Macros
-    are defined in .lang files (vernac/somaMacro.ml, theories/Soma/Macro.v). *)
+    are defined in .ext files (vernac/somaMacro.ml, theories/Soma/Macro.v). *)
 
 open Names
 
@@ -24,7 +24,7 @@ val is_macro : Constant.t -> bool
 val in_macro : Constant.t -> Libobject.obj
 
 (** Is this constant a reader in scope? A reader is defined with
-    [Reader name text := body.] in a .lang file: a function from a
+    [Reader name text := body.] in a .ext file: a function from a
     program's text to its top-level forms. *)
 val is_reader : Constant.t -> bool
 

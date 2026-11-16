@@ -7,7 +7,7 @@ proof says a count is never more than there are items. It has no `main`.
 ```
 soma.toml      the project: its name, version and description
 counts.soma    count_if
-counts.proof   count_if test items <= length items
+counts.exp   count_if test items <= length items
 ```
 
 Another project imports it by the `name` in this `soma.toml`:

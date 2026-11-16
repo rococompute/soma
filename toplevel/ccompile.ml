@@ -22,12 +22,12 @@ let source ldir file = Loc.InFile {
   }
 
 (* Soma: the properties of a program FILE.soma (its lemmas and
-   theorems) are in FILE.proof next to it, which is read after the
+   theorems) are in FILE.exp next to it, which is read after the
    program, in its environment: the proofs see what the program defines
    and imports, and the program is only built once they are checked. *)
-let proof_file f =
+let exp_file f =
   if Filename.check_suffix f ".soma" || Filename.check_suffix f ".definition" || SomaImport.is_folder_rules f then
-    let p = Filename.remove_extension f ^ ".proof" in
+    let p = Filename.remove_extension f ^ ".exp" in
     if Sys.file_exists p then Some p else None
   else None
 
@@ -41,10 +41,10 @@ let process_string ?file ~state s =
   in
   loop state
 
-(* FILE.proof is written in the proof language of theories/Soma/Proof.v,
+(* FILE.exp is written in the proof language of theories/Soma/Proof.v,
    which is imported for it, and only for it *)
-let load_proof_file ~beautify ~check ~state ldir f =
-  match proof_file f with
+let load_exp_file ~beautify ~check ~state ldir f =
+  match exp_file f with
   | None -> state
   | Some p ->
     let state = process_string ~state "Require Import Soma.Proof." in
@@ -53,18 +53,18 @@ let load_proof_file ~beautify ~check ~state ldir f =
     Fun.protect ~finally:Dumpglob.pop_output (fun () ->
         Vernac.load_vernac ~beautify ~check ~state ~source:(source ldir p) p)
 
-(* Soma: the macros of a program FILE.soma are in FILE.lang next to it,
-   which is loaded before the program, as by [Load "FILE.lang".]: they
-   are in scope in the program and in FILE.proof. A .lang file compiled
+(* Soma: the macros of a program FILE.soma are in FILE.ext next to it,
+   which is loaded before the program, as by [Load "FILE.ext".]: they
+   are in scope in the program and in FILE.exp. A .ext file compiled
    by itself, for other files to [Require Import], imports the Macro
    library. (vernac/somaMacro.ml) *)
-let load_lang_file ~state f =
-  if SomaMacro.is_lang_file f then process_string ~state "Require Import Soma.Macro."
-  else match Load.lang_of_program f with
+let load_ext_file ~state f =
+  if SomaMacro.is_ext_file f then process_string ~state "Require Import Soma.Macro."
+  else match Load.ext_of_program f with
   | None -> state
-  | Some l -> Load.load_lang ~state l
+  | Some l -> Load.load_ext ~state l
 
-(* Soma: the rules of the folders a file is in, X/X.lang and X/X.proof,
+(* Soma: the rules of the folders a file is in, X/X.ext and X/X.exp,
    apply to it: they are compiled first (vernac/somaImport.ml), then
    imported, by an [Import] in the file, which puts the cache in the load
    path of its document *)
@@ -138,6 +138,8 @@ let compile opts stm_options injections copts ~f_in ~f_out =
     ensure_exists_with_prefix ~src:f_in ~tgt:f_out ~tgt_ext:ext_out in
   let beautify = copts.beautify in
   let () = if beautify then CLexer.record_comments := true in
+  if List.exists (Filename.check_suffix long_f_dot_in) [".soma"; ".definition"; ".ext"] then
+    SomaImport.refuse_old_names (Filename.remove_extension long_f_dot_in);
   let rules = SomaImport.folder_rules long_f_dot_in in
   SomaImport.source_file := Some long_f_dot_in;
   match mode with
@@ -164,11 +166,11 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let check = Stm.AsyncOpts.(stm_options.async_proofs_mode = APoff) in
       let source = source ldir long_f_dot_in in
       let state = load_folder_rules ~state long_f_dot_in rules in
-      let state = load_lang_file ~state long_f_dot_in in
+      let state = load_ext_file ~state long_f_dot_in in
       let state = load_definition_prologue ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_definition_epilogue ~state long_f_dot_in in
-      let state = load_proof_file ~beautify ~check ~state ldir long_f_dot_in in
+      let state = load_exp_file ~beautify ~check ~state ldir long_f_dot_in in
       (* Soma: soma hash FILE, of what was checked (vernac/somaHash.ml) *)
       let () = SomaHash.report () in
       (* Soma: soma search QUERY, in what was checked (vernac/somaSearch.ml) *)
@@ -216,9 +218,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let ldir = Stm.get_ldir ~doc:state.doc in
       let source = source ldir long_f_dot_in in
       let state = load_folder_rules ~state long_f_dot_in rules in
-      let state = load_lang_file ~state long_f_dot_in in
+      let state = load_ext_file ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check:false ~source ~state long_f_dot_in in
-      let state = load_proof_file ~beautify ~check:false ~state ldir long_f_dot_in in
+      let state = load_exp_file ~beautify ~check:false ~state ldir long_f_dot_in in
       let state = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs state ~filename:long_f_dot_in;
       let () = Stm.snapshot_vos ~doc ~output_native_objects ldir long_f_dot_out in

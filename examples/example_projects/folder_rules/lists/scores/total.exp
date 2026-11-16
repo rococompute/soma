@@ -1,4 +1,4 @@
-(** What is proved about total.soma, with the theorems of lists/lists.proof *)
+(** What is proved about total.soma, with the theorems of lists/lists.exp *)
 
 (** There are as many totals as rounds that have both points and a bonus. *)
 Theorem totals_length : forall ps bs, length (totals ps bs) = min (length ps) (length bs).

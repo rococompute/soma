@@ -84,7 +84,7 @@ grows : Explore.model (option string) N action := {|
 (* its own Explore does not stop the review, which explores it too *)
 Explore grows.
 EOT
-cat > proj/main.proof <<'EOT'
+cat > proj/main.exp <<'EOT'
 Theorem assumed : forall n : N, (n <= n + 1)%N.
 Proof.
 Admitted.

@@ -8,7 +8,7 @@
     [app count (div ...)] is the app whose view is [(div ...)], [count]
     being the state where it is shown, from any start: a function from the
     start to the app, which the server gives the start of each request.
-    pages.proof proves, for every such app, whatever its view and its
+    pages.exp proves, for every such app, whatever its view and its
     start, that each click increases the state.
 
     The count is an [N], binary: a [nat] is unary, and a large count from

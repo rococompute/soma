@@ -1,5 +1,5 @@
-(** A counter, in the language of pages/ (pages/pages.lang): a page with a
-    +1 button. Its state is the count of pages.lang, from 0, and its only
+(** A counter, in the language of pages/ (pages/pages.ext): a page with a
+    +1 button. Its state is the count of pages.ext, from 0, and its only
     action is [Increment]: this file gives the view, nothing else. *)
 
 counter := app count

@@ -8,12 +8,12 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** Soma: [load_lang ~state f] loads the .lang file [f] as [Load] does:
+(** Soma: [load_ext ~state f] loads the .ext file [f] as [Load] does:
     in a module of its own, whose macros are then in scope *)
-val load_lang : state:Vernac.State.t -> string -> Vernac.State.t
+val load_ext : state:Vernac.State.t -> string -> Vernac.State.t
 
-(** Soma: FILE.lang, the macros of FILE.soma, when there is one *)
-val lang_of_program : string -> string option
+(** Soma: FILE.ext, the macros of FILE.soma, when there is one *)
+val ext_of_program : string -> string option
 
   (** [load_init_vernaculars opts ~state] Load vernaculars from
    the init (rc) file *)

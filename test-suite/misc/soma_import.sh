@@ -25,7 +25,7 @@ cat > stock.soma <<'EOT'
 Import models.item.
 total (xs : list item) : nat := fold_left (fun n x => n + count x) xs 0.
 EOT
-cat > stock.proof <<'EOT'
+cat > stock.exp <<'EOT'
 Theorem total_nil : total nil = 0.
 Proof.
   Computing, we conclude that 0 = 0.
@@ -72,14 +72,14 @@ echo 'empty := {| name := ""; count := 0 |}.' >> models/item.soma
 soma build main.soma > out.log 2> err.log
 [ "$(compiled)" = 3 ]
 
-# a change to a .proof is a change of its program, and a proof that does
+# a change to a .exp is a change of its program, and a proof that does
 # not hold fails the import
-sed -i.bak 's/0 = 0/0 = 1/' stock.proof
+sed -i.bak 's/0 = 0/0 = 1/' stock.exp
 if soma build main.soma > out.log 2> err.log; then
   echo "a false proof in an imported file did not fail the build"; exit 1
 fi
 grep -q 'Cannot import stock: stock.soma does not compile' err.log
-mv stock.proof.bak stock.proof
+mv stock.exp.bak stock.exp
 
 # so does an error in what it imports
 echo 'oops := undefined_thing.' >> models/item.soma
@@ -134,12 +134,12 @@ grep -q 'Import modules in scope and libraries or files in separate commands.' e
 # file says does: a notation is no proof, and goes on through what imports it.
 mkdir "$TMP/proofs"; cd "$TMP/proofs"
 printf 'x1 : nat := 1.\nx2 : nat := 2.\nNotation "!!" := x1.\n' > a.soma
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > a.proof
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > a.exp
 printf 'Import a.\nview : nat := !!.\n' > b.soma
 printf 'Import b.\nfinal : nat := view.\nfinal.\n' > main.soma
 soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q '= 1' out.log
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > a.proof
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > a.exp
 soma build -v main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q 'Compiling a.soma' out.log
 if grep -q 'Compiling b.soma' out.log; then echo "another proof compiled an importer"; cat out.log; exit 1; fi

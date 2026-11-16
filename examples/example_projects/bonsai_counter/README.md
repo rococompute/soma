@@ -14,7 +14,7 @@ soma extract main.soma    writes main-ocaml/, the program as an OCaml project
 ```
 soma.toml               the project: its name, version and description
 main.soma               the counter: its actions, step, view; main runs it
-main.proof              the count stays at most 10, and main runs the counter
+main.exp              the count stays at most 10, and main runs the counter
 render.soma             JSX elements as Bonsai's virtual DOM, and JSX apps run by Bonsai
 bonsai.definition       what Soma takes Bonsai's module Bonsai to be
 bonsai_web.definition   ... and Bonsai_web, its library for the web
@@ -112,7 +112,7 @@ write: so the state is a variable, and its machine is Soma's `step`.
 
 ## What is proved
 
-`main.proof` proves, as `reason_counter.proof` does, that whatever the
+`main.exp` proves, as `reason_counter.exp` does, that whatever the
 clicks, the count stays at most `limit`, and that `main` runs this counter:
 `run (make_app 0 step view)`. That Bonsai then shows `view` of the state
 after each click is Bonsai's to keep.

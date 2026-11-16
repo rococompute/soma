@@ -1,4 +1,4 @@
-(** Does add.wasm's add add? main.proof's theorems assume it does; this
+(** Does add.wasm's add add? main.exp's theorems assume it does; this
     tests it, on sums small and large, as Soma.Explore explores a model:
 
         soma build model.soma

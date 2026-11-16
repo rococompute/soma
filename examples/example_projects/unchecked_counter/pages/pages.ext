@@ -1,24 +1,28 @@
-(** The rules of pages/: a language of s-expressions for counter apps.
-    Every file under pages/ has them, as if it started with
-    [Import pages.pages].
+(** The rules of pages/: a language of s-expressions for counter apps
+    served over HTTP. Every file under pages/ has them, as if it started
+    with [Import pages.pages].
 
     The state of every app of this language is here, and only here: a
-    count, from 0, and one action, [Increment], which adds 1. A page gives
-    the view; [app count (div ...)] is the app whose view is [(div ...)],
-    [count] being the state where it is shown. pages.proof proves what
-    follows for every such app, whatever its view: the state is the number
-    of clicks, and each click increases it.
+    count, a whole number from a start the server is given, and one
+    action, [Increment], which adds 1. A page gives the view;
+    [app count (div ...)] is the app whose view is [(div ...)], [count]
+    being the state where it is shown, from any start: a function from the
+    start to the app, which the server gives the start of each request.
+    pages.exp proves, for every such app, whatever its view and its
+    start, that each click increases the state.
 
-    [sexp (div (h1 "Hello world"))] is the JSX element
-    [<div> <h1> "Hello world" </h1> </div>]. The s-expression is code that
-    Soma already reads ([div] applied to [h1 "Hello world"]); the macros
-    read it as a tree and give the element:
+    The count is an [N], binary: a [nat] is unary, and a large count from
+    a request would take as much memory as it is large.
 
+    [(increment "+1")], in an app, is its only control: a link to the page
+    at the next count, [/?count=N+1], which is how a click reaches the
+    server, with the event [Increment] that it stands for.
+
+    Otherwise, as in sexp_html:
     - [(tag child ...)], [tag] in lowercase, is the element [tag];
     - ["text"] and [42] are text;
     - a name, [count], is its value: an element, a string, or a number;
-    - [(attrs (class "page") (on click Increment))], among the children,
-      is the attributes: [class="page"], and the event [click];
+    - [(attrs (class "page"))], among the children, is the attributes;
       [data_id] is the attribute [data-id], names having no dashes;
     - [(Greeting "Soma")], in uppercase, calls the component [Greeting];
     - [(br _)] is an element without children ([(br)] is the name [br]).
@@ -29,17 +33,21 @@ Export JSX.
 
 (** * The state *)
 
-(** The only action: the +1 button's *)
+(** The only action: the +1 control's *)
 Inductive action := Increment.
 
 (** what an action does to the count *)
-step (a : action) (count : nat) : nat :=
+step (a : action) (count : N) : N :=
   match a with
-  | Increment => count + 1
+  | Increment => N.succ count
   end.
 
-(** the app of a view: its state is the count, from 0, changed by [step] *)
-counter_app (view : nat -> element action) : app nat action := make_app 0 step view.
+(** the app of a view, from [start]: its state is the count, changed by
+    [step] *)
+counter_app (start : N) (view : N -> element action) : app N action := make_app start step view.
+
+(** the address of the page at the count after [count] *)
+next_link (count : N) : string := ("/?count=" ++ to_string (step Increment count))%str.
 
 (** * Children *)
 
@@ -49,6 +57,7 @@ Class Child (T : Type) := child : T -> element action.
 #[export] Instance child_element : Child (element action) := fun e => e.
 #[export] Instance child_string : Child string := fun s => text s.
 #[export] Instance child_nat : Child nat := fun n => text (to_string n).
+#[export] Instance child_N : Child N := fun n => text (to_string n).
 
 (** * From s-expressions to elements *)
 
@@ -71,34 +80,41 @@ is_component (s : string) : bool :=
 code_list (cons_name : string) (xs : list syntax) : syntax :=
   List.fold_right (fun x acc => App (Var cons_name) [x, acc]) (Var "nil") xs.
 
-(** an attribute: [(class "page")] is [attr "class" "page"], and
-    [(on click Increment)] is [on "click" Increment] *)
+(** an attribute: [(class "page")] is [attr "class" "page"] *)
 attribute (a : syntax) : syntax :=
   match a with
   | App (Var "on") [Var event, action] => App (Var "Soma.JSX.on") [Str event, action]
-  | App (Var "on") [Str event, action] => App (Var "Soma.JSX.on") [Str event, action]
   | App (Var name) [Num n] => App (Var "Soma.JSX.attr") [Str (dashes name), Str (to_string n)]
   | App (Var name) [value] => App (Var "Soma.JSX.attr") [Str (dashes name), value]
-  | _ => MacroError "an attribute is (name value), or (on event action)"
+  | _ => MacroError "an attribute is (name value)"
   end.
 
 is_attrs (a : syntax) : bool := match a with App (Var "attrs") _ => true | _ => false end.
 is_hole (a : syntax) : bool := match a with Hole => true | _ => false end.
 
-(** the element [tag], from its children as written and as elements *)
-make_node (tag : string) (written elements : list syntax) : syntax :=
+(** the element [tag], from its children as written and as elements, with
+    the attributes [given] first *)
+make_node (tag : string) (given : list syntax) (written elements : list syntax) : syntax :=
   let attributes :=
-    List.flat_map (fun a => match a with App (Var "attrs") xs => List.map attribute xs | _ => nil end) written in
+    given ++ List.flat_map (fun a => match a with App (Var "attrs") xs => List.map attribute xs | _ => nil end) written in
   let children :=
     List.map snd (List.filter (fun p => negb (is_attrs (fst p) || is_hole (fst p))) (List.combine written elements)) in
   App (Var "Soma.JSX.node") [Str tag, code_list "Soma.JSX.attr_cons" attributes, code_list "Soma.JSX.jsx_cons" children].
 
-(** an s-expression as an element *)
-Recursive element_of (s : syntax) : syntax :=
+(** an s-expression as an element; [state] is the name of the state, in
+    an app ([""] outside one) *)
+Recursive element_of (state : string) (s : syntax) : syntax :=
   match s with
   | Num n => Str (to_string n)
+  | App (Var "increment") children =>
+    if String.eqb state ""
+    then MacroError "(increment ...) is the +1 control of an app: write it in app count (...)"
+    else make_node "a"
+      [App (Var "Soma.JSX.attr") [Str "href", App (Var "pages.pages.next_link") [Var state]],
+       App (Var "Soma.JSX.on") [Str "click", Var "pages.pages.Increment"]]
+      children (List.map (element_of state) children)
   | App (Var tag) children =>
-    if is_component tag then s else make_node tag children (List.map element_of children)
+    if is_component tag then s else make_node tag nil children (List.map (element_of state) children)
   | Var name =>
     (* [(br)] is read as the name [br]: say how to write it *)
     if is_void name
@@ -110,14 +126,16 @@ Recursive element_of (s : syntax) : syntax :=
 (** [sexp (tag child ...)]: the element *)
 Macro sexp args :=
   match args with
-  | cons e nil => element_of e
+  | cons e nil => element_of "" e
   | _ => MacroError "sexp takes one element, written (tag child ...)"
   end.
 
 (** [app count (tag child ...)]: the app whose view is the element, where
-    [count] is the state *)
+    [count] is the state, from any start: [fun start => counter_app start
+    (fun count => ...)] *)
 Macro app args :=
   match args with
-  | cons (Var state) (cons e nil) => App (Var "pages.pages.counter_app") [Lam state (element_of e)]
+  | cons (Var state) (cons e nil) =>
+    Lam "soma_start" (App (Var "pages.pages.counter_app") [Var "soma_start", Lam state (element_of state e)])
   | _ => MacroError "app takes the name of the state, then the view: app count (tag child ...)"
   end.

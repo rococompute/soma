@@ -1,8 +1,8 @@
 (** The square root of 2 is irrational. This file says what irrational
     means; the theorem, [sqrt2_irrational : irrational (sqrt 2)], is in
-    sqrt2_irrational.proof, proved top down: the theorem comes first, and
+    sqrt2_irrational.exp, proved top down: the theorem comes first, and
     its proof reduces it to simpler and simpler statements, each proved in
-    turn. sqrt2_irrational_bottom_up.proof proves the same bottom up, as
+    turn. sqrt2_irrational_bottom_up.exp proves the same bottom up, as
     separate named lemmas.
 
     If the program builds, the theorem is proved: every step is checked,

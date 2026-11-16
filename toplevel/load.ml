@@ -24,30 +24,30 @@ let load_init_file opts ~state =
     state
   end
 
-(* Soma: [Load "FILE.lang".], which loads a .lang file in a module of its
+(* Soma: [Load "FILE.ext".], which loads a .ext file in a module of its
    own (vernac/somaMacro.ml). Run as a compiled file's sentences are, not
    as the interactive loop's: Vernac.process_expr rolls the document back
    on an error (Stm.edit_at), which is only for an interactive session,
-   and turned any error in the .lang file into an anomaly with no
+   and turned any error in the .ext file into an anomaly with no
    location. *)
-let load_lang ~state f =
+let load_ext ~state f =
   let load = Vernacexpr.{ control = []; attrs = []; expr = VernacSynterp (VernacLoad (false, f)) } in
   Vernac.interp_vernac ~check:true ~state (CAst.make load)
 
-let lang_of_program f =
+let ext_of_program f =
   if Filename.check_suffix f ".soma" then
-    let l = Filename.chop_suffix f ".soma" ^ SomaMacro.lang_suffix in
+    let l = Filename.chop_suffix f ".soma" ^ SomaMacro.ext_suffix in
     if Sys.file_exists l then Some l else None
   else None
 
-(* A .lang file is loaded as by [Load], and FILE.soma after FILE.lang *)
+(* A .ext file is loaded as by [Load], and FILE.soma after FILE.ext *)
 let load_vernacular opts ~state =
   List.fold_left
     (fun state f_in ->
       let s = Loadpath.locate_source_file f_in in
-      if SomaMacro.is_lang_file s then load_lang ~state s
+      if SomaMacro.is_ext_file s then load_ext ~state s
       else
-        let state = Option.fold_left (fun state l -> load_lang ~state l) state (lang_of_program s) in
+        let state = Option.fold_left (fun state l -> load_ext ~state l) state (ext_of_program s) in
         Vernac.load_vernac ~check:true ~state s
     ) state opts.pre.load_vernacular_list
 

@@ -10,7 +10,7 @@
 
 (* Soma: macros. A macro is a function from the code of its arguments to
    code ([list syntax -> syntax], theories/Soma/Macro.v), defined with
-   [Macro] in a .lang file. A use of a macro in scope, [m a b], is
+   [Macro] in a .ext file. A use of a macro in scope, [m a b], is
    expanded when it is internalized (interp/constrintern.ml): the code of
    [a] and [b] is quoted into [syntax] values, [m] is applied to them and
    evaluated, and the [syntax] value it returns is read back as code,
@@ -21,9 +21,9 @@ open Names
 open Constrexpr
 open EConstr
 
-let lang_suffix = ".lang"
+let ext_suffix = ".ext"
 
-let is_lang_file f = Filename.check_suffix f lang_suffix
+let is_ext_file f = Filename.check_suffix f ext_suffix
 
 let file_of_loc = function
   | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> Some file
@@ -236,13 +236,13 @@ let expand env ?loc c args =
 
 let () = SomaMacros.expand := expand
 
-(* The Macro command, in .lang files only *)
+(* The Macro command, in .ext files only *)
 
 let check_in_lang_file ?loc ?(command="Macro") () =
   match file_of_loc loc with
-  | Some f when is_lang_file f -> ()
-  | _ -> CErrors.user_err ?loc (str command ++ str " can only be used in a .lang file: "
-                                ++ str (String.lowercase_ascii command) ++ str "s for FILE.soma go in FILE.lang.")
+  | Some f when is_ext_file f -> ()
+  | _ -> CErrors.user_err ?loc (str command ++ str " can only be used in a .ext file: "
+                                ++ str (String.lowercase_ascii command) ++ str "s for FILE.soma go in FILE.ext.")
 
 let global_ref ?loc name =
   CAst.make ?loc (CRef (Libnames.qualid_of_path ?loc (Nametab.path_of_global (Rocqlib.lib_ref name)), None))
@@ -258,7 +258,7 @@ let define ?loc ~name ~args body =
   | GlobRef.ConstRef c -> Lib.add_leaf (SomaMacros.in_macro c)
   | _ -> CErrors.anomaly (str "A macro is not a constant.")
 
-(* Readers: [Reader name text := body.] in a .lang file makes [name] a
+(* Readers: [Reader name text := body.] in a .ext file makes [name] a
    function from a program's text to its top-level forms ([string -> list
    item], theories/Soma/Macro.v). [Read name "text".], or a file whose
    first line is [#lang name], runs the forms it returns as commands, as
@@ -282,10 +282,10 @@ let reader_of ?loc qid =
   match Nametab.locate qid with
   | GlobRef.ConstRef c when SomaMacros.is_reader c -> c
   | _ -> CErrors.user_err ?loc (Libnames.pr_qualid qid
-                                ++ str " is not a reader: a reader is defined with Reader in a .lang file.")
+                                ++ str " is not a reader: a reader is defined with Reader in a .ext file.")
   | exception Not_found ->
     CErrors.user_err ?loc (str "The reader " ++ Libnames.pr_qualid qid
-                           ++ str " was not found. A reader for FILE.soma goes in FILE.lang, or in a .lang file it loads.")
+                           ++ str " was not found. A reader for FILE.soma goes in FILE.ext, or in a .ext file it loads.")
 
 (* The location of the character at [pos] in [text], which starts at
    [start], to the end of its line. Written in a string ([quoted]), each
@@ -353,7 +353,7 @@ let read ?loc qid (text : string CAst.t) ~quoted =
   try List.map form (list_of sigma result)
   with Not_code _ -> not_forms ()
 
-(* A .lang file is loaded in a module of its own, which imports the Macro
+(* A .ext file is loaded in a module of its own, which imports the Macro
    library: the module, and so the file's macros, is then imported where
    the file is loaded, and the Macro library is not. *)
 

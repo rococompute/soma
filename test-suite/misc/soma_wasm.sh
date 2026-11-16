@@ -44,14 +44,14 @@ grep -q 'expected an i64, but got 9223372036854775808%N : N' out.log
 grep -q 'Trapped "unreachable executed"' out.log
 
 # the kernel does not compute it: no proof goes through the module
-cat > prog.proof <<'EOT'
+cat > prog.exp <<'EOT'
 Theorem t : add 2 3 = 5%N.
 Proof.
   reflexivity.
 Qed.
 EOT
 if soma build prog.soma > out.log 2>&1; then echo "a proof computed through the module"; exit 1; fi
-rm prog.proof
+rm prog.exp
 
 # a definition is checked against the module
 check() {

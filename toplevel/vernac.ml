@@ -98,7 +98,7 @@ let interp_vernac ~check ~state ({CAst.loc;_} as com) =
       Exninfo.iraise (reraise, info)
 
 (* Soma: a file whose first line is [#lang NAME] is read by the reader
-   NAME, of a .lang file (vernac/somaMacro.ml): the rest of the file is
+   NAME, of a .ext file (vernac/somaMacro.ml): the rest of the file is
    its text, which Soma's parser does not see. The line, and the rest. *)
 let lang_line file =
   let ic = open_in_bin file in

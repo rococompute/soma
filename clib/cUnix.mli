@@ -39,7 +39,7 @@ val path_to_list : string -> string list
 val make_suffix : string -> string -> string
 
 (** Source file extensions, preferred first: Soma's [".soma"], then
-    Rocq's [".v"], then Soma's macro files, [".lang"]. *)
+    Rocq's [".v"], then Soma's macro files, [".ext"]. *)
 val source_extensions : string list
 
 val has_source_extension : string -> bool

@@ -5,7 +5,7 @@
     when the image stops, soma run asks [restart_policy] whether to run it
     again (theories/Soma/Orchestrate.v). This one is the default policy
     with its own bounds: at most 5 restarts, never more than 512 MB, and
-    never again what would fail again, which mirage_supervised.proof
+    never again what would fail again, which mirage_supervised.exp
     proves. *)
 Require Import Sandbox Orchestrate.
 

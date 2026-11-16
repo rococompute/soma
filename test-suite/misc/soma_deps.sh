@@ -255,10 +255,10 @@ refused 'is a checkout on disk, which a project fetched by others cannot have'
 # * A dependency has its folder's rules and proofs, not the importer's
 project github.com/owner/ruled ruled 1.0.0
 mkdir -p work/github.com/owner/ruled/lists
-echo 'rule : nat := 7.' > work/github.com/owner/ruled/ruled.lang
-echo 'in_rule : nat := 8.' > work/github.com/owner/ruled/lists/lists.lang
+echo 'rule : nat := 7.' > work/github.com/owner/ruled/ruled.ext
+echo 'in_rule : nat := 8.' > work/github.com/owner/ruled/lists/lists.ext
 printf 'uses : nat := rule + in_rule.\n' > work/github.com/owner/ruled/lists/f.soma
-printf 'Theorem uses_is : uses = 15.\nProof. reflexivity. Qed.\n' > work/github.com/owner/ruled/lists/f.proof
+printf 'Theorem uses_is : uses = 15.\nProof. reflexivity. Qed.\n' > work/github.com/owner/ruled/lists/f.exp
 publish github.com/owner/ruled v1.0.0
 top '"owner/ruled" = "1.0.0"'
 printf 'Import ruled.lists.f.\nuses.\nCheck uses_is.\n' > main.soma
@@ -267,7 +267,7 @@ printf 'Import ruled.lists.f.\nCheck rule.\n' > main.soma
 refused 'rule'
 # a proof of a dependency that does not hold stops the build
 project github.com/owner/ruled ruled 1.0.1
-printf 'Theorem uses_is : uses = 16.\nProof. reflexivity. Qed.\n' > work/github.com/owner/ruled/lists/f.proof
+printf 'Theorem uses_is : uses = 16.\nProof. reflexivity. Qed.\n' > work/github.com/owner/ruled/lists/f.exp
 publish github.com/owner/ruled v1.0.1
 top '"owner/ruled" = "1.0.1"'
 printf 'Import ruled.lists.f.\n1.\n' > main.soma
@@ -369,13 +369,13 @@ printf 'Definition d := 1.\nRedirect "%s/r" Check d.\n' "$OUT" > "$TMP/wip2/f.so
 top '"owner/wip2" = { path = "../wip2" }'
 printf 'Import wip2.f.\n1.\n' > main.soma
 refused 'wip2.f:2: Redirect writes a file'; writes_nothing
-# its .proof, what it imports of its own, a file it Loads, its Rocq library
+# its .exp, what it imports of its own, a file it Loads, its Rocq library
 project github.com/owner/w_proof w_proof 1.0.0
 echo 'Definition d := 1.' > work/github.com/owner/w_proof/f.soma
-printf 'Redirect "%s/r" Check d.\n' "$OUT" > work/github.com/owner/w_proof/f.proof
+printf 'Redirect "%s/r" Check d.\n' "$OUT" > work/github.com/owner/w_proof/f.exp
 publish github.com/owner/w_proof v1.0.0
 top '"owner/w_proof" = "1.0.0"'; printf 'Import w_proof.f.\n1.\n' > main.soma
-refused 'w_proof.f.proof:1: Redirect writes a file'; writes_nothing
+refused 'w_proof.f.exp:1: Redirect writes a file'; writes_nothing
 project github.com/owner/w_own w_own 1.0.0
 printf 'Redirect "%s/r" Check 1.\n' "$OUT" > work/github.com/owner/w_own/inner.soma
 echo 'Import inner.' > work/github.com/owner/w_own/f.soma

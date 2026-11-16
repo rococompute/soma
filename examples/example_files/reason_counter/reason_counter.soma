@@ -4,7 +4,7 @@
     below has a type annotation: [step : action -> nat -> nat] and the
     others are inferred.
 
-    What is proved about it is in reason_counter.proof, which is read after
+    What is proved about it is in reason_counter.exp, which is read after
     this file, with its definitions: whatever buttons are clicked, in
     whatever order, the count stays at most [limit], and [Reset] always
     brings it back to 0. The types are only there. Building or running
@@ -27,7 +27,7 @@ step action count :=
 
 (** a component whose prop is untyped, as one written in JavaScript might
     be: [(text : string)] reads it as a string, checked when the page is
-    built. The proofs (reason_counter.proof) are about the count, so it does
+    built. The proofs (reason_counter.exp) are about the count, so it does
     not matter. *)
 Label {text : Any} := <h2> (text : string) </h2>.
 

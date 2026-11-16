@@ -21,7 +21,7 @@ all done
 ```
 soma.toml          the project: its name, version and description
 main.soma          the tasks, run at once, and the order they finish in
-main.proof         ordering the tasks keeps every one
+main.exp         ordering the tasks keeps every one
 async.definition   what Soma takes Async to be
 core.definition    ... and Core, for lengths of time and printing
 ```
@@ -69,7 +69,7 @@ main := Thread_safe.block_on_async_exn (fun _ => run_all tasks).
 The tasks take 0.5, 0.125 and 0.25 seconds, and all of them take 0.5
 seconds, as Async runs them at once. Soma computes the order they finish in,
 without Async (`map fst (by_seconds tasks)`: `["fast", "medium", "slow"]`).
-Running `main` prints them in this order. `main.proof` proves that
+Running `main` prints them in this order. `main.exp` proves that
 `by_seconds` keeps every task.
 
 Soma never computes Async: to the kernel and to the evaluation of a term,

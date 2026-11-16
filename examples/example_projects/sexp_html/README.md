@@ -17,10 +17,10 @@ counter := app count
 soma.toml            the project: its name, version and description
 main.soma            renders the counter, before any click and after three
 pages/
-  pages.lang         the rules of pages/: the language (sexp, app), and the state
-  pages.proof        about the state of every app of pages/: it only increases
+  pages.ext         the rules of pages/: the language (sexp, app), and the state
+  pages.exp        about the state of every app of pages/: it only increases
   counter.soma       the counter, in the language
-  counter.proof      the counter's state, by the theorems of pages.proof
+  counter.exp      the counter's state, by the theorems of pages.exp
 ```
 
 `soma build -v main.soma` prints the page at `Count: 0`, the state after
@@ -28,7 +28,7 @@ three clicks (`3`), and the page at `Count: 3`.
 
 ## The state
 
-The state of every app of this language is in `pages.lang`, and only
+The state of every app of this language is in `pages.ext`, and only
 there: a count, from 0, and one action, `Increment`, which adds 1. It is
 global, and functional: an app is its initial state, the function from an
 action and a state to the next state (`step`), and the view of a state.
@@ -40,19 +40,19 @@ is the language's, and whose view is `(div ...)`, `count` being the state
 where it is shown. So a page cannot add a button that does anything but
 +1: there is no other action.
 
-`pages.proof` is checked once, with the rules of `pages/`, and is about
+`pages.exp` is checked once, with the rules of `pages/`, and is about
 every app made with `app`, whatever its view:
 
 - `state_is_clicks`: the state is the number of clicks;
 - `click_increases`: each click adds one;
 - `strictly_increasing`: the state after a click is greater than before it.
 
-`counter.proof` applies them to the counter (`counter_increases`). Were
+`counter.exp` applies them to the counter (`counter_increases`). Were
 `step` to subtract on some action, or a second action to do nothing,
-`pages.proof` would no longer check, and no page under `pages/` would
+`pages.exp` would no longer check, and no page under `pages/` would
 build.
 
-What it does not cover: an app put together by hand. `pages.lang` exports
+What it does not cover: an app put together by hand. `pages.ext` exports
 JSX, whose `make_app` makes an app with any update; one made with it is
 not an app of the language, and the theorems say nothing about it.
 
@@ -83,12 +83,12 @@ Mistakes are reported where the page has them: `(attrs class)` gives
 
 ## Where it applies
 
-`pages/pages.lang` is the rules of the folder `pages/`, so every file under
+`pages/pages.ext` is the rules of the folder `pages/`, so every file under
 `pages/` has the language, and nothing else does. `main.soma` is outside
 `pages/`: it imports `pages.pages` itself, for `Increment` and `render`.
 The rules export `JSX`, so the pages have `element`, `render` and JSX
 notation without importing anything.
 
-The macros are ordinary Soma code in `pages.lang`: functions on `syntax`
+The macros are ordinary Soma code in `pages.ext`: functions on `syntax`
 (`Var`, `Str`, `App`, `Lam`, ...) that build the code of the element.
 Changing the language is changing those functions.

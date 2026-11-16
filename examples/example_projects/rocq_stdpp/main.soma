@@ -1,7 +1,7 @@
 (** A shop's stock, kept in a finite map of stdpp, a Rocq library of finite
     maps, sets and lists. stdpp is Rocq, which Soma takes as it is: Soma
     compiles it from its source, once, into this project's .soma-cache
-    (Rocq Library), computes with its functions, and main.proof proves
+    (Rocq Library), computes with its functions, and main.exp proves
     with its lemmas.
 
         soma build -v main.soma *)

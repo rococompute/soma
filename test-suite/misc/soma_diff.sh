@@ -65,10 +65,10 @@ fresh
 for v in old new; do
   echo 'zero : nat := 0.' > $v/p.soma
   printf 'Import p.\nkeep : nat := 1.\n' > $v/q.soma
-  printf 'Theorem u : 1 = 1.\nProof. exact (t 1). Qed.\n' > $v/q.proof
+  printf 'Theorem u : 1 = 1.\nProof. exact (t 1). Qed.\n' > $v/q.exp
 done
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > old/p.proof
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > new/p.proof
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > old/p.exp
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > new/p.exp
 diff_
 under "$PROOF" p.t
 under "$PROOF" q.u
@@ -81,10 +81,10 @@ fresh
 for v in old new; do
   echo 'zero : nat := 0.' > $v/p.soma
   printf 'Import p.\nkeep : nat := 1.\n' > $v/q.soma
-  printf 'Theorem u : 1 = 1.\nProof. exact t. Qed.\n' > $v/q.proof
+  printf 'Theorem u : 1 = 1.\nProof. exact t. Qed.\n' > $v/q.exp
 done
-printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > old/p.proof
-printf 'Axiom cheat : 1 = 1.\nTheorem t : 1 = 1.\nProof. exact cheat. Qed.\n' > new/p.proof
+printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > old/p.exp
+printf 'Axiom cheat : 1 = 1.\nTheorem t : 1 = 1.\nProof. exact cheat. Qed.\n' > new/p.exp
 diff_
 under "$MORE" 'p.t, now assumes p.cheat'
 under "$MORE" 'q.u, now assumes p.cheat'

@@ -11,7 +11,7 @@
 (** Soma: [Import] compiles what it imports, in Soma files (see the
     implementation). *)
 
-(** Is the command at [loc] in a Soma file (.soma, .proof, .lang)? *)
+(** Is the command at [loc] in a Soma file (.soma, .exp, .ext)? *)
 val applies : ?loc:Loc.t -> unit -> bool
 
 (** [prepare ?loc qids], for an [Import] of names that are no modules in
@@ -56,9 +56,14 @@ val refuse_ml_module_in_rocq_library : unit -> unit
     the hash of its source and the digests of what it imported *)
 val write_stamp : unit -> unit
 
-(** Is [f] the rules of its folder: X/X.lang, with no X/X.soma? Their
-    proofs are in X/X.proof. *)
+(** Is [f] the rules of its folder: X/X.ext, with no X/X.soma? Their
+    proofs are in X/X.exp. *)
 val is_folder_rules : string -> bool
+
+(** [refuse_old_names base] fails when [base.lang] or [base.proof] exists:
+    they are [base.ext] and [base.exp] now, and one left with its old name
+    would not be read. *)
+val refuse_old_names : string -> unit
 
 (** The file being compiled, set by [rocq c] (toplevel/ccompile.ml): what
     a path in it is relative to, when no location says *)
@@ -85,7 +90,7 @@ val project_file : string -> string
 val resolve_project_file : string -> string
 
 (** [folder_rules file]: the rules of the folders of the project from its
-    root to [file]'s (ROOT/ROOT.lang, X/X.lang, ...), outermost first,
+    root to [file]'s (ROOT/ROOT.ext, X/X.ext, ...), outermost first,
     which apply to every Soma file under them, compiled into the cache when
     they are not up to date; the libraries for [file] to import. *)
 val folder_rules : string -> string list

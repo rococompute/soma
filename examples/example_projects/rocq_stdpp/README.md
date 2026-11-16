@@ -7,14 +7,14 @@ definition, nothing translated, nothing taken on trust. Soma computes with
 its functions, and proves with its lemmas and tactics.
 
 ```
-soma build -v main.soma     the stock, computed; main.proof checked
+soma build -v main.soma     the stock, computed; main.exp checked
 soma explore main.soma      no escape hatch: stdpp is checked by Soma's kernel
 ```
 
 ```
 soma.toml     the project: its name, version and description
 main.soma     the stock, restock and sell, on stdpp's gmap
-main.proof    restocking adds, selling one item changes no other, selling never sells what is not there
+main.exp    restocking adds, selling one item changes no other, selling never sells what is not there
 ```
 
 ## A Rocq library
@@ -45,7 +45,7 @@ sell "apples" 5 stock.
      = None
 ```
 
-`main.proof` uses stdpp's lemma `lookup_insert_ne` and its tactic
+`main.exp` uses stdpp's lemma `lookup_insert_ne` and its tactic
 `simplify_map_eq`, as any Rocq proof would:
 
 ```rocq

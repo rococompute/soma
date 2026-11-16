@@ -1,7 +1,7 @@
 (** lists/scores/total.soma is under lists/, so the rules of lists/
-    (lists/lists.lang) apply to it: [zip_with] and [pipe] are in scope
-    without importing anything, and what lists/lists.proof proves about
-    them is usable in total.proof. *)
+    (lists/lists.ext) apply to it: [zip_with] and [pipe] are in scope
+    without importing anything, and what lists/lists.exp proves about
+    them is usable in total.exp. *)
 
 (** a round's points, and the bonus for each *)
 points := [3, 1, 4].

@@ -86,7 +86,7 @@ the `wasm` library, so the build needs that library.
 - `soma repl [FILE]` is an interactive session (`rocq repl`, prompt
   `Soma <`), with FILE's definitions loaded first (`-l FILE`).
 - `soma build --fill FILE` writes the proofs that `The rest follows.`
-  found in `FILE.proof` (see Proof sentences).
+  found in `FILE.exp` (see Proof sentences).
 - `soma explore FILE` reviews FILE and the project files it imports (see
   Exploring a program).
 - `soma compile FILE` does both `soma build` and `soma explore`, in one
@@ -95,22 +95,34 @@ the `wasm` library, so the build needs that library.
 - `soma help` lists the commands, and `soma build --help` the options of
   build and run (those of `rocq c`).
 
-A program `FILE.soma` has its lemmas and theorems in `FILE.proof`, next
-to it: a `.soma` or `.lang` file cannot start a proof (`Theorem`, `Lemma`,
+A program `FILE.soma` can have two files next to it, read in this order:
+
+1. `FILE.ext`, its **extensions**: ways to extend the language before the
+   program is compiled and verified, such as macros and readers (see
+   Macros and Readers).
+2. `FILE.soma`, the program.
+3. `FILE.exp`, its **expectations**: what to expect of the program as
+   written, its lemmas and theorems, checked after it.
+
+They were `FILE.lang` and `FILE.proof`. A file left with its old name is
+an error that says how to rename it, since it would otherwise go unread.
+
+A program `FILE.soma` has its lemmas and theorems in `FILE.exp`, next
+to it: a `.soma` or `.ext` file cannot start a proof (`Theorem`, `Lemma`,
 a `Definition` proved interactively, ...; `vernac/vernactypes.ml`), while
 Rocq's `.v` files can. Checking `FILE.soma` (`rocq c`, so `soma build` and `soma
-run`) reads the program, then `FILE.proof` in the program's environment
+run`) reads the program, then `FILE.exp` in the program's environment
 (`toplevel/ccompile.ml`): the proofs see what it defines and imports, JSX
 included, without importing anything. A proof that does not hold fails the
-build, with its location in `FILE.proof`, and no `.vo` or MirageOS image is
+build, with its location in `FILE.exp`, and no `.vo` or MirageOS image is
 made; the theorems are part of the program's library. `soma build
-FILE.proof` and `soma run FILE.proof` stand for `FILE.soma`.
-`examples/example_files/reason_counter/reason_counter.proof` and `examples/example_files/reason_components/reason_components.proof` are
+FILE.exp` and `soma run FILE.exp` stand for `FILE.soma`.
+`examples/example_files/reason_counter/reason_counter.exp` and `examples/example_files/reason_components/reason_components.exp` are
 examples; `test-suite/misc/soma_proof.sh` tests it.
 
 ### Proof sentences
 
-A `.proof` file imports `theories/Soma/Proof.v` (and only a `.proof`
+A `.exp` file imports `theories/Soma/Proof.v` (and only a `.exp`
 file does), so that a proof can be written as sentences that say what
 each step does, for people and agents to read without replaying it.
 Each sentence is checked: one that states the goal or a fact fails
@@ -157,7 +169,7 @@ goal (not Rocq's), and Rocq's lemmas that could prove the goal, for 20
 seconds at most. It reports the proof it found as sentences, each printed
 so that it reads back as what it states. `soma build` says how many proofs
 were found, `soma build -v` prints them, and `soma build --fill` writes
-each in place of its `The rest follows.` in `FILE.proof`, indented as the
+each in place of its `The rest follows.` in `FILE.exp`, indented as the
 sentence was, so that the proof no longer depends on the search. When the
 search finds nothing, the build fails with what is still to show, as
 sentences to start from:
@@ -177,13 +189,13 @@ tests it.
 `lia`, `ring`, `nia` and propositional logic; `By t` adds `t`, applied
 or rewritten with. A step it cannot take is split into smaller
 sentences. Sentences are tactics, so they mix with any other tactic. In
-a `.proof` file, a tactic acts on one goal at a time (`Default Goal
+a `.exp` file, a tactic acts on one goal at a time (`Default Goal
 Selector "!"`): with several goals open, each is focused with a bullet or
 braces. Notations in a sentence are read as in a theorem's statement:
 `*` is on `nat`s unless scoped, as in `(sqrt 2 * sqrt 2 = 2)%R`. All the
-example `.proof` files are written in sentences, `sqrt2_irrational.proof`
+example `.exp` files are written in sentences, `sqrt2_irrational.exp`
 (top down, with `It suffices to show that ... as ...` blocks and strong
-induction) and `reason_counter.proof` (cases and induction) among them;
+induction) and `reason_counter.exp` (cases and induction) among them;
 the tactics they replace are in their history.
 
 ### Record updates
@@ -220,9 +232,9 @@ Use `{| r with balance := v |}` in place of `with_balance r v`.
 both updates, without a full-copy helper. Run `soma build main.soma` in that
 project, then `./main.exe`; it prints `Ada 25 true | Grace 30 true`.
 
-### Macros: `.lang` files
+### Macros: `.ext` files, a program's extensions
 
-Macros are defined in `.lang` files, with `Macro name args := body.`: a
+Macros are defined in `.ext` files, with `Macro name args := body.`: a
 macro is a function from the code of its arguments (`args : list syntax`)
 to the code it stands for (a `syntax`), in `theories/Soma/Macro.v`. A use
 of a macro in scope, `name a b`, looks like a call: when it is
@@ -245,24 +257,24 @@ macro. Expansions nested 1000 deep stop with an error.
 
 Macros are in scope only where they are asked for:
 
-- `FILE.lang`, next to `FILE.soma`, is read before the program, so its
-  macros are in scope in `FILE.soma` and `FILE.proof` (and in `soma repl
+- `FILE.ext`, next to `FILE.soma`, is read before the program, so its
+  macros are in scope in `FILE.soma` and `FILE.exp` (and in `soma repl
   FILE.soma`).
-- Another `.lang` file is in scope where it is loaded, `Load
-  "other.lang".`, or, compiled by itself (`rocq c other.lang`), where it
+- Another `.ext` file is in scope where it is loaded, `Load
+  "other.ext".`, or, compiled by itself (`rocq c other.ext`), where it
   is imported, `Require Import other.` (not with `Require` alone).
-- `Macro` can only be used in a `.lang` file, and the `Macro` library
-  (`syntax`, `App`, ...) is only in scope there: a `.lang` file is loaded in
+- `Macro` can only be used in a `.ext` file, and the `Macro` library
+  (`syntax`, `App`, ...) is only in scope there: a `.ext` file is loaded in
   a module of its own that imports it.
 
-`examples/example_files/macros/macros.lang` and `examples/example_files/macros/macros.soma` are an example;
+`examples/example_files/macros/macros.ext` and `examples/example_files/macros/macros.soma` are an example;
 `test-suite/misc/soma_macros.sh` tests it.
 
 ### Readers: other syntax, read from text
 
 A macro is given code that Soma has already parsed, so it can only change
 what that code means, not how it is written. A reader is given the text:
-`Reader name text := body.`, in a `.lang` file, makes `name` a function
+`Reader name text := body.`, in a `.ext` file, makes `name` a function
 from a program's text (`text : string`) to its top-level forms (a `list
 item`, in `theories/Soma/Macro.v`):
 
@@ -287,24 +299,24 @@ A reader in scope is used two ways:
   The text is a string, its quotes written doubled.
 - A file whose first line is `#lang name` is read by `name` whole: the
   rest of the file is the text, which Soma's parser never sees. The
-  reader goes in `FILE.lang` next to it, or in a `.lang` file that
-  `FILE.lang` loads. Such a file is compiled, run, and imported by
+  reader goes in `FILE.ext` next to it, or in a `.ext` file that
+  `FILE.ext` loads. Such a file is compiled, run, and imported by
   another file of its project (`Import FILE.`) as any other is.
 
-What a reader defines is in scope after it, in `FILE.proof`, and where
+What a reader defines is in scope after it, in `FILE.exp`, and where
 the file is imported; Soma's review counts it, and its escape hatches, as
 it does the rest. The reader runs when the program is checked, as a
 macro does: it is a Soma function, so it reads no file and has no
 effect but its forms. `examples/example_files/lisp/` is a program in
-s-expressions, `#lang lisp`, with its reader in `lisp.lang` and proofs
-about what it defines in `lisp.proof`; `test-suite/misc/soma_readers.sh`
+s-expressions, `#lang lisp`, with its reader in `lisp.ext` and proofs
+about what it defines in `lisp.exp`; `test-suite/misc/soma_readers.sh`
 tests readers, and that example.
 
 ### Projects: `Import` compiles what it imports
 
 A program can be several files in a folder, its project. In a Soma file,
 `Import X`, where `X` is no module in scope, is the file `X.soma` (or
-`X.lang`) of the project, and `Import X.Y` is `X/Y.soma`. It is compiled
+`X.ext`) of the project, and `Import X.Y` is `X/Y.soma`. It is compiled
 into the project's `.soma-cache` (`.soma-cache/X/Y.vo`, the library
 `X.Y`) unless the cache has it up to date, then loaded and opened, as
 `Require Import` would. A name that is no file of the project is a
@@ -316,9 +328,9 @@ keep the cache) work from any folder (`vernac/somaImport.ml`, hooked in
 `vernac/synterp.ml`).
 
 A file is compiled by a `rocq c` of its own, which compiles what it
-imports in the same way. Its `.proof` is checked then, and it is not made
+imports in the same way. Its `.exp` is checked then, and it is not made
 a unikernel. When it succeeds, it writes a stamp next to the `.vo`: the
-hash of the source, its `.proof` and its `.lang`, the digest of each
+hash of the source, its `.exp` and its `.ext`, the digest of each
 project file it imported, as compiled, and the digest of each library from
 elsewhere it was compiled with (Stdlib, `Soma.JSX`, ...). A compiled file
 is used while its stamp holds: its sources unchanged, what it imports up
@@ -339,7 +351,7 @@ others, is `Import cycle: a -> b -> a.`
 `soma build` also keeps a store of compiled projects, shared by the
 checkouts of a machine: `$SOMA_CACHE`, or else `$XDG_CACHE_HOME/soma`
 (`~/.cache/soma` without it), with a `.soma-cache` under a key of the
-project's sources: the path and bytes of each `.soma`, `.proof`, `.lang`,
+project's sources: the path and bytes of each `.soma`, `.exp`, `.ext`,
 `.definition`, `.wasm`, `.ml` and `.lean` file, `soma.toml`, `soma.lock`, and
 Soma itself. A checkout without a `.soma-cache` starts from the one of the
 same key. A `.definition`'s `.vo` names the `FILE.ml` beside it by its path
@@ -515,7 +527,7 @@ in the build's cache, and what imports it need not name them.
 
 **A dependency is checked, not run.** Fetching runs nothing: no hooks and no
 submodules, and git never asks for a password. Compiling a dependency, fetched
-or a checkout, with its `.proof`, its own imports and the Rocq libraries it
+or a checkout, with its `.exp`, its own imports and the Rocq libraries it
 names, refuses each command whose argument says where to write:
 
 ```
@@ -611,9 +623,9 @@ for by their shape, as Hoogle and Loogle do:
 ```console
 $ soma search discount
 pricing-1.1/rates.soma:4: pricing.rates.discount : nat -> nat -> nat
-main.proof:2: main.nothing_lost : forall percent price : nat, percent <= 100 -> ...
+main.exp:2: main.nothing_lost : forall percent price : nat, percent <= 100 -> ...
   assumes pricing.rates.discount_small
-pricing-1.1/rates.proof:2: pricing.rates.discount_small : forall percent price : nat, ...
+pricing-1.1/rates.exp:2: pricing.rates.discount_small : forall percent price : nat, ...
   is assumed, and not proved
 
 $ soma search 'list nat -> nat'
@@ -696,14 +708,14 @@ was edited may be the point of the release.
 
 ### The rules of a folder
 
-`X/X.lang` is the rules of the folder `X/`, and `X/X.proof` their
-proofs, unless `X/X.soma` exists, whose `.lang` and `.proof` they then
+`X/X.ext` is the rules of the folder `X/`, and `X/X.exp` their
+proofs, unless `X/X.soma` exists, whose `.ext` and `.exp` they then
 are. Every Soma file under `X/`, in its subfolders too, is compiled as if
 it started with `Import X.X`, after the rules of the folders around `X/`
-(the project's own first: `ROOT/NAME.lang`, by its `soma.toml`'s name, or
-`ROOT/ROOT.lang` without one). So what the rules define,
+(the project's own first: `ROOT/NAME.ext`, by its `soma.toml`'s name, or
+`ROOT/ROOT.ext` without one). So what the rules define,
 macros and theorems included, is in scope in those files and their
-`.proof`s, and it is one library, compiled once into `.soma-cache` with
+`.exp`s, and it is one library, compiled once into `.soma-cache` with
 its proofs checked, and recompiled when it changes, as any import
 (`folder_rules` in `vernac/somaImport.ml`, called from
 `toplevel/ccompile.ml`). The rules of a nested folder see those of the
@@ -714,8 +726,8 @@ The folders are those from the project to the file. In a project with a
 `soma.toml`, a file built by itself has the rules of the folders from the
 root to it. Without one, a file built by itself is its own project, so
 the rules of the folders above it do not apply; a warning says so, and a
-`soma.toml` or `SOMA_PROJECT_ROOT` sets the project. A `X/X.proof`
-without `X/X.lang` is an error.
+`soma.toml` or `SOMA_PROJECT_ROOT` sets the project. A `X/X.exp`
+without `X/X.ext` is an error.
 
 `examples/example_projects/folder_rules` is an example;
 `test-suite/misc/soma_folder_rules.sh` tests it.
@@ -751,7 +763,7 @@ against the module: it is an export, with as many arguments, whose
 type is `N`, `Z`, `float` (an `f32` rounds), `Any`, or the module's own
 `i64` or `i32` (of `Soma.Wasm`, which a `.definition` exports, with
 `float` and its literals). A `.definition` defines nothing, and
-proves nothing (its `.proof` may).
+proves nothing (its `.exp` may).
 
 The declarations are parameters to the kernel, which never computes
 them: no proof holds by running the module. Soma computes them when it
@@ -857,8 +869,8 @@ values named by a keyword of Soma's (`return`).
 
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
-`.lang`; given a name without an extension, they look for `.soma` first,
-then `.v`, then `.lang`.
+`.ext`; given a name without an extension, they look for `.soma` first,
+then `.v`, then `.ext`.
 `rocq makefile`, `rocq doc` and editor modes still only know `.v`.
 
 Every file starts with the Soma prelude, `theories/Soma/Soma.v`,
@@ -1254,7 +1266,7 @@ gradual program a theorem is about, and are not evidence: theorems about
 gradual programs, such as `forall n, succ_dyn n = n + 1`, and theorems
 about records with fields of type `Any` are not reported. A fake that
 occurs in the statement itself is its subject, and is not reported either.
-In `.proof` files this is an error (`theories/Soma/Proof.v`); in Rocq's
+In `.exp` files this is an error (`theories/Soma/Proof.v`); in Rocq's
 `.v` files, a warning:
 
 ```rocq
@@ -1708,7 +1720,7 @@ program's `restart_policy` (or `default_policy 3 1024`) what to do: the
 outcome is given to it as a term of Soma and the decision evaluated by
 Soma, so that what runs is the policy that is proved. A run stopped from
 outside ends supervision. `examples/example_files/mirage_supervised/mirage_supervised.soma`
-is a server with its own policy, whose `.proof` proves that it never runs
+is a server with its own policy, whose `.exp` proves that it never runs
 again a failed cast, stops after 5 restarts and asks for at most 512 MB;
 `dev/mirage-check.sh` checks a run out of memory in 64 MB, run again with
 128 (`supervised`).

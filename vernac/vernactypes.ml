@@ -48,13 +48,13 @@ module Proof = struct
   module LStack = Vernacstate.LemmaStack
 
   (* Soma: a program's lemmas and theorems, and anything else proved
-     interactively, are in FILE.proof: no proof can be started in a .soma
-     or .lang file (Rocq's .v files are not concerned) *)
+     interactively, are in FILE.exp: no proof can be started in a .soma
+     or .ext file (Rocq's .v files are not concerned) *)
   let check_proof_file ?loc () = match loc with
     | Some { Loc.fname = Loc.InFile { file; _ }; _ }
-      when List.exists (Filename.check_suffix file) [".soma"; ".lang"; ".definition"] ->
+      when List.exists (Filename.check_suffix file) [".soma"; ".ext"; ".definition"] ->
       CErrors.user_err ?loc
-        Pp.(str "Proofs go in a .proof file: the lemmas and theorems of FILE.soma are in FILE.proof, next to it.")
+        Pp.(str "Proofs go in a .exp file: the lemmas and theorems of FILE.soma are in FILE.exp, next to it.")
     | _ -> ()
 
   type state = Declare.Proof.t

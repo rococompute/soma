@@ -989,7 +989,7 @@ let interp_mutual_using env cinfo bodies_types using =
    gradual primitive, [unk], [raise] or a cast to the statement it stands
    for, in the proof or in what it uses (GradualTyping.proof_fake_evidence).
    A theorem about a gradual program, whose casts are its subject, is not
-   reported. In .proof files, this is an error (theories/Soma/Proof.v).
+   reported. In .exp files, this is an error (theories/Soma/Proof.v).
    Deferred (asynchronous) proofs are not forced for this. *)
 let warn_gradual_proof =
   CWarnings.create ~name:"gradual-proof" ~category:CWarnings.CoreCategories.vernacular

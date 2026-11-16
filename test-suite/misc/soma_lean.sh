@@ -36,7 +36,7 @@ EOT
 cat > main.soma <<'EOT'
 Import defs facts.
 EOT
-cat > main.proof <<'EOT'
+cat > main.exp <<'EOT'
 Theorem double_even : forall n, Nat.even (double n) = true.
 Proof.
   Take n : nat.

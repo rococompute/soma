@@ -1,7 +1,7 @@
 (** Where a page starts: the count in the address ([/?count=5]), or else
     in the cookie [count] the server set, or else 0. A count is accepted
     only when it is a whole number, 0 or more, written as Soma writes one:
-    request.proof proves that nothing else is. *)
+    request.exp proves that nothing else is. *)
 
 (** * Counts *)
 

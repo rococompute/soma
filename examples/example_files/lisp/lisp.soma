@@ -1,5 +1,5 @@
 #lang lisp
-; Lisp, read by the reader in lisp.lang: each form below is a Soma
+; Lisp, read by the reader in lisp.ext: each form below is a Soma
 ; definition or term, checked and evaluated as if written in Soma.
 
 (define (square x) (* x x))

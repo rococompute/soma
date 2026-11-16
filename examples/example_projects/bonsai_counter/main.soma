@@ -8,7 +8,7 @@
         soma run main.soma      serves it at http://localhost:8080
         soma build main.soma    writes main.html and main.js
 
-    main.proof proves that whatever buttons are clicked, the count stays
+    main.exp proves that whatever buttons are clicked, the count stays
     at most [limit], and that what main runs is [step]. *)
 Require Import JSX.
 Import render.

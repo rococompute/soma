@@ -1,4 +1,4 @@
-(** What is proved about the counter, by the theorems of pages/pages.proof,
+(** What is proved about the counter, by the theorems of pages/pages.exp,
     which hold for every app of pages/: its count is the number of clicks,
     and each click increases it. *)
 

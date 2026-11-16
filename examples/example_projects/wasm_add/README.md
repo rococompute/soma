@@ -9,7 +9,7 @@ add.definition    what Soma takes add.wasm to be
 mul.wasm          a module without a .definition: mul and average (rust/mul)
 main.soma         Soma code built on add, fib and mul
 image.soma        a unikernel whose main calls add.wasm
-main.proof        what follows if add adds
+main.exp        what follows if add adds
 model.soma        does add add? tested on sums small and large
 rust/             the Rust crates; rust/build.sh builds both modules
 ```
@@ -129,7 +129,7 @@ not declare is of type `Any` in the same way.
 
 Soma does not compute the module when it checks a proof: to the kernel,
 `add` and `fib` are parameters, so no theorem holds by running Rust code.
-`main.proof` proves what follows if `add` adds, with that as the
+`main.exp` proves what follows if `add` adds, with that as the
 theorem's hypothesis:
 
 ```rocq

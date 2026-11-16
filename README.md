@@ -2,10 +2,11 @@
 
 Soma is a programming language with gradual dependent types. Types can be
 as loose as you like (`Any`, checked at run time) or as precise as a
-proof, and a program's theorems sit beside it, in `FILE.proof`, and are
-checked when it builds. A program prints its result, or is built into an
-OCaml executable, a MirageOS unikernel or a JSX page, and it can use OCaml
-and WebAssembly modules.
+proof. A program's expectations, its theorems, sit beside it in `FILE.exp`
+and are checked when it builds, and its extensions, macros and readers
+that extend the language, in `FILE.ext`, read before it. A program prints
+its result, or is built into an OCaml executable, a MirageOS unikernel or
+a JSX page, and it can use OCaml and WebAssembly modules.
 
 Its kernel implements GCIC^G: conservativity and graduality are kept, and
 normalization is given up, so type checking may not terminate.

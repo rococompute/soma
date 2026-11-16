@@ -12,14 +12,14 @@ main.soma            main: serve 8080 answer, a MirageOS image (main.hvt)
 model.soma           the counter as a state machine, explored (Explore model.)
 four_digits.soma     a property that does not hold, and how it is reported
 pages/
-  pages.lang         the rules of pages/: the language, and the state
-  pages.proof        the state, from any start, strictly increases
+  pages.ext         the rules of pages/: the language, and the state
+  pages.exp        the state, from any start, strictly increases
   counter.soma       the counter, in the language
 web/
   request.soma       where a page starts: address, cookie, or 0
-  request.proof      only whole numbers, 0 or more, are accepted
+  request.exp      only whole numbers, 0 or more, are accepted
   server.soma        the response to each request
-  server.proof       what is served: the state increases, the +1 link is accepted
+  server.exp       what is served: the state increases, the +1 link is accepted
 ```
 
 ## Running it
@@ -48,7 +48,7 @@ requests against the image (`counter-server`).
 
 ## What is proved
 
-**Only whole numbers, 0 or more** (`web/request.proof`). The count is an
+**Only whole numbers, 0 or more** (`web/request.exp`). The count is an
 `N`, which has no negative numbers, and the parser accepts a string only
 when it is exactly how Soma writes some `N`:
 
@@ -62,10 +62,10 @@ when it is exactly how Soma writes some `N`:
   `rejected_is_not_accepted`: where the start comes from, and that a
   count is rejected only when it is not accepted.
 
-**The state strictly increases** (`pages/pages.proof`, as in
+**The state strictly increases** (`pages/pages.exp`, as in
 `sexp_html`, now from any start): the only action is +1, so the state
 after some clicks is the start and one more for each, and each click
-increases it. `web/server.proof` puts the two together:
+increases it. `web/server.exp` puts the two together:
 `served_state_increases` holds for the start of any request that is
 accepted, and `next_count_is_accepted`: the +1 link of the page at `n`
 carries `n + 1`, which is greater, and which the server accepts.

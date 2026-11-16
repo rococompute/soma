@@ -371,7 +371,7 @@ type synterp_vernac_expr =
   | VernacLoad of verbose_flag * string
   | VernacRead of Libnames.qualid * string CAst.t * bool
   (** Soma: [Read reader "text".]: the forms that [reader], a reader of a
-      .lang file, reads in the text, run as if written there. The text's
+      .ext file, reads in the text, run as if written there. The text's
       location is where it starts; the flag says it was written in a
       string, its quotes doubled, as against a file read with [#lang]. *)
   | VernacReservedNotation of infix_flag * (lstring * syntax_modifier CAst.t list)

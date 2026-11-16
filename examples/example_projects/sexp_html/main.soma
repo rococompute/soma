@@ -1,6 +1,6 @@
 (** The counter of pages/counter.soma, as HTML: before any click, and
     after three clicks of +1. main.soma is not under pages/, so the
-    language of pages/ (pages/pages.lang) is not given to it: it imports it,
+    language of pages/ (pages/pages.ext) is not given to it: it imports it,
     for [Increment] and, with JSX, [render]. See README.md. *)
 Import pages.pages.
 Import pages.counter.

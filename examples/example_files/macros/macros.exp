@@ -1,4 +1,4 @@
-(** What is proved about macros.soma. This file is read after macros.lang
+(** What is proved about macros.soma. This file is read after macros.ext
     and macros.soma, in their environment: [square], [pow8] and the macros
     are in scope. Building or running macros.soma checks it, and fails if a
     proof does not hold. Proofs are written as checked sentences

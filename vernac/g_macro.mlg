@@ -9,7 +9,7 @@
 (************************************************************************)
 
 (* Soma: [Macro name args := body.] and [Reader name text := body.], in
-   .lang files (vernac/somaMacro.ml) *)
+   .ext files (vernac/somaMacro.ml) *)
 
 DECLARE GLOBAL PLUGIN
 
@@ -30,7 +30,7 @@ VERNAC COMMAND EXTEND SomaMacro CLASSIFIED AS SIDEFF
   { SomaMacro.define ?loc:name.CAst.loc ~name ~args body }
 END
 
-(* Soma: [Reader name text := body.], in .lang files *)
+(* Soma: [Reader name text := body.], in .ext files *)
 VERNAC COMMAND EXTEND SomaReader CLASSIFIED AS SIDEFF
 | [ "Reader" identref(name) identref(text) ":=" macro_body(body) ] ->
   { SomaMacro.define_reader ?loc:name.CAst.loc ~name ~text body }

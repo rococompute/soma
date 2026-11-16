@@ -8,9 +8,9 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(* Soma: [Import] compiles what it imports. In a Soma file (.soma, .proof,
-   .lang), [Import X], where [X] is no module in scope, is the file
-   [X.soma] (or [X.lang]) of the program's project, compiled first when it
+(* Soma: [Import] compiles what it imports. In a Soma file (.soma, .exp,
+   .ext), [Import X], where [X] is no module in scope, is the file
+   [X.soma] (or [X.ext]) of the program's project, compiled first when it
    is not compiled yet or changed since, then loaded and opened as by
    [Require Import X]; or else a compiled library ([Import Sandbox]), as by
    [Require Import]. [X.Y] is the file [X/Y.soma].
@@ -19,7 +19,7 @@
    being built (vernac/somaProject.ml), or else the program's folder
    ($SOMA_PROJECT_ROOT for the compilations it starts). What is compiled
    goes to its .soma-cache, with a stamp: the hash of the source (with
-   its .proof and .lang) and the digests of what it imports, as compiled,
+   its .exp and .ext) and the digests of what it imports, as compiled,
    without their proofs.
    A cached file is used while its stamp holds: its source unchanged, and
    what it imports up to date and the same as when it was compiled. A
@@ -47,7 +47,7 @@ let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
 let rocq_library_var = "SOMA_ROCQ_LIBRARY"
 
-let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".proof"; ".lang"; ".definition"]
+let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".exp"; ".ext"; ".definition"]
 
 let file_of_loc = function
   | Some { Loc.fname = Loc.InFile { file; _ }; _ } -> Some file
@@ -74,8 +74,8 @@ let root_of_dir dir =
   | Some root -> (SomaProject.load root).root
   | None -> dir
 
-(* The rules of a project's root are NAME.lang, by its soma.toml, which a
-   copy of it elsewhere still has; without one, FOLDER/FOLDER.lang *)
+(* The rules of a project's root are NAME.ext, by its soma.toml, which a
+   copy of it elsewhere still has; without one, FOLDER/FOLDER.ext *)
 let root_rules_name root =
   if Sys.file_exists (Filename.concat root SomaProject.file_name)
   then (SomaProject.load root).name
@@ -147,7 +147,7 @@ let refuse_in_dependency ?(does = "writes a file") command =
   if Option.has_some (env_value prefix_var) then begin
     let loc = Loc.get_current_command_loc () in
     let name = DirPath.to_string (Lib.library_dp ()) in
-    (* the program and its .proof are one library; say which *)
+    (* the program and its .exp are one library; say which *)
     let where = match Option.bind loc (fun l -> file_of_loc (Some l)) with
       | Some f when not (List.exists (Filename.check_suffix f) [".soma"; ".v"]) -> name ^ Filename.extension f
       | _ -> name in
@@ -181,7 +181,7 @@ let path_of_qualid qid =
 let source_of root path =
   List.find_map (fun ext ->
       let f = Filename.concat root (path ^ ext) in
-      if Sys.file_exists f then Some f else None) [".soma"; ".lang"; ".definition"; ".wasm"]
+      if Sys.file_exists f then Some f else None) [".soma"; ".ext"; ".definition"; ".wasm"]
 
 let vo_of p path = Filename.concat p.cache_dir (path ^ ".vo")
 let stamp_of p path = Filename.concat p.cache_dir (path ^ ".stamp")
@@ -263,7 +263,7 @@ let locate ?loc p path =
             str (if files = [] then "It has no .soma file at its root."
                  else "Import " ^ example ^ ". Its root has " ^ String.concat ", " files ^ "."))
 
-(* What a compilation reads of a program: its source, .proof and .lang *)
+(* What a compilation reads of a program: its source, .exp and .ext *)
 let source_hash src =
   let base = Filename.remove_extension src in
   let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
@@ -277,7 +277,7 @@ let source_hash src =
   let ml_digest =
     if Sys.file_exists ml then "rel:" ^ Digest.to_hex (Digest.file ml) else "-" in
   Digest.to_hex (Digest.string (String.concat " "
-    [one src; one (base ^ ".proof"); one (base ^ ".lang"); one (base ^ ".wasm");
+    [one src; one (base ^ ".exp"); one (base ^ ".ext"); one (base ^ ".wasm");
      ml_digest; one (base ^ ".lean")]))
 
 let digest f = Digest.to_hex (Digest.file f)
@@ -551,13 +551,35 @@ let names_another_library ?loc qid mp = match mp with
     DirPath.to_string dir <> String.map (function '/' -> '.' | c -> c) (qualified p path)
   | ModPath.MPbound _ | ModPath.MPdot _ -> false
 
-(* A folder's rules: X/X.lang, with its proofs in X/X.proof, apply to every
+(* A program's extensions (macros and readers) were in FILE.lang and its
+   expectations (lemmas and theorems) in FILE.proof; they are FILE.ext,
+   read before the program, and FILE.exp, checked after it. A file left
+   with its old name would be passed over without a word, its theorems
+   unchecked, so one is an error that says how to rename it. *)
+let renamed_extensions =
+  [".lang", ".ext", "extensions (macros and readers)";
+   ".proof", ".exp", "expectations (lemmas and theorems)"]
+
+let refuse_old_names base =
+  let base = if CString.is_prefix "./" base then String.sub base 2 (String.length base - 2) else base in
+  List.iter (fun (old_ext, new_ext, what) ->
+      let old_f = base ^ old_ext and new_f = base ^ new_ext in
+      if Sys.file_exists old_f then
+        CErrors.user_err Pp.(
+          str old_f ++ str " is not read: a program's " ++ str what ++ str " are in " ++
+          str (Filename.basename new_f) ++ str " now. " ++
+          (if Sys.file_exists new_f
+           then str "Move what it has into " ++ str new_f ++ str " and delete it."
+           else str "Rename it: git mv " ++ str old_f ++ str " " ++ str new_f)))
+    renamed_extensions
+
+(* A folder's rules: X/X.ext, with its proofs in X/X.exp, apply to every
    Soma file under X/, as if each started with [Import X.X]; so they are
    compiled once, into the cache, and what they define, macros and
    theorems included, is the same for all. Unless X/X.soma exists: then
    they are its own, as for any program. *)
 let is_folder_rules f =
-  Filename.check_suffix f ".lang" &&
+  Filename.check_suffix f ".ext" &&
   let base = Filename.remove_extension f in
   let dir = CUnix.canonical_path_name (Filename.dirname (absolute f)) in
   Filename.basename base = (if SomaProject.find_root dir = Some dir then root_rules_name dir else Filename.basename dir) &&
@@ -579,10 +601,10 @@ let folder_rules file =
       let rec above d =
         let up = Filename.dirname d in
         if up = d then ()
-        else if Sys.file_exists (Filename.concat up (Filename.basename up ^ ".lang"))
+        else if Sys.file_exists (Filename.concat up (Filename.basename up ^ ".ext"))
              && not (Sys.file_exists (Filename.concat up (Filename.basename up ^ ".soma")))
         then Feedback.msg_warning Pp.(
-            str (Filename.basename up ^ "/" ^ Filename.basename up ^ ".lang") ++
+            str (Filename.basename up ^ "/" ^ Filename.basename up ^ ".ext") ++
             str ", the rules of the folder " ++ str (Filename.basename up ^ "/") ++
             str " this file is under, does not apply to it when it is built by itself: build the program that imports it, " ++
             str "or give the project a " ++ str SomaProject.file_name ++ str " (its root), or set " ++
@@ -602,19 +624,20 @@ let folder_rules file =
   match folders with
   | None -> []
   | Some folders ->
-    (* the root's rules are ROOT/ROOT.lang, a folder X's X/X.lang *)
+    (* the root's rules are ROOT/ROOT.ext, a folder X's X/X.ext *)
     let rec paths prefix = function
       | [] -> []
       | x :: rest -> let p = prefix ^ x in (p ^ "/" ^ x) :: paths (p ^ "/") rest in
     let self = Filename.concat dir (Filename.remove_extension (Filename.basename file)) in
     let rules = List.filter_map (fun path ->
         let base = Filename.concat root path in
-        let lang = base ^ ".lang" in
+        let lang = base ^ ".ext" in
+        refuse_old_names base;
         if base = self || Sys.file_exists (base ^ ".soma") then None
         else if Sys.file_exists lang then Some (path, lang)
-        else if Sys.file_exists (base ^ ".proof") then
-          CErrors.user_err Pp.(str (path ^ ".proof") ++ str " has the proofs of the rules of its folder, " ++
-                               str (path ^ ".lang") ++ str ", which does not exist.")
+        else if Sys.file_exists (base ^ ".exp") then
+          CErrors.user_err Pp.(str (path ^ ".exp") ++ str " has the proofs of the rules of its folder, " ++
+                               str (path ^ ".ext") ++ str ", which does not exist.")
         else None) (root_rules_name root :: paths "" folders) in
     List.iter (fun (path, src) ->
         ensure p path src;

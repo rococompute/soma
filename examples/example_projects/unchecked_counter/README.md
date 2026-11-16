@@ -12,7 +12,7 @@ pages/               as in counter_server: the language, the state, its proofs
 web/
   request.soma       start_of request : Any, from the address, the cookie, or 0
   server.soma        page (start_of request): page takes an N
-  server.proof       counter_server's theorem, which still checks
+  server.exp       counter_server's theorem, which still checks
 ```
 
 The difference from `counter_server` is in `web/request.soma`:
@@ -52,7 +52,7 @@ Soma follows `start_of request` back into `start_of`, through its
 address and the cookie, and an `N`, the 0. A string is never an `N`, so
 the cast fails for every request that has a count, `41` as much as `-1`:
 a cast checks a type, and never converts. The same warning is on
-`served_state_increases` in `server.proof`: the theorem is about an `Any`
+`served_state_increases` in `server.exp`: the theorem is about an `Any`
 that may be a string, so for those requests it says nothing (below).
 
 ## When it runs
@@ -152,13 +152,13 @@ What main does outside the program:
 
 ## The proof that still checks
 
-`server.proof` proves `counter_server`'s theorem: the counter's state,
+`server.exp` proves `counter_server`'s theorem: the counter's state,
 from the start of any request, strictly increases. It checks: it holds
 for every `N`, and the start is an `N`, the cast's. But for a request
 with a count, that `N` is `raise`, an error, not a number; the theorem is
 true of it, and says nothing about what that request is served. In
 `counter_server`, the start is a number that the parser accepted, and
-`request.proof` says which.
+`request.exp` says which.
 
 ## What the warning looks at
 

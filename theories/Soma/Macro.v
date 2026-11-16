@@ -8,18 +8,18 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** * Macros, for .lang files
+(** * Macros, for .ext files
 
-    A .lang file defines macros: [Macro name args := body.] makes [name]
+    A .ext file defines macros: [Macro name args := body.] makes [name]
     a function from [args], the code its arguments were written as (a
     [list syntax]), to the code it stands for (a [syntax]). Where the
     macro is in scope, [name a b] is replaced by the code the function
     returns for [a] and [b], which is then checked as if it had been
-    written there. A macro is in scope in the .lang file after its
-    definition, in FILE.soma and FILE.proof when it is in FILE.lang, and
-    in a file that loads its .lang file ([Load "other.lang".]).
+    written there. A macro is in scope in the .ext file after its
+    definition, in FILE.soma and FILE.exp when it is in FILE.ext, and
+    in a file that loads its .ext file ([Load "other.ext".]).
 
-    This library is imported in .lang files only, and [Macro] can only be
+    This library is imported in .ext files only, and [Macro] can only be
     used there (vernac/somaMacro.ml). *)
 
 From Soma Require Import Strings.
@@ -59,7 +59,7 @@ Register Opaque as soma.macro.opaque.
 Register MacroError as soma.macro.error.
 
 (** * Readers
-    A .lang file can also define a reader: [Reader name text := body.]
+    A .ext file can also define a reader: [Reader name text := body.]
     makes [name] a function from the text of a program, a [string], to its
     top-level forms, a [list item]. [Read name "text".] in a Soma file,
     or a first line [#lang name] (the rest of the file is the text), runs

@@ -26,7 +26,7 @@ cat > lib/rates.soma <<'EOT'
 discount (percent price : nat) : nat := price * percent / 100.
 discounted (percent price : nat) : nat := price - discount percent price.
 EOT
-cat > lib/rates.proof <<'EOT'
+cat > lib/rates.exp <<'EOT'
 Axiom discount_small : forall percent price, discount percent price <= price.
 
 Theorem discount_le : forall percent price, percent <= 100 -> discount percent price <= price.
@@ -42,7 +42,7 @@ Fixpoint total (prices : list nat) : nat :=
   match prices with [] => 0 | p :: r => p + total r end.
 half (n : nat) : nat := n / 2.
 EOT
-printf 'Theorem half_le : forall n, half n <= n.\nProof. intro n. unfold half. apply Nat.Div0.div_le_upper_bound. lia. Qed.\n' > app/main.proof
+printf 'Theorem half_le : forall n, half n <= n.\nProof. intro n. unfold half. apply Nat.Div0.div_le_upper_bound. lia. Qed.\n' > app/main.exp
 cd app
 
 # * A name: itself first, wherever it is, with its file and line
@@ -61,7 +61,7 @@ if grep -A1 'lib.rates.discounted_le :' out.log | grep -q 'assumes'; then cat ou
 # this project's own files, by a path from here
 search half
 first 'main.soma:4: main.half : nat -> nat'
-says 'main.proof:1: main.half_le :'
+says 'main.exp:1: main.half_le :'
 # a theorem by its own name, and only it
 search discount_le
 [ "$(grep -c ' : ' out.log)" = 1 ] || { cat out.log; exit 1; }

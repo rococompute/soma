@@ -1,7 +1,7 @@
 (** The rules of the folder lists/: every Soma file under lists/,
     lists/scores/ included, has what this file defines, as if it started
     with [Import lists.lists]. It is compiled once, with its proofs in
-    lists.proof, and shared by all of them. *)
+    lists.exp, and shared by all of them. *)
 
 (** [zip_with f xs ys]: [f] on the elements of [xs] and [ys] in pairs, as
     far as the shorter list goes *)

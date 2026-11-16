@@ -1,7 +1,7 @@
 # Example files
 
 Small Soma programs, each in a folder of its name: `NAME/NAME.soma`, with
-`NAME.proof` and `NAME.lang` next to it when it has them. Run one with
+`NAME.exp` and `NAME.ext` next to it when it has them. Run one with
 `soma run` (in `_build/install/default/bin` once Soma is built), which
 prints the value of its last line, or, for a Sandbox program, runs its
 image:
@@ -34,20 +34,20 @@ soma run examples/example_files/hello/hello.soma
   ints and strings, `g` turns ints into even ints (a number with a proof
   that it is even), and `h` and `j` take arguments of the types they
   compute. The types are passed as codes (`Int`, `Str`), since a function
-  cannot ask a type what it is. `type_functions.proof` proves that `j`
+  cannot ask a type what it is. `type_functions.exp` proves that `j`
   cannot be given an odd number, and that it returns a larger number for
   any number above 1.
-- `macros/`: macros, defined in `macros.lang` next to it, which is
+- `macros/`: macros, defined in `macros.ext` next to it, which is
   read first: `pipe` threads a value through functions, `swap` swaps two
   arguments, and `repeat` builds a string while the program is checked.
   `pow8 x` is defined as `pipe x square square square`, and
-  `macros.proof` proves that it is `x ^ 8`.
+  `macros.exp` proves that it is `x ^ 8`.
 - `lisp/`: a program written in s-expressions. Its first line, `#lang
-  lisp`, hands the rest of the file to the reader `lisp` in `lisp.lang`,
+  lisp`, hands the rest of the file to the reader `lisp` in `lisp.ext`,
   a Soma function that parses the text and returns Soma definitions and
   terms: `square`, `fact` (a `Recursive` definition that Rocq checks
   ends), `countdown` (defined through the Z combinator, so Soma's review
-  lists it as an escape hatch), `make-adder` and a `let`. `lisp.proof`
+  lists it as an escape hatch), `make-adder` and a `let`. `lisp.exp`
   proves facts about them, as about any Soma definition.
 - `sqrt2_irrational/`: a proof that the square root of 2
   is irrational (`irrational (sqrt 2)`, with `irrational` defined in the
@@ -59,17 +59,17 @@ soma run examples/example_files/hello/hello.soma
 - `reason_components/`: React components with JSX
   (`Require Import JSX.`): typed props, an untyped (`Any`) prop checked
   when the page is built, a fragment, rendered to HTML. What is proved
-  about them (`Greeting` escapes any name) is in `reason_components.proof`.
+  about them (`Greeting` escapes any name) is in `reason_components.exp`.
 - `reason_counter/`: a counter app (state, actions, a view);
-  `reason_counter.proof` proves that its count stays within a limit,
+  `reason_counter.exp` proves that its count stays within a limit,
   whatever buttons are clicked. Only the theorems have types.
 
-A program's lemmas and theorems are in `NAME.proof` next to `NAME.soma`
+A program's lemmas and theorems are in `NAME.exp` next to `NAME.soma`
 (a `.soma` file cannot have proofs): building or running the program
 reads it after the program and checks them, and fails if one does not
 hold. A proof can be written as checked sentences (`Take x : nat.`,
 `We need to show that ...`, `We conclude that ...`; see GRADUAL.md), as
-in `macros.proof` and `type_functions.proof`.
+in `macros.exp` and `type_functions.exp`.
 - `mirage_*/`: MirageOS unikernels. A program that has
   `Require Import Sandbox.` is built into an image, `<name>.hvt` next to it, by `soma build`,
   which says how to run it (see the Sandbox section of GRADUAL.md):
@@ -80,7 +80,7 @@ in `macros.proof` and `type_functions.proof`.
   - `mirage_http_server/`: an HTTP server, with `serve`, `now` and
     `random`.
   - `mirage_supervised/`: a server with a restart policy
-    (`soma run --supervise`); `mirage_supervised.proof` proves what the
+    (`soma run --supervise`); `mirage_supervised.exp` proves what the
     policy does.
   - `mirage_fetch/`: fetches a page from the server, with `args`,
     `fetch` and exit codes.

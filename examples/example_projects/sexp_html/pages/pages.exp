@@ -1,6 +1,6 @@
 (** What is proved about the state of every app of pages/: checked once,
     with the rules of pages/, and so for any view, any page. The state is
-    the count of pages.lang, and the only action is +1, so the count is the
+    the count of pages.ext, and the only action is +1, so the count is the
     number of clicks, and every click increases it. *)
 
 (** From any count, the clicks add one each. *)

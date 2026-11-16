@@ -9,7 +9,7 @@ single-file examples are in `../example_files/`.
 | `bonsai_counter` | a JSX counter run by Bonsai in the browser |
 | `cached_compilation` | `Import` compiles the project's files into `.soma-cache` |
 | `counter_server` | the `sexp_html` counter served over HTTP by a unikernel |
-| `folder_rules` | a folder's `X.lang` and `X.proof` apply to every file under it |
+| `folder_rules` | a folder's `X.ext` and `X.exp` apply to every file under it |
 | `owl_tictactoe` | trains a small tic-tac-toe neural network with Owl through the private `soma-owl` SSH dependency; repository access required |
 | `rocq_stdpp` | a shop's stock in std++, a Rocq library compiled by Soma |
 | `scores` | depends on `../tally` and uses its function and its theorem |

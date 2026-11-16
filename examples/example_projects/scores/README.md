@@ -4,7 +4,7 @@ A program that depends on another project, `../tally`, and uses its function
 and its theorem.
 
 ```
-soma build -v main.soma     3 of the 5 scores pass; main.proof checked
+soma build -v main.soma     3 of the 5 scores pass; main.exp checked
 soma explore main.soma      reviews this project and tally
 ```
 
@@ -12,7 +12,7 @@ soma explore main.soma      reviews this project and tally
 soma.toml     the project, and what it depends on
 soma.lock     the version of each dependency, written by soma
 main.soma     counts the scores that pass, with tally's count_if
-main.proof    passing scores <= length scores, by tally's theorem
+main.exp    passing scores <= length scores, by tally's theorem
 ```
 
 ## A dependency

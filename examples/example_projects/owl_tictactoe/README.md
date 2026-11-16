@@ -29,7 +29,7 @@ The test uses one OpenBLAS/OpenMP thread for this small workload.
 ## What runs
 
 - `game.soma`: legal moves, wins, eight board symmetries, and a minimax
-  teacher. `game.proof` checks basic rules without calling Owl.
+  teacher. `game.exp` checks basic rules without calling Owl.
 - `policy.soma`: player-relative board encoding, teacher targets, and a
   legal-move mask over the network's nine output scores.
 - `main.soma`: trains a 9-input, 32-hidden-unit tanh, 9-output softmax

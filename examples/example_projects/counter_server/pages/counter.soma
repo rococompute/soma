@@ -1,5 +1,5 @@
-(** A counter, in the language of pages/ (pages/pages.lang): a page with a
-    +1 link. Its state is the count of pages.lang, from the start the
+(** A counter, in the language of pages/ (pages/pages.ext): a page with a
+    +1 link. Its state is the count of pages.ext, from the start the
     server gives it, and its only action is [Increment]: this file gives
     the view, nothing else. [counter start] is the app from [start]. *)
 

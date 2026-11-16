@@ -67,12 +67,12 @@ soma hash b.soma | grep -q ' b.quad$'
 
 # * Another proof of a statement: the witness, and not the contract
 echo 'zero : nat := 0.' > p.soma
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > p.proof
-printf 'Theorem u2 : 1 = 1.\nProof. exact (t 1). Qed.\n' > q.proof
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. reflexivity. Qed.\n' > p.exp
+printf 'Theorem u2 : 1 = 1.\nProof. exact (t 1). Qed.\n' > q.exp
 printf 'Import p.\nkeep : nat := 1.\n' > q.soma
 T="$(contract q.soma p.t)"; TW="$(witness q.soma p.t)"
 U="$(contract q.soma q.u2)"; UW="$(witness q.soma q.u2)"
-printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > p.proof
+printf 'Theorem t : forall n : nat, n = n.\nProof. intro n. destruct n; reflexivity. Qed.\n' > p.exp
 same 'another proof: its contract' "$T" "$(contract q.soma p.t)"
 differ 'another proof: its witness' "$TW" "$(witness q.soma p.t)"
 same 'another proof: what mentions it, its contract' "$U" "$(contract q.soma q.u2)"
@@ -80,13 +80,13 @@ differ 'another proof: what mentions it, its witness' "$UW" "$(witness q.soma q.
 
 # * A proof that rests on more is another contract: Soma's logic is inconsistent
 # once unknown is used, and a theorem proves what its assumptions leave of it
-printf 'Theorem st : 1 = 1.\nProof. reflexivity. Qed.\n' > r.proof
+printf 'Theorem st : 1 = 1.\nProof. reflexivity. Qed.\n' > r.exp
 echo 'r0 : nat := 0.' > r.soma
-printf 'Import r.\nTheorem up : 1 = 1.\nProof. exact st. Qed.\n' > s.proof
+printf 'Import r.\nTheorem up : 1 = 1.\nProof. exact st. Qed.\n' > s.exp
 printf 'Import r.\ns0 : nat := 0.\n' > s.soma
 R="$(contract s.soma r.st)"; UP="$(contract s.soma s.up)"
 if line s.soma r.st | grep -q assumes; then echo "assumes nothing:"; line s.soma r.st; exit 1; fi
-printf 'Axiom cheat : 1 = 1.\nTheorem st : 1 = 1.\nProof. exact cheat. Qed.\n' > r.proof
+printf 'Axiom cheat : 1 = 1.\nTheorem st : 1 = 1.\nProof. exact cheat. Qed.\n' > r.exp
 differ 'a proof that begins to rest on an axiom: its contract' "$R" "$(contract s.soma r.st)"
 differ 'and what mentions it, its contract' "$UP" "$(contract s.soma s.up)"
 line s.soma r.st | grep -q 'assumes r.cheat$'
@@ -140,13 +140,13 @@ differ 'an OCaml module with other source' "$O" "$(contract ouse.soma ouse.useo)
 # of the compiled files as they are
 mkdir cached; cd cached
 echo 'Axiom unused : 1 = 1.' > a.soma
-printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > a.proof
+printf 'Theorem t : 1 = 1.\nProof. reflexivity. Qed.\n' > a.exp
 printf 'Import a.\nused : 1 = 1 := t.\n' > b.soma
 printf 'Import b.\nfinal : 1 = 1 := used.\n' > main.soma
 soma build main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 BVO="$(cksum .soma-cache/b.vo)"
 C="$(contract main.soma main.final)"
-printf 'Theorem t : 1 = 1.\nProof. exact unused. Qed.\n' > a.proof
+printf 'Theorem t : 1 = 1.\nProof. exact unused. Qed.\n' > a.exp
 soma build main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q 'Compiling a.soma' out.log
 if grep -q 'Compiling b.soma' out.log; then echo "another proof compiled an importer"; cat out.log; exit 1; fi
@@ -154,7 +154,7 @@ if grep -q 'Compiling b.soma' out.log; then echo "another proof compiled an impo
 differ 'a cached importer of what now rests on an axiom' "$C" "$(contract main.soma main.final)"
 line main.soma main.final | grep -q 'assumes a.unused$'
 # a statement is not a proof
-printf 'Theorem t : 2 = 2.\nProof. reflexivity. Qed.\nTheorem s : 1 = 1.\nProof. reflexivity. Qed.\n' > a.proof
+printf 'Theorem t : 2 = 2.\nProof. reflexivity. Qed.\nTheorem s : 1 = 1.\nProof. reflexivity. Qed.\n' > a.exp
 if soma build main.soma > out.log 2>&1; then echo "an importer took a statement that went away"; exit 1; fi
 grep -q 'Compiling b.soma' out.log
 cd "$TMP"

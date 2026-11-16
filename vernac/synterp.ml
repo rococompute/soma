@@ -553,10 +553,10 @@ and synterp_load ~intern verbosely fname =
     let in_chan = Util.open_utf8_file_in longfname in
     Procq.Parsable.make ~loc:Loc.(initial source)
         (Gramlib.Stream.of_channel in_chan) in
-  (* Soma: a .lang file is loaded in a module of its own, which imports
+  (* Soma: a .ext file is loaded in a module of its own, which imports
      the Macro library (vernac/somaMacro.ml) *)
   let inputs =
-    if SomaMacro.is_lang_file longfname then
+    if SomaMacro.is_ext_file longfname then
       let of_string s = Procq.Parsable.make ~loc:Loc.(initial source) (Gramlib.Stream.of_string s) in
       [of_string (SomaMacro.lang_prologue longfname); input; of_string (SomaMacro.lang_epilogue longfname)]
     else [input] in

@@ -60,7 +60,7 @@ soma explore uses.soma > out.log 2>&1 || { cat out.log; exit 1; }
 grep -q "OCaml's Lib.Deferred.map : 'a Lib.Deferred.t -> ('a -> 'b) -> 'b Lib.Deferred.t (~f by label)" out.log
 
 # the kernel does not compute them: no proof goes through OCaml code
-cat > prog.proof <<'EOT'
+cat > prog.exp <<'EOT'
 Theorem t : hello "x" = hello "x".
 Proof.
   reflexivity.
@@ -71,7 +71,7 @@ Proof.
 Qed.
 EOT
 if soma build prog.soma > out.log 2>&1; then echo "a proof computed through OCaml code"; exit 1; fi
-rm prog.proof
+rm prog.exp
 
 # a type that OCaml does not have
 echo 'count : N -> unit.' >> greet.definition

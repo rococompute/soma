@@ -30,7 +30,7 @@ From mylib Require Import B.
 eight := four + four.
 eight.
 EOT
-cat > prog/main.proof <<'EOT'
+cat > prog/main.exp <<'EOT'
 Theorem eight_is : eight = 8.
 Proof.
   We need to show that four + four = 8.

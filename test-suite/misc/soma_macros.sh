@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Soma macros (vernac/somaMacro.ml): [Macro] in .lang files only; the
-# macros of FILE.lang are in scope in FILE.soma and FILE.proof; another
-# .lang file's macros are in scope where it is loaded or imported, and
+# Soma macros (vernac/somaMacro.ml): [Macro] in .ext files only; the
+# macros of FILE.ext are in scope in FILE.soma and FILE.exp; another
+# .ext file's macros are in scope where it is loaded or imported, and
 # nowhere else; the Macro library is not in scope in .soma files.
 
 set -euo pipefail
@@ -20,7 +20,7 @@ fails() { # fails FILE MESSAGE: compiling FILE fails, with MESSAGE
   grep -q "$2" out.log || { cat out.log; exit 1; }
 }
 
-cat > prog.lang <<'EOT'
+cat > prog.ext <<'EOT'
 Macro swap args :=
   match args with
   | cons f (cons a (cons b nil)) => App f (cons b (cons a nil))
@@ -34,19 +34,19 @@ Macro twice args :=
 Macro loop args := App (Var "loop") nil.
 EOT
 
-# the macros of prog.lang, in prog.soma and prog.proof; a match is
+# the macros of prog.ext, in prog.soma and prog.exp; a match is
 # passed through a macro unchanged (Opaque)
 cat > prog.soma <<'EOT'
 Definition a : swap Nat.sub 1 5 = 4 := eq_refl.
 Definition b : twice S 0 = 2 := eq_refl.
 Definition c : swap Nat.sub 2 (match 5 with 0 => 0 | _ => 9 end) = 7 := eq_refl.
 EOT
-cat > prog.proof <<'EOT'
+cat > prog.exp <<'EOT'
 Theorem swap_sub : forall m n, swap Nat.sub m n = n - m.
 Proof. reflexivity. Qed.
 EOT
 rocq c -q prog.soma
-rm prog.proof
+rm prog.exp
 
 # a macro's error, at the use
 echo 'Definition d := twice S.' >> prog.soma
@@ -55,15 +55,15 @@ fails prog.soma "twice takes a function and an argument"
 sed -i.bak '$d' prog.soma && echo 'Definition d := loop.' >> prog.soma
 fails prog.soma "The macro loop was expanded 1000 times"
 
-# Macro, outside a .lang file
+# Macro, outside a .ext file
 echo 'Macro m args := Hole.' > bad.soma
-fails bad.soma "Macro can only be used in a .lang file"
-# the Macro library, outside a .lang file
+fails bad.soma "Macro can only be used in a .ext file"
+# the Macro library, outside a .ext file
 echo 'Check App.' > nolib.soma
 fails nolib.soma "The reference App was not found"
 
-# another .lang file: its macros where it is loaded, and not elsewhere
-cat > strings.lang <<'EOT'
+# another .ext file: its macros where it is loaded, and not elsewhere
+cat > strings.ext <<'EOT'
 Macro repeat args :=
   match args with
   | cons (Str s) (cons (Num n) nil) =>
@@ -72,15 +72,15 @@ Macro repeat args :=
   end.
 EOT
 cat > user.soma <<'EOT'
-Load "strings.lang".
+Load "strings.ext".
 Definition e : repeat "ab" 3 = "ababab" := eq_refl.
 EOT
 rocq c -q user.soma
 echo 'Definition f := swap Nat.sub 1 5.' >> user.soma
 fails user.soma "The reference swap was not found"
 
-# a .lang file compiled by itself: its macros where it is imported
-rocq c -q strings.lang
+# a .ext file compiled by itself: its macros where it is imported
+rocq c -q strings.ext
 cat > imported.soma <<'EOT'
 Require Import strings.
 Definition g : repeat "ab" 2 = "abab" := eq_refl.
@@ -92,17 +92,17 @@ Definition h : repeat "ab" 2 = "abab" := eq_refl.
 EOT
 fails required.soma "The term"
 
-# an error in FILE.lang: located in FILE.lang, not an anomaly. A syntax
+# an error in FILE.ext: located in FILE.ext, not an anomaly. A syntax
 # error, and an error in a sentence that parses (each was "Anomaly ...
 # stm.ml ... Assertion failed", with no location)
 mkdir errs && cd errs
-printf 'Macro m args := App (Var "f") nil |> x.\n' > syn.lang
+printf 'Macro m args := App (Var "f") nil |> x.\n' > syn.ext
 echo 'Definition x := 1.' > syn.soma
-fails syn.soma 'File "./syn.lang", line 1, characters 34-35'
+fails syn.soma 'File "./syn.ext", line 1, characters 34-35'
 grep -q "Anomaly" out.log && { cat out.log; exit 1; }
-printf 'Inductive m := A.\nMacro m args := Var "x".\n' > clash.lang
+printf 'Inductive m := A.\nMacro m args := Var "x".\n' > clash.ext
 echo 'Definition x := 1.' > clash.soma
-fails clash.soma 'File "./clash.lang", line 2, characters 0-24'
+fails clash.soma 'File "./clash.ext", line 2, characters 0-24'
 grep -q "m already exists" out.log || { cat out.log; exit 1; }
 cd ..
 
@@ -110,7 +110,7 @@ cd ..
 # returns a match makes structural recursion; a match with simple
 # patterns is quoted as Match, any other is Opaque
 mkdir letmatch && cd letmatch
-cat > lm.lang <<'EOS'
+cat > lm.ext <<'EOS'
 Macro natcase args :=
   match args with
   | cons n (cons z (cons m (cons s nil))) =>

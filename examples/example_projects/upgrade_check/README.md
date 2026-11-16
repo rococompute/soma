@@ -14,7 +14,7 @@ soma diff pricing-1.0 pricing-1.1     what the upgrade is
 soma.toml      the project, and which pricing it depends on
 soma.lock      the version of it, written by soma
 main.soma      an invoice
-main.proof     nothing_lost: no money is lost to rounding, from pricing's discount_le
+main.exp     nothing_lost: no money is lost to rounding, from pricing's discount_le
 pricing-1.0/   the library
 pricing-1.1/   the same library, "cleaned up"
 ```
@@ -61,7 +61,7 @@ Each line is one of the things that were done in this release:
 Change `soma.toml` to `{ path = "pricing-1.1" }` and build:
 
 ```
-soma build -v main.soma         builds, and main.proof checks: 5900
+soma build -v main.soma         builds, and main.exp checks: 5900
 soma hash main.soma             main.nothing_lost now assumes pricing.rates.discount_small
 ```
 

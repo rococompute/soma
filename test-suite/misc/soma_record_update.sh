@@ -21,7 +21,7 @@ Print advance.
 Inductive step : state -> state -> Prop :=
 | step_advance : forall s, step s (advance s).
 EOT
-cat > main.proof <<'EOT'
+cat > main.exp <<'EOT'
 Theorem setters_compute (s : state) : pc (set_pc 7 s) = 7 /\ j (set_pc 7 s) = j s.
 Proof. split; reflexivity. Qed.
 Theorem invert_step : forall s t, step s t ->
