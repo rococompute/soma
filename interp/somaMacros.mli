@@ -23,6 +23,15 @@ val is_macro : Constant.t -> bool
     module that defines it is imported *)
 val in_macro : Constant.t -> Libobject.obj
 
+(** Is this constant a reader in scope? A reader is defined with
+    [Reader name text := body.] in a .lang file: a function from a
+    program's text to its top-level forms. *)
+val is_reader : Constant.t -> bool
+
+(** The library object that makes a constant a reader, in scope where the
+    module that defines it is imported *)
+val in_reader : Constant.t -> Libobject.obj
+
 (** [nested ?loc macro f] runs [f], the internalization of an expansion of
     [macro], and fails when expansions are nested too deep: a macro that
     expands to itself does not stop. *)

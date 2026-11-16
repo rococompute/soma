@@ -159,7 +159,7 @@ let rec list_of sigma c =
   | App (f, [|_; x; rest|]) when is "core.list.cons" sigma f -> x :: list_of sigma rest
   | _ -> raise (Not_code c)
 
-let unquote ?loc ~macro sigma opaque c =
+let unquote ?loc ?(what="macro") ~macro sigma opaque c =
   let rec u c =
     if is "soma.macro.hole" sigma c then CAst.make ?loc (CHole None)
     else match kind sigma c with
@@ -189,7 +189,7 @@ let unquote ?loc ~macro sigma opaque c =
       | App (f, [|i|]) when is "soma.macro.opaque" sigma f ->
         begin match List.nth_opt opaque (nat_of sigma i) with
           | Some e -> e
-          | None -> CErrors.user_err ?loc (str "The macro " ++ str macro ++ str " returned Opaque "
+          | None -> CErrors.user_err ?loc (str "The " ++ str what ++ str " " ++ str macro ++ str " returned Opaque "
                                            ++ int (nat_of sigma i) ++ str ", which is not the code of one of its arguments.")
         end
       | App (f, [|message|]) when is "soma.macro.error" sigma f ->
@@ -209,9 +209,9 @@ let unquote ?loc ~macro sigma opaque c =
         begin match kind sigma g, list_of sigma args with
           | App (v, [|n|]), [] when is "soma.macro.var" sigma v -> pat (CPatAtom (Some (name n)))
           | App (v, [|n|]), args when is "soma.macro.var" sigma v -> pat (CPatCstr (name n, None, List.map upat args))
-          | _ -> CErrors.user_err ?loc (str "The macro " ++ str macro ++ str " returned a pattern that applies something other than a name.")
+          | _ -> CErrors.user_err ?loc (str "The " ++ str what ++ str " " ++ str macro ++ str " returned a pattern that applies something other than a name.")
         end
-      | _ -> CErrors.user_err ?loc (str "The macro " ++ str macro ++ str " returned a pattern that is not a name, a number, a string, _, or a constructor applied to patterns.")
+      | _ -> CErrors.user_err ?loc (str "The " ++ str what ++ str " " ++ str macro ++ str " returned a pattern that is not a name, a number, a string, _, or a constructor applied to patterns.")
   in
   u c
 
@@ -238,10 +238,11 @@ let () = SomaMacros.expand := expand
 
 (* The Macro command, in .lang files only *)
 
-let check_in_lang_file ?loc () =
+let check_in_lang_file ?loc ?(command="Macro") () =
   match file_of_loc loc with
   | Some f when is_lang_file f -> ()
-  | _ -> CErrors.user_err ?loc (str "Macro can only be used in a .lang file: macros for FILE.soma go in FILE.lang.")
+  | _ -> CErrors.user_err ?loc (str command ++ str " can only be used in a .lang file: "
+                                ++ str (String.lowercase_ascii command) ++ str "s for FILE.soma go in FILE.lang.")
 
 let global_ref ?loc name =
   CAst.make ?loc (CRef (Libnames.qualid_of_path ?loc (Nametab.path_of_global (Rocqlib.lib_ref name)), None))
@@ -257,6 +258,101 @@ let define ?loc ~name ~args body =
   | GlobRef.ConstRef c -> Lib.add_leaf (SomaMacros.in_macro c)
   | _ -> CErrors.anomaly (str "A macro is not a constant.")
 
+(* Readers: [Reader name text := body.] in a .lang file makes [name] a
+   function from a program's text to its top-level forms ([string -> list
+   item], theories/Soma/Macro.v). [Read name "text".], or a file whose
+   first line is [#lang name], runs the forms it returns as commands, as
+   if they had been written there: a [Def] is a definition, a [RecDef] a
+   Recursive (Fixpoint) definition, an [Expr] a bare term, and a
+   [ReadError] fails at its place. *)
+
+let define_reader ?loc ~name ~text body =
+  check_in_lang_file ?loc ~command:"Reader" ();
+  let string_type = global_ref ?loc "core.string.type" in
+  let items = CAst.make ?loc (CApp (global_ref ?loc "core.list.type", [global_ref ?loc "soma.reader.item", None])) in
+  let binder = CLocalAssum ([CAst.make ?loc:text.CAst.loc (Name text.CAst.v)], None, Default Glob_term.Explicit, string_type) in
+  ComDefinition.do_definition ?loc ~name:name.CAst.v ~poly:PolyFlags.default ~kind:Decls.Definition
+    None [binder] None body (Some items);
+  match Nametab.locate (Libnames.qualid_of_ident name.CAst.v) with
+  | GlobRef.ConstRef c -> Lib.add_leaf (SomaMacros.in_reader c)
+  | _ -> CErrors.anomaly (str "A reader is not a constant.")
+
+let reader_of ?loc qid =
+  let loc = match qid.CAst.loc with Some l -> Some l | None -> loc in
+  match Nametab.locate qid with
+  | GlobRef.ConstRef c when SomaMacros.is_reader c -> c
+  | _ -> CErrors.user_err ?loc (Libnames.pr_qualid qid
+                                ++ str " is not a reader: a reader is defined with Reader in a .lang file.")
+  | exception Not_found ->
+    CErrors.user_err ?loc (str "The reader " ++ Libnames.pr_qualid qid
+                           ++ str " was not found. A reader for FILE.soma goes in FILE.lang, or in a .lang file it loads.")
+
+(* The location of the character at [pos] in [text], which starts at
+   [start], to the end of its line. Written in a string ([quoted]), each
+   quote of the text took two characters. *)
+let loc_at ~quoted (start : Loc.t) text pos =
+  let pos = max 0 (min pos (String.length text)) in
+  let width i = if quoted && text.[i] = '"' then 2 else 1 in
+  let line = ref start.Loc.line_nb and bol = ref start.Loc.bol_pos and off = ref start.Loc.bp in
+  for i = 0 to pos - 1 do
+    off := !off + width i;
+    if text.[i] = '\n' then (incr line; bol := !off)
+  done;
+  let ep = ref !off and i = ref pos in
+  while !i < String.length text && text.[!i] <> '\n' do ep := !ep + width !i; incr i done;
+  { start with Loc.line_nb = !line; bol_pos = !bol; line_nb_last = !line; bol_pos_last = !bol;
+               bp = !off; ep = max !ep (!off + 1) }
+
+let read ?loc qid (text : string CAst.t) ~quoted =
+  let open Vernacexpr in
+  let c = reader_of ?loc qid in
+  let reader = Libnames.string_of_qualid qid in
+  let env = Global.env () in
+  let sigma = Evd.from_env env in
+  let call = mkApp (mkConstU (c, EInstance.empty), [|string_value text.CAst.v|]) in
+  Gradual.clear_failures ();
+  let result = Reductionops.nf_all env sigma call in
+  let start = match text.CAst.loc with
+    | Some l when quoted -> Some { l with Loc.bp = l.Loc.bp + 1 }
+    | Some l -> Some l
+    | None -> loc in
+  let at pos = match start with Some s -> Some (loc_at ~quoted s text.CAst.v pos) | None -> loc in
+  let not_forms () =
+    let why =
+      if GradualErrors.mentions_err env sigma result then
+        GradualErrors.runtime_error env sigma ~original:call ~failures:(Gradual.failures ())
+      else str "It returned " ++ Printer.pr_econstr_env env sigma result ++ str "." in
+    CErrors.user_err ?loc (hov 0 (str "The reader " ++ str reader ++ str " did not return forms." ++ fnl () ++ why)) in
+  let ident ?loc s =
+    try Id.of_string s
+    with _ -> CErrors.user_err ?loc (str "The reader " ++ str reader ++ str " defined " ++ Pp.quote (str s)
+                                     ++ str ", which is not a name.") in
+  let command loc expr = CAst.make ?loc { control = []; attrs = []; expr } in
+  let form item =
+    let code loc s = unquote ?loc ~what:"reader" ~macro:reader sigma [] s in
+    match kind sigma item with
+    | App (f, [|pos; name; body|]) when is "soma.reader.def" sigma f ->
+      let loc = at (nat_of sigma pos) in
+      let name = CAst.make ?loc (Name (ident ?loc (string_of sigma name))) in
+      command loc (VernacSynPure (VernacDefinition ((NoDischarge, Decls.Definition), (name, None),
+                                                    DefineBody ([], None, code loc body, None))))
+    | App (f, [|pos; name; params; body|]) when is "soma.reader.recdef" sigma f ->
+      let loc = at (nat_of sigma pos) in
+      let param p = CLocalAssum ([CAst.make ?loc (Name (ident ?loc (string_of sigma p)))], None,
+                                 Default Glob_term.Explicit, CAst.make ?loc (CHole None)) in
+      let fix = { fname = CAst.make ?loc (ident ?loc (string_of sigma name)); univs = None;
+                  binders = List.map param (list_of sigma params);
+                  rtype = CAst.make ?loc (CHole None); body_def = Some (code loc body); notations = [] } in
+      command loc (VernacSynPure (VernacFixpoint (NoDischarge, ([None], [fix]))))
+    | App (f, [|pos; term|]) when is "soma.reader.expr" sigma f ->
+      let loc = at (nat_of sigma pos) in
+      command loc (VernacSynPure (VernacCheckMayEval (Some (Genredexpr.Lazy Redops.all_flags), None, code loc term)))
+    | App (f, [|pos; message|]) when is "soma.reader.error" sigma f ->
+      CErrors.user_err ?loc:(at (nat_of sigma pos)) (str (string_of sigma message))
+    | _ -> raise (Not_code item) in
+  try List.map form (list_of sigma result)
+  with Not_code _ -> not_forms ()
+
 (* A .lang file is loaded in a module of its own, which imports the Macro
    library: the module, and so the file's macros, is then imported where
    the file is loaded, and the Macro library is not. *)
@@ -266,7 +362,9 @@ let lang_module file =
   String.map (fun c -> match c with 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> c | _ -> '_') base ^ "_lang"
 
 let lang_prologue file =
-  Printf.sprintf "Require Soma.Macro. Module %s. Import Soma.Macro." (lang_module file)
+  (* a reader's syntax is often nested in list, for which no All scheme
+     is needed *)
+  Printf.sprintf "Require Soma.Macro. Module %s. Import Soma.Macro. Local Set Warnings \"-register-all\"." (lang_module file)
 
 let lang_epilogue file =
   let m = lang_module file in

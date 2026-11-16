@@ -2765,7 +2765,7 @@ let translate_vernac_synterp ?loc ~atts v = let open Vernactypes in match v with
   | EVernacNoop ->
     vtdefault(fun () -> ())
 
-  | EVernacLoad _ ->
+  | EVernacLoad _ | EVernacRead _ ->
     anomaly (str "type_vernac")
 
   (* Extensions *)

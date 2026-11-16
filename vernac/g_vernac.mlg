@@ -1120,6 +1120,9 @@ GRAMMAR EXTEND Gram
           { VernacSynterp (VernacSetOption (true, table, OptionUnset)) }
     ] ];
 
+  read_text:
+    [ [ s = STRING -> { CAst.make ~loc s } ] ]
+  ;
   command:
     [ [ IDENT "Comments"; l = LIST0 comment -> { VernacSynPure (VernacComments l) }
 
@@ -1144,6 +1147,10 @@ GRAMMAR EXTEND Gram
       | IDENT "Load"; verbosely = [ IDENT "Verbose" -> { true } | -> { false } ];
         s = [ s = ne_string -> { s } | s = IDENT -> { s } ] ->
           { VernacSynterp (VernacLoad (verbosely, s)) }
+      (* Soma: [Read reader "text".], the text read by a reader of a
+         .lang file (vernac/somaMacro.ml) *)
+      | IDENT "Read"; r = global; t = read_text ->
+          { VernacSynterp (VernacRead (r, t, true)) }
       | IDENT "Declare"; IDENT "ML"; IDENT "Module"; l = LIST1 ne_string ->
           { VernacSynterp (VernacDeclareMLModule l) }
 

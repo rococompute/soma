@@ -1374,6 +1374,8 @@ let pr_synterp_vernac_expr v =
       else
         spc() ++ qs s
     )
+  | VernacRead (r, t, _) ->
+    return (keyword "Read" ++ spc () ++ pr_qualid r ++ spc () ++ qs t.CAst.v)
 
   | VernacBeginSection id ->
     return (hov 2 (keyword "Section" ++ spc () ++ pr_lident id))

@@ -258,6 +258,45 @@ Macros are in scope only where they are asked for:
 `examples/example_files/macros/macros.lang` and `examples/example_files/macros/macros.soma` are an example;
 `test-suite/misc/soma_macros.sh` tests it.
 
+### Readers: other syntax, read from text
+
+A macro is given code that Soma has already parsed, so it can only change
+what that code means, not how it is written. A reader is given the text:
+`Reader name text := body.`, in a `.lang` file, makes `name` a function
+from a program's text (`text : string`) to its top-level forms (a `list
+item`, in `theories/Soma/Macro.v`):
+
+| Form | Runs as |
+|---|---|
+| `Def pos name body` | `name := body.` |
+| `RecDef pos name params body` | `Recursive name params := body.`, which Rocq's termination check checks |
+| `Expr pos term` | `term.`, a bare term, evaluated |
+| `ReadError pos message` | reading fails with `message` |
+
+`body` and `term` are `syntax`, as a macro returns, so a reader writes
+`match`es and `let`s with `Match` and `LetIn`. `pos` is where the form
+starts in the text, a count of characters, and an error in the form (a
+`ReadError`, a type error, a recursion Rocq rejects, a name that is not
+one) is reported at that line of the file. `chars` and `of_chars` turn a
+string into the codes of its characters and back, so a reader can walk
+its text as a `list nat`.
+
+A reader in scope is used two ways:
+
+- `Read name "text".`, anywhere a command can be, runs the forms there.
+  The text is a string, its quotes written doubled.
+- A file whose first line is `#lang name` is read by `name` whole: the
+  rest of the file is the text, which Soma's parser never sees. The
+  reader goes in `FILE.lang` next to it, or in a `.lang` file that
+  `FILE.lang` loads. Such a file is compiled, run, and imported by
+  another file of its project (`Import FILE.`) as any other is.
+
+What a reader defines is in scope after it, in `FILE.proof`, and where
+the file is imported; Soma's review counts it, and its escape hatches, as
+it does the rest. The reader runs when the program is checked, as a
+macro does: it is a Soma function, so it reads no file and has no
+effect but its forms. `test-suite/misc/soma_readers.sh` tests readers.
+
 ### Projects: `Import` compiles what it imports
 
 A program can be several files in a folder, its project. In a Soma file,

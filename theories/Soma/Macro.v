@@ -57,3 +57,44 @@ Register LetIn as soma.macro.letin.
 Register Match as soma.macro.match.
 Register Opaque as soma.macro.opaque.
 Register MacroError as soma.macro.error.
+
+(** * Readers
+    A .lang file can also define a reader: [Reader name text := body.]
+    makes [name] a function from the text of a program, a [string], to its
+    top-level forms, a [list item]. [Read name "text".] in a Soma file,
+    or a first line [#lang name] (the rest of the file is the text), runs
+    the forms as if they had been written there (vernac/somaMacro.ml). A
+    reader sees the text itself, not code Soma has parsed, so it can read
+    any syntax: s-expressions, say. *)
+
+(** A top-level form. [pos] is where it starts in the text, a count of
+    characters from the start, where an error in it is reported. *)
+Inductive item : Type :=
+| Def (pos : nat) (name : string) (body : syntax)
+    (* [name := body.] *)
+| RecDef (pos : nat) (name : string) (params : list string) (body : syntax)
+    (* [Recursive name params := body.], checked by Rocq's termination check *)
+| Expr (pos : nat) (term : syntax)
+    (* [term.], evaluated, as a bare term is *)
+| ReadError (pos : nat) (message : string).
+    (* reading fails with [message], at [pos] *)
+
+Register item as soma.reader.item.
+Register Def as soma.reader.def.
+Register RecDef as soma.reader.recdef.
+Register Expr as soma.reader.expr.
+Register ReadError as soma.reader.error.
+
+(** A string as the codes of its characters, and back: a reader can walk
+    its text as a [list nat], with no library of characters *)
+Fixpoint chars (s : string) : list nat :=
+  match s with
+  | String.EmptyString => nil
+  | String.String c rest => cons (Ascii.nat_of_ascii c) (chars rest)
+  end.
+
+Fixpoint of_chars (codes : list nat) : string :=
+  match codes with
+  | nil => String.EmptyString
+  | cons n rest => String.String (Ascii.ascii_of_nat n) (of_chars rest)
+  end.

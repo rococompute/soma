@@ -53,6 +53,10 @@ type synterp_entry =
   | EVernacInclude of Declaremods.module_expr list
   | EVernacSetOption of { export : bool; key : Goptions.option_name; value : Vernacexpr.option_setting }
   | EVernacLoad of Vernacexpr.verbose_flag * (vernac_control_entry * Vernacstate.Synterp.t) list
+  | EVernacRead of Libnames.qualid * string CAst.t * bool
+  (** Soma: [Read reader "text".]. The reader runs at interpretation, as it
+      needs the global environment; its forms are then interpreted as a
+      Load's sentences are (vernacinterp.ml). *)
   | EVernacExtend of Vernactypes.typed_vernac
 
 and vernac_entry = synterp_entry Vernacexpr.vernac_expr_gen

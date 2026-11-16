@@ -97,8 +97,46 @@ let interp_vernac ~check ~state ({CAst.loc;_} as com) =
       in
       Exninfo.iraise (reraise, info)
 
+(* Soma: a file whose first line is [#lang NAME] is read by the reader
+   NAME, of a .lang file (vernac/somaMacro.ml): the rest of the file is
+   its text, which Soma's parser does not see. The line, and the rest. *)
+let lang_line file =
+  let ic = open_in_bin file in
+  Fun.protect ~finally:(fun () -> close_in ic) (fun () ->
+      match input_line ic with
+      | exception End_of_file -> None
+      | line ->
+        let prefix = "#lang " in
+        let n = String.length prefix in
+        if String.length line > n && String.sub line 0 n = prefix then
+          let rest_start = pos_in ic in
+          let rest = really_input_string ic (in_channel_length ic - rest_start) in
+          Some (String.trim (String.sub line n (String.length line - n)), String.length line, rest_start, rest)
+        else None)
+
+let read_lang_file ~check ~state ~source (name, line_length, rest_start, rest) =
+  let line = Loc.{ (initial source) with ep = line_length } in
+  (* the command is the whole file: an error in the text is within it *)
+  let lines = List.length (String.split_on_char '\n' rest) in
+  let whole = Loc.{ line with line_nb_last = lines; ep = rest_start + String.length rest } in
+  let text = Loc.{ (initial source) with line_nb = 2; line_nb_last = 2;
+                                         bol_pos = rest_start; bol_pos_last = rest_start;
+                                         bp = rest_start; ep = rest_start } in
+  let reader = try Libnames.qualid_of_string ~loc:line name
+    with _ -> CErrors.user_err ~loc:line Pp.(str "#lang is followed by the name of a reader, not " ++ quote (str name) ++ str ".") in
+  let read = Vernacexpr.{ control = []; attrs = [];
+                          expr = VernacSynterp (VernacRead (reader, CAst.make ~loc:text rest, false)) } in
+  interp_vernac ~check ~state (CAst.make ~loc:whole read)
+
 (* Load a vernac file. CErrors are annotated with file and location *)
-let load_vernac_core ~beautify ~check ~state ?source file =
+let rec load_vernac_core ~beautify ~check ~state ?source file =
+  match lang_line file with
+  | Some lang ->
+    let source = Option.default (Loc.InFile {dirpath=None; file}) source in
+    read_lang_file ~check ~state ~source lang
+  | None -> load_vernac_file ~beautify ~check ~state ?source file
+
+and load_vernac_file ~beautify ~check ~state ?source file =
   (* Keep in sync *)
   let in_chan = open_utf8_file_in file in
   let input_cleanup () = close_in in_chan in

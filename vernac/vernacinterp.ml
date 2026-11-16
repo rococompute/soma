@@ -73,6 +73,18 @@ and interp_expr_core ?loc ~atts ~st c =
     Attributes.unsupported_attributes atts;
     vernac_load ~verbosely ~st fname
 
+  (* Soma: [Read reader "text".]: the reader's forms (vernac/somaMacro.ml),
+     each through the syntactic phase, then interpreted as a Load's
+     sentences are, each located in the text *)
+  | VernacSynterp EVernacRead (reader, text, quoted) ->
+    Attributes.unsupported_attributes atts;
+    let intern _ = CErrors.user_err (Pp.str "A reader's forms cannot load libraries.") in
+    let entries = List.map (fun cmd ->
+        let entry = Synterp.synterp_control ~intern cmd in
+        (entry, Vernacstate.Synterp.freeze ()))
+        (SomaMacro.read ?loc reader text ~quoted) in
+    vernac_load ~verbosely:false ~st entries
+
   | v ->
     let fv = Vernacentries.translate_vernac ?loc ~atts v in
     let stack = st.Vernacstate.interp.lemmas in

@@ -77,6 +77,7 @@ type synterp_entry =
   | EVernacInclude of Declaremods.module_expr list
   | EVernacSetOption of { export : bool; key : Goptions.option_name; value : Vernacexpr.option_setting }
   | EVernacLoad of Vernacexpr.verbose_flag * (vernac_control_entry * Vernacstate.Synterp.t) list
+  | EVernacRead of Libnames.qualid * string CAst.t * bool
   | EVernacExtend of Vernactypes.typed_vernac
 
 and vernac_entry = synterp_entry Vernacexpr.vernac_expr_gen
@@ -532,6 +533,10 @@ let rec synterp ~intern ?loc ~atts v =
     | VernacLoad (verbosely, fname) ->
       unsupported_attributes atts;
       synterp_load ~intern verbosely fname
+    | VernacRead (reader, text, quoted) ->
+      (* Soma: the reader runs at interpretation (vernacinterp.ml) *)
+      unsupported_attributes atts;
+      EVernacRead (reader, text, quoted)
     | VernacExtend (opn,args) ->
       let f = Vernacextend.type_vernac ?loc ~atts opn args () in
       EVernacExtend(f)
