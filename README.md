@@ -63,9 +63,13 @@ typed_square (x : N) : N := x * x.
 typed_square 123.      (* 15129%N *)
 ```
 
-Then with a dependent type, one that depends on a value: `even` is a proof
-that `x` is even, so the type of the second argument mentions the first.
-`eq_refl` proves it when `N.even x` computes to `true`.
+Then with a dependent type, one that depends on a value. The body is still
+`x * x`; what changes is that the function takes a second argument,
+`even`, a proof that `x` is even. Its type, `N.even x = true`, mentions
+the first argument. The caller supplies the proof: `eq_refl` is the proof
+that something equals itself (`a = a`), and the checker may compute both
+sides first. For 2048, `N.even 2048` computes to `true`, so `eq_refl` fits
+`true = true`. For 123, it would have to prove `false = true`, and doesn't.
 
 ```fsharp
 gradually_typed_square (x : N) (even : N.even x = true) : N := x * x.
@@ -76,10 +80,33 @@ gradually_typed_square 123 eq_refl.    (* rejected: 123 isn't even *)
 
 The rejected line fails when the program is checked: `The term "eq_refl"
 has type "N.even 123 = N.even 123" while it is expected to have type
-"N.even 123 = true"`. Without it, all three go in one file, `square.soma`:
-`soma run square.soma` prints the last value, `= 4194304%N : N`, and `soma
-build -v square.soma` prints each. `soma help` lists the commands: build,
-run, explore, compile, extract, hash, search, diff, get and repl.
+"N.even 123 = true"`. Leaving the proof out doesn't skip the check:
+`gradually_typed_square 123.` is a function still waiting for it, `fun _ :
+false = true => 15129%N`.
+
+Soma doesn't invent proofs, but a type class can find this one by
+computing, so the call looks like the ones above. `` `{Even x} `` is the
+proof argument, filled in by trying `eq_refl`:
+
+```fsharp
+Class Even (x : N) := even_proof : N.even x = true.
+#[export] Hint Extern 1 (Even _) => exact eq_refl : typeclass_instances.
+
+even_square (x : N) `{Even x} : N := x * x.
+
+even_square 2048.      (* 4194304%N *)
+even_square 123.       (* rejected: Could not find an instance for "Even 123" *)
+```
+
+Either way, the proof is found while the program is checked, so `x` has
+to be known then, as a literal is. For an `x` that arrives when the
+program runs, the program checks `N.even x` first and carries the result
+along as the proof.
+
+Without the rejected lines, all four go in one file, `square.soma`: `soma
+run square.soma` prints the last value, `= 4194304%N : N`, and `soma build
+-v square.soma` prints each. `soma help` lists the commands: build, run,
+explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
