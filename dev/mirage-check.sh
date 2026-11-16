@@ -3,7 +3,8 @@
 # Build the Mirage examples (examples/example_files/mirage_*/) with soma build, boot
 # each image on solo5-hvt, and check what it does: its console and its exit
 # code. The network cases run under solo5-vmnet (macOS 26 or later); a
-# server unikernel is fetched from by another one.
+# server unikernel is fetched from by another one, and one fetches a page
+# over HTTPS from the internet (outbound access needed).
 #
 # Usage: dev/mirage-check.sh [--no-network | --no-image | --storage-only]
 #
@@ -112,7 +113,8 @@ no_image_one() {
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
-        mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage; do
+        mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
+        mirage_https; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
@@ -177,6 +179,13 @@ build mirage_clock &&
     run mirage_clock clock timeout "^[0-9]{2}:[0-9]{2}:[0-9]{2}$" plain
 
 if [ "${NETWORK}" = 1 ]; then
+    # resolve and https: DNS, TCP and TLS to the internet through vmnet's
+    # NAT, the server's certificate checked against the NSS authorities
+    if build mirage_https; then
+        run mirage_https https 0 "^https://mirageos.org/: status 200, [1-9][0-9]* bytes" net
+        run mirage_https https-untrusted 1 \
+            "^no answer: TLS with self-signed.badssl.com: authentication failure" net "--arg=self-signed.badssl.com"
+    fi
     if build mirage_http_server && build mirage_fetch; then
         # without an address, the fetcher says how to use it and exits 2
         run mirage_fetch fetch-usage 2 "usage: --arg=ADDRESS" net
