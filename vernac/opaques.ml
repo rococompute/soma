@@ -118,6 +118,12 @@ let get_current_constraints i =
       Some ctx
   with Not_found -> None
 
+let pending () =
+  Opaqueproof.HandleMap.fold (fun _ pf acc -> match pf with
+      | OpaqueCertif cert when Option.is_empty (Future.peek_val cert) ->
+        Future.UUIDSet.add (Future.uuid cert) acc
+      | OpaqueCertif _ | OpaqueValue _ -> acc) !current_opaques Future.UUIDSet.empty
+
 let dump ?(except=Future.UUIDSet.empty) () =
   let n =
     if Opaqueproof.HandleMap.is_empty !current_opaques then 0

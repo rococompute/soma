@@ -355,6 +355,24 @@ import fails with `Cannot import X.Y: X/Y.soma does not compile (its
 errors are above).`, after its errors. A file that imports itself, through
 others, is `Import cycle: a -> b -> a.`
 
+The files of one `Import` (`Import a b c`), and what they import, are
+compiled at the same time, one process each, rather than in turn; a file
+that two of them import is compiled once, and the other waits for it.
+`$SOMA_PROOF_JOBS` caps the number of proof checks at once (below), the
+number of processors by default, and `SOMA_PROOF_JOBS=0` compiles one file
+at a time, as before. With `SOMA_DEFER_PROOFS=1`, a file with a `.exp` is
+compiled first without its proofs, so that what imports it can be compiled
+at once, and its proofs are checked beside the rest of the build, at most
+`$SOMA_PROOF_JOBS` at a time; the build waits for them at the end (`Checking
+the proofs of X.exp, ...`), and fails with the errors of one that does not
+hold. This is off by default: a library without its proofs is the same
+library only when they add no universe constraints between global
+universes, which Rocq keeps in the library, and many proofs about gradual
+programs add some. The build then fails, saying that the library with its
+proofs is not the one without them, and the build without
+`SOMA_DEFER_PROOFS` works. `SOMA_PROOF_JOBS_KEEP=1` keeps the folder of
+the checks' logs, and says where.
+
 `soma build` also keeps a store of compiled projects, shared by the
 checkouts of a machine: `$SOMA_CACHE`, or else `$XDG_CACHE_HOME/soma`
 (`~/.cache/soma` without it), with a `.soma-cache` under a key of the

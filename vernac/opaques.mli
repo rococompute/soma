@@ -24,6 +24,10 @@ val get_current_constraints : Opaqueproof.opaque_handle -> Univ.ContextSet.t opt
 
 val dump : ?except:Future.UUIDSet.t -> unit -> opaque_disk * Opaqueproof.opaque_handle Future.UUIDMap.t
 
+(** Soma: the proofs not checked yet (delayed, and not forced): a library
+    saved without them is what its importers need (vernac/somaImport.ml) *)
+val pending : unit -> Future.UUIDSet.t
+
 module Summary :
 sig
   type t

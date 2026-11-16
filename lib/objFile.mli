@@ -43,6 +43,16 @@ val library_hash : in_handle -> Digest.t option
     lazily (its proofs, its VM code) is read again from the new file. *)
 val replaced_segment : file:string -> library:Digest.t -> string -> (int64 * Digest.t) option
 
+(** Soma: whether the segments [names] of two files are the same values. A
+    segment is identified by the hash of its bytes, and two compilations of
+    the same file may share the same values differently in memory, which
+    Marshal writes differently. *)
+val same_values : string -> string -> string list -> bool
+
+(** Soma: [splice ~base ~from names ~out] writes [out] as [base], but with
+    the bytes of its segments [names] taken from [from]. *)
+val splice : base:string -> from:string -> string list -> out:string -> unit
+
 val open_out : file:string -> out_handle
 val close_out : out_handle -> unit
 val marshal_out_segment : out_handle -> segment:'a id -> 'a -> unit

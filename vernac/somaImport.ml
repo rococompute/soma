@@ -434,7 +434,93 @@ let add_cache_to_loadpath ?loc p =
           add_load_path dir (Libnames.dirpath_of_string (String.sub l 0 i))
       | None -> ()) (if SomaCache.trusted (load_paths_file ()) then SomaOpam.read_lines (load_paths_file ()) else [])
 
-let compile ?loc p path src =
+let is_folder_rules f =
+  Filename.check_suffix f ".ext" &&
+  let base = Filename.remove_extension f in
+  let dir = CUnix.canonical_path_name (Filename.dirname (absolute f)) in
+  Filename.basename base = (if SomaProject.find_root dir = Some dir then root_rules_name dir else Filename.basename dir) &&
+  not (Sys.file_exists (base ^ ".soma"))
+
+(* Soma: proofs checked beside the build.
+
+   A file with a FILE.exp is compiled twice. First without the proofs of its
+   lemmas, left delayed and unchecked: what its importers need, its definitions and the
+   statements of its lemmas, ready in the time its program takes. Then,
+   beside the build, whole, into the same .vo. The two are the same library:
+   a .vo has its proofs in a segment of their own ("opaques"), and Rocq
+   identifies a library by the rest ("library"). So the build goes on to
+   the importers at once, while proofs are checked, as many at a time as
+   there are processors ($SOMA_PROOF_JOBS; 0 checks each file's proofs
+   before going on, as one compilation).
+
+   The compilation that starts a build (toplevel/ccompile.ml) makes a
+   folder for it, $SOMA_PROOF_JOBS_DIR, which every compilation of the build
+   shares:
+   - ready-ID: ID is compiled for this build, whether or not its proofs are
+     checked yet (its stamp comes from the compilation that checks them);
+   - lock-ID: held by the compilation compiling ID, so that two compiling at
+     once (see [ensure_all]) don't both compile it;
+   - job-ID, log-ID, status-ID: a proof check, its output, and how it ended;
+   - slot-N: one for each proof check that runs at once.
+   The build waits for every proof check before it is done, and fails with
+   the errors of one that failed. Only a compilation that checked the proofs
+   writes a stamp, so a build stopped before its checks are done leaves no
+   file that looks up to date without them. *)
+
+let jobs_var = "SOMA_PROOF_JOBS_DIR"
+let slots_var = "SOMA_PROOF_JOBS"
+let proof_job_var = "SOMA_PROOF_JOB"
+let interface_var = "SOMA_INTERFACE"
+let interface_digest_var = "SOMA_INTERFACE_DIGEST"
+
+let jobs_dir () = env_value jobs_var
+let is_interface () = env_value interface_var <> None
+let proof_job () = env_value proof_job_var
+
+let job_file dir kind id =
+  Filename.concat dir (kind ^ "-" ^ String.map (function '/' -> '+' | c -> c) id)
+
+let is_ready dir id = Sys.file_exists (job_file dir "ready" id)
+let mark_ready dir id = close_out (open_out_bin (job_file dir "ready" id))
+
+(* The locks this compilation holds. A lock (lockf) is a process's: taken
+   again by the same process, it is granted, and closing either releases
+   it. So one held here is busy here too, until [unlock]. *)
+let held : (string, Unix.file_descr) Hashtbl.t = Hashtbl.create 17
+
+(* The lock [file], if no compilation holds it, this one included *)
+let try_lock file =
+  if Hashtbl.mem held file then None else
+  match Unix.openfile file [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 with
+  | exception Unix.Unix_error (Unix.ENOENT, _, _) ->
+    (* the build's folder is gone: the build that started this compilation
+       is over, and has said why *)
+    exit 1
+  | fd ->
+    match Unix.lockf fd Unix.F_TLOCK 0 with
+    | () -> Hashtbl.replace held file fd; Some (file, fd)
+    | exception Unix.Unix_error ((Unix.EAGAIN | Unix.EACCES | Unix.EWOULDBLOCK), _, _) ->
+      Unix.close fd; None
+
+let unlock (file, fd) =
+  Hashtbl.remove held file;
+  Unix.close fd
+
+(* A file whose proofs are checked beside the build: one with a .exp, when
+   $SOMA_DEFER_PROOFS is 1. Not by default: a library compiled without its
+   proofs is the same library only when its proofs add no universe
+   constraints between global universes, which Rocq keeps in the library,
+   and many proofs about gradual programs add some. Importers compiled
+   against it would then not load with it; a proof check that finds its
+   library different fails the build, and says so. *)
+let has_proofs src =
+  env_value "SOMA_DEFER_PROOFS" = Some "1" &&
+  (Filename.check_suffix src ".soma" || Filename.check_suffix src ".definition" || is_folder_rules src)
+  && Sys.file_exists (Filename.remove_extension src ^ ".exp")
+
+(* What compiles [path]: the program, its arguments and its environment.
+   [interface]: without the proofs of its lemmas, into PATH.vos. *)
+let compile_command ?loc ?(delayed=false) ~interface p path src =
   let vo = vo_of p path in
   mkdir_p (Filename.dirname vo);
   (* a module without a definition: an empty one, in the cache, for the
@@ -447,10 +533,9 @@ let compile ?loc p path src =
                             " has no .definition: its exports are all of type Any *)\n"));
       [ "SOMA_WASM_FILE=" ^ src ], definition
     end else [], src in
-  Printf.eprintf "Compiling %s (into %s)\n%!" (qualified p path ^ Filename.extension src) cache_name;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"]))
+                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
@@ -460,20 +545,36 @@ let compile ?loc p path src =
           stamp_var ^ "=" ^ stamp_of p path;
           source_var ^ "=" ^ src;
           (* what a program imports is not a unikernel of its own *)
-          "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file) in
+          "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file
+      @ (if interface then [ interface_var ^ "=1" ] else [])) in
   let prog = Boot.Env.self in
   (* the cache in the load path names the library by its place there:
      .soma-cache/models/task.vo is models.task; that of a dependency, by
      its name too: maps.a.b *)
-  let argv = [| prog; "--kind=compile"; input; "-o"; vo; "-Q"; p.cache_dir; p.prefix |] in
+  (* without its proofs: they are delayed, and never forced (Rocq's lazy
+     asynchronous proofs), and its .vo is saved without them, as PATH.vos
+     (toplevel/ccompile.ml). Its proof check delays them the same way, and
+     forces them at the end: the universes of its statements are then the
+     same as without them, and so is its library. *)
+  let argv = Array.of_list ([ prog; "--kind=compile"; input; "-o"; vo; "-Q"; p.cache_dir; p.prefix ]
+                            @ (if interface || delayed then [ "-async-proofs"; "lazy" ] else [])) in
+  prog, argv, env
+
+(* Starts a compilation, its output discarded and its errors shown *)
+let start_compile_process prog argv env =
   let null = Unix.openfile "/dev/null" [Unix.O_WRONLY] 0 in
   let pid = Unix.create_process_env prog argv env Unix.stdin null Unix.stderr in
   Unix.close null;
-  let rec wait () = try snd (Unix.waitpid [] pid)
-    with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
+  pid
+
+let rec wait_pid pid = try snd (Unix.waitpid [] pid)
+  with Unix.Unix_error (Unix.EINTR, _, _) -> wait_pid pid
+
+(* How the compilation of [path] ended: nothing when it succeeded *)
+let compiled ?loc p path src status =
   let import_name = String.map (function '/' -> '.' | c -> c) (qualified p path) in
   let file = qualified p path ^ Filename.extension src in
-  match wait () with
+  match status with
   | Unix.WEXITED 0 ->
     (* the folder's listing, if read before, does not have the new file *)
     System.forget_dir p.cache_dir
@@ -490,6 +591,77 @@ let compile ?loc p path src =
                               str ": " ++ str file ++
                               str " does not compile (its errors are above).")
 
+let say_compiling p path src =
+  Printf.eprintf "Compiling %s (into %s)\n%!" (qualified p path ^ Filename.extension src) cache_name
+
+(* [path] compiled without its proofs is what its importers need: in place,
+   as PATH.vo, and its proofs checked beside the build, into the same .vo *)
+let check_proofs_beside dir ?loc p path src =
+  let vo = vo_of p path in
+  Sys.rename (vo ^ "s") vo;
+  let id = qualified p path in
+  let prog, argv, env = compile_command ?loc ~delayed:true ~interface:false p path src in
+  let env = Array.append env
+      [| proof_job_var ^ "=" ^ id; interface_digest_var ^ "=" ^ interface_digest vo |] in
+  let flags = [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC; Unix.O_CLOEXEC] in
+  let log = Unix.openfile (job_file dir "log" id) flags 0o600 in
+  let null = Unix.openfile "/dev/null" [Unix.O_RDONLY; Unix.O_CLOEXEC] 0 in
+  let pid = Unix.create_process_env prog argv env null log log in
+  Unix.close log;
+  Unix.close null;
+  Out_channel.with_open_bin (job_file dir "job" id) (fun oc ->
+      Printf.fprintf oc "%d\n%s\n" pid (qualified p path ^ ".exp"))
+
+let compile ?loc p path src =
+  say_compiling p path src;
+  match jobs_dir () with
+  | Some dir when has_proofs src ->
+    let prog, argv, env = compile_command ?loc ~interface:true p path src in
+    compiled ?loc p path src (wait_pid (start_compile_process prog argv env));
+    check_proofs_beside dir ?loc p path src
+  | _ ->
+    let prog, argv, env = compile_command ?loc ~interface:false p path src in
+    compiled ?loc p path src (wait_pid (start_compile_process prog argv env))
+
+(* Compilations this one started and has not waited for ([ensure_all]): what
+   to do when each ends, and the lock it releases then *)
+type running = { pid : int; lock : string * Unix.file_descr; finish : Unix.process_status -> unit }
+
+let running : running list ref = ref []
+
+(* A compilation that ends early (an error) stops those it started *)
+let () = at_exit (fun () ->
+    List.iter (fun r -> try Unix.kill r.pid Sys.sigterm with Unix.Unix_error _ -> ()) !running)
+
+(* Waits for one of [running] to end, or, without [block], only takes one
+   that has: whether one did *)
+let rec reap ~block =
+  match !running with
+  | [] -> false
+  | rs ->
+    let ended = List.find_map (fun r ->
+        match Unix.waitpid [Unix.WNOHANG] r.pid with
+        | 0, _ -> None
+        | _, status -> Some (r, status)
+        | exception Unix.Unix_error (Unix.EINTR, _, _) -> None) rs in
+    match ended with
+    | Some (r, status) ->
+      running := List.filter (fun x -> x.pid <> r.pid) !running;
+      (* what it compiled is in place, and ready, before another takes the lock *)
+      Fun.protect ~finally:(fun () -> unlock r.lock) (fun () -> r.finish status);
+      true
+    | None ->
+      if block then (Unix.sleepf 0.01; reap ~block) else false
+
+(* The lock of [id], once no other compilation holds it; None when [id] is
+   ready meanwhile. Waiting, this one still takes what it started that
+   ended: one may be what the holder of the lock waits for. *)
+let rec acquire dir id =
+  if is_ready dir id then None
+  else match try_lock (job_file dir "lock" id) with
+    | Some lock -> if is_ready dir id then (unlock lock; None) else Some lock
+    | None -> ignore (reap ~block:false); Unix.sleepf 0.01; acquire dir id
+
 (* [path] (whose source is [src]) compiled and up to date in the cache *)
 let rec ensure ?loc p path src =
   let id = qualified p path in
@@ -498,31 +670,82 @@ let rec ensure ?loc p path src =
     if List.mem id stack then
       CErrors.user_err ?loc Pp.(str "Import cycle: " ++
                                 str (String.concat " -> " (stack @ [id])) ++ str ".");
-    let vo = vo_of p path in
-    let fresh = SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
-      | None -> false
-      | Some (hash, imports, libraries) ->
-        hash = source_hash src &&
-        List.for_all (fun (l, d) -> match library_file (Libnames.dirpath_of_string l) with
-            | Some f -> file_digest f = d
-            | None -> false) libraries &&
-        List.for_all (fun (i, d) -> match locate ?loc p i with
-            | None -> false
-            | Some (q, i, s) -> ensure ?loc q i s; interface_digest (vo_of q i) = d) imports
-    in
-    if not fresh then compile ?loc p path src;
+    begin match jobs_dir () with
+      | None -> if not (fresh ?loc p path src) then compile ?loc p path src
+      | Some dir ->
+        match acquire dir id with
+        | None -> ()
+        | Some lock ->
+          Fun.protect ~finally:(fun () -> unlock lock) (fun () ->
+              if not (fresh ?loc p path src) then compile ?loc p path src;
+              mark_ready dir id)
+    end;
     Hashtbl.replace ensured id ()
   end
+
+(* Whether the cache has [path] as its stamp says, and up to date: its
+   source unchanged, and what it imports as it was *)
+and fresh ?loc p path src =
+  let vo = vo_of p path in
+  SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
+  | None -> false
+  | Some (hash, imports, libraries) ->
+    hash = source_hash src &&
+    List.for_all (fun (l, d) -> match library_file (Libnames.dirpath_of_string l) with
+        | Some f -> file_digest f = d
+        | None -> false) libraries &&
+    List.for_all (fun (i, d) -> match locate ?loc p i with
+        | None -> false
+        | Some (q, i, s) -> ensure ?loc q i s; interface_digest (vo_of q i) = d) imports
+
+(* The files of one [Import], compiled at once when they need to be. One
+   whose lock another compilation holds is left for after, when this one
+   holds no lock: two waiting on each other's would wait forever. *)
+let ensure_all ?loc targets =
+  match jobs_dir (), targets with
+  | None, _ | _, ([] | [_]) -> List.iter (fun (q, i, s) -> ensure ?loc q i s) targets
+  | Some dir, _ ->
+    let later = ref [] in
+    List.iter (fun (q, i, s) ->
+        let id = qualified q i in
+        if Hashtbl.mem ensured id then ()
+        else if List.mem id (stack ?loc ()) || is_ready dir id then ensure ?loc q i s
+        else match try_lock (job_file dir "lock" id) with
+          | None -> later := (q, i, s) :: !later
+          | Some lock ->
+            let started = ref false in
+            Fun.protect ~finally:(fun () -> if not !started then unlock lock) (fun () ->
+                if is_ready dir id then Hashtbl.replace ensured id ()
+                else if fresh ?loc q i s then begin
+                  mark_ready dir id;
+                  Hashtbl.replace ensured id ()
+                end else begin
+                  say_compiling q i s;
+                  let interface = has_proofs s in
+                  let prog, argv, env = compile_command ?loc ~interface q i s in
+                  let pid = start_compile_process prog argv env in
+                  started := true;
+                  let finish status =
+                    compiled ?loc q i s status;
+                    if interface then check_proofs_beside dir ?loc q i s;
+                    mark_ready dir id;
+                    Hashtbl.replace ensured id () in
+                  running := { pid; lock; finish } :: !running
+                end)) targets;
+    while reap ~block:true do () done;
+    List.iter (fun (q, i, s) -> ensure ?loc q i s) (List.rev !later)
 
 (* [Import] of these names, which are no modules in scope: those that are
    files of the project or of a dependency are compiled when needed. The
    names to require: those of the libraries. *)
 let prepare ?loc qids =
   let p = current ?loc () in
+  let found = List.map (fun qid -> qid, locate ?loc p (path_of_qualid qid)) qids in
+  ensure_all ?loc (List.filter_map snd found);
   let any = ref false in
-  let names = List.map (fun qid ->
+  let names = List.map (fun (qid, located) ->
       let path = path_of_qualid qid in
-      match locate ?loc p path with
+      match located with
       | Some (q, inside, src) ->
         ensure ?loc q inside src;
         if not (List.mem_assoc path !imported) then
@@ -537,7 +760,7 @@ let prepare ?loc qids =
           CErrors.user_err ?loc Pp.(str "Import " ++ Libnames.pr_qualid qid ++ str ": " ++ str path ++
                                     str ".ml has no " ++ str (Filename.basename path) ++ str ".definition next to it," ++ spc () ++
                                     str "which declares the types of its values that Soma uses (name : type.).");
-        qid) qids in
+        qid) found in
   if !any then add_cache_to_loadpath ?loc p;
   names
 
@@ -578,13 +801,6 @@ let refuse_old_names base =
    compiled once, into the cache, and what they define, macros and
    theorems included, is the same for all. Unless X/X.soma exists: then
    they are its own, as for any program. *)
-let is_folder_rules f =
-  Filename.check_suffix f ".ext" &&
-  let base = Filename.remove_extension f in
-  let dir = CUnix.canonical_path_name (Filename.dirname (absolute f)) in
-  Filename.basename base = (if SomaProject.find_root dir = Some dir then root_rules_name dir else Filename.basename dir) &&
-  not (Sys.file_exists (base ^ ".soma"))
-
 (* The rules of the folders of the project from its root to [file]'s,
    outermost first, compiled when needed: the libraries to import *)
 let folder_rules file =
@@ -675,4 +891,163 @@ let record_interface ~source ~dirpath ~vo_file =
     Out_channel.with_open_bin (file ^ ".tmp") (fun oc ->
         output_string oc ("interface " ^ name ^ " " ^ digest ^ "\n"));
     Sys.rename (file ^ ".tmp") file
+  end
+
+(* Soma: proofs checked beside the build (see [check_proofs_beside]), as the
+   compilations of a build see them *)
+
+(* Whether this compilation made the build's folder of proof checks *)
+let owns_jobs = ref false
+
+let processors () =
+  try
+    let ic = Unix.open_process_args_in "getconf" [| "getconf"; "_NPROCESSORS_ONLN" |] in
+    let n = Fun.protect ~finally:(fun () -> ignore (Unix.close_process_in ic))
+        (fun () -> int_of_string_opt (String.trim (In_channel.input_all ic))) in
+    match n with Some n when n > 0 -> n | _ -> 4
+  with Unix.Unix_error _ | Sys_error _ -> 4
+
+let jobs_of_dir dir =
+  Array.to_list (try Sys.readdir dir with Sys_error _ -> [||])
+  |> List.filter (String.starts_with ~prefix:"job-")
+  |> List.filter_map (fun name ->
+      let id = String.sub name 4 (String.length name - 4) in
+      match In_channel.with_open_bin (Filename.concat dir name) In_channel.input_all
+            |> String.split_on_char '\n' with
+      | pid :: label :: _ -> Option.map (fun pid -> id, pid, label) (int_of_string_opt pid)
+      | _ | exception Sys_error _ -> None)
+
+let read_status dir id =
+  let f = Filename.concat dir ("status-" ^ id) in
+  if Sys.file_exists f then Some (String.trim (In_channel.with_open_bin f In_channel.input_all)) else None
+
+let remove_tree dir =
+  Array.iter (fun f -> try Sys.remove (Filename.concat dir f) with Sys_error _ -> ())
+    (try Sys.readdir dir with Sys_error _ -> [||]);
+  try Unix.rmdir dir with Unix.Unix_error _ -> ()
+
+(* The compilation that starts a build (that of the program, not one that an
+   [Import] started) makes the build's folder, unless $SOMA_PROOF_JOBS is 0.
+   Leaving early, it stops the checks it waits for. *)
+let start_proof_jobs () =
+  let starts_build = env_value stamp_var = None && jobs_dir () = None in
+  let slots = match Option.bind (env_value slots_var) int_of_string_opt with
+    | Some n -> n
+    | None -> processors () in
+  if starts_build && slots > 0 then begin
+    let dir = Filename.concat (Filename.get_temp_dir_name ())
+        (Printf.sprintf "soma-proofs-%d-%06x" (Unix.getpid ()) (Random.State.bits (Random.State.make_self_init ()))) in
+    Unix.mkdir dir 0o700;
+    Unix.putenv jobs_var dir;
+    Unix.putenv slots_var (string_of_int slots);
+    owns_jobs := true;
+    at_exit (fun () ->
+        if !owns_jobs then begin
+          List.iter (fun (id, pid, _) ->
+              if read_status dir id = None then (try Unix.kill pid Sys.sigterm with Unix.Unix_error _ -> ()))
+            (jobs_of_dir dir);
+          (* $SOMA_PROOF_JOBS_KEEP: the folder is kept, to read its logs *)
+          if env_value "SOMA_PROOF_JOBS_KEEP" = None then remove_tree dir
+          else Printf.eprintf "Proof checks kept in %s\n%!" dir
+        end)
+  end
+
+(* Whether the process [pid] is gone; one of this compilation's, taken *)
+let gone pid =
+  match Unix.waitpid [Unix.WNOHANG] pid with
+  | 0, _ -> false
+  | _ -> true
+  | exception Unix.Unix_error (Unix.ECHILD, _, _) ->
+    (try Unix.kill pid 0; false with Unix.Unix_error (Unix.ESRCH, _, _) -> true)
+  | exception Unix.Unix_error (Unix.EINTR, _, _) -> false
+
+(* The build waits for its proof checks, before what reads proofs (the
+   program's assumptions, its build), and fails if one failed, with its
+   errors *)
+let wait_proof_jobs () =
+  match jobs_dir () with
+  | Some dir when !owns_jobs ->
+    let jobs = jobs_of_dir dir in
+    let pending () = List.filter (fun (id, _, _) -> read_status dir id = None) jobs in
+    (match pending () with
+     | [] -> ()
+     | p -> Printf.eprintf "Checking the proofs of %s\n%!"
+              (String.concat ", " (List.rev_map (fun (_, _, label) -> label) p)));
+    let rec wait () =
+      let p = pending () in
+      (* a check that ended without a status was killed *)
+      let p = List.filter (fun (_, pid, _) -> not (gone pid)) p in
+      if p <> [] then (Unix.sleepf 0.02; wait ()) in
+    wait ();
+    let failed = List.filter (fun (id, _, _) -> read_status dir id <> Some "ok") jobs in
+    List.iter (fun (id, _, _) ->
+        let log = Filename.concat dir ("log-" ^ id) in
+        (try prerr_string (In_channel.with_open_bin log In_channel.input_all) with Sys_error _ -> ()))
+      failed;
+    flush stderr;
+    (match failed with
+     | [] -> ()
+     | (id, _, label) :: _ ->
+       let why = match read_status dir id with
+         | Some "different" -> "its library is not the same with its proofs as without them: build again with SOMA_PROOF_JOBS=0, and report it"
+         | Some _ -> "its proofs do not check (its errors are above)"
+         | None -> "it was killed while its proofs were checked" in
+       CErrors.user_err Pp.(str label ++ str ": " ++ str why ++ str "."))
+  | _ -> ()
+
+let job_status status =
+  match jobs_dir (), proof_job () with
+  | Some dir, Some id ->
+    (try Out_channel.with_open_bin (job_file dir "status" id) (fun oc -> output_string oc status)
+     with Sys_error _ -> ())
+  | _ -> ()
+
+(* A proof check runs once a slot is free, and says how it ended *)
+let acquire_proof_slot () =
+  match jobs_dir (), proof_job () with
+  | Some dir, Some _ ->
+    let done_ = ref false in
+    at_exit (fun () -> if not !done_ then job_status "failed");
+    let slots = match Option.bind (env_value slots_var) int_of_string_opt with
+      | Some n when n > 0 -> n | _ -> 1 in
+    let rec take () =
+      match List.find_map (fun i -> try_lock (Filename.concat dir ("slot-" ^ string_of_int i)))
+              (List.init slots Fun.id) with
+      | Some _ -> () (* held until this compilation ends *)
+      | None -> Unix.sleepf 0.05; take () in
+    take ();
+    fun () -> done_ := true; job_status "ok"
+  | _ -> fun () -> ()
+
+(* Where a proof check writes its .vo first, to put it in place whole:
+   importers may be reading the one without proofs *)
+let checked_output vo =
+  match proof_job () with
+  | Some _ -> Filename.chop_suffix vo ".vo" ^ ".checking.vo"
+  | None -> vo
+
+(* The .vo of a proof check in place, if it is the library its importers
+   compiled against: the same values, though not always the same bytes (two
+   compilations share values differently in memory, and Marshal writes
+   what is shared once). So it is put in place with the bytes of the one
+   they compiled against, which Rocq identifies the library by, and its
+   own proofs and VM code. *)
+let install_checked ~vo =
+  let tmp = checked_output vo in
+  if tmp <> vo then begin
+    let segments = ["summary"; "library"] in
+    if not (Sys.file_exists vo && ObjFile.same_values tmp vo segments) then begin
+      job_status "different";
+      CErrors.user_err Pp.(str (Filename.basename vo) ++ str ": the library with its proofs is not the one without them: its proofs add universe constraints, which Rocq keeps in the library. Build without SOMA_DEFER_PROOFS=1.")
+    end;
+    let spliced = Filename.chop_suffix vo ".vo" ^ ".spliced.vo" in
+    ObjFile.splice ~base:tmp ~from:vo segments ~out:spliced;
+    Sys.remove tmp;
+    (* what importers compiled against, by construction *)
+    (match env_value interface_digest_var with
+     | Some d when interface_digest spliced <> d ->
+       job_status "different";
+       CErrors.user_err Pp.(str (Filename.basename vo) ++ str ": the library with its proofs is not the one without them: its proofs add universe constraints, which Rocq keeps in the library. Build without SOMA_DEFER_PROOFS=1.")
+     | _ -> ());
+    Sys.rename spliced vo
   end

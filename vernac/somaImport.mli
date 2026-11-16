@@ -97,3 +97,23 @@ val folder_rules : string -> string list
 
 (** Record the compiled interface after a successful compilation. *)
 val record_interface : source:string -> dirpath:Names.DirPath.t -> vo_file:string -> unit
+
+(** Proofs checked beside the build: a file with a .exp is compiled first
+    without its proofs, for its importers, and its proofs are checked by a
+    compilation of their own, at the same time as the rest of the build. *)
+
+(** Made by the compilation that starts a build, for the compilations it starts *)
+val start_proof_jobs : unit -> unit
+
+(** Waits for the build's proof checks, and fails if one failed *)
+val wait_proof_jobs : unit -> unit
+
+(** A compilation without the proofs of its lemmas, for its importers *)
+val is_interface : unit -> bool
+
+(** In a proof check: waits for a slot; the function says it succeeded *)
+val acquire_proof_slot : unit -> (unit -> unit)
+
+(** Where a compilation writes its .vo [vo], and puts it in place *)
+val checked_output : string -> string
+val install_checked : vo:string -> unit

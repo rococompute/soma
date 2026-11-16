@@ -171,6 +171,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_definition_epilogue ~state long_f_dot_in in
       let state = load_exp_file ~beautify ~check ~state ldir long_f_dot_in in
+      (* Soma: the proofs of what it imports, checked beside it, before what
+         reads them (vernac/somaImport.ml) *)
+      let () = SomaImport.wait_proof_jobs () in
       (* Soma: soma hash FILE, of what was checked (vernac/somaHash.ml) *)
       let () = SomaHash.report () in
       (* Soma: soma search QUERY, in what was checked (vernac/somaSearch.ml) *)
@@ -180,14 +183,28 @@ let compile opts stm_options injections copts ~f_in ~f_out =
         then process_string ~state "Require Soma.Explore. Review." else state in
       let fullstate = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs ~filename:long_f_dot_in fullstate;
-      let () = Stm.join ~doc:state.doc in
+      (* Soma: compiled for its importers, its proofs are left unchecked,
+         for a compilation of their own (vernac/somaImport.ml) *)
+      let interface = SomaImport.is_interface () in
+      let () = if not interface then Stm.join ~doc:state.doc in
       let wall_clock2 = Unix.gettimeofday () in
       (* In .vo production, dump a complete .vo file. *)
-      let () = if mode = BuildVo then
-          Library.save_library_to ~output_native_objects Library.ProofsTodoNone ldir long_f_dot_out
+      let () = if interface then
+          (* without its proofs: FILE.vos, which the compilation that asked
+             for it puts in place *)
+          Library.save_library_to ~output_native_objects
+            (Library.ProofsTodoSomeEmpty (Opaques.pending ())) ldir (long_f_dot_out ^ "s")
+        else if mode = BuildVo then begin
+          (* a proof check writes its .vo beside the one without proofs,
+             then puts it in place (vernac/somaImport.ml) *)
+          Library.save_library_to ~output_native_objects Library.ProofsTodoNone ldir
+            (SomaImport.checked_output long_f_dot_out);
+          SomaImport.install_checked ~vo:long_f_dot_out
+        end
       in
-      (* Soma: a file compiled for an [Import] says what it imported *)
-      let () = if mode = BuildVo then SomaImport.write_stamp () in
+      (* Soma: a file compiled for an [Import] says what it imported, once
+         its proofs are checked *)
+      let () = if mode = BuildVo && not interface then SomaImport.write_stamp () in
       (* Soma: a program (a .soma file, not a library in .v) that requires
          Sandbox is also built as a MirageOS image, next to the .vo *)
       let () = if mode = BuildVo && Filename.check_suffix long_f_dot_in ".soma" then
@@ -198,7 +215,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = if mode = BuildVo && Filename.check_suffix long_f_dot_in ".soma" then
           SomaOcaml.build ~state ~source:long_f_dot_in ~vo_file:long_f_dot_out
       in
-      let () = if mode = BuildVo then
+      let () = if mode = BuildVo && not interface then
           SomaImport.record_interface ~source:long_f_dot_in ~dirpath:ldir ~vo_file:long_f_dot_out
       in
       let () = Aux_file.record_in_aux_at "vo_compile_time"
@@ -219,7 +236,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let source = source ldir long_f_dot_in in
       let state = load_folder_rules ~state long_f_dot_in rules in
       let state = load_ext_file ~state long_f_dot_in in
+      let state = load_definition_prologue ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check:false ~source ~state long_f_dot_in in
+      let state = load_definition_epilogue ~state long_f_dot_in in
       let state = load_exp_file ~beautify ~check:false ~state ldir long_f_dot_in in
       let state = Stm.finish ~doc:state.doc in
       ensure_no_pending_proofs state ~filename:long_f_dot_in;
@@ -239,10 +258,16 @@ let compile opts stm_opts copts injections ~f_in ~f_out =
        (try Unix.kill (Unix.getpid ()) Sys.sigkill with Unix.Unix_error _ -> ())
    | _ -> ());
   ignore(CoqworkmgrApi.get 1);
+  (* Soma: proofs checked beside the build (vernac/somaImport.ml): the
+     build's folder of checks, made by the compilation that starts it, and a
+     slot for a check *)
+  if copts.compilation_mode = BuildVo then SomaImport.start_proof_jobs ();
+  let checked = SomaImport.acquire_proof_slot () in
   let timing = match Sys.getenv_opt "SOMA_BUILD_TIMINGS" with
     | Some path when path <> "" -> Some (path, System.get_time ())
     | _ -> None in
   compile opts stm_opts injections copts ~f_in ~f_out;
+  checked ();
   Option.iter (fun (path, start) ->
       let seconds = System.time_difference start (System.get_time ()) in
       (* Like CObj.heap_size_kb, include the minor heap; use the major

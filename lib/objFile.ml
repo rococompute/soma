@@ -198,6 +198,24 @@ let replaced_segment ~file ~library name =
         | Some l, Some s when String.equal l library -> Some (s.pos, s.hash)
         | _ -> None)
 
+let segment_value h (s : _ segment) : Obj.t =
+  let () = LargeFile.seek_in h.in_channel s.pos in
+  Marshal.from_channel h.in_channel
+
+let same_values a b names =
+  let ha = open_in ~file:a in
+  Fun.protect ~finally:(fun () -> close_in ha) (fun () ->
+      let hb = open_in ~file:b in
+      Fun.protect ~finally:(fun () -> close_in hb) (fun () ->
+          List.for_all (fun name ->
+              match CString.Map.find_opt name ha.in_segments, CString.Map.find_opt name hb.in_segments with
+              | Some sa, Some sb ->
+                String.equal sa.hash sb.hash ||
+                (try compare (segment_value ha sa) (segment_value hb sb) = 0
+                 with Invalid_argument _ -> false)
+              | None, None -> true
+              | _ -> false) names))
+
 let open_out ~file =
   let ch = open_trapping_failure file in
   let () = output_int32 ch magic_number in
@@ -217,3 +235,32 @@ let close_out { out_channel = ch; out_segments = seg } =
   let () = output_int64 ch pos in
   let () = flush ch in
   close_out ch
+
+let splice ~base ~from names ~out =
+  let hb = open_in ~file:base in
+  Fun.protect ~finally:(fun () -> close_in hb) (fun () ->
+      let hf = open_in ~file:from in
+      Fun.protect ~finally:(fun () -> close_in hf) (fun () ->
+          let o = open_out ~file:out in
+          let copy h (s : _ segment) =
+            let oc, finish = marshal_out_binary o ~segment:(make_id s.name) in
+            let () = LargeFile.seek_in h.in_channel s.pos in
+            let buf = Bytes.create 65536 in
+            let rec go left =
+              if Int64.compare left 0L > 0 then begin
+                let n = input h.in_channel buf 0 (Int64.to_int (min left 65536L)) in
+                if n = 0 then raise End_of_file;
+                output oc buf 0 n;
+                go (Int64.sub left (Int64.of_int n))
+              end in
+            go s.len;
+            finish () in
+          let in_order = List.sort (fun (a : _ segment) b -> Int64.compare a.pos b.pos)
+              (List.map snd (CString.Map.bindings hb.in_segments)) in
+          List.iter (fun (s : _ segment) ->
+              if List.mem s.name names then
+                match CString.Map.find_opt s.name hf.in_segments with
+                | Some s' -> copy hf s'
+                | None -> copy hb s
+              else copy hb s) in_order;
+          close_out o))
