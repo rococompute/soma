@@ -1,0 +1,27 @@
+(** A unikernel that resolves a host name and fetches a page from it over
+    HTTPS, its certificate checked, then exits: 0 when it got an answer, 1
+    when it didn't (and says why). The host is the one it is given, or
+    mirageos.org:
+
+        soma run examples/example_files/mirage_https/mirage_https.soma
+        soma run examples/example_files/mirage_https/mirage_https.soma -- --arg=mempool.space
+
+    [resolve] and [https] make it a web image: MirageOS's DNS client and
+    TLS, with the NSS certificate authorities. *)
+Require Import Sandbox.
+
+main : io unit :=
+  a <- args ;;
+  let host := match a with [h] => h | _ => "mirageos.org" end in
+  r <- resolve host ;;
+  match r with
+  | Resolved address => print (host ++ " is at " ++ address)
+  | Unresolved why => print ("not resolved: " ++ why)
+  end ;;
+  answer <- https_get host "/" ;;
+  match answer with
+  | Answer status headers body =>
+    print ("https://" ++ host ++ "/: status " ++ to_string status ++ ", " ++ to_string (String.length body) ++ " bytes"
+           ++ match header "content-type" headers with Some t => ", " ++ t | None => "" end)
+  | Unanswered why => print ("no answer: " ++ why) ;; exit 1
+  end.

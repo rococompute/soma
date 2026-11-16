@@ -84,6 +84,8 @@ in `macros.exp` and `type_functions.exp`.
     policy does.
   - `mirage_fetch/`: fetches a page from the server, with `args`,
     `fetch` and exit codes.
+  - `mirage_https/`: resolves a host name and fetches its home page over
+    HTTPS, its certificate checked (`resolve`, `https_get`, `header`).
   - `mirage_frame_server/` and `mirage_frame_client/`: two images that
     keep one connection open and exchange length-prefixed frames on it
     (`listen`, `connect`, `send_frame`, `receive_frame`, `close`).

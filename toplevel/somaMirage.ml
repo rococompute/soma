@@ -136,14 +136,26 @@ let replace_text text old replacement =
     else (Buffer.add_char out text.[i]; loop (i+1)) in
   loop 0
 
-let config_ml ~network ~wasm ~storage =
-  let text = config_ml_base ~network ~wasm in
-  if not storage then text else
+(* a web image: [resolve] and [https] need MirageOS's dns-client device on
+   the stack (with happy-eyeballs, which it asks for), and TLS with the NSS
+   certificate authorities *)
+let web_config text =
+  let text = replace_text text "(stackv4v6 @-> " "(stackv4v6 @-> dns_client @-> " in
+  let text = replace_text text "package \"duration\"" "package \"domain-name\"; package \"tls-mirage\"; package \"ca-certs-nss\"; package \"x509\"; package \"duration\"" in
+  let text = replace_text text "let () = register" "let happy_eyeballs = generic_happy_eyeballs stack\nlet dns = generic_dns_client stack happy_eyeballs\nlet () = register" in
+  replace_text text "main $ stack" "main $ stack $ dns"
+
+let storage_config text =
   let text = replace_text text "(stackv4v6 @-> job)" "(stackv4v6 @-> block @-> job)" in
   let text = replace_text text "main \"Unikernel\" job" "main \"Unikernel.Main\" (block @-> job)" in
   let text = replace_text text "package \"duration\"" "package \"mirage-block\"; package \"cstruct\"; package \"lwt\"; package \"duration\"" in
   let text = replace_text text "let () = register" "let storage = block_of_file \"storage\"\nlet () = register" in
   replace_text (replace_text text "main $ stack" "main $ stack $ storage") "[ main ]" "[ main $ storage ]"
+
+let config_ml ~network ~wasm ~storage ~web =
+  let text = config_ml_base ~network ~wasm in
+  let text = if storage then storage_config text else text in
+  if web then web_config text else text
 
 let runtime_ml = header ^ {soma|(* Runs a Soma program's [main : io unit], extracted to prog.ml: each
    [io] action becomes the unikernel's console, clock, random numbers,
@@ -227,6 +239,90 @@ let report ?(during = "main") e =
 type fetched = Got of string | Net_refused | Net_timed_out | Net_bad_address
 type fetched_value = Reply of string | Refused | TimedOut | BadAddress
 
+(* What [resolve] and [https] get (Sandbox.resolved, answered), as
+   extracted *)
+type resolved_value = Resolved of string | Unresolved of string
+type answered_value = Answer of int * (string * string) list * string | Unanswered of string
+
+(* HTTP/1.1 for [https], over whatever carries it (TLS, in the image):
+   the request's bytes, and the answer read from all the bytes the server
+   sent before it closed. No network here: these are pure. *)
+let has_line_break s = String.contains s '\r' || String.contains s '\n'
+
+let http_request verb host port path headers body =
+  let lower = String.lowercase_ascii in
+  let set_by_us = ["host"; "connection"; "content-length"] in
+  if List.exists has_line_break (verb :: host :: path :: List.concat_map (fun (k, v) -> [k; v]) headers)
+     || String.contains verb ' ' || String.contains path ' ' then
+    Error "a request's verb, path or header has a space or a line break where it can't"
+  else if verb = "" then Error "a request needs a verb, as GET"
+  else
+    let path = if path = "" then "/" else path in
+    let host_header = if port = 443 then host else host ^ ":" ^ string_of_int port in
+    let b = Buffer.create (256 + String.length body) in
+    Buffer.add_string b (verb ^ " " ^ path ^ " HTTP/1.1\r\nHost: " ^ host_header ^ "\r\nConnection: close\r\n");
+    if body <> "" || List.mem verb ["POST"; "PUT"; "PATCH"] then
+      Buffer.add_string b ("Content-Length: " ^ string_of_int (String.length body) ^ "\r\n");
+    List.iter (fun (k, v) ->
+        if not (List.mem (lower k) set_by_us) then Buffer.add_string b (k ^ ": " ^ v ^ "\r\n")) headers;
+    if not (List.exists (fun (k, _) -> lower k = "user-agent") headers) then
+      Buffer.add_string b "User-Agent: soma\r\n";
+    Buffer.add_string b "\r\n";
+    Buffer.add_string b body;
+    Ok (Buffer.contents b)
+
+let find_from s sub from =
+  let n = String.length s and k = String.length sub in
+  let rec go i = if i + k > n then None else if String.sub s i k = sub then Some i else go (i + 1) in
+  go from
+
+(* a chunked body's chunks, joined *)
+let dechunk s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    match find_from s "\r\n" i with
+    | None -> Error "a chunked body ends inside a chunk's size"
+    | Some j ->
+      let size = String.sub s i (j - i) in
+      let size = match String.index_opt size ';' with Some k -> String.sub size 0 k | None -> size in
+      match int_of_string_opt ("0x" ^ String.trim size) with
+      | None -> Error ("a chunk's size isn't hexadecimal: " ^ size)
+      | Some 0 -> Ok (Buffer.contents b)
+      | Some n when n < 0 || j + 2 + n > String.length s -> Error "a chunked body ends inside a chunk"
+      | Some n -> Buffer.add_string b (String.sub s (j + 2) n); go (j + 2 + n + 2)
+  in
+  go 0
+
+let http_answer raw =
+  match find_from raw "\r\n\r\n" 0 with
+  | None -> Error (if raw = "" then "the server closed without answering" else "the answer has no end to its headers")
+  | Some i ->
+    let head = String.sub raw 0 i and rest = String.sub raw (i + 4) (String.length raw - i - 4) in
+    let trim_cr l = if l <> "" && l.[String.length l - 1] = '\r' then String.sub l 0 (String.length l - 1) else l in
+    match List.map trim_cr (String.split_on_char '\n' head) with
+    | [] -> Error "an empty answer"
+    | status_line :: lines ->
+      match String.split_on_char ' ' status_line with
+      | version :: code :: _ when String.length version >= 5 && String.sub version 0 5 = "HTTP/" ->
+        (match int_of_string_opt code with
+         | None -> Error ("not an HTTP status: " ^ status_line)
+         | Some status ->
+           let headers = List.filter_map (fun l -> match String.index_opt l ':' with
+               | Some j -> Some (String.lowercase_ascii (String.trim (String.sub l 0 j)),
+                                 String.trim (String.sub l (j + 1) (String.length l - j - 1)))
+               | None -> None) lines in
+           let value k = List.assoc_opt k headers in
+           let chunked = match value "transfer-encoding" with
+             | Some te -> find_from (String.lowercase_ascii te) "chunked" 0 <> None | None -> false in
+           let body =
+             if chunked then dechunk rest
+             else match Option.bind (value "content-length") (fun n -> int_of_string_opt (String.trim n)) with
+               | Some n when n >= 0 && n <= String.length rest -> Ok (String.sub rest 0 n)
+               | Some _ -> Error "the body is shorter than its Content-Length"
+               | None -> Ok rest in
+           Result.map (fun body -> (status, headers, body)) body)
+      | _ -> Error ("not an HTTP answer: " ^ String.sub status_line 0 (min 80 (String.length status_line)))
+
 (* Links (Sandbox.connection, connected, received, sent): the image knows
    a connection by its number. Extracted, [connected], [received] and
    [sent] have the representations of the [_value] types. *)
@@ -274,6 +370,12 @@ type net = {
      until the promise the function gives resolves *)
   listen_mailbox : int -> unit;
   mailbox : (unit -> unit Lwt.t) -> mail list Lwt.t;
+  (* a host name's IPv4 address, or why there is none *)
+  resolve : string -> (string, string) result Lwt.t;
+  (* an HTTPS request: verb, host, port, path, headers, body; the status,
+     headers and body, or why there are none *)
+  https : string -> string -> int -> string -> (string * string) list -> string ->
+    (int * (string * string) list * string, string) result Lwt.t;
 }
 
 let no_network =
@@ -283,7 +385,8 @@ let no_network =
     send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
     receive_frame = (fun _ _ -> fail ());
     close = (fun _ -> fail ());
-    listen_mailbox = (fun _ -> fail ()); mailbox = (fun _ -> fail ()) }
+    listen_mailbox = (fun _ -> fail ()); mailbox = (fun _ -> fail ());
+    resolve = (fun _ -> fail ()); https = (fun _ _ _ _ _ _ -> fail ()) }
 
 (* a connection's number, and the connection of a number *)
 let link_id (c : Prog.connection) = int_of_nat (check c)
@@ -411,6 +514,20 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Net_refused -> Refused
           | Net_timed_out -> TimedOut
           | Net_bad_address -> BadAddress)
+  | Prog.Resolve host ->
+      net.resolve (string_of_chars (check host))
+      >|= fun r -> Obj.magic (match r with
+          | Ok address -> Resolved (chars_of_string address)
+          | Error why -> Unresolved (chars_of_string why))
+  | Prog.Https (verb, host, port, path, headers, body) ->
+      let s x = string_of_chars (check x) in
+      net.https (s verb) (s host) (int_of_nat (check port)) (s path)
+        (List.map (fun kv -> let (k, v) = check kv in (s k, s v)) (check headers)) (s body)
+      >|= fun r -> Obj.magic (match r with
+          | Ok (status, headers, body) ->
+            Answer (nat_of_int status, List.map (fun (k, v) -> (chars_of_string k, chars_of_string v)) headers,
+                    chars_of_string body)
+          | Error why -> Unanswered (chars_of_string why))
   | Prog.Listen (port, handler) ->
       net.listen (int_of_nat (check port)) (fun id -> run net (handler (connection_of id)));
       Lwt.return (Obj.magic ())
@@ -726,23 +843,114 @@ module Main (S : Tcpip.Stack.V4V6) = struct
       Queue.clear mail;
       got
     in
+    (* resolve and https: a web image's (unikernel_ml ~web) *)
+    let resolve _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
+    let https _ _ _ _ _ _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
       { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame; close;
-        listen_mailbox; mailbox }
+        listen_mailbox; mailbox; resolve; https }
 end
 |soma}
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
 |soma}
 
-let unikernel_ml ~network ~storage =
+(* A web image's resolve and https: DNS through MirageOS's dns-client (the
+   resolvers DHCP gives), and HTTPS as HTTP/1.1 (Soma_rt.http_request,
+   http_answer) over tls-mirage on the stack's TCP, the server's
+   certificate checked against the NSS certificate authorities for the
+   host name *)
+let web_ml = {soma|    let module TLS = Tls_mirage.Make (S.TCP) in
+    let host_name host = Result.bind (Domain_name.of_string host) Domain_name.host in
+    let within seconds what p =
+      Lwt.pick [ p; (Mirage_sleep.ns (Duration.of_sec seconds) >|= fun () ->
+                     Error (what ^ ": no answer within " ^ string_of_int seconds ^ " seconds")) ] in
+    let address_of name =
+      D.gethostbyname dns name >|= function
+      | Ok ip -> Ok (Ipaddr.V4.to_string ip)
+      | Error (`Msg m) -> Error m
+    in
+    let resolve host =
+      match host_name host with
+      | Error (`Msg m) -> Lwt.return (Error ("not a host name, " ^ host ^ ": " ^ m))
+      | Ok name -> within 10 ("resolving " ^ host) (address_of name)
+    in
+    let authenticator = lazy (Ca_certs_nss.authenticator ()) in
+    let limit = 16 * 1024 * 1024 in
+    let https verb host port path headers body =
+      match host_name host, Soma_rt.http_request verb host port path headers body with
+      | Error (`Msg m), _ -> Lwt.return (Error ("not a host name, " ^ host ^ ": " ^ m))
+      | _, Error why -> Lwt.return (Error why)
+      | Ok name, Ok request ->
+        match Lazy.force authenticator with
+        | Error (`Msg m) -> Lwt.return (Error ("no certificate authorities: " ^ m))
+        | Ok authenticator ->
+          match Tls.Config.client ~authenticator ~peer_name:name () with
+          | Error (`Msg m) -> Lwt.return (Error ("TLS: " ^ m))
+          | Ok config ->
+            within 30 ("https " ^ host) (
+              within 10 ("resolving " ^ host) (address_of name) >>= function
+              | Error why -> Lwt.return (Error why)
+              | Ok address ->
+                match Ipaddr.of_string address with
+                | Error (`Msg m) -> Lwt.return (Error m)
+                | Ok ip ->
+                  dial ip port >>= function
+                  | `Refused -> Lwt.return (Error (host ^ " (" ^ address ^ ") refused the connection"))
+                  | `Timeout -> Lwt.return (Error (host ^ " (" ^ address ^ ") didn't answer within 10 seconds"))
+                  | `Flow flow ->
+                    incr Soma_rt.open_connections;
+                    let finish r = decr Soma_rt.open_connections; r in
+                    TLS.client_of_flow config ~host:name flow >>= function
+                    | Error e ->
+                      S.TCP.close flow >|= fun () ->
+                      finish (Error (Format.asprintf "TLS with %s: %a" host TLS.pp_write_error e))
+                    | Ok tls ->
+                      TLS.write tls (Cstruct.of_string request) >>= function
+                      | Error e ->
+                        TLS.close tls >|= fun () ->
+                        finish (Error (Format.asprintf "sending to %s: %a" host TLS.pp_write_error e))
+                      | Ok () ->
+                        let answer = Buffer.create 8192 in
+                        let rec read () =
+                          if Buffer.length answer > limit then
+                            Lwt.return (Error (host ^ "'s answer is over 16 MB"))
+                          else
+                            TLS.read tls >>= function
+                            | Ok (`Data b) -> Buffer.add_string answer (Cstruct.to_string b); read ()
+                            | Ok `Eof -> Lwt.return (Ok ())
+                            (* a server that ends without TLS's close_notify
+                               has still sent what it sent *)
+                            | Error _ when Buffer.length answer > 0 -> Lwt.return (Ok ())
+                            | Error e -> Lwt.return (Error (Format.asprintf "reading from %s: %a" host TLS.pp_error e))
+                        in
+                        read () >>= fun got ->
+                        TLS.close tls >|= fun () ->
+                        finish (Result.bind got (fun () -> Soma_rt.http_answer (Buffer.contents answer))))
+    in
+|soma}
+
+let unikernel_ml ~network ~storage ~web =
   let text = unikernel_ml_base ~network in
+  (* a web image: the dns-client device after the stack, and the real
+     resolve and https *)
+  let text = if not web then text else
+      replace_text
+        (replace_text
+           (replace_text text "    let resolve _ = Lwt.return (Error \"this image has no resolver: it was built without resolve or https\") in\n" "")
+           "    let https _ _ _ _ _ _ = Lwt.return (Error \"this image has no resolver: it was built without resolve or https\") in\n" web_ml)
+        "module Main (S : Tcpip.Stack.V4V6) = struct" "module Main (S : Tcpip.Stack.V4V6) (D : Dns_client_mirage.S) = struct" in
+  let text = if not web then text else replace_text text "let start s =" "let start s dns =" in
   if not storage then text else
   let setup = "Store.connect disk >>= fun files ->\n    Soma_rt.install_storage { read=Store.read files; write=Store.write files; append=Store.append files };\n    " in
   if network then
     replace_text
-      (replace_text text "module Main (S : Tcpip.Stack.V4V6) = struct"
-         "module Main (S : Tcpip.Stack.V4V6) (B : Mirage_block.S) = struct\n  module Store = Soma_store.Make(B)")
-      "let start s =" ("let start s disk =\n    " ^ setup)
+      (replace_text
+         (replace_text text "module Main (S : Tcpip.Stack.V4V6) = struct"
+            "module Main (S : Tcpip.Stack.V4V6) (B : Mirage_block.S) = struct\n  module Store = Soma_store.Make(B)")
+         "(D : Dns_client_mirage.S) = struct"
+         "(D : Dns_client_mirage.S) (B : Mirage_block.S) = struct\n  module Store = Soma_store.Make(B)")
+      (if web then "let start s dns =" else "let start s =")
+      ((if web then "let start s dns disk =\n    " else "let start s disk =\n    ") ^ setup)
   else header ^ "open Lwt.Infix\nmodule Main (B : Mirage_block.S) = struct\n  module Store = Soma_store.Make(B)\n  let start disk =\n    " ^ setup ^
        "Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network\nend\n"
 
@@ -1246,6 +1454,22 @@ let applied prog c =
 let uses_network prog =
   List.exists (applied prog) ["Serve"; "Fetch"; "Listen"; "Connect"; "Connect_within"; "Listen_mailbox"; "Mailbox"]
 
+(* [resolve] and [https] need DNS and TLS: a web image, with a network.
+   The constructor as a word, applied to anything (extraction writes
+   [Resolve host] with no parenthesis), but not its declaration ([Resolve
+   of ...]) *)
+let mentions prog c =
+  let n = String.length prog and k = String.length c in
+  let rec from i =
+    if i + k > n then false
+    else if String.sub prog i k = c && (i = 0 || not (is_ident_char prog.[i - 1]))
+            && (i + k = n || not (is_ident_char prog.[i + k]))
+            && not (i + k + 4 <= n && String.sub prog (i + k) 4 = " of ") then true
+    else from (i + 1) in
+  from 0
+
+let uses_web prog = List.exists (mentions prog) ["Resolve"; "Https"]
+
 (* Extracts [main] into [dir]/prog.ml, by running the extraction commands
    at the end of the program, after its .vo has been saved. *)
 (* [main] is extracted as [soma_main ()], with [main] inlined in it: a
@@ -1350,7 +1574,15 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
    - Lwt_condition: lwt 5, src/core/lwt_condition.mli
    - Tcpip.Stack.V4V6 and its TCP: tcpip 8, src/core/stack.ml and
      src/core/tcp.ml (Tcp.S), whose flow functions are Mirage_flow.S's
-     (mirage-flow 4, src/mirage_flow.mli) *)
+     (mirage-flow 4, src/mirage_flow.mli)
+   - for a web image (resolve, https):
+     Domain_name: domain-name 0.4, src/domain_name.mli (of_string, host);
+     Dns_client_mirage.S: dns-client-mirage 10, mirage/dns_client_mirage.mli
+     (gethostbyname); X509.Authenticator.t: x509 1.0;
+     Ca_certs_nss.authenticator: ca-certs-nss 3, lib/ca_certs_nss.mli;
+     Tls.Config.client: tls 1.0, lib/config.mli; Tls_mirage.Make: tls-mirage
+     1.0, mirage/tls_mirage.mli (client_of_flow, and Mirage_flow.S's read,
+     write, close, pp_error, pp_write_error) *)
 module Lwt : sig
   type 'a t
   val return : 'a -> 'a t
@@ -1430,6 +1662,47 @@ module Ipaddr : sig
   type t
   val of_string : string -> (t, [> `Msg of string ]) result
   val to_string : t -> string
+  module V4 : sig
+    type t
+    val to_string : t -> string
+  end
+end
+module Domain_name : sig
+  type 'a t
+  val of_string : string -> ([ `raw ] t, [> `Msg of string ]) result
+  val host : 'a t -> ([ `host ] t, [> `Msg of string ]) result
+end
+module Dns_client_mirage : sig
+  module type S = sig
+    type t
+    val gethostbyname : t -> [ `host ] Domain_name.t -> (Ipaddr.V4.t, [> `Msg of string ]) result Lwt.t
+  end
+end
+module X509 : sig
+  module Authenticator : sig type t end
+end
+module Ca_certs_nss : sig
+  val authenticator : unit -> (X509.Authenticator.t, [> `Msg of string ]) result
+end
+module Tls : sig
+  module Config : sig
+    type client
+    val client : authenticator:X509.Authenticator.t -> ?peer_name:[ `host ] Domain_name.t -> unit ->
+      (client, [> `Msg of string ]) result
+  end
+end
+module Tls_mirage : sig
+  module Make (F : sig type flow end) : sig
+    type flow
+    type error
+    type write_error
+    val pp_error : Format.formatter -> error -> unit
+    val pp_write_error : Format.formatter -> write_error -> unit
+    val client_of_flow : Tls.Config.client -> ?host:[ `host ] Domain_name.t -> F.flow -> (flow, write_error) result Lwt.t
+    val read : flow -> ([ `Data of Cstruct.t | `Eof ], error) result Lwt.t
+    val write : flow -> Cstruct.t -> (unit, write_error) result Lwt.t
+    val close : flow -> unit Lwt.t
+  end
 end
 module Lwt_condition : sig
   type 'a t
@@ -1538,7 +1811,8 @@ let build ~state ~vo_file =
     mkdir_p staging;
     extract ~calls ~state staging;
     let prog = read_file (Filename.concat staging "prog.ml") in
-    let network = uses_network prog in
+    let web = uses_web prog in
+    let network = uses_network prog || web in
     (* Include constructors applied to a variable, not only parenthesized
        arguments. Their type declarations alone do not need a device. *)
     let storage = List.exists (fun line -> List.exists (fun c ->
@@ -1549,14 +1823,14 @@ let build ~state ~vo_file =
        interpreter: the others need not fetch it *)
     let wasm = calls <> [] in
     let dir = Filename.concat (cache_dir ())
-        ((if network then "net" else "plain") ^ (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "")) in
+        ((if network then "net" else "plain") ^ (if web then "-web" else "") ^ (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "")) in
     mkdir_p dir;
     let file name contents = update_file (Filename.concat dir name) contents in
-    let config_changed = file "config.ml" (config_ml ~network ~wasm ~storage) in
+    let config_changed = file "config.ml" (config_ml ~network ~wasm ~storage ~web) in
     let modules = List.sort_uniq compare
         (List.map (fun (_, (c : SomaForeign.image_call)) -> module_name c.module_file, read_file c.module_file) calls) in
     List.iter (fun (name, contents) -> ignore (file name contents)) [
-      "unikernel.ml", unikernel_ml ~network ~storage;
+      "unikernel.ml", unikernel_ml ~network ~storage ~web;
       "soma_store.ml", header ^ SomaStorage.source;
       "soma_rt.ml", runtime_ml;
       "soma_wasm.ml", wasm_ml modules;

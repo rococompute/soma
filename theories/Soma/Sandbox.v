@@ -23,7 +23,9 @@
     connection), in order, ending with a result of type
     [A]. Building an [io] does nothing; the image runs [main]. A program
     that uses [serve], [fetch], [listen] or [connect] gets a network stack
-    and runs under [solo5-vmnet]. *)
+    and runs under [solo5-vmnet]; one that uses [resolve] or [https] gets
+    DNS and TLS as well (MirageOS's dns-client, tls-mirage and the NSS
+    certificate authorities). *)
 
 From Stdlib Require Strings.String Strings.Ascii.
 From Corelib Require Extraction.
@@ -41,6 +43,18 @@ Inductive fetched : Type :=
 | Refused                 (* nothing listens at that address and port *)
 | TimedOut                (* nothing answered within 10 seconds *)
 | BadAddress.             (* the address is not an IP address *)
+
+(** What [resolve] gets: an IPv4 address of the name, or why there is none *)
+Inductive resolved : Type :=
+| Resolved (address : string)   (* an IPv4 address, as "93.184.215.14" *)
+| Unresolved (why : string).    (* not a host name, no such name, no IPv4 address, or no answer *)
+
+(** What [https] gets: the server's answer, or why there is none. Header
+    names are in lower case ([header] finds one); the body is the whole
+    body, its chunks joined when it came chunked. *)
+Inductive answered : Type :=
+| Answer (status : nat) (headers : list (string * string)) (body : string)
+| Unanswered (why : string).    (* no address, no connection, a certificate not trusted, or no HTTP answer *)
 
 (** * Links: TCP connections that stay open, line by line *)
 
@@ -122,6 +136,19 @@ Inductive io : Type -> Type :=
     [Refused], nothing answered within 10 seconds ([TimedOut]), or the
     address is not an IP address ([BadAddress]) *)
 | fetch (address : string) (port : nat) (request : string) : io fetched
+(** the IPv4 address of the host name [host] (as ["mirageos.org"]), asked
+    of the DNS resolvers the network gives the unikernel; no answer within
+    10 seconds is [Unresolved] *)
+| resolve (host : string) : io resolved
+(** an HTTPS request, HTTP/1.1 over TLS: [verb] (["GET"], ["POST"], ...)
+    [path] (as ["/api/blocks/tip/height"], with its query) on [host], a
+    host name, at [port] (443 for HTTPS), with [headers] and [body]. The
+    name is resolved, the server's certificate checked against the NSS
+    certificate authorities for that name, and the answer read to its end:
+    [Answer], or why there is none ([Unanswered]), within 30 seconds and up
+    to 16 MB. [Host], [Connection] and [Content-Length] are set by the
+    request itself; a header with a line break in it is refused. *)
+| https (verb host : string) (port : nat) (path : string) (headers : list (string * string)) (body : string) : io answered
 (** accept TCP connections on [port], each with [handler], which reads and
     writes it as long as it likes; the connection is closed when [handler]
     ends. [listen] returns at once; the unikernel keeps listening after
@@ -187,6 +214,22 @@ Notation "m ;; rest" := (bind m (fun _ => rest))
   (at level 61, right associativity) : io_scope.
 
 Open Scope io_scope.
+
+(** [https]'s usual requests, on port 443 *)
+Definition https_get (host path : string) : io answered := https "GET" host 443 path nil "".
+Definition https_post (host path content_type body : string) : io answered :=
+  https "POST" host 443 path (cons ("content-type", content_type) nil) body.
+
+(** the value of the header [name], given in lower case, as [https] gives
+    the headers *)
+Fixpoint header (name : string) (headers : list (string * string)) : option string :=
+  match headers with
+  | nil => None
+  | cons (k, v) rest => if String.eqb k name then Some v else header name rest
+  end.
+
+Example header_found : header "content-type" (cons ("server", "x") (cons ("content-type", "text/html") nil)) = Some "text/html" := eq_refl.
+Example header_missing : header "etag" (cons ("server", "x") nil) = None := eq_refl.
 
 (** Elapsed milliseconds; saturates at zero for reversed arguments. *)
 Definition elapsed_ms (start finish : N) : N := (finish - start)%N.

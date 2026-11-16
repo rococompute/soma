@@ -1531,6 +1531,8 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |
 | `fetch address port request` | `io fetched` | connects to the IP address, sends `request`, returns what comes back before the other side closes (`Reply body`), or why there is nothing: `Refused` (nothing listens there), `TimedOut` (nothing answered within 10 seconds), `BadAddress` (not an IP address) |
+| `resolve host` | `io resolved` | the IPv4 address of the host name, asked of the DNS resolvers the network gives the image (`Resolved address`), or why there is none (`Unresolved why`): not a host name, no such name, no IPv4 address, or no answer within 10 seconds |
+| `https verb host port path headers body` | `io answered` | an HTTPS request (HTTP/1.1 over TLS): the name resolved, the server's certificate checked against the NSS certificate authorities for that name, the answer read to its end: `Answer status headers body` (header names in lower case, a chunked body joined), or why there is none (`Unanswered why`: no address, no connection, a certificate not trusted, no HTTP answer), within 30 seconds and up to 16 MB. `Host`, `Connection` and `Content-Length` are set by the request; a header with a line break is refused. `https_get host path` and `https_post host path content_type body` are the usual ones, on port 443; `header name headers` finds a header. |
 | `listen port handler` | `io unit` | accepts TCP connections on `port`, each given to `handler : connection -> io unit`, which talks over it as long as it likes; the connection is closed when the handler ends. Returns at once; the image keeps listening after `main` ends. |
 | `connect address port` | `io connected` | opens a connection that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` |
 | `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
@@ -1623,7 +1625,12 @@ program is built so, a `.soma` file; a Rocq `.v` file that requires
 3. A program that uses `serve`, `fetch`, `listen` or `connect` gets a network stack
    (`generic_stackv4v6`, DHCP); the image runs under `solo5-vmnet`, which
    gives it an address on the Mac's vmnet network (macOS 26 or later, no
-   root). The others have no network device.
+   root). The others have no network device. One that uses `resolve` or
+   `https` is a web image (`net-web/`): MirageOS's `dns_client` device on
+   the stack (`generic_dns_client`, with `generic_happy_eyeballs`), and the
+   packages `tls-mirage`, `ca-certs-nss`, `x509` and `domain-name`. The
+   HTTP/1.1 of `https` (the request, and reading the answer) is in
+   `soma_rt.ml`, with no library; DNS and TLS are in `unikernel.ml`.
 4. The project is built for solo5's `hvt` target in the opam switch
    `$SOMA_MIRAGE_SWITCH` (for example `hvf`: a switch with the hvf-mac
    repository of solo5-mac, with `mirage`, `opam-monorepo`, `solo5-hvt` and
@@ -1732,14 +1739,23 @@ soma run examples/example_files/mirage_fetch/mirage_fetch.soma -- --arg=<that IP
 
 `dev/mirage-check.sh` builds the examples (`examples/example_files/mirage_*/`), boots
 each image and checks its console and exit code, the network cases with one
-unikernel serving and another fetching from it.
+unikernel serving and another fetching from it, and one fetching a page over
+HTTPS from the internet and refusing a self-signed certificate
+(`mirage_https`).
+
+```sh
+soma run examples/example_files/mirage_https/mirage_https.soma                       # mirageos.org
+soma run examples/example_files/mirage_https/mirage_https.soma -- --arg=mempool.space
+```
 `dev/mirage-check.sh --no-image` stops after the check above and does not boot.
 
 Soma's installed libraries can be required by their short name, as
 Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
 `Soma.Sandbox`.
 
-Not yet: DNS names (`fetch` takes an IP address), TLS, UDP, block devices
+Not yet: DNS names for `fetch` and `connect` (they take an IP address;
+`resolve` gives one), IPv6 addresses from `resolve`, TLS for `listen` and
+`serve` (an HTTPS server), client certificates, UDP, block devices
 other than the one `storage` device behind `read_file`, `write_file` and
 `append_file` (see "Persistent files in Sandbox" below), and state shared between `serve`
 handlers.
