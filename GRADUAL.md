@@ -162,7 +162,8 @@ Qed.
 | `The rest follows.` | searches for the rest of the proof, and reports it as sentences (below) |
 
 An example of what a function gives, `Example e : f 3 = "three".`, is
-proved by `computed` (a tactic of `theories/Soma/Proof.v`): the kernel
+proved by `computed` (a tactic of `theories/Soma/Proof.v`), also under
+`forall`s that the computation does not need to take apart: the kernel
 computes both sides when the proof ends, at `Qed`, as it checks every
 proof. `reflexivity` computes them as it is applied too, so it takes twice
 as long, which shows in a file of many examples. An equation that does not

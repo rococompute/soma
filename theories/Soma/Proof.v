@@ -54,7 +54,8 @@
       case, for [n], assuming the statement for every smaller number.
 
     - [computed] proves an equation that holds by computation, such as an
-      example of what a function gives, [f 3 = "three"]: the kernel
+      example of what a function gives, [f 3 = "three"], perhaps for every
+      value of some variables ([forall x, ...]): the kernel
       computes both sides when the proof ends ([Qed]), once. [reflexivity]
       would also compute them as it is applied, so that this check takes
       twice as long. An equation that does not hold fails at [Qed]: "The
@@ -74,10 +75,15 @@ Declare ML Module "soma-runtime.plugins.soma_proof".
 (** ** Computed equations *)
 
 (* The proof term is checked by the kernel at Qed, as every proof is; this
-   only leaves out the tactic's own check, which is the same computation. *)
+   only leaves out the tactic's own check, which is the same computation.
+   The term is [eq_refl] of the right side, the expected value, as
+   reflexivity's is: the kernel then computes the left side towards it.
+   Of the left side, it can compute much more: a [sha256 (sha256 "x")] on
+   both sides, computed rather than compared. *)
 Ltac computed :=
+  intros;
   lazymatch goal with
-  | |- @eq ?T ?a _ => exact_no_check (@eq_refl T a)
+  | |- @eq ?T _ ?b => exact_no_check (@eq_refl T b)
   | |- ?g => fail "computed: the goal is not an equation:" g
   end.
 

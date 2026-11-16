@@ -172,7 +172,7 @@ if rocq c -q -async-proofs lazy gradual.soma > out.log 2>&1; then
 fi
 grep -q "stands in for a proof of" out.log || { cat out.log; exit 1; }
 # computed: an equation the kernel computes once, at Qed
-printf '%s\n' 'Example two : succ_dyn 1 = 2 /\ 1 + 1 = 2. Proof. split; computed. Qed.' > gradual.exp
+printf '%s\n' 'Example two : succ_dyn 1 = 2 /\ forall n : nat, 0 + n = n. Proof. split; computed. Qed.' > gradual.exp
 rocq c -q gradual.soma
 printf '%s\n' 'Example three : 1 + 1 = 3. Proof. computed. Qed.' > gradual.exp
 if rocq c -q gradual.soma > out.log 2>&1; then
