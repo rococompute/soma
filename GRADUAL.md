@@ -161,6 +161,13 @@ Qed.
 | `We use strong induction on n.` | for a number: proves the goal for `n` assuming it for every smaller number, which is taken and assumed |
 | `The rest follows.` | searches for the rest of the proof, and reports it as sentences (below) |
 
+An example of what a function gives, `Example e : f 3 = "three".`, is
+proved by `computed` (a tactic of `theories/Soma/Proof.v`): the kernel
+computes both sides when the proof ends, at `Qed`, as it checks every
+proof. `reflexivity` computes them as it is applied too, so it takes twice
+as long, which shows in a file of many examples. An equation that does not
+hold fails at `Qed`; a goal that is not an equation fails at `computed`.
+
 `The rest follows.` searches for the rest of a proof
 (`plugins/soma_proof/soma_rest.ml`): it takes and assumes what the goal
 gives, then tries `soma_auto`, computing, the hypotheses, the program's

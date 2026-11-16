@@ -53,6 +53,13 @@
       [Assume]; [We use strong induction on n.] (for a number) is one
       case, for [n], assuming the statement for every smaller number.
 
+    - [computed] proves an equation that holds by computation, such as an
+      example of what a function gives, [f 3 = "three"]: the kernel
+      computes both sides when the proof ends ([Qed]), once. [reflexivity]
+      would also compute them as it is applied, so that this check takes
+      twice as long. An equation that does not hold fails at [Qed]: "The
+      term eq_refl ... has type ... while it is expected to have type ...".
+
     "Proves" means: by [soma_auto], which tries, in turn, the hypotheses,
     computation, equalities, linear then non-linear arithmetic ([lia],
     [ring], [nia]) and propositional logic. A step [soma_auto] cannot take
@@ -63,6 +70,16 @@
 
 From Stdlib Require Import Arith Lia Lra.
 Declare ML Module "soma-runtime.plugins.soma_proof".
+
+(** ** Computed equations *)
+
+(* The proof term is checked by the kernel at Qed, as every proof is; this
+   only leaves out the tactic's own check, which is the same computation. *)
+Ltac computed :=
+  lazymatch goal with
+  | |- @eq ?T ?a _ => exact_no_check (@eq_refl T a)
+  | |- ?g => fail "computed: the goal is not an equation:" g
+  end.
 
 (** ** What "proves" means *)
 

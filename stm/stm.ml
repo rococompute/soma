@@ -1454,7 +1454,15 @@ end = struct (* {{{ *)
     p
 
   let build_proof_here ~doc ?loc ~drop_pt exn_info eop =
-    Future.create ~fix_exn:(Some exn_info) (fun () -> build_proof_here_fun ~doc ?loc ~drop_pt ~id:exn_info.Stateid.id eop)
+    Future.create ~fix_exn:(Some exn_info) (fun () ->
+        (* Soma: a proof forced later (lazy asynchronous proofs) is computed
+           in the state where it ends, before its lemma is declared; the
+           state it is forced in is put back once it is computed, so that
+           the kernel checks it in an environment that has its lemma
+           (Opaques.declare_defined_opaque) *)
+        let st = Vernacstate.freeze_full_state () in
+        Fun.protect ~finally:(fun () -> Vernacstate.unfreeze_full_state st) (fun () ->
+            build_proof_here_fun ~doc ?loc ~drop_pt ~id:exn_info.Stateid.id eop))
 
   let perform_buildp { Stateid.exn_info; stop; document; loc } drop my_states =
     try

@@ -1008,13 +1008,17 @@ let warn_gradual_proof =
            str "so the theorem is not proved (see Print Assumptions)."))
 
 let check_gradual_proof ~kind name (entry : proof_entry) =
+  let check ~typ body = match GradualTyping.proof_fake_evidence (Global.env ()) ~typ ~body with
+    | Some fake -> warn_gradual_proof (name, fake)
+    | None -> () in
   match kind, entry.proof_entry_body, entry.proof_entry_type with
-  | Decls.IsProof _, Default { body; _ }, Some typ ->
-    begin match GradualTyping.proof_fake_evidence (Global.env ()) ~typ ~body with
-      | Some fake -> warn_gradual_proof (name, fake)
-      | None -> ()
-    end
-  | _ -> ()
+  | Decls.IsProof _, Default { body; _ }, Some typ -> check ~typ body; entry
+  | Decls.IsProof _, DeferredOpaque { body; feedback_id }, Some typ ->
+    (* Soma: a deferred proof (one checked beside the build,
+       vernac/somaImport.ml) is checked for this when it is computed *)
+    let body = Future.chain body (fun (((b, _), _) as proof) -> check ~typ b; proof) in
+    { entry with proof_entry_body = DeferredOpaque { body; feedback_id } }
+  | _ -> entry
 
 (* Soma: a value of type [Any] that may have been made from a type it is
    then used as something inconsistent with: an [Any] that may be a
@@ -1064,7 +1068,7 @@ let declare_possibly_mutual_definitions ~info ~cinfo ~obls ?(is_telescope=false)
   let _, refs = List.fold_left2_map (fun subst CInfo.{name; impargs; loc} (entry, uctx) ->
       (* replacing matters for Derive-like statement but it does not hurt otherwise *)
       let entry = ProofEntry.map_entry entry ~f:(Vars.replace_vars subst) in
-      let () = check_gradual_proof ~kind name entry in
+      let entry = check_gradual_proof ~kind name entry in
       let () = check_casts_may_fail name entry in
       let gref = declare_entry ~loc ~name ~scope ~clearbody ~kind ?hook ~impargs ~typing_flags ~user_warns ~obls ~uctx entry in
       let inst = instance_of_univs entry.proof_entry_universes in

@@ -165,6 +165,25 @@ fake 'Theorem t : 1 = 2. Proof. exact unk. Qed.'
 fake 'Theorem t : 1 = 2. Proof. exact (cast nat (1 = 2) 0). Qed.'
 fake 'Theorem t : forall n : nat, succ_dyn n = n + 2. Proof. intros n. exact (eq_trans unk eq_refl). Qed.'
 fake 'Theorem t : 1 = 2. Proof. exact cheat. Qed.'
+# also when the proof is deferred (checked beside the build, SOMA_DEFER_PROOFS)
+printf '%s\n' 'Theorem t : 1 = 2. Proof. exact unk. Qed.' > gradual.exp
+if rocq c -q -async-proofs lazy gradual.soma > out.log 2>&1; then
+  echo "a deferred fake proof was accepted"; exit 1
+fi
+grep -q "stands in for a proof of" out.log || { cat out.log; exit 1; }
+# computed: an equation the kernel computes once, at Qed
+printf '%s\n' 'Example two : succ_dyn 1 = 2 /\ 1 + 1 = 2. Proof. split; computed. Qed.' > gradual.exp
+rocq c -q gradual.soma
+printf '%s\n' 'Example three : 1 + 1 = 3. Proof. computed. Qed.' > gradual.exp
+if rocq c -q gradual.soma > out.log 2>&1; then
+  echo "computed proved 1 + 1 = 3"; exit 1
+fi
+grep -q '"1 + 1 = 3"' out.log || { cat out.log; exit 1; }
+printf '%s\n' 'Example le : 1 <= 2. Proof. computed. Qed.' > gradual.exp
+if rocq c -q gradual.soma > out.log 2>&1; then
+  echo "computed proved an inequality"; exit 1
+fi
+grep -q "computed: the goal is not an equation" out.log || { cat out.log; exit 1; }
 cat > gradual.exp <<'EOT'
 Theorem about_program : forall n : nat, succ_dyn n = n + 1.
 Proof. intros n. reflexivity. Qed.
