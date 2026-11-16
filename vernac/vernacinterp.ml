@@ -98,7 +98,16 @@ and vernac_load ~verbosely ~st entries =
         };
       }
     in
-    v_mod (interp_control ~st) (CAst.make ?loc cmd)
+    (* Soma: an error in a loaded sentence (a .lang file's, say) is located
+       at that sentence when it has no location of its own, as it would be
+       in a compiled file, not left without one *)
+    try v_mod (interp_control ~st) (CAst.make ?loc cmd)
+    with reraise ->
+      let reraise, info = Exninfo.capture reraise in
+      let info = match Loc.get_loc info, loc with
+        | None, Some loc -> Loc.add_loc info loc
+        | _ -> info in
+      Exninfo.iraise (reraise, info)
   in
   let pm = st.Vernacstate.interp.program in
   let stack = st.Vernacstate.interp.lemmas in

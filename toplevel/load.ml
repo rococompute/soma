@@ -25,10 +25,14 @@ let load_init_file opts ~state =
   end
 
 (* Soma: [Load "FILE.lang".], which loads a .lang file in a module of its
-   own (vernac/somaMacro.ml) *)
+   own (vernac/somaMacro.ml). Run as a compiled file's sentences are, not
+   as the interactive loop's: Vernac.process_expr rolls the document back
+   on an error (Stm.edit_at), which is only for an interactive session,
+   and turned any error in the .lang file into an anomaly with no
+   location. *)
 let load_lang ~state f =
   let load = Vernacexpr.{ control = []; attrs = []; expr = VernacSynterp (VernacLoad (false, f)) } in
-  Vernac.process_expr ~state (CAst.make load)
+  Vernac.interp_vernac ~check:true ~state (CAst.make load)
 
 let lang_of_program f =
   if Filename.check_suffix f ".soma" then

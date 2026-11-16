@@ -91,3 +91,17 @@ Require strings.
 Definition h : repeat "ab" 2 = "abab" := eq_refl.
 EOT
 fails required.soma "The term"
+
+# an error in FILE.lang: located in FILE.lang, not an anomaly. A syntax
+# error, and an error in a sentence that parses (each was "Anomaly ...
+# stm.ml ... Assertion failed", with no location)
+mkdir errs && cd errs
+printf 'Macro m args := App (Var "f") nil |> x.\n' > syn.lang
+echo 'Definition x := 1.' > syn.soma
+fails syn.soma 'File "./syn.lang", line 1, characters 34-35'
+grep -q "Anomaly" out.log && { cat out.log; exit 1; }
+printf 'Inductive m := A.\nMacro m args := Var "x".\n' > clash.lang
+echo 'Definition x := 1.' > clash.soma
+fails clash.soma 'File "./clash.lang", line 2, characters 0-24'
+grep -q "m already exists" out.log || { cat out.log; exit 1; }
+cd ..
