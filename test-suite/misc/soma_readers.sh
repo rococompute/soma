@@ -95,3 +95,13 @@ cp tiny.lang fail.lang
 echo 'Read broken "x".' > fail.soma
 fails fail.soma "The reader broken did not return forms"
 
+# the example: examples/example_files/lisp, a #lang lisp program, its
+# values and its proofs
+EXAMPLE="$(cd "$HERE/../../examples/example_files/lisp" 2>/dev/null && pwd || true)"
+if [ -n "$EXAMPLE" ] && [ -f "$EXAMPLE/lisp.soma" ]; then
+  mkdir example && cp "$EXAMPLE"/lisp.* example/
+  (cd example && soma compile -v lisp.soma > out.log 2>&1) || { cat example/out.log; exit 1; }
+  for v in '= 144' '= 120' '= 35' '= "less"' 'cast (list nat) Any [3, 2, 1, 0]' '3 theorems' 'lisp.countdown'; do
+    grep -qF "$v" example/out.log || { echo "lisp example: no $v"; cat example/out.log; exit 1; }
+  done
+fi

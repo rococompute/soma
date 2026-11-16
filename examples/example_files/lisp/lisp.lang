@@ -1,0 +1,245 @@
+(** A reader of s-expressions: lisp.soma starts with [#lang lisp], so
+    the rest of it is read by [lisp], below, not by Soma's parser
+    (GRADUAL.md, "Readers"). The reader turns each top-level form into a
+    Soma definition or term:
+
+    - [(define (f x y) body)] defines [f]. If [body] calls [f], it is a
+      [Recursive] definition, which Rocq's termination check checks.
+    - [(define-any (f x) body)] defines [f] through [fix_any] (the Z
+      combinator, typed with [Any]): any recursion is accepted, and Soma's
+      review lists it among the escape hatches.
+    - [(define x e)] defines [x]; any other form is a term, evaluated.
+
+    In expressions: [(lambda (x y) body)], [(if c a b)], [(let ((x e)
+    ...) body)], [(match e (pattern body) ...)] with patterns such as [0],
+    [(Succ m)], [(cons x _)], [(list a b c)], and calls [(f a b)].
+    [+ - * / = < <=] are [Nat]'s, [#t] and [#f] are [true] and [false],
+    [()] is [nil], [_] is a hole, and a [-] in a name is read as [_]
+    ([make-adder] is [make_adder]). [;] starts a comment. *)
+
+(** Z, the strict Y combinator: its argument is [Any], so it may apply
+    itself, which no static type allows *)
+Definition fix_any (f : Any) : Any :=
+  (fun (x : Any) => f (fun (v : Any) => x x v)) (fun (x : Any) => f (fun (v : Any) => x x v)).
+
+(** ** Characters to tokens, each with where it starts *)
+
+Inductive token :=
+| LParen (pos : nat)
+| RParen (pos : nat)
+| Atom (pos : nat) (cs : list nat)
+| Text (pos : nat) (cs : list nat)
+| Unclosed (pos : nat).
+
+(** the token being read, if any, before what follows it *)
+Definition flush (mode start : nat) (acc : list nat) (rest : list token) : list token :=
+  match mode with
+  | 1 => cons (Atom start (List.rev acc)) rest
+  | 2 => cons (Unclosed start) nil
+  | _ => rest
+  end.
+
+(** [mode]: 0 between tokens, 1 in an atom, 2 in a string, 3 in a comment *)
+Fixpoint tokens (cs : list nat) (pos mode start : nat) (acc : list nat) : list token :=
+  match cs with
+  | nil => flush mode start acc nil
+  | cons c r =>
+    match mode with
+    | 2 => if Nat.eqb c 34 then cons (Text start (List.rev acc)) (tokens r (Succ pos) 0 0 nil)
+           else tokens r (Succ pos) 2 start (cons c acc)
+    | 3 => if Nat.eqb c 10 then tokens r (Succ pos) 0 0 nil else tokens r (Succ pos) 3 0 nil
+    | _ =>
+      if Nat.eqb c 40 then flush mode start acc (cons (LParen pos) (tokens r (Succ pos) 0 0 nil))
+      else if Nat.eqb c 41 then flush mode start acc (cons (RParen pos) (tokens r (Succ pos) 0 0 nil))
+      else if Nat.eqb c 34 then flush mode start acc (tokens r (Succ pos) 2 pos nil)
+      else if Nat.eqb c 59 then flush mode start acc (tokens r (Succ pos) 3 0 nil)
+      else if Nat.leb c 32 then flush mode start acc (tokens r (Succ pos) 0 0 nil)
+      else if Nat.eqb mode 1 then tokens r (Succ pos) 1 start (cons c acc)
+      else tokens r (Succ pos) 1 pos (cons c nil)
+    end
+  end.
+
+(** ** Tokens to s-expressions *)
+
+Inductive sx :=
+| SAtom (pos : nat) (cs : list nat)
+| SText (pos : nat) (cs : list nat)
+| SList (pos : nat) (xs : list sx).
+
+Inductive parsed :=
+| Parsed (x : sx) (rest : list token)
+| Failed (pos : nat) (message : string).
+
+(** [fuel] bounds the work, and is more than the tokens need *)
+Fixpoint parse (fuel : nat) (ts : list token) : parsed :=
+  match fuel with
+  | 0 => Failed 0 "too deeply nested"
+  | Succ f =>
+    match ts with
+    | nil => Failed 0 "an expression was expected"
+    | cons (Atom p cs) r => Parsed (SAtom p cs) r
+    | cons (Text p cs) r => Parsed (SText p cs) r
+    | cons (Unclosed p) _ => Failed p "this string is not closed"
+    | cons (RParen p) _ => Failed p "this ) closes nothing"
+    | cons (LParen p) r => parse_list f p r nil
+    end
+  end
+with parse_list (fuel lp : nat) (ts : list token) (acc : list sx) : parsed :=
+  match fuel with
+  | 0 => Failed lp "too deeply nested"
+  | Succ f =>
+    match ts with
+    | nil => Failed lp "this ( is not closed"
+    | cons (Unclosed p) _ => Failed p "this string is not closed"
+    | cons (RParen _) r => Parsed (SList lp (List.rev acc)) r
+    | _ => match parse f ts with
+           | Parsed x r => parse_list f lp r (cons x acc)
+           | Failed p m => Failed p m
+           end
+    end
+  end.
+
+(** ** S-expressions to Soma code *)
+
+Fixpoint digits (cs : list nat) : bool :=
+  match cs with
+  | nil => true
+  | cons c r => andb (andb (Nat.leb 48 c) (Nat.leb c 57)) (digits r)
+  end.
+
+Fixpoint number (cs : list nat) (acc : nat) : nat :=
+  match cs with nil => acc | cons c r => number r (acc * 10 + (c - 48)) end.
+
+(** a name, with each [-] read as [_] *)
+Definition name (cs : list nat) : string :=
+  of_chars (List.map (fun c => if Nat.eqb c 45 then 95 else c) cs).
+
+Definition atom (cs : list nat) : syntax :=
+  let s := of_chars cs in
+  if String.eqb s "+" then Var "Nat.add" else
+  if String.eqb s "-" then Var "Nat.sub" else
+  if String.eqb s "*" then Var "Nat.mul" else
+  if String.eqb s "/" then Var "Nat.div" else
+  if String.eqb s "=" then Var "Nat.eqb" else
+  if String.eqb s "<" then Var "Nat.ltb" else
+  if String.eqb s "<=" then Var "Nat.leb" else
+  if String.eqb s "#t" then Var "true" else
+  if String.eqb s "#f" then Var "false" else
+  if String.eqb s "_" then Hole else
+  match cs with
+  | cons _ _ => if digits cs then Num (number cs 0) else Var (name cs)
+  | nil => Hole
+  end.
+
+Definition names (xs : list sx) : list string :=
+  List.map (fun x => match x with SAtom _ cs => name cs | _ => "not_a_name" end) xs.
+
+Definition lams (ps : list string) (body : syntax) : syntax := List.fold_right Lam body ps.
+
+(** a pattern: a name, a number, a string, [_], or [(C p ...)] *)
+Fixpoint pattern (x : sx) : syntax :=
+  match x with
+  | SAtom _ cs => atom cs
+  | SText _ cs => Str (of_chars cs)
+  | SList _ (cons (SAtom _ c) ps) =>
+    App (Var (name c)) ((fix go (l : list sx) : list syntax :=
+                           match l with nil => nil | cons p r => cons (pattern p) (go r) end) ps)
+  | SList _ _ => MacroError "a pattern is a name, a number, a string, _ or (C p ...)"
+  end.
+
+Fixpoint expr (x : sx) : syntax :=
+  let exprs := fix go (l : list sx) : list syntax :=
+    match l with nil => nil | cons y r => cons (expr y) (go r) end in
+  match x with
+  | SAtom _ cs => atom cs
+  | SText _ cs => Str (of_chars cs)
+  | SList _ nil => Var "nil"
+  | SList _ (cons (SAtom _ h) args) =>
+    let head := of_chars h in
+    if String.eqb head "lambda" then
+      match args with
+      | cons (SList _ ps) (cons body nil) => lams (names ps) (expr body)
+      | _ => MacroError "(lambda (params) body)"
+      end
+    else if String.eqb head "if" then
+      match args with
+      | cons c (cons a (cons b nil)) =>
+        Match (expr c) (cons (Var "true", expr a) (cons (Var "false", expr b) nil))
+      | _ => MacroError "(if test then else)"
+      end
+    else if String.eqb head "let" then
+      match args with
+      | cons (SList _ binds) (cons body nil) =>
+        (fix lets (bs : list sx) : syntax :=
+           match bs with
+           | nil => expr body
+           | cons (SList _ (cons (SAtom _ v) (cons e nil))) r => LetIn (name v) (expr e) (lets r)
+           | cons _ _ => MacroError "(let ((name value) ...) body)"
+           end) binds
+      | _ => MacroError "(let ((name value) ...) body)"
+      end
+    else if String.eqb head "match" then
+      match args with
+      | cons e cases =>
+        Match (expr e) ((fix arms (cs : list sx) : list (syntax * syntax) :=
+                           match cs with
+                           | nil => nil
+                           | cons (SList _ (cons p (cons b nil))) r => cons (pattern p, expr b) (arms r)
+                           | cons _ r => cons (Hole, MacroError "(match e (pattern body) ...)") (arms r)
+                           end) cases)
+      | nil => MacroError "(match e (pattern body) ...)"
+      end
+    else if String.eqb head "list" then
+      List.fold_right (fun a acc => App (Var "cons") (cons a (cons acc nil))) (Var "nil") (exprs args)
+    else App (atom h) (exprs args)
+  | SList _ (cons f args) => App (expr f) (exprs args)
+  end.
+
+(** does the name [n] occur free in [s]? *)
+Fixpoint mentions (n : string) (s : syntax) : bool :=
+  match s with
+  | Var x => String.eqb x n
+  | App f xs => orb (mentions n f) (List.existsb (mentions n) xs)
+  | Lam x b => andb (negb (String.eqb x n)) (mentions n b)
+  | LetIn x v b => orb (mentions n v) (andb (negb (String.eqb x n)) (mentions n b))
+  | Match e bs => orb (mentions n e)
+                      ((fix go (l : list (syntax * syntax)) : bool :=
+                          match l with nil => false | cons (_, b) r => orb (mentions n b) (go r) end) bs)
+  | _ => false
+  end.
+
+(** ** Top-level forms *)
+
+Definition form (x : sx) : item :=
+  match x with
+  | SList p (cons (SAtom _ d) (cons (SList _ (cons (SAtom _ f) ps)) (cons body nil))) =>
+    let f := name f in
+    let b := expr body in
+    if String.eqb (of_chars d) "define" then
+      if mentions f b then RecDef p f (names ps) b else Def p f (lams (names ps) b)
+    else if String.eqb (of_chars d) "define-any" then
+      Def p f (App (Var "fix_any") (cons (Lam f (lams (names ps) b)) nil))
+    else Expr p (expr x)
+  | SList p (cons (SAtom _ d) (cons (SAtom _ v) (cons e nil))) =>
+    if String.eqb (of_chars d) "define" then Def p (name v) (expr e) else Expr p (expr x)
+  | SList p _ => Expr p (expr x)
+  | SAtom p _ => Expr p (expr x)
+  | SText p _ => Expr p (expr x)
+  end.
+
+Fixpoint forms (n fuel : nat) (ts : list token) : list item :=
+  match n with
+  | 0 => nil
+  | Succ k =>
+    match ts with
+    | nil => nil
+    | _ => match parse fuel ts with
+           | Parsed x r => cons (form x) (forms k fuel r)
+           | Failed p m => cons (ReadError p m) nil
+           end
+    end
+  end.
+
+Reader lisp text :=
+  let ts := tokens (chars text) 0 0 0 nil in
+  forms (Succ (List.length ts)) (Succ (Succ (2 * List.length ts))) ts.

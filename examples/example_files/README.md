@@ -42,6 +42,13 @@ soma run examples/example_files/hello/hello.soma
   arguments, and `repeat` builds a string while the program is checked.
   `pow8 x` is defined as `pipe x square square square`, and
   `macros.proof` proves that it is `x ^ 8`.
+- `lisp/`: a program written in s-expressions. Its first line, `#lang
+  lisp`, hands the rest of the file to the reader `lisp` in `lisp.lang`,
+  a Soma function that parses the text and returns Soma definitions and
+  terms: `square`, `fact` (a `Recursive` definition that Rocq checks
+  ends), `countdown` (defined through the Z combinator, so Soma's review
+  lists it as an escape hatch), `make-adder` and a `let`. `lisp.proof`
+  proves facts about them, as about any Soma definition.
 - `sqrt2_irrational/`: a proof that the square root of 2
   is irrational (`irrational (sqrt 2)`, with `irrational` defined in the
   `.soma`), top down: the theorem first, then a proof that reduces it with

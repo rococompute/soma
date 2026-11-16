@@ -295,7 +295,10 @@ What a reader defines is in scope after it, in `FILE.proof`, and where
 the file is imported; Soma's review counts it, and its escape hatches, as
 it does the rest. The reader runs when the program is checked, as a
 macro does: it is a Soma function, so it reads no file and has no
-effect but its forms. `test-suite/misc/soma_readers.sh` tests readers.
+effect but its forms. `examples/example_files/lisp/` is a program in
+s-expressions, `#lang lisp`, with its reader in `lisp.lang` and proofs
+about what it defines in `lisp.proof`; `test-suite/misc/soma_readers.sh`
+tests readers, and that example.
 
 ### Projects: `Import` compiles what it imports
 

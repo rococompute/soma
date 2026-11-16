@@ -1,0 +1,15 @@
+(** What lisp.soma's forms define are Soma definitions, so they can be
+    proved about like any other. *)
+
+Theorem square_is_mul : forall n, square n = n * n.
+Proof. reflexivity. Qed.
+
+Theorem fact_positive : forall n, 0 < fact n.
+Proof.
+  induction n as [| m IH]; simpl.
+  - lia.
+  - lia.
+Qed.
+
+Theorem add_ten_adds : forall x, add_ten x = x + 10.
+Proof. reflexivity. Qed.
