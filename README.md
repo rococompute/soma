@@ -92,10 +92,10 @@ proof argument, filled in by trying `eq_refl`:
 Class Even (x : N) := even_proof : N.even x = true.
 #[export] Hint Extern 1 (Even _) => exact eq_refl : typeclass_instances.
 
-even_square (x : N) `{Even x} : N := x * x.
+gradually_typed_square (x : N) `{Even x} : N := x * x.
 
-even_square 2048.      (* 4194304%N *)
-even_square 123.       (* rejected: Could not find an instance for "Even 123" *)
+gradually_typed_square 2048.           (* 4194304%N *)
+gradually_typed_square 123.            (* rejected: Could not find an instance for "Even 123" *)
 ```
 
 Either way, the proof is found while the program is checked, so `x` has
@@ -103,9 +103,11 @@ to be known then, as a literal is. For an `x` that arrives when the
 program runs, the program checks `N.even x` first and carries the result
 along as the proof.
 
-Without the rejected lines, all four go in one file, `square.soma`: `soma
-run square.soma` prints the last value, `= 4194304%N : N`, and `soma build
--v square.soma` prints each. `soma help` lists the commands: build, run,
+The last two both define `gradually_typed_square`, two ways to write the
+same function, so a file keeps one of them. Without the rejected lines,
+the first three go in one file, `square.soma`: `soma run square.soma`
+prints the last value, `= 4194304%N : N`, and `soma build -v square.soma`
+prints each. `soma help` lists the commands: build, run,
 explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
