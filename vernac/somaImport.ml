@@ -893,6 +893,52 @@ let record_interface ~source ~dirpath ~vo_file =
     Sys.rename (file ^ ".tmp") file
   end
 
+(* The test runner asks the compiler, rather than a second source parser,
+   which project files it loaded. loaded_libraries includes indirect imports,
+   imports from expectations, and those introduced by folder rules/macros.
+   Only the requested entry point writes the trace; its imported compilers
+   inherit the request too. This metadata never participates in compilation. *)
+let record_test_dependencies ~source =
+  match Sys.getenv_opt "SOMA_TEST_SOURCE", Sys.getenv_opt "SOMA_TEST_DEPENDENCIES" with
+  | Some requested, Some output when absolute source = requested ->
+    let p = current () in
+    let prefix = p.cache_dir ^ "/" in
+    let sources = ref [absolute source] in
+    let complete = ref true in
+    let visited = Hashtbl.create 17 in
+    let rec visit path =
+      if not (Hashtbl.mem visited path) then begin
+        Hashtbl.add visited path ();
+        (match source_of p.root path with
+         | Some src -> sources := absolute src :: !sources
+         | None -> complete := false);
+        (* Deferred proofs may load libraries absent from the interface the
+           entry point loaded. Their completed stamps contain those imports. *)
+        match read_stamp (stamp_of p path) with
+        | Some (_, imports, _) -> List.iter (fun (path, _) -> visit path) imports
+        | None -> complete := false
+      end in
+    let installed file = match Boot.Env.initialized () with
+      | Some (Boot.Env.Env env) ->
+        List.exists (fun dir -> CString.is_prefix (Boot.Env.Path.to_string dir ^ "/") file)
+          [Boot.Env.coqlib env; Boot.Env.runtimelib env]
+      | _ -> false in
+    List.iter (fun dir -> match library_file dir with
+        | Some file when CString.is_prefix prefix file ->
+          let relative = String.sub file (String.length prefix)
+              (String.length file - String.length prefix) |> Filename.remove_extension in
+          visit relative
+        | Some file -> if not (installed file) then complete := false
+        | None -> complete := false) (Library.loaded_libraries ());
+    (* External project sources and arbitrary load paths need a broader graph.
+       Keep running those tests until that graph is available. *)
+    if dependencies () <> [] then complete := false;
+    Out_channel.with_open_bin output (fun oc ->
+        output_string oc (if !complete then "soma-test-dependencies 1\n" else "incomplete\n");
+        List.sort_uniq String.compare !sources |> List.iter (fun file ->
+            Printf.fprintf oc "%S\n" file))
+  | _ -> ()
+
 (* Soma: proofs checked beside the build (see [check_proofs_beside]), as the
    compilations of a build see them *)
 

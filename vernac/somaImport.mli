@@ -98,6 +98,10 @@ val folder_rules : string -> string list
 (** Record the compiled interface after a successful compilation. *)
 val record_interface : source:string -> dirpath:Names.DirPath.t -> vo_file:string -> unit
 
+(** Write the requested test entry point's complete project import trace,
+    after imported proof checks have finished. *)
+val record_test_dependencies : source:string -> unit
+
 (** Proofs checked beside the build: a file with a .exp is compiled first
     without its proofs, for its importers, and its proofs are checked by a
     compilation of their own, at the same time as the rest of the build. *)

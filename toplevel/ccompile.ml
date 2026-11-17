@@ -218,6 +218,9 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = if mode = BuildVo && not interface then
           SomaImport.record_interface ~source:long_f_dot_in ~dirpath:ldir ~vo_file:long_f_dot_out
       in
+      let () = if mode = BuildVo && not interface then
+          SomaImport.record_test_dependencies ~source:long_f_dot_in
+      in
       let () = Aux_file.record_in_aux_at "vo_compile_time"
           (Printf.sprintf "%.3f" (wall_clock2 -. wall_clock1))
       in
