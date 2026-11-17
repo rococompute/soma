@@ -24,7 +24,7 @@
  (name soma)
  (public_name soma)
  (package soma-runtime)
- (modules soma)
+ (modules soma somaTest)
  (libraries rocqshim soma-runtime.boot soma-runtime.clib findlib unix))
 
 (executable

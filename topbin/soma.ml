@@ -59,6 +59,9 @@ Commands:
                               its models, and list its escape hatches and its issues.
   compile                     Build, then review: soma build and soma explore, in one
                               check; fails if the review finds an issue.
+  test [PATH ...]             Check Soma test entry points and their .exp expectations.
+                              --changedSince REF selects affected tests; --listTests
+                              lists them without building. soma test --help has details.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
   hash                        Check a program and print each definition's hashes: CONTRACT
@@ -305,9 +308,11 @@ let copy_file src dst =
 let rec copy_tree src dst =
   mkdir_p dst;
   Array.iter (fun name ->
-      let s = Filename.concat src name and d = Filename.concat dst name in
-      if (Unix.lstat s).Unix.st_kind = Unix.S_DIR then copy_tree s d
-      else if SomaCache.trusted s then copy_file s d)
+      if name <> ".tests" then begin
+        let s = Filename.concat src name and d = Filename.concat dst name in
+        if (Unix.lstat s).Unix.st_kind = Unix.S_DIR then copy_tree s d
+        else if SomaCache.trusted s then copy_file s d
+      end)
     (Sys.readdir src)
 
 let is_directory_opt p = try Sys.is_directory p with Sys_error _ -> false
@@ -384,11 +389,13 @@ let publish_shared_cache file =
          let rec publish src dst =
            mkdir_p dst;
            Array.iter (fun name ->
-               let s = Filename.concat src name and d = Filename.concat dst name in
-               match (Unix.lstat s).Unix.st_kind with
-               | Unix.S_DIR -> publish s d
-               | Unix.S_REG when SomaCache.trusted s -> copy_file s d
-               | _ -> ()) (Sys.readdir src) in
+               if name <> ".tests" then begin
+                 let s = Filename.concat src name and d = Filename.concat dst name in
+                 match (Unix.lstat s).Unix.st_kind with
+                 | Unix.S_DIR -> publish s d
+                 | Unix.S_REG when SomaCache.trusted s -> copy_file s d
+                 | _ -> ()
+               end) (Sys.readdir src) in
          publish cache_dir tmp;
          (try Sys.rename tmp stored with Unix.Unix_error (Unix.EEXIST, _, _) -> ())
        with Sys_error _ | Unix.Unix_error _ -> ())
@@ -1040,9 +1047,10 @@ let fresh_tree ?(skip = []) ~prefix dir =
 let env_matters entry =
   let name = match String.index_opt entry '=' with
     | Some i -> String.sub entry 0 i | None -> entry in
-  List.mem name ["PATH"; "HOME"; "LD_LIBRARY_PATH"; "DYLD_LIBRARY_PATH"] ||
+  not (starts_with ~prefix:"SOMA_TEST_" name) &&
+  (List.mem name ["PATH"; "HOME"; "LD_LIBRARY_PATH"; "DYLD_LIBRARY_PATH"] ||
   List.exists (fun prefix -> starts_with ~prefix name)
-    ["SOMA_"; "ROCQ"; "COQ"; "OCAML"; "CAML_"; "OPAM"; "DUNE_"; "XDG_"]
+    ["SOMA_"; "ROCQ"; "COQ"; "OCAML"; "CAML_"; "OPAM"; "DUNE_"; "XDG_"])
 
 let initial_getenv name =
   List.find_map (fun entry ->
@@ -1131,7 +1139,7 @@ let freshness_record cache canonical =
 let fresh_outputs cache =
   if not (is_directory_opt cache) then uncertain "%s does not exist" cache;
   List.map (fun (r, d) -> Printf.sprintf "output %s %s" (String.escaped r) d)
-    (fresh_tree ~skip:[".freshness"; ".interfaces"] ~prefix:"." cache)
+    (fresh_tree ~skip:[".freshness"; ".interfaces"; ".tests"] ~prefix:"." cache)
 
 (* Before a build: its record is no longer that of the last successful
    build. What the project is, to compare with after it. *)
@@ -1284,6 +1292,39 @@ let run_command ~events ~supervise = function
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
+  | "test" :: [arg] when is_help arg -> print_string SomaTest.help
+  | "test" :: args ->
+    let initialized = ref false in
+    let initialize () = if not !initialized then begin
+        let opts, _ = parse_opts [] in
+        init opts [];
+        initialized := true
+      end in
+    let identity no_image =
+      initialize ();
+      let env = List.filter env_matters initial_env |> List.sort String.compare in
+      Digest.to_hex (Digest.string (String.concat "\n"
+          ((!cache_toolchain) () :: string_of_bool no_image :: env))) in
+    let build_test ~source ~trace ~no_image =
+      let prog = Sys.executable_name in
+      let args = prog :: "build" :: source :: (if no_image then ["--no-image"] else []) in
+      let env = Array.to_list (Unix.environment ()) |> List.filter (fun entry ->
+          not (starts_with ~prefix:"SOMA_TEST_SOURCE=" entry ||
+               starts_with ~prefix:"SOMA_TEST_DEPENDENCIES=" entry)) in
+      let env = Array.of_list (("SOMA_TEST_SOURCE=" ^ source) ::
+          ("SOMA_TEST_DEPENDENCIES=" ^ trace) :: env) in
+      pass_signals ();
+      let pid = Unix.create_process_env prog (Array.of_list args) env Unix.stdin Unix.stdout Unix.stderr in
+      child := Some pid;
+      let status = wait pid in
+      child := None;
+      exit_code status in
+    (try SomaTest.run ~identity ~build:build_test args with
+     | SomaTest.Error reason -> Printf.eprintf "soma test: %s\n%!" reason; exit 2
+     | SomaTest.Test_failure code -> exit code
+     | Sys_error reason -> Printf.eprintf "soma test: %s\n%!" reason; exit 2
+     | Unix.Unix_error (e, call, path) ->
+       Printf.eprintf "soma test: %s %s: %s\n%!" call path (Unix.error_message e); exit 2)
   | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
@@ -1323,7 +1364,7 @@ let () =
            it has nothing to do: it ends here, before rocq c loads a library
            or the prelude. With -v, the values of bare terms are to be
            printed again, which only the build does. *)
-        if record && not verbose then begin
+        if record && not verbose && Sys.getenv_opt "SOMA_TEST_DEPENDENCIES" = None then begin
           let start = Unix.gettimeofday () in
           match (try freshness_verdict config with _ -> Error "") with
           | Ok () ->

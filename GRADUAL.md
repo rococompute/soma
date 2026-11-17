@@ -1916,6 +1916,44 @@ with that Stdlib. The suite result below is commit `d011c4b1cf`
 
 ## Tests
 
+For a Soma project in Git, `soma test` discovers `.soma` entry points
+recursively under `test/` and `tests/`, builds them and checks their paired
+`.exp` expectations. Give paths to use another layout:
+
+```sh
+soma test                         # establish successful dependency records
+soma test --changedSince HEAD     # staged, unstaged and untracked changes
+soma test --changedSince main     # branch changes plus working-tree changes
+soma test --changedSince main --listTests
+soma test checks/ crypto/smoke.soma --no-image
+```
+
+The comparison is against the given commit, rather than its merge base;
+pass a merge-base commit explicitly when that is the intended comparison.
+`--listTests` prints one selected project-relative path per line and does
+not build or write cache records. Other runners can consume those paths;
+external scripts and image boot tests remain their responsibility. Use
+`--no-image` to check without building Mirage images.
+
+Successful test builds record the files the compiler actually loaded,
+including indirect imports, expectation imports and folder rules. No
+second parser guesses imports from source text. An edit to an unrelated
+existing Soma module can skip its tests; edits to imported modules or
+their expectations select the dependent entry points. Records also
+include source hashes, so changing the Git baseline cannot hide source
+changes since the last successful test build.
+
+The first run, missing or invalid records, changed toolchains/environments,
+added or removed sources, changed configuration, extensions or other
+resources widen selection. Tests with external project dependencies keep
+running until their dependency graph can be recorded completely. Records
+live under `.soma-cache/.tests/`; deleting the cache is safe. A failed
+test removes its record and stops the run with that test's exit status.
+Git-ignored source dependencies cannot certify a skipped test. Discovery
+does not follow symbolic links. This command checks project Soma tests;
+the inherited compiler and shell test suite described below still uses
+its existing runner.
+
 The last recorded full run of the inherited Rocq test suite
 (`make -C test-suite`) is commit `d011c4b1cf` (26 Oct 2026, "Gradual
 Typing: recursion through Dyn, without a guard"): 2751 tests passed and
