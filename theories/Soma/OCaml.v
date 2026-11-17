@@ -43,7 +43,19 @@
     Soma evaluates a term, so that no proof holds by running OCaml. A
     program whose [main] uses them is built with FILE.ml and the
     libraries, by OCaml, which checks each declaration against what it
-    declares (toplevel/somaOcaml.ml). *)
+    declares (toplevel/somaOcaml.ml).
+
+    The same declarations work in a [Sandbox] program. Its local OCaml
+    modules and typed bindings are compiled into the MirageOS image,
+    with declared libraries (including C-backed libraries) built for the
+    Solo5 target. Those libraries must support that target; host-only
+    facilities such as [Soma.Host] and [unix] are not available. Exact
+    [soma.toml] [opam] versions constrain the image's dependency solver.
+    [soma build --no-image] checks the bindings too, using the declared
+    libraries installed for its OCaml compiler; it does not link or run
+    their C stubs. Native declarations stay opaque to the proof kernel.
+    See examples/example_projects/native_crypto and
+    dev/ocaml-mirage-check.sh. *)
 
 From Stdlib Require Strings.String.
 From Corelib Require PrimFloat.

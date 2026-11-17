@@ -64,6 +64,28 @@ printf 'Import Sandbox other.\nmain : io unit := print message.\n' > main.soma
 soma build --no-image main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 test -f "$dir/other.ml"
 ! test -f "$dir/tools.ml"
+! test -f "$dir/no-image/tools.cmi"
+
+# Relocating an unchanged project reuses its dependency build, rather
+# than configuring a new monorepo for every temporary CI checkout.
+cp -R . "$TMP/relocated"
+soma build --no-image "$TMP/relocated/main.soma" > out.log 2>&1 || { cat out.log; exit 1; }
+test "$(find "$SOMA_MIRAGE_DIR" -maxdepth 1 -type d -name 'plain-ocaml-*' | wc -l | tr -d ' ')" = 1
+
+# Two programs with the same dependencies share the generated project.
+# Their native modules have incompatible types; neither build may see
+# the other's extraction, wrappers or compiled interfaces.
+mkdir "$TMP/parallel-a" "$TMP/parallel-b"
+printf 'let message = 42\n' > "$TMP/parallel-a/other.ml"
+printf 'message : nat.\n' > "$TMP/parallel-a/other.definition"
+printf 'Import Sandbox other.\nmain : io unit := print (to_string message).\n' > "$TMP/parallel-a/main.soma"
+printf 'let message = "forty two"\n' > "$TMP/parallel-b/other.ml"
+printf 'message : string.\n' > "$TMP/parallel-b/other.definition"
+printf 'Import Sandbox other.\nmain : io unit := print message.\n' > "$TMP/parallel-b/main.soma"
+soma build --no-image "$TMP/parallel-a/main.soma" > "$TMP/a.log" 2>&1 & pa=$!
+soma build --no-image "$TMP/parallel-b/main.soma" > "$TMP/b.log" 2>&1 & pb=$!
+wait "$pa" || { cat "$TMP/a.log"; exit 1; }
+wait "$pb" || { cat "$TMP/b.log"; exit 1; }
 
 # Do not overwrite the image's own runtime modules.
 printf 'let message = "bad"\n' > soma_rt.ml
@@ -82,7 +104,8 @@ EOF
 printf 'OCaml Library "str".\nreplace : string -> string.\n' > replacer.definition
 printf 'Import Sandbox replacer.\nmain : io unit := print (replace "old").\n' > main.soma
 soma build --no-image main.soma > out.log 2>&1 || { cat out.log; exit 1; }
-grep -q '~local_libs:\["str"\]' "$dir/config.ml"
+find "$SOMA_MIRAGE_DIR" -name config.ml -not -path '*/no-image/*' \
+  -exec grep -l '~local_libs:\["str"\]' {} \; | grep -q .
 
 # Native bindings and WASM bindings must coexist in the same extraction.
 cp "$HERE/examples/example_projects/wasm_add/add.wasm" add.wasm

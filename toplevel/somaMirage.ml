@@ -1848,7 +1848,7 @@ let ocaml_dependencies libraries versions =
   String.concat "" (List.map (fun p ->
       Printf.sprintf "  %S%s\n" p (match List.assoc_opt p versions with
         | None -> "" | Some v -> Printf.sprintf " {= %S}" v))
-      (SomaOcamlBindings.packages_of libraries)) ^ "]\n"
+      (List.sort_uniq compare (SomaOcamlBindings.packages_of libraries @ List.map fst versions))) ^ "]\n"
 
 let write_ocaml_files dir modules =
   let file name text = ignore (update_file (Filename.concat dir name) text) in
@@ -1861,8 +1861,20 @@ let write_ocaml_files dir modules =
   file "ocaml-files" (String.concat "\n" made ^ "\n");
   made
 
+(* The extraction staging directory and generated project are shared.
+   Hold the lock through the final copy: otherwise another build can
+   overwrite prog.ml or its native modules while dune is reading them. *)
+let with_build_lock f =
+  let dir = cache_dir () in
+  mkdir_p dir;
+  let fd = Unix.openfile (Filename.concat dir "build.lock") [Unix.O_CREAT; Unix.O_RDWR] 0o600 in
+  Unix.set_close_on_exec fd;
+  Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
+      Unix.lockf fd Unix.F_LOCK 0;
+      f ())
+
 let build ~state ~source ~vo_file =
-  if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then begin
+  if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then with_build_lock (fun () ->
     check_main ();
     let calls = foreign_calls () in
     let ocaml_modules, libraries = ocaml_modules () in
@@ -1883,16 +1895,20 @@ let build ~state ~source ~vo_file =
        interpreter: the others need not fetch it *)
     let wasm = calls <> [] in
     let native = ocaml_modules <> [] in
-    let project = if native then "-ocaml-" ^
-        String.sub (Digest.to_hex (Digest.string (CUnix.canonical_path_name source))) 0 12 else "" in
+    let versions = match SomaProject.of_file source with Some p -> p.SomaProject.opam | None -> [] in
+    let dependencies = ocaml_dependencies libraries versions in
+    (* Temporary CI checkouts with the same dependencies reuse the same
+       monorepo. Source changes only rebuild the application, not every
+       library. The lock and file manifest make reuse across apps safe. *)
+    let project = if native then "-ocaml-" ^ Digest.to_hex
+        (Digest.string (String.concat "\n" libraries ^ "\n" ^ dependencies)) else "" in
     let dir = Filename.concat (cache_dir ())
         ((if network then "net" else "plain") ^ (if web then "-web" else "") ^
          (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "") ^ project) in
     mkdir_p dir;
     let file name contents = update_file (Filename.concat dir name) contents in
     let config_changed = file "config.ml" (config_ml ~network ~wasm ~storage ~web ~libraries) in
-    let versions = match SomaProject.of_file source with Some p -> p.SomaProject.opam | None -> [] in
-    let deps_changed = if native then file "soma-ocaml-deps.opam" (ocaml_dependencies libraries versions) else false in
+    let deps_changed = if native then file "soma-ocaml-deps.opam" dependencies else false in
     let native_files = write_ocaml_files dir ocaml_modules in
     let modules = List.sort_uniq compare
         (List.map (fun (_, (c : SomaForeign.image_call)) -> module_name c.module_file, read_file c.module_file) calls) in
@@ -1943,4 +1959,4 @@ let build ~state ~source ~vo_file =
     Feedback.msg_notice Pp.(str "Mirage: built " ++ str hvt ++
                             str "; run it with: " ++ str run ++ str hvt)
     end
-  end
+  )

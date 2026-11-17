@@ -4,7 +4,7 @@ Import Sandbox digestif native_helpers.
 
 main : io unit :=
   print (label "native " (unwrap (wrap "OCaml"))) ;;
-  print (to_string (twice next 40)) ;;
+  print (to_string (twice next (settled 40))) ;;
   print (SHA256.to_hex (SHA256.digest_string "")) ;;
   print (SHA256.to_hex (SHA256.digest_string "abc")) ;;
   print "native crypto checks passed".
