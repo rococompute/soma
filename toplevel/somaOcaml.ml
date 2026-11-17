@@ -234,10 +234,7 @@ let dune_file ~js libraries =
     (if ppx = [] then "" else Printf.sprintf " (preprocess (pps %s))\n" (String.concat " " ppx))
 
 (* the modules main uses, checked, and the libraries they use *)
-let checked_modules () =
-  if SomaMirage.requires_mirage () then
-    error Pp.(str "a program that requires Sandbox is a unikernel, which cannot use OCaml modules yet.");
-  SomaOcamlBindings.checked_modules ()
+let checked_modules = SomaOcamlBindings.checked_modules
 
 (* The OCaml project of the program, in [dir]: [main] extracted, the
    bindings, the project's modules (with line directives to them when
@@ -381,7 +378,8 @@ let build ~state ~source ~vo_file =
   match Sys.getenv_opt "SOMA_OCAML_EXTRACT" with
   | Some dir when dir <> "" -> export ~state ~source dir
   | _ ->
-  if getenv_default "SOMA_OCAML_BUILD" "1" <> "0" && getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" then
+  if getenv_default "SOMA_OCAML_BUILD" "1" <> "0" && getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0"
+     && not (SomaMirage.requires_mirage ()) then
   match used_modules () with
   | [] -> ()
   | _ ->
