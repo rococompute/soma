@@ -1,0 +1,8 @@
+OCaml Library "lwt".
+box : Type -> Type.
+wrap : forall {A}, A -> box A.
+unwrap : forall {A}, box A -> A.
+twice : forall {A}, (A -> A) -> A -> A.
+next : nat -> nat.
+label : forall (prefix : string), string -> string.
+settled : nat -> nat.

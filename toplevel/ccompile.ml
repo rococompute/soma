@@ -208,7 +208,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       (* Soma: a program (a .soma file, not a library in .v) that requires
          Sandbox is also built as a MirageOS image, next to the .vo *)
       let () = if mode = BuildVo && Filename.check_suffix long_f_dot_in ".soma" then
-          SomaMirage.build ~state ~vo_file:long_f_dot_out
+          SomaMirage.build ~state ~source:long_f_dot_in ~vo_file:long_f_dot_out
       in
       (* Soma: a program whose main uses OCaml modules is built with them,
          by OCaml, next to the .vo *)
