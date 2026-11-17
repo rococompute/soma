@@ -1014,7 +1014,8 @@ let uncertain fmt = Printf.ksprintf (fun s -> raise (Uncertain s)) fmt
 (* the environment soma was started with, before [init] adds to it *)
 let initial_env = Array.to_list (Unix.environment ())
 
-let freshness_format = "soma-freshness 1"
+let freshness_format = "soma-freshness 2"
+let fingerprint_writes = ref true
 
 let fresh_error path e = uncertain "cannot read %s: %s" path (Unix.error_message e)
 
@@ -1081,8 +1082,9 @@ let fresh_toolchain () =
   let soma_env = Filename.concat (Filename.dirname Sys.executable_name) "coq_environment.txt" in
   let tool name path = Printf.sprintf "tool %s %s %s" name (String.escaped path) (fresh_digest path) in
   let tree label dir =
-    List.map (fun (r, d) -> Printf.sprintf "library %s %s" (String.escaped r) d)
-      (fresh_tree ~prefix:label dir) in
+    let snapshot = try SomaMerkle.scan ~write:!fingerprint_writes dir with
+      | Failure reason -> uncertain "%s" reason in
+    [Printf.sprintf "library %s sha256:%s" label snapshot.SomaMerkle.digest] in
   [ tool "soma" Sys.executable_name; tool "worker" worker ] @
   (if Sys.file_exists soma_env then [ tool "environment" soma_env ] else []) @
   [ "coqlib " ^ String.escaped (Boot.Env.Path.to_string (Boot.Env.coqlib env));
@@ -1091,7 +1093,7 @@ let fresh_toolchain () =
   tree "runtimelib" (Boot.Env.Path.to_string (Boot.Env.runtimelib env))
 
 let () =
-  let identity = lazy (Digest.to_hex (Digest.string (String.concat "\n" (fresh_toolchain ())))) in
+  let identity = lazy (SomaMerkle.string (String.concat "\n" (fresh_toolchain ()))) in
   cache_toolchain := (fun () ->
     let id = Lazy.force identity in
     Unix.putenv "SOMA_CACHE_ID" id;
@@ -1294,6 +1296,8 @@ let () =
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
   | "test" :: [arg] when is_help arg -> print_string SomaTest.help
   | "test" :: args ->
+    if List.exists (fun a -> a = "--listTests" || a = "--list-tests") args then
+      fingerprint_writes := false;
     let initialized = ref false in
     let initialize () = if not !initialized then begin
         let opts, _ = parse_opts [] in

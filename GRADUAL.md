@@ -393,6 +393,25 @@ the store, as that folder's files are not in the key.
 project's own `.soma-cache` is still used). Deleting the store's directory
 clears it. An empty `XDG_CACHE_HOME` is the same as unset: the store is
 `~/.cache/soma`.
+
+Toolchain freshness uses SHA-256 Merkle directory fingerprints: a directory
+hash includes its sorted child names, kinds, permissions and hashes. The
+private cache at `$XDG_CACHE_HOME/soma-fingerprints/v1` (otherwise
+`~/.cache/soma-fingerprints/v1`) stores content-addressed directory nodes
+and file-digest hints. Every invocation still lists directories and checks
+file identity, size, modification time and change time. It reuses a file's
+digest only when all metadata agrees; recent timestamps are rehashed to
+avoid coarse-clock races. A parent directory's timestamp alone never
+certifies an unchanged subtree. Symlink targets are checked too, and
+cycles, changing inputs or unsupported files cannot certify freshness.
+
+This replaces repeated reads of the installed libraries with metadata
+scans when they are unchanged. Deleting or corrupting the fingerprint
+cache is safe: Soma reads the content again. Set `SOMA_FINGERPRINT_CACHE=0`
+for strict content reads on every scan, for example on filesystems whose
+metadata cannot reliably report changes. These are fingerprints of build
+inputs, not proofs that tests passed; test results still depend on the
+compiler's recorded import graph and successful checks.
 `test-suite/misc/soma_module_cache.sh`,
 `test-suite/misc/soma_module_cache_checkout.sh`,
 `test-suite/misc/soma_module_cache_path_deps.sh` and

@@ -20,12 +20,24 @@
  (files (rocq.bc as rocq.byte)))
 
 ; soma: Soma's command line (soma build FILE is rocq c FILE)
+(library
+ (name soma_fingerprints)
+ (wrapped false)
+ (modules somaMerkle)
+ (libraries digestif.c unix))
+
+(test
+ (name somaMerkleTest)
+ (modules somaMerkleTest)
+ (enabled_if (= %{os_type} Unix))
+ (libraries soma_fingerprints unix))
+
 (executable
  (name soma)
  (public_name soma)
  (package soma-runtime)
  (modules soma somaTest)
- (libraries rocqshim soma-runtime.boot soma-runtime.clib findlib unix))
+ (libraries rocqshim soma_fingerprints soma-runtime.boot soma-runtime.clib findlib unix))
 
 (executable
  (name rocqnative)

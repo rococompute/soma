@@ -30,6 +30,7 @@
   (ocaml (>= 4.14.0))
   (ocamlfind (and (>= 1.9.1) (or (>= 1.9.8) (<> :os-family "windows"))))
   (zarith (>= 1.11))
+  (digestif (>= 1.2))
   (wasm (>= 2.0.2))
   (conf-linux-libc-dev (= :os "linux")))
  ; soma-runtime and soma-core install Rocq's binaries (rocq, rocqchk) and
