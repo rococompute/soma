@@ -1940,15 +1940,43 @@ recursively under `test/` and `tests/`, builds them and checks their paired
 `.exp` expectations. Give paths to use another layout:
 
 ```sh
-soma test                         # establish successful dependency records
+soma test                         # first non-empty diff in the waterfall below
+soma test --full                  # every entry point; establish dependency records
 soma test --changedSince HEAD     # staged, unstaged and untracked changes
 soma test --changedSince main     # branch changes plus working-tree changes
 soma test --changedSince main --listTests
 soma test checks/ crypto/smoke.soma --no-image
 ```
 
-The comparison is against the given commit, rather than its merge base;
+Without an explicit mode, select the first non-empty project diff:
+
+1. Unstaged changes, including untracked files.
+2. Staged changes.
+3. `HEAD` against the current branch's remote-tracking branch.
+4. `HEAD` against the default branch.
+
+Only that diff is used; the lower steps are not combined with it, even when
+the chosen diff affects no tests. Tests execute against the current working
+tree, including its staged and unstaged edits. All steps are scoped to the
+Soma project, so changes elsewhere in a containing Git repository do not
+hide a later relevant diff.
+
+The remote branch is the configured remote-tracking upstream, or the
+same-named branch on the selected remote when no upstream is available.
+The selected remote is the branch's configured remote, otherwise `origin`,
+otherwise the only remote. The default branch is that remote's symbolic
+`HEAD`; without it, use an existing local `init.defaultBranch`, or a unique
+local `main`/`master`. Comparisons use locally available refs and never fetch.
+Detached HEAD skips the current-branch comparison. If no comparison is
+available, run the full suite conservatively; if comparisons are available
+but all empty, select only tests with missing or uncertain records.
+
+`--changedSince REF` overrides this waterfall and includes all differences
+between that commit and the working tree, plus untracked files. Its
+comparison is against the given commit, rather than its merge base;
 pass a merge-base commit explicitly when that is the intended comparison.
+`--full` runs every discovered entry point regardless of differences or
+dependency records. It cannot be combined with `--changedSince`.
 `--listTests` prints one selected project-relative path per line and does
 not build or write cache records. Other runners can consume those paths;
 external scripts and image boot tests remain their responsibility. Use
@@ -1959,8 +1987,10 @@ including indirect imports, expectation imports and folder rules. No
 second parser guesses imports from source text. An edit to an unrelated
 existing Soma module can skip its tests; edits to imported modules or
 their expectations select the dependent entry points. Records also
-include source hashes, so changing the Git baseline cannot hide source
-changes since the last successful test build.
+include source hashes. With an explicit `--changedSince`, changing the Git
+baseline cannot hide source changes since the last successful test build.
+Automatic selection instead focuses on the chosen diff; it does not union
+changes from lower-priority steps through those source snapshots.
 
 The first run, missing or invalid records, changed toolchains/environments,
 added or removed sources, changed configuration, extensions or other

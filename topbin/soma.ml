@@ -60,7 +60,8 @@ Commands:
   compile                     Build, then review: soma build and soma explore, in one
                               check; fails if the review finds an issue.
   test [PATH ...]             Check Soma test entry points and their .exp expectations.
-                              --changedSince REF selects affected tests; --listTests
+                              Select affected tests automatically; --full runs all.
+                              --changedSince REF overrides the diff; --listTests
                               lists them without building. soma test --help has details.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.

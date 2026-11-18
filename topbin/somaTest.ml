@@ -8,14 +8,26 @@ exception Error of string
 exception Test_failure of int
 let error fmt = Printf.ksprintf (fun s -> raise (Error s)) fmt
 
-let help = {|Usage: soma test [PATH ...] [--changedSince REF] [--listTests] [--no-image]
+let help = {|Usage: soma test [PATH ...] [--changedSince REF | --full] [--listTests] [--no-image]
 
 Build/check .soma entry points and their paired .exp expectations. With no
 paths, discover .soma files recursively under test/ and tests/. Explicit paths
 may be files or directories. This does not boot images or run external scripts.
 
+By default, use the first non-empty project diff in this order:
+  1. Unstaged changes (including untracked files).
+  2. Staged changes.
+  3. HEAD compared with the current branch's remote-tracking branch.
+  4. HEAD compared with the default branch.
+Remote comparisons use local refs without fetching. If there is no usable
+comparison, run the full suite. If comparisons exist but are empty, select no
+tests except those with missing or uncertain dependency records.
+
   --changedSince REF   Select tests affected since a Git commit/tag/branch,
                        including staged, unstaged and untracked changes.
+                       Overrides automatic diff selection.
+  --full               Run every discovered entry point; incompatible with
+                       --changedSince.
   --listTests          Print selected paths only, without building or writing.
   --no-image           Check without building Mirage images, as soma build does.
 
@@ -35,13 +47,17 @@ let relative root p =
   if not (under root p) || p = root then error "%s is outside %s" p root;
   String.sub p (String.length root + 1) (String.length p - String.length root - 1)
 
-let capture args =
+let capture_opt args =
   let argv = Array.of_list ("git" :: args) in
   let ic = Unix.open_process_args_in "git" argv in
   let out = In_channel.input_all ic in
   match Unix.close_process_in ic with
-  | Unix.WEXITED 0 -> out
-  | _ -> error "git %s failed" (String.concat " " args)
+  | Unix.WEXITED 0 -> Some out
+  | _ -> None
+
+let capture args = match capture_opt args with
+  | Some out -> out
+  | None -> error "git %s failed" (String.concat " " args)
 
 let rec mkdir dir =
   if not (Sys.file_exists dir) then begin
@@ -130,10 +146,13 @@ let drift before after =
   List.filter_map (fun (p, d) -> if M.find_opt p before_map = Some d then None else Some p) after
   |> S.of_list
 
-let affected ~identity ~inputs ~changed receipt =
+let affected ~identity ~inputs ~changed ~include_drift receipt =
   if receipt.identity <> identity then true else
   let delta = drift receipt.inputs inputs in
-  let changed = S.union delta changed in
+  (* An explicit baseline retains the historical snapshot-drift safeguard.
+     Automatic mode deliberately focuses on one diff: lower-priority staged
+     or committed edits must not silently become part of that diff. *)
+  let changed = if include_drift then S.union delta changed else changed in
   (* An added/removed source may shadow an installed module or a folder rule.
      Ordinary edits can use the recorded graph. Unknown file kinds may be
      resources used by readers or native builds, so require the full suite. *)
@@ -142,31 +161,88 @@ let affected ~identity ~inputs ~changed receipt =
       (S.mem p delta && (not (List.mem_assoc p receipt.inputs) || not (List.mem_assoc p inputs))) ||
       S.mem p receipt.dependencies) changed
 
+type selection = Full of string | Diff of S.t * string * bool
+
+let changed_paths root repo output =
+  nul output |> List.filter (fun p -> not (generated p))
+  |> List.map (fun p -> relative root (Filename.concat repo p)) |> S.of_list
+
+let diff root args =
+  capture (["-C"; root; "diff"; "--no-relative"; "--no-renames"; "--name-only"; "-z"]
+           @ args @ ["--"; "."])
+
+let untracked root =
+  capture ["-C"; root; "ls-files"; "--full-name"; "--others"; "--exclude-standard"; "-z"; "--"; "."]
+
+let commit root ref_ =
+  Option.map String.trim (capture_opt ["-C"; root; "rev-parse"; "--verify"; "--quiet";
+                                      "--end-of-options"; ref_ ^ "^{commit}"])
+
+let automatic root repo =
+  let paths output = changed_paths root repo output in
+  let unstaged = paths (diff root [] ^ untracked root) in
+  if not (S.is_empty unstaged) then Diff (unstaged, "unstaged changes", false) else
+  let staged = paths (diff root ["--cached"]) in
+  if not (S.is_empty staged) then Diff (staged, "staged changes", false) else
+  let optional args = match capture_opt (["-C"; root] @ args) with
+    | Some out when String.trim out <> "" -> Some (String.trim out) | _ -> None in
+  let branch = optional ["symbolic-ref"; "--quiet"; "--short"; "HEAD"] in
+  let upstream = Option.bind branch (fun b ->
+      optional ["for-each-ref"; "--format=%(upstream)"; "refs/heads/" ^ b]) in
+  let remotes = lines (capture ["-C"; root; "remote"]) in
+  let configured = Option.bind branch (fun b -> optional ["config"; "--get"; "branch." ^ b ^ ".remote"]) in
+  let remote = match configured with
+    | Some r when List.mem r remotes -> Some r
+    | _ when List.mem "origin" remotes -> Some "origin"
+    | _ -> (match remotes with [r] -> Some r | _ -> None) in
+  let upstream = match upstream with
+    | Some r when String.starts_with ~prefix:"refs/remotes/" r && commit root r <> None -> Some r
+    | _ -> Option.bind remote (fun r -> Option.bind branch (fun b ->
+        let ref_ = "refs/remotes/" ^ r ^ "/" ^ b in
+        if commit root ref_ <> None then Some ref_ else None)) in
+  let local_default () =
+    match optional ["config"; "--get"; "init.defaultBranch"] with
+    | Some b when commit root ("refs/heads/" ^ b) <> None -> Some ("refs/heads/" ^ b)
+    | _ -> (match List.filter (fun r -> commit root r <> None) ["refs/heads/main"; "refs/heads/master"] with
+        | [r] -> Some r | _ -> None) in
+  let default = match remote with
+    | Some r -> (match optional ["symbolic-ref"; "--quiet"; "refs/remotes/" ^ r ^ "/HEAD"] with
+        | Some ref_ when commit root ref_ <> None -> Some ref_
+        | _ -> local_default ())
+    | None -> local_default () in
+  let rec choose usable = function
+    | [] -> if usable then Diff (S.empty, "no changes", false) else Full "no usable comparison"
+    | (label, None) :: rest -> choose usable rest
+    | (label, Some ref_) :: rest ->
+      let changes = paths (diff root [ref_; "HEAD"]) in
+      if S.is_empty changes then choose true rest else Diff (changes, label ^ " " ^ ref_, false) in
+  choose false ["remote branch", upstream; "default branch", default]
+
 let run ~identity ~build args =
-  let since = ref None and list_only = ref false and no_image = ref false in
+  let since = ref None and full = ref false and list_only = ref false and no_image = ref false in
   let rec options paths = function
     | [] -> List.rev paths
     | ("--changedSince" | "--changed-since") :: ref_ :: rest ->
       if !since <> None then error "--changedSince given twice";
       since := Some ref_; options paths rest
+    | "--full" :: rest -> full := true; options paths rest
     | ("--listTests" | "--list-tests") :: rest -> list_only := true; options paths rest
     | "--no-image" :: rest -> no_image := true; options paths rest
     | "--" :: rest -> List.rev paths @ rest
     | arg :: _ when String.starts_with ~prefix:"-" arg -> error "unknown or incomplete option %s" arg
     | path :: rest -> options (path :: paths) rest in
   let paths = options [] args in
+  if !full && !since <> None then error "--full and --changedSince cannot be used together";
   let cwd = Unix.realpath (Sys.getcwd ()) in
   let repo = String.trim (capture ["rev-parse"; "--show-toplevel"]) |> Unix.realpath in
   let root = match project cwd with Some root -> root | None -> cwd in
   if not (under repo root) then error "project root must be inside the Git repository";
-  let changed = match !since with
-    | None -> S.empty
-    | Some ref_ ->
-      let commit = String.trim (capture ["rev-parse"; "--verify"; "--end-of-options"; ref_ ^ "^{commit}"]) in
-      let tracked = capture ["-C"; root; "diff"; "--no-relative"; "--no-renames"; "--name-only"; "-z"; commit; "--"; "."] in
-      let untracked = capture ["-C"; root; "ls-files"; "--full-name"; "--others"; "--exclude-standard"; "-z"; "--"; "."] in
-      nul (tracked ^ untracked) |> List.filter (fun p -> not (generated p))
-      |> List.map (fun p -> relative root (Filename.concat repo p)) |> S.of_list in
+  let selection = match !full, !since with
+    | true, _ -> Full "--full"
+    | false, None -> automatic root repo
+    | false, Some ref_ ->
+      let base = match commit root ref_ with Some c -> c | None -> error "invalid Git commit %s" ref_ in
+      Diff (changed_paths root repo (diff root [base] ^ untracked root), "since " ^ ref_, true) in
   let paths = if paths <> [] then paths else
       List.filter (fun p -> Sys.file_exists (Filename.concat root p)) ["test"; "tests"]
       |> List.map (Filename.concat root) in
@@ -174,13 +250,15 @@ let run ~identity ~build args =
   let inputs = snapshot root repo in
   let identity = if tests = [] then "" else identity !no_image in
   let selected = List.filter (fun test ->
-      !since = None ||
-      try let receipt = load (record root test) in
-        not (S.mem test receipt.dependencies) || affected ~identity ~inputs ~changed receipt
-      with Error _ | Sys_error _ | Scanf.Scan_failure _ | End_of_file | Failure _ -> true) tests in
+      match selection with
+      | Full _ -> true
+      | Diff (changed, _, include_drift) ->
+        try let receipt = load (record root test) in
+          not (S.mem test receipt.dependencies) || affected ~identity ~inputs ~changed ~include_drift receipt
+        with Error _ | Sys_error _ | Scanf.Scan_failure _ | End_of_file | Failure _ -> true) tests in
   if !list_only then List.iter print_endline selected else begin
-    Printf.eprintf "soma test: %d of %d entry points selected%s\n%!" (List.length selected) (List.length tests)
-      (if !since = None then "" else " (missing or uncertain records also run)");
+    let reason = match selection with Full reason -> reason | Diff (_, reason, _) -> reason ^ "; missing or uncertain records also run" in
+    Printf.eprintf "soma test: %d of %d entry points selected (%s)\n%!" (List.length selected) (List.length tests) reason;
     List.iter (fun test ->
         let receipt_file = record root test in
         if Sys.file_exists receipt_file then Sys.remove receipt_file;

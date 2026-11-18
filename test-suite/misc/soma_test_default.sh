@@ -41,11 +41,11 @@ git('config', 'user.email', 'test@example.invalid')
 git('config', 'diff.relative', 'true')
 put('.gitignore', '.soma-cache/\n')
 put('soma.toml', '[project]\nname = "default_tests"\nversion = "0.1.0"\n')
-put('a.soma', 'a : nat := 1.\n')
-put('b.soma', 'b : nat := 2.\n')
+put('left.soma', 'a : nat := 1.\n')
+put('right.soma', 'b : nat := 2.\n')
 put('unused.soma', 'unused : nat := 0.\n')
-put('test/a.soma', 'Import a.\na_test := a.\n')
-put('test/b.soma', 'Import b.\nb_test := b.\n')
+put('test/a.soma', 'Import left.\na_test := a.\n')
+put('test/b.soma', 'Import right.\nb_test := b.\n')
 git('add', '.')
 git('commit', '-qm', 'baseline')
 git('tag', 'baseline')
@@ -65,25 +65,25 @@ expect([])
 expect(all_tests, '--full')
 
 # Unstaged wins over staged. Receipt drift must not silently union the stages.
-put('a.soma', 'a : nat := 3.\n')
-git('add', 'a.soma')
-put('b.soma', 'b : nat := 4.\n')
+put('left.soma', 'a : nat := 3.\n')
+git('add', 'left.soma')
+put('right.soma', 'b : nat := 4.\n')
 expect(['test/b.soma'])
 expect(all_tests, '--changedSince', 'baseline')
 expect(all_tests, '--full')
-git('restore', 'b.soma')
+git('restore', 'right.soma')
 expect(['test/a.soma'])
-git('restore', '--staged', 'a.soma')
-git('restore', 'a.soma')
+git('restore', '--staged', 'left.soma')
+git('restore', 'left.soma')
 expect([])
 
 # Non-empty refers to the diff, not whether it happens to select any tests.
 put('unused.soma', 'unused : nat := 5.\n')
-put('a.soma', 'a : nat := 6.\n')
-git('add', 'a.soma')
+put('left.soma', 'a : nat := 6.\n')
+git('add', 'left.soma')
 expect([])
-git('restore', '--staged', 'a.soma')
-git('restore', 'a.soma', 'unused.soma')
+git('restore', '--staged', 'left.soma')
+git('restore', 'left.soma', 'unused.soma')
 
 # Untracked inputs are unstaged. New/unknown inputs conservatively widen.
 put('new.soma', 'new_value : nat := 1.\n')
@@ -91,19 +91,23 @@ expect(all_tests)
 (root / 'new.soma').unlink()
 
 # Remote branch comparison wins over default branch comparison.
-put('a.soma', 'a : nat := 7.\n')
+put('left.soma', 'a : nat := 7.\n')
 git('add', '.')
 git('commit', '-qm', 'feature a')
 git('update-ref', 'refs/remotes/origin/feature', 'HEAD')
-put('b.soma', 'b : nat := 8.\n')
+put('right.soma', 'b : nat := 8.\n')
 git('add', '.')
 git('commit', '-qm', 'feature b')
 expect(['test/b.soma'])
 expect(all_tests, '--changedSince', 'baseline')
+git('branch', '--unset-upstream')
+expect(['test/b.soma'])  # same-named remote branch without an upstream
+git('branch', '--set-upstream-to=origin/feature')
 git('update-ref', 'refs/remotes/origin/feature', 'HEAD')
 expect(all_tests)  # upstream is equal; now compare the default branch.
 soma('--full')
 expect(all_tests)  # baseline differences still matter after a passing run.
+expect([], '--changedSince', 'HEAD')  # explicit baseline overrides the default
 
 # Default-branch fallback works without an upstream, and from detached HEAD.
 git('branch', '--unset-upstream')
@@ -113,13 +117,13 @@ git('switch', '--detach', '-q')
 expect(all_tests)
 
 # A stage outside this nested project must not hide the relevant later stage.
-put('b.soma', 'b : nat := 9.\n')
-git('add', 'b.soma')
+put('right.soma', 'b : nat := 9.\n')
+git('add', 'right.soma')
 (outer / 'outside.soma').write_text('outside : nat := 1.\n')
 expect(['test/b.soma'])
 (outer / 'outside.soma').unlink()
-git('restore', '--staged', 'b.soma')
-git('restore', 'b.soma')
+git('restore', '--staged', 'right.soma')
+git('restore', 'right.soma')
 
 # Explicit options are order independent; contradictory modes fail early.
 for args in [('--full', '--changedSince', 'HEAD'), ('--changedSince', 'HEAD', '--full')]:
@@ -128,5 +132,13 @@ assert soma('--changedSince', 'missing-ref', ok=False).returncode == 2
 expect(['test/a.soma'], '--full', 'test/a.soma')
 os.chdir(root / 'test')
 expect(all_tests, '.')
+os.chdir(root)
+
+# With no remote, the local default is usable; with no known default, run all.
+git('remote', 'remove', 'origin')
+expect(all_tests)
+git('branch', '-D', 'main')
+git('config', 'init.defaultBranch', 'missing-default')
+expect(all_tests)
 print('soma test default waterfall: passed')
 PY
