@@ -17,6 +17,6 @@ val publish : source:string -> directory:string -> switch:string -> output:strin
   generated:SomaBuildInfo.input list -> unit
 val read : string -> plan option
 val validate : plan -> bool
-val record_path : string -> string
+val record_path : string -> string option
 val promote : draft:string -> key:string -> bool
 val resume : plan -> run:(directory:string -> log:string -> bool) -> bool

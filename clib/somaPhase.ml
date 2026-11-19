@@ -146,18 +146,19 @@ let validate p =
 
 let record_path key =
   let cache = match Sys.getenv_opt "XDG_CACHE_HOME" with
-    | Some d when d<>"" -> d
-    | _ -> Filename.concat (Sys.getenv "HOME") ".cache" in
-  Filename.concat (Filename.concat cache "soma-native-phases") key
+    | Some d when d<>"" -> Some d
+    | _ -> Option.bind (Sys.getenv_opt "HOME") (fun home ->
+        if home="" then None else Some (Filename.concat home ".cache")) in
+  Option.map (fun cache -> Filename.concat (Filename.concat cache "soma-native-phases") key) cache
 
 let promote ~draft ~key =
-  match read draft with
-  | Some p when p.key=key && validate p ->
+  match read draft,record_path key with
+  | Some p,Some destination when p.key=key && validate p ->
     (try
        let text=contents p in
        (* Preserve exact producer-certified bytes and their existing receipt. *)
-       atomic_write (record_path key) text;
-       SomaCache.trusted_metadata (record_path key) ~contents:text
+       atomic_write destination text;
+       SomaCache.trusted_metadata destination ~contents:text
      with Sys_error _ | Unix.Unix_error _ -> false)
   | _ -> false
 

@@ -42,7 +42,7 @@ let () =
     assert (not (SomaPhase.validate {plan with source=path root "other.soma"}));
     assert (not (SomaPhase.promote ~draft ~key:"different-key"));
     assert (SomaPhase.promote ~draft ~key:"fixture-key");
-    assert (SomaPhase.read (SomaPhase.record_path "fixture-key")=Some plan);
+    assert (SomaPhase.read (Option.get (SomaPhase.record_path "fixture-key"))=Some plan);
     let original=text draft in
     write draft (original ^ "forged\000");assert (SomaPhase.read draft=None);
     write draft "soma-native-phase 2\000";SomaCache.record draft;assert (SomaPhase.read draft=None);
@@ -87,6 +87,9 @@ let () =
      | _ -> failwith "generated mutation during validation was accepted"
      | exception Failure _ -> ());
     assert (text output="fresh validated native product");
+    Unix.putenv "HOME" "";Unix.putenv "XDG_CACHE_HOME" "";
+    assert(SomaPhase.record_path "fixture-key"=None);
+    assert(not(SomaPhase.promote ~draft ~key:"fixture-key"));
     print_endline "production phase parser, receipts, identity, native failure and producer copy: passed"
   end
 ML

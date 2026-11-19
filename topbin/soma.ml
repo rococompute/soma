@@ -1485,15 +1485,15 @@ type phase_snapshot = { phase_key : string; phase_root : string;
                         phase_rows : string list }
 
 let phase_rc_absent () =
-  let warn _ = () in
-  let xdg = Envars.xdg_config_home warn and home = Envars.home ~warn in
-  let paths = [Filename.concat xdg ("coqrc." ^ Coq_config.version);
-               Filename.concat xdg "coqrc";
-               Filename.concat home (".coqrc." ^ Coq_config.version);
-               Filename.concat home ".coqrc"] in
-  List.for_all (fun path -> match Unix.lstat path with
-      | _ -> false
-      | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR),_,_) -> true) paths
+  try
+    let worker = get_worker_path {package="soma-runtime";basename="rocqworker"} in
+    let paths = List.concat_map (fun executable ->
+        Boot.UserConfig.rc_candidates_for_executable executable ~warn:(fun _ -> ()))
+        [worker; Unix.realpath worker] |> List.sort_uniq String.compare in
+    List.for_all (fun path -> match Unix.lstat path with
+        | _ -> false
+        | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR),_,_) -> true) paths
+  with Sys_error _ | Unix.Unix_error _ | Not_found -> false
 
 let phase_inputs ?(final=false) c =
   if c.verbose || c.fill || c.no_image || c.args <> [] || not (phase_rc_absent ()) then None else
@@ -1510,7 +1510,7 @@ let phase_inputs ?(final=false) c =
         "phase-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))] in
     Some {phase_key=SomaMerkle.string (String.concat "\n" rows);phase_root=root;
           phase_source=source;phase_output=output;phase_rows=rows}
-  with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> None
+  with Uncertain _ | Sys_error _ | Unix.Unix_error _ | Not_found -> None
 
 let prepare_phase c =
   let snapshot = phase_inputs c in
@@ -1530,7 +1530,7 @@ let phase_unchanged c before = match phase_inputs ~final:true c with
 let resume_phase c before = match before with
   | None -> false
   | Some before ->
-    match SomaPhase.read (SomaPhase.record_path before.phase_key) with
+    match Option.bind (SomaPhase.record_path before.phase_key) SomaPhase.read with
     | Some plan when plan.SomaPhase.key=before.phase_key &&
                      plan.source=before.phase_source && plan.root=before.phase_root &&
                      plan.output=before.phase_output && SomaPhase.validate plan ->
