@@ -32,5 +32,6 @@ with tempfile.TemporaryDirectory(prefix='soma-failed-load-') as tmp:
         missing.write_text('Definition appeared := 2.\n')
         second=subprocess.run(args,cwd=root,env=env,text=True,capture_output=True,timeout=90)
         assert second.returncode!=0,(mode,'failed Load absent-to-present was skipped',second.stdout,second.stderr)
+        assert 'The command has not failed!' in second.stderr,(mode,'expected current-source Fail diagnostic',second.stdout,second.stderr)
 print('Failed Load absent-to-present changes invalidate root/import/Rocq-library successes: passed')
 PY
