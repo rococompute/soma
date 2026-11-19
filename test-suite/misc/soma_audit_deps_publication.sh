@@ -11,8 +11,8 @@
 #
 # git's url.insteadOf, from the environment (never the global configuration),
 # makes https://HOST/ a folder of bare repositories. A git wrapper delays
-# fetch, and can plant a folder at the destination, so that the race is
-# certain; it changes nothing of soma.
+# fetch, can plant a folder at the destination, or make it read-only, so
+# that the race and a failed move are certain; it changes nothing of soma.
 
 set -euo pipefail
 
@@ -68,6 +68,12 @@ no_work() { # no folder of a fetch left beside the source
   left="$(find "$XDG_CACHE_HOME/soma/src" -name '*.tmp-*' 2>/dev/null || true)"
   [ -z "$left" ] || { echo "fetch work folders left behind:"; echo "$left"; exit 1; }
 }
+no_source() { # nothing published in the source cache
+  local found
+  found="$(find "$XDG_CACHE_HOME/soma/src" -mindepth 1 -maxdepth 4 -type d -name 'maps@*' \
+             ! -name '*.tmp-*' 2>/dev/null || true)"
+  [ -z "$found" ] || { echo "a failed fetch published a source:"; echo "$found"; exit 1; }
+}
 # whole SOURCE: the pinned tree, complete, and its marker
 whole() {
   local src="$1" f
@@ -108,6 +114,7 @@ for a in "\$@"; do
         other) mkdir -p "\$SOMA_TEST_PLANT_DIR"
                printf '%s\n' "\$SOMA_TEST_PLANT_COMMIT" > "\$SOMA_TEST_PLANT_DIR/.soma-source"
                echo other > "\$SOMA_TEST_PLANT_DIR/other.soma" ;;
+        deny) chmod 0555 "\$SOMA_TEST_PLANT_DIR" ;;
       esac ;;
   esac
 done
@@ -177,6 +184,22 @@ rm -rf "$PLANT"
 (cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1) || { cat "$TMP/a.log"; exit 1; }
 SRC="$(source_of)"; whole "$SRC"; no_work
 
+# * A move that fails for another reason is reported, and publishes nothing
+cold
+OWNER="$XDG_CACHE_HOME/soma/src/github.com/owner"
+if (cd "$TMP/a" && PATH="$SLOW" SOMA_TEST_PLANT=deny SOMA_TEST_PLANT_DIR="$OWNER" \
+      soma build -v main.soma > "$TMP/a.log" 2>&1); then
+  echo "built although the source could not be published"; cat "$TMP/a.log"; exit 1
+fi
+says 'cannot move the source of github.com/owner/maps into' "$TMP/a.log"
+says 'Permission denied' "$TMP/a.log"
+no_source
+# the read-only folder kept the work folder from being removed: let it go
+chmod 0755 "$OWNER"; rm -rf "$OWNER"/*.tmp-*
+no_work
+(cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1) || { cat "$TMP/a.log"; exit 1; }
+SRC="$(source_of)"; whole "$SRC"; no_work
+
 # * A fetch that fails publishes nothing, leaves no work folder, and a retry works
 cold
 mv "$TMP/remote" "$TMP/remote.off"
@@ -184,8 +207,7 @@ if (cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1); then
   echo "built with no remote"; cat "$TMP/a.log"; exit 1
 fi
 says 'git failed' "$TMP/a.log"
-[ -z "$(find "$XDG_CACHE_HOME/soma/src" -mindepth 1 -maxdepth 4 -type d -name 'maps@*' 2>/dev/null)" ] \
-  || { echo "a failed fetch published a source"; find "$XDG_CACHE_HOME/soma/src"; exit 1; }
+no_source
 no_work
 mv "$TMP/remote.off" "$TMP/remote"
 (cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1) || { cat "$TMP/a.log"; exit 1; }
@@ -201,8 +223,7 @@ if (cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1); then
 fi
 says 'is no longer on https://github.com/owner/maps.git' "$TMP/a.log"
 says 'soma get writes it' "$TMP/a.log"
-[ -z "$(find "$XDG_CACHE_HOME/soma/src" -mindepth 1 -maxdepth 4 -type d -name 'maps@*' 2>/dev/null)" ] \
-  || { echo "a failed checkout published a source"; find "$XDG_CACHE_HOME/soma/src"; exit 1; }
+no_source
 no_work
 rm -f "$TMP/a/soma.lock"
 (cd "$TMP/a" && soma build -v main.soma > "$TMP/a.log" 2>&1) || { cat "$TMP/a.log"; exit 1; }
