@@ -821,7 +821,14 @@ let project_module_filename table mp =
 
 (* Soma: a dependency is checked, not run: what writes a file is refused in
    its compilation (vernac/somaImport.ml). Printing is not. *)
+let refuse_in_check_only command =
+  if Sys.getenv_opt "SOMA_CHECK_ONLY" = Some "1" then
+    user_err (str command ++
+      str " writes extracted files and is not available in soma check; " ++
+      str "use soma build or soma extract.")
+
 let full_extraction ~opaque_access f lr =
+  if Option.has_some f then refuse_in_check_only "Extraction";
   if Option.has_some f then SomaImport.refuse_in_dependency "Extraction";
   let f = Option.map project_extraction_target f in
   full_extr opaque_access f (locate_refs lr)
@@ -845,6 +852,7 @@ let refuse_modular_gradual struc =
    decomposed in many files, one per Rocq .v file *)
 
 let separate_extraction ~opaque_access lr =
+  refuse_in_check_only "Separate Extraction";
   SomaImport.refuse_in_dependency "Separate Extraction";
   let table = init ~modular:true ~library:false () in
   let refs,mps = locate_refs lr in
@@ -891,7 +899,9 @@ let simple_extraction ~opaque_access r =
   \verb!(Recursive) Extraction Library! [M]. *)
 
 let extraction_library ~opaque_access is_rec CAst.{loc;v=m} =
-  SomaImport.refuse_in_dependency (if is_rec then "Recursive Extraction Library" else "Extraction Library");
+  let command = if is_rec then "Recursive Extraction Library" else "Extraction Library" in
+  refuse_in_check_only command;
+  SomaImport.refuse_in_dependency command;
   let table = init ~modular:true ~library:true () in
   let dir_m =
     (* XXX WTF is going on here? *)
@@ -948,6 +958,7 @@ let remove f =
   if Sys.file_exists f then Sys.remove f
 
 let extract_and_compile ~opaque_access l =
+  refuse_in_check_only "Extraction TestCompile";
   SomaImport.refuse_in_dependency "Extraction TestCompile";
   if lang () != Ocaml then
     CErrors.user_err (Pp.str "This command only works with OCaml extraction");
