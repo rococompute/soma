@@ -114,12 +114,17 @@ compiled=subprocess.run([real_opam,'exec','--switch='+env['SOMA_OCAML_SWITCH'],'
 assert compiled.returncode==0,(compiled.stdout,compiled.stderr)
 (implementation/'META').write_text('version="1"\nrequires=""\nplugin(native)="phase_probe_impl.cmxs"\n')
 (umbrella/'META').write_text('version="1"\nrequires="phase_probe_impl"\nplugin(native)=""\n')
+old_ocamlpath=env.get('OCAMLPATH');old_debug=env.get('SOMA_PHASE_DEBUG')
 env['OCAMLPATH']=str(packages)+(':'+env['OCAMLPATH'] if env.get('OCAMLPATH') else '')
 env['SOMA_PHASE_DEBUG']='1'
 source.write_text('Declare ML Module "phase_probe_umbrella".\n'+original)
 p=build(False);assert 'uncertified plugin: phase_probe_impl' in p.stderr,p.stderr
 p=build(False);assert 'uncertified plugin: phase_probe_impl' in p.stderr,p.stderr
-source.write_text(original);env.pop('SOMA_PHASE_DEBUG');env.pop('OCAMLPATH');build(True)
+source.write_text(original)
+for key,value in [('SOMA_PHASE_DEBUG',old_debug),('OCAMLPATH',old_ocamlpath)]:
+    if value is None:env.pop(key,None)
+    else:env[key]=value
+build(True)
 # A native validator failure never becomes success through an earlier plan.
 (work/'fail').write_text('fail native validator');build(None,False);(work/'fail').unlink();build(True)
 # Broken source cannot hide behind a previously successful phase.
