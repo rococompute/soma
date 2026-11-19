@@ -62,6 +62,9 @@ names = [
     'with;semicolon',
     'with(newline)\nsecond',
     'with\ttab',
+    'with\x01control',
+    'with\x7fdelete',
+    'with\u00e9utf8',
     'all "quote" \\ slash\nnewline\tand space',
 ]
 
