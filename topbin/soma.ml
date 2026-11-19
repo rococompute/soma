@@ -213,6 +213,18 @@ let created ~before ~source dir =
 
 let lines s = String.split_on_char '\n' s
 
+(* Compiler products and command arguments are paths/bytes, not shell words
+   or fragments of a human-readable notice. The final NUL is required so a
+   truncated manifest cannot silently turn into a different command. *)
+let manifest_fields file =
+  if not (Sys.file_exists file) then [] else
+  let contents = In_channel.with_open_bin file In_channel.input_all in
+  if contents = "" then [] else begin
+    if contents.[String.length contents - 1] <> '\000' then
+      usage_error "soma: incomplete compiler manifest %s" file;
+    List.rev (List.tl (List.rev (String.split_on_char '\000' contents)))
+  end
+
 let starts_with ~prefix s =
   String.length s >= String.length prefix &&
   String.sub s 0 (String.length prefix) = prefix
@@ -559,38 +571,8 @@ let last_value output =
   | [] -> None
   | first :: rest -> Some (String.concat "\n" (first :: block rest))
 
-(* The command Mirage's build says runs the image:
-   ["Mirage: built IMAGE; run it with: COMMAND"] *)
-let mirage_command output =
-  let marker = "; run it with: " in
-  List.find_map (fun l ->
-      if starts_with ~prefix:"Mirage: built " l then
-        let rec at i =
-          if i + String.length marker > String.length l then None
-          else if String.sub l i (String.length marker) = marker then
-            Some (String.sub l (i + String.length marker) (String.length l - i - String.length marker))
-          else at (i + 1)
-        in
-        Option.map (fun c -> List.filter (( <> ) "") (String.split_on_char ' ' c)) (at 0)
-      else None)
-    (lines output)
-
-(* What OCaml's build says it built (toplevel/somaOcaml.ml): ["OCaml:
-   built PROG.html, with PROG.js; ..."], a page, or ["OCaml: built
-   PROG.exe; ..."], an executable *)
+(* The kind of a published product, from the compiler's product manifest. *)
 type built = Page of string | Executable of string
-
-let ocaml_built output =
-  let prefix = "OCaml: built " in
-  List.find_map (fun l ->
-      if starts_with ~prefix l then
-        let rest = String.sub l (String.length prefix) (String.length l - String.length prefix) in
-        let file = List.hd (String.split_on_char ';' (List.hd (String.split_on_char ',' rest))) in
-        if Filename.check_suffix file ".html" then Some (Page file)
-        else if Filename.check_suffix file ".exe" then Some (Executable file)
-        else None
-      else None)
-    (lines output)
 
 (* [soma run] of a page: [dir] served on localhost, at $SOMA_PORT or 8080,
    or the next port that is free, until Ctrl-C. "/" is the page; the other
@@ -973,14 +955,18 @@ let run ~events ~supervise file args image_args =
      however the program ends *)
   let finish code = (try remove_tree dir with Sys_error _ -> ()); exit code in
   pass_signals ();
+  let products_file = Filename.concat dir "products" in
+  let argv_file = Filename.concat dir "mirage-argv" in
+  Unix.putenv "SOMA_BUILD_PRODUCTS" products_file;
+  Unix.putenv "SOMA_MIRAGE_ARGV" argv_file;
   let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
   let code, output = compile (file :: "-o" :: vo :: args) in
   List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l ||
           starts_with ~prefix:"Mirage: checked" l then print_endline l)
     (lines output);
   if code <> 0 then finish code;
-  match mirage_command output with
-  | Some command ->
+  match manifest_fields argv_file with
+  | prog :: _ as command when prog <> "" ->
     (* the image's tools come from the same opam switch as its build *)
     let switch = match Sys.getenv_opt "SOMA_MIRAGE_SWITCH" with
       | Some s when s <> "" -> s | _ -> "hvf" in
@@ -1026,8 +1012,15 @@ let run ~events ~supervise file args image_args =
       in
       loop (memory_of command) 0
     end
-  | None ->
-    match ocaml_built output with
+  | _ ->
+    let products = manifest_fields products_file in
+    if List.exists (fun path -> Filename.check_suffix path ".hvt") products then
+      usage_error "soma run: the compiler published an image without its command arguments";
+    let built = List.find_map (fun path ->
+        if Filename.check_suffix path ".exe" then Some (Executable path)
+        else if Filename.check_suffix path ".html" then Some (Page path)
+        else None) products in
+    match built with
     | Some (Executable exe) ->
       (* a program built with OCaml modules: run, with ARGUMENTS; Ctrl-C
          stops it, and then soma *)

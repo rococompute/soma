@@ -1968,9 +1968,21 @@ let build ~state ~source ~vo_file =
     let mem = match int_of_string_opt (getenv_default "SOMA_MIRAGE_MEM" "") with
       | Some m when m > 0 -> m
       | _ -> 256 in
-    let hvt_cmd = Printf.sprintf "solo5-hvt --mem=%d %s-- " mem (if storage then "--block:storage=storage.img " else "") in
-    let run = if network then "solo5-vmnet -- " ^ hvt_cmd else hvt_cmd in
+    let hvt_args = ["solo5-hvt"; Printf.sprintf "--mem=%d" mem] @
+        (if storage then ["--block:storage=storage.img"] else []) @ ["--"; hvt] in
+    let command = (if network then ["solo5-vmnet"; "--"] else []) @ hvt_args in
+    (match Sys.getenv_opt "SOMA_MIRAGE_ARGV" with
+     | Some file when file <> "" ->
+       Out_channel.with_open_bin file (fun oc ->
+           List.iter (fun arg -> output_string oc arg; output_char oc '\000') command)
+     | _ -> ());
+    (match Sys.getenv_opt "SOMA_BUILD_PRODUCTS" with
+     | Some file when file <> "" ->
+       Out_channel.with_open_gen [Open_wronly; Open_creat; Open_append; Open_binary] 0o600 file (fun oc ->
+           output_string oc hvt; output_char oc '\000')
+     | _ -> ());
+    let run = Filename.quote_command (List.hd command) (List.tl command) in
     Feedback.msg_notice Pp.(str "Mirage: built " ++ str hvt ++
-                            str "; run it with: " ++ str run ++ str hvt)
+                            str "; run it with: " ++ str run)
     end
   )
