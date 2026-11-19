@@ -54,7 +54,8 @@ let keywords =
     "parser"; "private"; "rec"; "sig"; "struct"; "then"; "to"; "true";
     "try"; "type"; "val"; "virtual"; "when"; "while"; "with"; "mod";
     "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr" ; "unit" ; "_" ; "__";
-    "Gradual_rt"; shared_gradual_runtime_module ]
+    "Gradual_rt"; shared_gradual_runtime_module;
+    "Soma_shared_dependency_requires_reextraction" ]
   Id.Set.empty
 
 (* Note: do not shorten [str "foo" ++ fnl ()] into [str "foo\n"],
@@ -91,11 +92,27 @@ let pp_gradual_rt table usf =
     str "end" ++ fnl ()
   else mt ()
 
+let pp_shared_dependency_checks table used_modules usf =
+  if not (State.get_modular table && usf.gradual_rt) || DirPath.Set.is_empty used_modules then mt () else
+  str "(* Re-extract dependencies with Separate Extraction or Recursive Extraction Library under Gradual. *)" ++ fnl () ++
+  str "module type Soma_shared_dependency_requires_reextraction = sig" ++ fnl () ++
+  str "  module Gradual_rt : sig val shared_runtime_token : unit Stdlib.ref end" ++ fnl () ++
+  str "end" ++ fnl () ++
+  prlist (fun dir ->
+      let name = Common.pp_module table (MPfile dir) in
+      str ("module _ : Soma_shared_dependency_requires_reextraction = " ^ name) ++ fnl () ++
+      str ("let () = if Stdlib.( != ) " ^ name ^ ".Gradual_rt.shared_runtime_token Gradual_rt.shared_runtime_token then") ++ fnl () ++
+      str ("  Stdlib.failwith " ^ Printf.sprintf "%S"
+          ("Shared gradual runtime mismatch for " ^ name ^
+           ": re-extract dependencies with Separate Extraction or Recursive Extraction Library.")) ++ fnl ())
+    (DirPath.Set.elements used_modules)
+
 let preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf ++ pp_mldummy usf) ++
-  then_nl (pp_gradual_rt table usf)
+  then_nl (pp_gradual_rt table usf) ++
+  then_nl (pp_shared_dependency_checks table used_modules usf)
 
 let pp_gradual_rt_sig table usf =
   if usf.gradual_rt then
