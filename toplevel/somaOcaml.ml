@@ -559,7 +559,7 @@ let build ~state ~source ~vo_file =
         (SomaPhase.requested ()) (SomaPhase.eligible ()) (phase_generated <> None)
         (List.length libraries) js (SomaImport.loaded_dependencies_certified ~source));
       (match phase_generated with
-       | Some generated when SomaPhase.eligible () && libraries = [] && not js &&
+       | Some generated when SomaPhase.eligible () && packages_of libraries = [] && not js &&
            SomaImport.loaded_dependencies_certified ~source &&
            List.for_all (fun (m : SomaForeign.ocaml_module) ->
              match m.ml_file with None -> m.top = host_module
