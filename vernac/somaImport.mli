@@ -139,6 +139,7 @@ val note_loaded_source : string -> unit
 (** Private compiler-child metadata: the plugin names a unique output and
     receives producer-attested source-load hashes after successful checking. *)
 val loaded_source_inputs_var : string
+val loaded_source_request_var : string
 val write_loaded_source_inputs : unit -> unit
 val rocq_source_in_project : string -> bool
 

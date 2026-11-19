@@ -48,6 +48,7 @@ let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
 let rocq_library_var = "SOMA_ROCQ_LIBRARY"
 let loaded_source_inputs_var = "SOMA_LOADED_SOURCE_INPUTS"
+let loaded_source_request_var = "SOMA_LOADED_SOURCE_REQUEST"
 
 let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".exp"; ".ext"; ".definition"]
 
@@ -602,12 +603,15 @@ let write_loaded_source_inputs () =
   match env_value loaded_source_inputs_var with
   | None -> ()
   | Some output ->
+    let request = match env_value loaded_source_request_var with
+      | Some request when SomaMerkle.valid_hash request -> request
+      | _ -> CErrors.user_err Pp.(str "Loaded-source metadata has no current compiler request.") in
     let rows = Hashtbl.fold (fun file expected rows ->
         if SomaMerkle.file_hash file <> expected then
           CErrors.user_err Pp.(str "A loaded source changed during compilation; rebuild.");
         Printf.sprintf "input %S %s\n" file expected :: rows) loaded_source_inputs [] |> List.sort compare in
     Out_channel.with_open_bin output (fun oc ->
-        Printf.fprintf oc "soma-loaded-inputs 1\nuncertain %b\n%s" !loaded_sources_uncertain (String.concat "" rows));
+        Printf.fprintf oc "soma-loaded-inputs 2\nrequest %S\nuncertain %b\n%s" request !loaded_sources_uncertain (String.concat "" rows));
     SomaCache.record output
 
 let rocq_source_in_project directory =
@@ -784,7 +788,7 @@ let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src
     end else [], src in
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [loaded_source_inputs_var; root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
+                                   [loaded_source_inputs_var; loaded_source_request_var; root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
