@@ -1240,6 +1240,15 @@ let () =
    so an image build and a check cannot reuse each other's freshness. *)
 type fresh_config = { verbose : bool; fill : bool; no_image : bool; file : string; args : string list }
 
+(* The compiler may read fallback environment entries beside its own
+   executable. Inspect both lookup and resolved paths, covering platform
+   differences in Sys.executable_name without duplicating rc selection. *)
+let worker_rc_candidates () =
+  let worker = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
+  List.sort_uniq String.compare [worker; Unix.realpath worker] |>
+  List.concat_map (fun executable ->
+      Boot.UserConfig.rc_candidates_for_executable executable ~warn:(fun _ -> ()))
+
 (* What a build of [c] reads of its project, and how it was asked for; with
    [~toolchain], of soma's installation too *)
 let fresh_inputs ?(products=[]) ?(reuse_initial_toolchain=false) ~toolchain c =
@@ -1250,7 +1259,7 @@ let fresh_inputs ?(products=[]) ?(reuse_initial_toolchain=false) ~toolchain c =
       match Unix.lstat path with
       | _ -> uncertain "rc file candidate %s requires validation" path
       | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> ())
-    (Boot.UserConfig.rc_candidates ~warn:(fun _ -> ()));
+    (worker_rc_candidates ());
   (match initial_getenv "SOMA_OCAML_EXTRACT" with
    | Some path when path <> "" -> uncertain "explicit extraction exports require validation"
    | _ -> ());
