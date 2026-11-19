@@ -292,6 +292,62 @@ let require_component kind s =
   if not (safe_component s) then
     error (str kind ++ str " " ++ qstring s ++ str " is not one safe path component.")
 
+(* * One compilation of one library at a time *)
+
+(* A library compiles into a directory of the cache that a compilation
+   removes and makes again, so the lock that says who compiles it is beside
+   it: [DIR.lock], in the cache, which is never removed. Without it, the two
+   compilations of one library that [Import left right.] starts (each a
+   process of its own) both find no [theories], both remove the directory,
+   and one takes the other's [order] and sources away. A lock (lockf) is a
+   process's: the system releases it when the process ends, however it ends,
+   and [with_lock] releases it on an error too. *)
+let lock_file root name = Filename.concat root (name ^ ".lock")
+
+(* The locks this process holds: lockf grants one it holds again, and
+   closing either fd releases it, so a nested [with_lock] of the same
+   library runs under the lock its caller holds instead of taking it again *)
+let locks_held : (string, unit) Hashtbl.t = Hashtbl.create 7
+
+let with_lock file f =
+  if Hashtbl.mem locks_held file then f () else begin
+    let fd = Unix.openfile file [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 in
+    Fun.protect ~finally:(fun () ->
+        Hashtbl.remove locks_held file;
+        Unix.close fd) (fun () ->
+        let rec lock () =
+          match Unix.lockf fd Unix.F_LOCK 0 with
+          | () -> ()
+          | exception Unix.Unix_error (Unix.EINTR, _, _) -> lock () in
+        lock ();
+        Hashtbl.replace locks_held file ();
+        f ())
+  end
+
+(* [d], a directory of the cache compiled before, removed while holding its
+   lock: one that another compilation is building now is left to it, and is
+   removed by a later build, when no one holds it *)
+let remove_stale d =
+  match Unix.openfile (d ^ ".lock") [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 with
+  | exception Unix.Unix_error _ -> ()
+  | fd ->
+    Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
+        match Unix.lockf fd Unix.F_TLOCK 0 with
+        | () ->
+          (* it may have been compiled and published meanwhile *)
+          if Sys.is_directory d then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; d]))
+        | exception Unix.Unix_error _ -> ())
+
+(* What a compiled library's [theories] says: its theories, in the order it
+   compiled them. None when the compilation did not finish: the file is
+   written last, and renamed into place, so a partial one is no [theories]. *)
+let compiled_theories file =
+  match List.filter_map (fun l -> match String.index_opt l ' ' with
+      | Some i -> Some (String.sub l 0 i, String.sub l (i + 1) (String.length l - i - 1))
+      | None -> None) (SomaOpam.read_lines file) with
+  | [] -> None
+  | ts -> Some ts
+
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
   (* before a cache directory is created or removed, and before opam *)
@@ -327,33 +383,43 @@ let ensure ~package source =
          then error (str "opam source " ++ str package ++ str "." ++ str version ++ str " failed; the end of " ++
                      str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
   in
+  let name = Filename.basename dir in
   let done_file = Filename.concat dir "theories" in
   let src = Filename.concat dir "src" in
-  if not (Sys.file_exists done_file) then begin
-    (* a compilation stopped halfway starts again *)
-    if Sys.file_exists dir then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; dir]));
-    SomaOpam.mkdir_p dir;
-    fetch src;
-    let ts = theories ~package src in
-    if ts = [] then
-      error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
-             spc () ++ str "and there is no _RocqProject or _CoqProject.");
-    let name = Filename.basename dir in
-    compile ~name ~log:(Filename.concat dir "compile.log") ts;
-    Out_channel.with_open_bin done_file (fun oc ->
-        List.iter (fun t -> Printf.fprintf oc "%s %s\n" t.logical t.dir) ts);
-    (* the package compiled before, by another Soma or from other sources,
-       is of no use any more *)
-    let prefix = match source with Local _ -> package ^ "-local-" | Opam _ -> package ^ "." in
-    Array.iter (fun e ->
-        let d = Filename.concat root e in
-        if String.starts_with ~prefix e && d <> dir && Sys.is_directory d then
-          ignore (Sys.command (Filename.quote_command "rm" ["-rf"; d])))
-      (Sys.readdir root)
-  end;
-  List.filter_map (fun l -> match String.index_opt l ' ' with
-      | Some i -> Some (String.sub l 0 i, String.sub l (i + 1) (String.length l - i - 1))
-      | None -> None) (SomaOpam.read_lines done_file)
+  (* The lock is taken before the directory is looked at, and held until
+     what it holds is published: what another compilation of the same
+     library did while this one waited for it is then seen, not undone. The
+     lock of another library is another file, so libraries whose keys differ
+     still compile at the same time. *)
+  with_lock (lock_file root name) (fun () ->
+      match compiled_theories done_file with
+      | Some ts -> ts
+      | None ->
+        (* a compilation stopped halfway starts again *)
+        if Sys.file_exists dir then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; dir]));
+        SomaOpam.mkdir_p dir;
+        fetch src;
+        let ts = theories ~package src in
+        if ts = [] then
+          error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
+                 spc () ++ str "and there is no _RocqProject or _CoqProject.");
+        compile ~name ~log:(Filename.concat dir "compile.log") ts;
+        (* written last, and renamed into place: a compilation that stopped
+           leaves no [theories] that a later one would take for a finished
+           library *)
+        let tmp = done_file ^ ".tmp" in
+        Out_channel.with_open_bin tmp (fun oc ->
+            List.iter (fun t -> Printf.fprintf oc "%s %s\n" t.logical t.dir) ts);
+        Sys.rename tmp done_file;
+        (* the package compiled before, by another Soma or from other sources,
+           is of no use any more; one that another compilation is building
+           now is left to it *)
+        let prefix = match source with Local _ -> package ^ "-local-" | Opam _ -> package ^ "." in
+        Array.iter (fun e ->
+            let d = Filename.concat root e in
+            if String.starts_with ~prefix e && d <> dir && Sys.is_directory d then remove_stale d)
+          (Sys.readdir root);
+        List.map (fun t -> (t.logical, t.dir)) ts)
 
 (* [Rocq Library "package".]: in the load path, compiled if need be *)
 let library package source =
