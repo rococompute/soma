@@ -10,6 +10,10 @@
 
 val getenv_opt : string -> string option
 
+(** Resolve a process environment variable, then its fallback in
+    coq_environment.txt beside the selected executable. *)
+val getenv_opt_for_executable : string -> string -> string option
+
 val getenv_rocq : string -> string option
 (** [getenv_rocq name] returns the value of "ROCQ$name" if it exists,
     otherwise the value of "COQ$name" if it exists and warns that it

@@ -9,6 +9,8 @@ source=pathlib.Path(os.environ['SOMA_RC_SOURCE'])
 loader=(source/'toplevel/coqrc.ml').read_text()
 cli=(source/'topbin/soma.ml').read_text();start=cli.index('  List.iter (fun path ->\n      match Unix.lstat path with',cli.index('let fresh_inputs '))
 end=cli.index('  (match initial_getenv "SOMA_OCAML_EXTRACT"',start);guard=cli[start:end]
+helper_start=cli.index('let worker_rc_candidates () =')
+worker_helper=cli[helper_start:cli.index('(* What a build of [c]',helper_start)]
 prefix=r'''
 module CUnix=struct let file_readable_p p=try Unix.access p [Unix.R_OK];not(Sys.is_directory p) with Unix.Unix_error _->false end
 module Pp=struct let str s=s end
@@ -75,11 +77,47 @@ with tempfile.TemporaryDirectory(prefix='soma-rc-candidates-') as tmp:
   (root/name).write_bytes((source/'boot'/name).read_bytes())
  (root/'coq_config.ml').write_text('let version="audit-version"\n')
  (root/'boot.ml').write_text('module UserConfig = UserConfig\n')
- (root/'cli_guard.ml').write_text('exception Uncertain of string\nlet uncertain fmt=Printf.ksprintf(fun s->raise(Uncertain s))fmt\nlet can_skip ()=try\n'+guard+'true with Uncertain _->false\n')
+ (root/'cli_guard.ml').write_text('exception Uncertain of string\nlet uncertain fmt=Printf.ksprintf(fun s->raise(Uncertain s))fmt\ntype worker={package:string;basename:string}\nlet get_worker_path (_:worker)=match Sys.getenv_opt "SOMA_RC_WORKER" with Some p->p|None->Sys.executable_name\n'+worker_helper+'let can_skip ()=try\n'+guard+'true with Uncertain _->false\n')
  # Compile the actual driver guard BEFORE any Coqrc/compiler endpoint exists.
  # This catches accidentally adding a toplevel-only driver dependency.
  subprocess.run(['ocamlfind','ocamlopt','-package','unix','-c','coq_config.ml','util.mli','util.ml','userConfig.mli','userConfig.ml','boot.ml','cli_guard.ml'],cwd=root,check=True)
  (root/'check.ml').write_text(prefix+loader+suffix)
  subprocess.run(['ocamlfind','ocamlopt','-package','unix','-linkpkg','coq_config.cmx','util.cmx','userConfig.cmx','boot.cmx','cli_guard.cmx','check.ml','-o','check'],cwd=root,check=True)
  subprocess.run([str(root/'check'),tmp],cwd=root,check=True)
+
+ # Actual Boot.Util sidecar parsing and selected-worker guard, with separate
+ # driver/worker executable folders. No compiler installation is modified.
+ (root/'context.ml').write_text(r"""
+let () =
+ let default=Boot.UserConfig.rc_candidates ~warn:ignore in
+ assert(List.for_all(fun p->not(Sys.file_exists p))default);
+ let expected=Sys.argv.(1)="allow" in
+ assert(Cli_guard.can_skip()=expected);
+ print_endline(if expected then "worker-context absent: fresh allowed" else "worker-context candidate: fresh refused")
+""")
+ subprocess.run(['ocamlfind','ocamlopt','-package','unix','-linkpkg','coq_config.cmx','util.cmx','userConfig.cmx','boot.cmx','cli_guard.cmx','context.ml','-o','context'],cwd=root,check=True)
+ driver=root/'driver';driver.mkdir();worker=root/'worker';worker.mkdir();alias=root/'alias';alias.mkdir()
+ homes={}
+ for name,folder in [('driver',driver),('worker',worker),('alias',alias)]:
+  home=root/(name+'-home');home.mkdir();homes[name]=home
+  (folder/'coq_environment.txt').write_text('HOME="'+str(home)+'"\n')
+ (driver/'soma').write_bytes((root/'context').read_bytes());(driver/'soma').chmod(0o700)
+ (worker/'rocqworker').write_bytes((root/'context').read_bytes());(worker/'rocqworker').chmod(0o700)
+ (alias/'rocqworker').symlink_to(worker/'rocqworker')
+ env=dict(os.environ)
+ for key in ['HOME','XDG_CONFIG_HOME','HOMEDRIVE','HOMEPATH','USERPROFILE']:env.pop(key,None)
+ env['SOMA_RC_WORKER']=str(worker/'rocqworker')
+ worker_rc=homes['worker']/'.coqrc';worker_rc.write_text('worker rc')
+ def context(mode):subprocess.run([str(driver/'soma'),mode],cwd=root,env=env,check=True)
+ context('refuse')
+ env['SOMA_RC_WORKER']=str(alias/'rocqworker');context('refuse')
+ worker_rc.unlink();alias_rc=homes['alias']/'.coqrc';alias_rc.write_text('alias rc');context('refuse')
+ alias_rc.unlink();context('allow')
+ worker_config=root/'worker-config';(worker_config/'coq').mkdir(parents=True)
+ (worker/'coq_environment.txt').write_text('HOME="'+str(homes['worker'])+'"\nXDG_CONFIG_HOME="'+str(worker_config)+'"\n')
+ (worker_config/'coq/coqrc').write_text('worker XDG rc');env['SOMA_RC_WORKER']=str(worker/'rocqworker');context('refuse')
+ # Process environment wins over either adjacent executable's fallback file.
+ env['HOME']=str(homes['driver']);env['XDG_CONFIG_HOME']=str(root/'process-config');context('allow')
+ print('separate worker sidecars, symlink lookup/resolved contexts and process-env precedence: passed')
+
 PY

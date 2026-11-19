@@ -20,8 +20,8 @@ let with_ic file f =
     rc
   with e -> close_in ic; raise e
 
-let getenv_from_file name =
-  let base = Filename.dirname Sys.executable_name in
+let getenv_from_file executable name =
+  let base = Filename.dirname executable in
   try
     with_ic (base ^ "/coq_environment.txt") (fun ic ->
       let rec find () =
@@ -36,10 +36,12 @@ let getenv_from_file name =
   | End_of_file -> None
 
 
-let getenv_opt name =
+let getenv_opt_for_executable executable name =
   match Sys.getenv_opt name with
   | Some _ as v -> v
-  | None -> getenv_from_file name
+  | None -> getenv_from_file executable name
+
+let getenv_opt name = getenv_opt_for_executable Sys.executable_name name
 
 let warn_deprecated_coq_var = ref (fun ~rocq ~coq ->
     Printf.eprintf "Deprecated environment variable %s, use %s instead.\n%!" coq rocq)
