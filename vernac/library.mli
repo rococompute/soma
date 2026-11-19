@@ -76,6 +76,11 @@ val library_is_loaded : DirPath.t -> bool
 (** - Tell which libraries are loaded, in the order by which they were loaded. *)
 val loaded_libraries : unit -> DirPath.t list
 
+(** Actual filenames recorded when libraries were loaded, in load order.
+    This does not resolve the names again through the current load path.
+    An unavailable recorded filename remains the existing unavailable marker. *)
+val loaded_library_files : unit -> (DirPath.t * string) list
+
 val library_compiled : DirPath.t -> Safe_typing.compiled_library
 
 (** {6 Native compiler. } *)

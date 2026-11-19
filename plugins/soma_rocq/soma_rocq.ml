@@ -66,7 +66,7 @@ let soma_key () =
   match List.find_map (fun p -> match Loadpath.locate_absolute_library (lib p) with
       | Ok f -> Some f | Error _ -> None) [["Soma"; "Soma"]; ["Corelib"; "Init"; "Prelude"]] with
   | Some f -> SomaMerkle.string
-      ("soma-rocq-toolchain 2\000" ^ SomaCache.identity () ^ "\000" ^ SomaMerkle.file_hash f)
+      ("soma-rocq-toolchain 4\000" ^ SomaCache.identity () ^ "\000" ^ SomaMerkle.file_hash f)
   | None -> error (str "Soma's Corelib is not found.")
 
 (* * The theories of a source *)
@@ -274,7 +274,7 @@ let compile ~name ~log ts =
       let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
       if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
-               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log))), None
+               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
     order
 
 (* * The source *)
@@ -372,15 +372,20 @@ let with_lock file f =
 (* What a compiled library's [theories] says: its theories, in the order it
    compiled them. None when the compilation did not finish: the file is
    written last, and renamed into place, so a partial one is no [theories]. *)
-let compiled_theories file =
-  match List.filter_map (fun l -> match String.index_opt l ' ' with
-      | Some i -> Some (String.sub l 0 i, String.sub l (i + 1) (String.length l - i - 1))
-      | None -> None) (SomaOpam.read_lines file) with
-  | [] -> None
-  | ts -> Some ts
+let compiled_theories ~key directory =
+  match SomaRocqCache.load ~key ~directory ~resolve_input:SomaImport.resolve_project_file with
+  | Some entry -> Some entry.SomaRocqCache.theories
+  | None -> None
 
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
+  (match source with
+   | Opam None -> SomaImport.note_uncertified_rocq_library ()
+   | Local path when not (SomaImport.rocq_source_in_project path) ->
+     (* File hashes cannot observe added .v/dune/configuration files in an
+        external source tree. Until tree traces exist, keep it uncertified. *)
+     SomaImport.note_uncertified_rocq_library ()
+   | _ -> ());
   (* before a cache directory is created or removed, and before opam *)
   require_component "package" package;
   (match source with Opam (Some version) -> require_component "version" version | Opam None | Local _ -> ());
@@ -422,10 +427,18 @@ let ensure ~package source =
      lock of another library is another file, so libraries whose keys differ
      still compile at the same time. *)
   with_lock (lock_file root name) (fun () ->
-      match compiled_theories done_file with
+      match compiled_theories ~key:name dir with
       | Some ts -> ts
       | None ->
-        (* a compilation stopped halfway starts again *)
+        (* Never delete a completed entry a build/REPL may still be using.
+           Altered/untrusted completed entries fail closed; only unpublished
+           partial compilations may be cleaned under this entry's lock. *)
+        let exists path =
+          try ignore (Unix.lstat path); true with
+          | Unix.Unix_error (Unix.ENOENT, _, _) -> false in
+        if exists done_file || exists (Filename.concat dir SomaRocqCache.marker) then
+          error (str "the completed Rocq library cache entry " ++ qstring dir ++
+                 str " has changed or lacks compiler provenance; use a clean project cache.");
         if Sys.file_exists dir then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; dir]));
         SomaOpam.mkdir_p dir;
         fetch src;
@@ -433,23 +446,24 @@ let ensure ~package source =
         if ts = [] then
           error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
                  spc () ++ str "and there is no _RocqProject or _CoqProject.");
+        let snapshot = SomaRocqCache.source_snapshot ~directory:dir in
         compile ~name ~log:(Filename.concat dir "compile.log") ts;
         (match source, local_key with
          | Local path, Some expected when source_key src <> expected || source_key path <> expected ->
            error (str "the local library's sources changed while it was compiled; build again.")
          | _ -> ());
-        let input_files, complete = match source with
-          | Local path -> source_files (Unix.realpath path), true
-          | Opam (Some _) -> source_files src, true
-          | Opam None -> source_files src, false in
-        SomaImport.record_rocq_inputs ~directory:dir ~complete input_files;
-        (* written last, and renamed into place: a compilation that stopped
-           leaves no [theories] that a later one would take for a finished
-           library *)
-        let tmp = done_file ^ ".tmp" in
-        Out_channel.with_open_bin tmp (fun oc ->
-            List.iter (fun t -> Printf.fprintf oc "%s %s\n" t.logical t.dir) ts);
-        Sys.rename tmp done_file;
+        let input_files = List.map (fun (relative, digest) ->
+            let prefix = "src/" in
+            if not (String.starts_with ~prefix relative) then
+              error (str "a Rocq library source is outside its copied source tree.");
+            let relative = String.sub relative (String.length prefix) (String.length relative - String.length prefix) in
+            let root = match source with Local path -> Unix.realpath path | Opam _ -> src in
+            Filename.concat root relative, digest) snapshot in
+        (* Coverage describes the compiled snapshot. Selection policy (a
+           floating version or external tree) is attached to this use above. *)
+        SomaImport.record_rocq_inputs ~directory:dir ~complete:true input_files;
+        SomaRocqCache.publish ~key:name ~directory:dir ~sources:snapshot
+          ~theories:(List.map (fun t -> t.logical, t.dir) ts);
         (* Completed entries stay immutable and are kept until the project
            cache is explicitly removed. A build or REPL can still be loading
            a different key after its compilation lock has been released, so
