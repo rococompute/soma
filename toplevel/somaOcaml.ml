@@ -306,14 +306,7 @@ let with_project_lock dir f =
       wait ();
       f dir)
 
-let record_build_paths variable paths =
-  match Sys.getenv_opt variable with
-  | Some file when file <> "" ->
-    Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o600 file (fun oc ->
-        List.iter (fun path -> output_string oc path; output_char oc '\000') paths)
-  | _ -> ()
-
-let record_build_inputs ~switch ~dir modules =
+let prepare_build_inputs ~switch modules =
   match Sys.getenv_opt "SOMA_BUILD_INPUTS" with
   | Some file when file <> "" ->
     let out = Filename.temp_file "soma-native-switch-" ".prefix" in
@@ -322,12 +315,12 @@ let record_build_inputs ~switch ~dir modules =
           match List.find_opt (fun path ->
               not (Filename.is_relative path) && Sys.file_exists path && Sys.is_directory path)
               (List.rev (read_lines out)) with
-          | None -> ()
+          | None -> None
           | Some prefix ->
             let opam_root = match Sys.getenv_opt "OPAMROOT" with
               | Some path when path <> "" -> path
               | _ -> Filename.concat (Sys.getenv "HOME") ".opam" in
-            let roots = [dir; Filename.concat opam_root "config"] @ List.map (Filename.concat prefix)
+            let roots = [Filename.concat opam_root "config"] @ List.map (Filename.concat prefix)
                 ["bin"; "lib"; ".opam-switch"] in
             let sources = List.filter_map (fun (m : SomaForeign.ocaml_module) -> m.ml_file) modules in
             (* Retain lookup paths rather than realpaths: a changed symlink
@@ -335,8 +328,9 @@ let record_build_inputs ~switch ~dir modules =
                in the manifest so the CLI cannot certify a partial snapshot. *)
             let paths = List.map (fun path -> if Filename.is_relative path then
                 Filename.concat (Sys.getcwd ()) path else path) (roots @ sources) in
-            record_build_paths "SOMA_BUILD_INPUTS" paths)
-  | _ -> ()
+            SomaBuildInfo.prepare_inputs paths
+        else None)
+  | _ -> None
 
 (* * soma extract *)
 
@@ -479,6 +473,7 @@ let build ~state ~source ~vo_file =
     let dir = List.fold_left Filename.concat (cache_dir ())
         ["build"; name ^ "-" ^ SomaMerkle.string source] in
     with_project_lock dir (fun dir ->
+    let inputs = prepare_build_inputs ~switch modules in
     write_project ~state ~modules ~libraries ~js ~directives:true dir;
     ignore (update_file (Filename.concat dir "dune-project") "(lang dune 3.0)\n");
     let target = if js then "./soma_main.bc.js" else "./soma_main.exe" in
@@ -497,14 +492,14 @@ let build ~state ~source ~vo_file =
     if js then begin
       SomaMirage.write_file (out ^ ".js") (read_file built);
       SomaMirage.write_file (out ^ ".html") (page_html (Filename.basename out));
-      record_build_inputs ~switch ~dir modules;
-      record_build_paths "SOMA_BUILD_PRODUCTS" [out ^ ".js"; out ^ ".html"];
+      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_products [out ^ ".js"; out ^ ".html"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".html") ++ str ", with " ++
                               str (Filename.basename out ^ ".js") ++ str "; open it in a browser")
     end else begin
       SomaMirage.copy_file ~src:built ~dst:(out ^ ".exe");
-      record_build_inputs ~switch ~dir modules;
-      record_build_paths "SOMA_BUILD_PRODUCTS" [out ^ ".exe"];
+      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_products [out ^ ".exe"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".exe") ++ str "; run it with: " ++
                               str (out ^ ".exe"))
     end)
