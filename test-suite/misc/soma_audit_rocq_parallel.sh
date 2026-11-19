@@ -124,18 +124,29 @@ with open(first_err, "w") as err, open(first_out, "w") as out:
         assert first.poll() is None, first_err.read_text(errors="replace")
         time.sleep(0.01)
     # a second build, which waits for the lock the first holds
-    second = subprocess.Popen(
-        ["soma", "build", "-v", "main.soma"], cwd=root, env=env_with(store),
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    time.sleep(0.3)
-    # kill the compilation the second one waits for
-    os.killpg(first.pid, signal.SIGKILL)
-    first.wait()
-    assert first.returncode != 0, first.returncode
-    # killed before it wrote [theories]: no later build may take it for done
-    assert markers(root) == [], markers(root)
-    out, err = second.communicate(timeout=300)
-    assert second.returncode == 0, (out, err)
+    second_err = outer / "second.err"
+    second_out = outer / "second.out"
+    with open(second_err, "w") as serr, open(second_out, "w") as sout:
+        second = subprocess.Popen(["soma", "build", "-v", "main.soma"], cwd=root,
+                                  env=env_with(store), stdout=sout, stderr=serr)
+        # it is in the cache: its imports compile, and its library must wait
+        deadline = time.time() + 60
+        while "Compiling " not in second_err.read_text(errors="replace"):
+            assert time.time() < deadline, "the second build did not start"
+            assert second.poll() is None, second_err.read_text(errors="replace")
+            time.sleep(0.01)
+        time.sleep(0.3)
+        assert "Rocq: compiling " not in second_err.read_text(errors="replace"), \
+            "the second build did not wait for the first one's lock"
+        # kill the compilation the second one waits for
+        os.killpg(first.pid, signal.SIGKILL)
+        first.wait()
+        assert first.returncode != 0, first.returncode
+        # killed before it wrote [theories]: no later build may take it for done
+        assert markers(root) == [], markers(root)
+        assert second.wait(timeout=300) == 0, second_err.read_text(errors="replace")
+    out = second_out.read_text(errors="replace")
+    err = second_err.read_text(errors="replace")
     assert ("= %d" % (2 * N)) in out, out
     assert compiled(err) == N, err
     assert markers(root) != [], "the waiter did not compile the library"

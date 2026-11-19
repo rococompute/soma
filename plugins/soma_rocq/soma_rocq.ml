@@ -311,7 +311,7 @@ let locks_held : (string, unit) Hashtbl.t = Hashtbl.create 7
 
 let with_lock file f =
   if Hashtbl.mem locks_held file then f () else begin
-    let fd = Unix.openfile file [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 in
+    let fd = Unix.openfile file [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o644 in
     Fun.protect ~finally:(fun () ->
         Hashtbl.remove locks_held file;
         Unix.close fd) (fun () ->
@@ -329,7 +329,7 @@ let with_lock file f =
    it, and is removed by a later build, when no one holds it *)
 let remove_stale root e =
   let d = Filename.concat root e in
-  match Unix.openfile (lock_file root e) [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 with
+  match Unix.openfile (lock_file root e) [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o644 with
   | exception Unix.Unix_error _ -> ()
   | fd ->
     Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
