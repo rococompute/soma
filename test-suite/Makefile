@@ -686,7 +686,7 @@ $(patsubst %.sh,%.log,$(wildcard misc/*.sh)): %.log: %.sh $(PREREQUISITELOG)
 	  export BIN=$(BIN); \
 	  export coqc="eval $(coqc)"; \
 	  export coqdep="eval $(coqdep)"; \
-	  $(call WITH_TIMER,$@,"$<" 2>&1); R=$$?; times; \
+	  $(call WITH_TIMER,$@,bash "$<" 2>&1); R=$$?; times; \
 	  if [ $$R = 0 ]; then \
 	    echo $(log_success); \
 	    echo "    $< ... Ok"; \
