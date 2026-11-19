@@ -240,6 +240,7 @@ let compile_products args =
   let external_manifest = Filename.temp_file "soma-external" ".manifest" in
   let imports = Filename.temp_file "soma-imports" ".manifest" in
   let phase = Filename.temp_file "soma-phase" ".manifest" in
+  let keep_phase = ref false in
   let variables = ["SOMA_BUILD_PRODUCTS", products; "SOMA_BUILD_INPUTS", inputs;
                    "SOMA_BUILD_EXTERNAL", external_manifest; "SOMA_BUILD_CHECKED_IMPORTS", imports;
                    "SOMA_BUILD_PHASE", phase] in
@@ -247,7 +248,8 @@ let compile_products args =
   List.iter (fun (name, value) -> Unix.putenv name value) variables;
   Fun.protect ~finally:(fun () ->
       List.iter (fun (name, value) -> Unix.putenv name (Stdlib.Option.value ~default:"" value)) previous;
-      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest; imports]) (fun () ->
+      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ())
+        ([products; inputs; external_manifest; imports] @ (if !keep_phase then [] else [phase]))) (fun () ->
       let code, output = compile args in
       let rec pairs = function
         | path :: signature :: rest -> (path, signature) :: pairs rest
@@ -260,7 +262,7 @@ let compile_products args =
         external_build = phases <> [];
         certified_bytecode = List.mem "bytecode-check" phases &&
           List.for_all (fun phase -> phase = "external" || phase = "bytecode-check") phases;
-        phase_draft = (if code = 0 && SomaPhase.read phase <> None then Some phase
+        phase_draft = (if code = 0 && SomaPhase.read phase <> None then (keep_phase := true; Some phase)
                        else (Sys.remove phase; None));
         checked_imports = (match manifest_fields imports with
           | "soma-checked-imports 1" :: paths -> Some paths
@@ -1741,12 +1743,14 @@ let () =
             exit 0
           | Error _ -> ()
         end;
-        let phase_before = if record then prepare_phase config else None in
+        let phase_before = if record && not timings then prepare_phase config
+            else (Unix.putenv "SOMA_PHASE_KEY" ""; None) in
         if record && (try resume_phase config phase_before with
             | Failure reason -> Printf.eprintf "soma build: %s\n%!" reason; exit 1) then exit 0;
         (* A failed lookup can race a source edit. Start a new independent
            boundary for the worker rather than certifying the old snapshot. *)
-        let phase_before = if record then prepare_phase config else None in
+        let phase_before = if record && not timings then prepare_phase config
+            else (Unix.putenv "SOMA_PHASE_KEY" ""; None) in
         let dir = output_dir (program_of file) args in
         let before_build = if record then modification_times dir else [] in
         let before = if record then forget_freshness config else None in

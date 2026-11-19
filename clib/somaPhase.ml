@@ -15,9 +15,21 @@ let eligible () = requested () && !safe && not !checking
 let within root file = String.starts_with ~prefix:(root ^ "/") file
 let canonical file = Unix.realpath file
 let regular file = (Unix.lstat file).Unix.st_kind = Unix.S_REG
-let installed file =
-  List.exists (fun name -> let root = getenv name in root <> "" && within (canonical root) file)
-    ["SOMA_PHASE_COQLIB"; "SOMA_PHASE_RUNTIMELIB"]
+(* Installation trees contain symlinks into the compiler build tree. Match
+   the actual file set the installation exposes, not a permissive parent
+   directory prefix around their realpaths. *)
+let installed_files = lazy (
+  let files = Hashtbl.create 4096 in
+  List.iter (fun name ->
+      let root = getenv name in
+      if root <> "" then begin
+        let snapshot = SomaMerkle.scan root in
+        List.iter (fun (relative,_) ->
+            Hashtbl.replace files (canonical (Filename.concat root relative)) ())
+          snapshot.SomaMerkle.files
+      end) ["SOMA_PHASE_COQLIB"; "SOMA_PHASE_RUNTIMELIB"];
+  files)
+let installed file = Hashtbl.mem (Lazy.force installed_files) file
 
 let plugin ~package ~files =
   if requested () &&
