@@ -223,11 +223,13 @@ type state = {
 
 type modular = {
   mutable mpfiles : DirPath.Set.t; (* List of external modules that will be opened initially *)
+  mutable dependencies : DirPath.Set.t; (* All referenced roots, including those not safe to open *)
   mutable mpfiles_content : Id.t KMap.t DirPath.Map.t; (* table recording objects in the first level of all MPfile *)
 }
 
 let empty_modular () = {
   mpfiles = DirPath.Set.empty;
+  dependencies = DirPath.Set.empty;
   mpfiles_content = DirPath.Map.empty;
 }
 
@@ -353,7 +355,8 @@ let get_mpfiles s =
   s.mpfiles
 
 let add_mpfiles s mp =
-  s.mpfiles <- DirPath.Set.add mp s.mpfiles
+  s.mpfiles <- DirPath.Set.add mp s.mpfiles;
+  s.dependencies <- DirPath.Set.add mp s.dependencies
 
 let clear_mpfiles s =
   s.mpfiles <- DirPath.Set.empty
@@ -385,7 +388,9 @@ let reset s =
   (* don't reset modular files content *)
   let () = match s.modular with
   | None -> ()
-  | Some mdl -> mdl.mpfiles <- DirPath.Set.empty
+  | Some mdl ->
+    mdl.mpfiles <- DirPath.Set.empty;
+    mdl.dependencies <- DirPath.Set.empty
   in
   s.state := state
 
@@ -578,6 +583,11 @@ let opened_libraries table =
     let () = State.clear_mpfiles mdl in
     let () = List.iter (fun mp -> State.add_mpfiles mdl mp) to_open in
     State.get_mpfiles mdl
+
+let used_libraries table =
+  match State.get_modular_state table with
+  | None -> DirPath.Set.empty
+  | Some mdl -> mdl.dependencies
 
 (*s On-the-fly qualification issues for both monolithic or modular extraction. *)
 
