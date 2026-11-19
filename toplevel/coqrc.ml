@@ -13,7 +13,7 @@
 
 let load_rcfile ~rcfile ~state =
   let load file =
-    SomaImport.note_loaded_source file;
+    SomaImport.note_rc_source file;
     Vernac.load_vernac ~check:true ~state file in
   try
     match rcfile with
