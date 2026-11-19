@@ -90,6 +90,13 @@ let () =
   ignore (prepare local_name);
   ignore (ensure ~package:"pkg" (Local external_dir));
   assert !(SomaImport.rocq_selection_uncertified);
+  let pinned_dir = Filename.concat cache_root opam_name in
+  List.iter (fun name ->
+      let path = Filename.concat pinned_dir name in
+      Sys.remove path; Unix.symlink "missing-marker-target" path) ["theories"; SomaRocqCache.marker];
+  let refused = try ignore (ensure ~package:"pkg" (Opam (Some "1.0"))); false with Failure _ -> true in
+  assert refused;
+  assert (Sys.file_exists (Filename.concat pinned_dir "src/A.vo"));
   print_endline "Warm pinned-to-floating and local-to-external requests remain uncertified without mutating cache metadata: passed"
 ''')
     env=dict(os.environ,XDG_CACHE_HOME=str(root/'xdg'),SOMA_CACHE_ID='selection-test')

@@ -433,7 +433,10 @@ let ensure ~package source =
         (* Never delete a completed entry a build/REPL may still be using.
            Altered/untrusted completed entries fail closed; only unpublished
            partial compilations may be cleaned under this entry's lock. *)
-        if Sys.file_exists done_file || Sys.file_exists (Filename.concat dir SomaRocqCache.marker) then
+        let exists path =
+          try ignore (Unix.lstat path); true with
+          | Unix.Unix_error (Unix.ENOENT, _, _) -> false in
+        if exists done_file || exists (Filename.concat dir SomaRocqCache.marker) then
           error (str "the completed Rocq library cache entry " ++ qstring dir ++
                  str " has changed or lacks compiler provenance; use a clean project cache.");
         if Sys.file_exists dir then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; dir]));
