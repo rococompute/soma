@@ -94,18 +94,24 @@ let is_ident s =
    nor is a project inside this one, with its own soma.toml, a part of it. *)
 let importable root =
   let exts = [".soma"; ".ext"; ".definition"; ".wasm"] in
-  let rec walk rel =
+  let rec walk ancestors rel =
     let dir = if rel = "" then root else Filename.concat root rel in
+    let stat = Unix.stat dir in
+    let inode = stat.Unix.st_dev, stat.Unix.st_ino in
+    (* Only ancestors are excluded: two acyclic aliases may expose the same
+       source under different importable names, and both must be compared. *)
+    if List.mem inode ancestors then [] else
+    let ancestors = inode :: ancestors in
     List.concat_map (fun e ->
         let path = if rel = "" then e else rel ^ "/" ^ e in
         let full = Filename.concat dir e in
         if Sys.is_directory full then
-          if is_ident e && not (Sys.file_exists (Filename.concat full file_name)) then walk path else []
+          if is_ident e && not (Sys.file_exists (Filename.concat full file_name)) then walk ancestors path else []
         else if List.exists (Filename.check_suffix e) exts && is_ident (Filename.remove_extension e) then
           [if rel = "" then Filename.remove_extension e else rel ^ "/" ^ Filename.remove_extension e]
         else [])
       (List.sort compare (Array.to_list (Sys.readdir dir))) in
-  List.sort_uniq compare (walk "")
+  List.sort_uniq compare (walk [] "")
 
 type definition = {
   name : string;
@@ -261,4 +267,8 @@ let run args =
   failed old_side old_failures;
   failed new_side new_failures;
   say (Printf.sprintf "\n%d unchanged. Notations, instances, hints and tactics are not compared.\n"
-         (List.length unchanged))
+         (List.length unchanged));
+  if old_failures <> [] || new_failures <> [] then begin
+    flush stdout;
+    error (str "The comparison is incomplete: some files could not be checked.")
+  end
