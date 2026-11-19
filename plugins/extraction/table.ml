@@ -133,6 +133,9 @@ type table = {
   (* projs: working modulo name equivalence is ok *)
   info_axioms : GlobRef.Set_env.t;
   log_axioms : GlobRef.Set_env.t;
+  (* Diagnostic aggregation only, deliberately by symbol: extraction does not
+     implement rewrite rules, and warns about all rules of each used symbol.
+     The type/term/inductive extraction caches above retain their instances. *)
   symbols : Id.t list GlobRef.Map_env.t;
   opaques:  GlobRef.Set_env.t;
   modfile_ids : Id.Set.t;
