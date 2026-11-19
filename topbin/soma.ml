@@ -240,7 +240,7 @@ let compile_products args =
   let previous = List.map (fun (name, _) -> name, Sys.getenv_opt name) variables in
   List.iter (fun (name, value) -> Unix.putenv name value) variables;
   Fun.protect ~finally:(fun () ->
-      List.iter (fun (name, value) -> Unix.putenv name (Option.value ~default:"" value)) previous;
+      List.iter (fun (name, value) -> Unix.putenv name (Stdlib.Option.value ~default:"" value)) previous;
       List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest]) (fun () ->
       let code, output = compile args in
       let rec pairs = function

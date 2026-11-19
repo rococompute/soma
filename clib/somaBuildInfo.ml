@@ -35,13 +35,13 @@ let program name =
     with Unix.Unix_error _ -> None in
   if String.contains name '/' then executable name else
   let separator = if Sys.win32 then ';' else ':' in
-  let paths = Option.value ~default:"" (Sys.getenv_opt "PATH") |> String.split_on_char separator in
+  let paths = Stdlib.Option.value ~default:"" (Sys.getenv_opt "PATH") |> String.split_on_char separator in
   List.find_map (fun dir -> executable (Filename.concat (if dir = "" then "." else dir) name)) paths
 
 let program_candidates name =
   if String.contains name '/' then [name] else
   let separator = if Sys.win32 then ';' else ':' in
-  let paths = Option.value ~default:"" (Sys.getenv_opt "PATH") |> String.split_on_char separator in
+  let paths = Stdlib.Option.value ~default:"" (Sys.getenv_opt "PATH") |> String.split_on_char separator in
   let rec until_found = function
     | [] -> []
     | dir :: rest ->
