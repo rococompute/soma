@@ -231,22 +231,77 @@ let external_fresh inputs =
       with Error _ | Sys_error _ | Unix.Unix_error _ | Changed_input -> false) inputs
 
 type receipt = { identity : string; inputs : (string * string) list; dependencies : S.t;
-                 external_inputs : (string * string) list }
+                 sources : S.t; context : string; external_inputs : (string * string) list }
+
+type physical_context = { scope : string; candidates : (string * bool) list }
+
+let compiler_source path = List.exists (Filename.check_suffix path) [".soma"; ".ext"; ".definition"; ".wasm"]
+
+(* Probe only compiler-known source families and exact implicit-rule paths.
+   Gitignored candidates cannot be certified merely because Git omitted them. *)
+let physical_context ?(allow_outside=false) root test sources inputs =
+  try
+    let entry = Filename.concat root test in
+    let dir = Unix.realpath (Filename.dirname entry) in
+    let build_root = match project dir with Some root -> root | None -> dir in
+    if not (under root build_root) then None else
+    let config = Filename.concat build_root "soma.toml" in
+    let config_present = Sys.file_exists config in
+    if config_present && (external_input root config || not (List.mem_assoc (relative root config) inputs))
+    then None else
+    let root_name = SomaRuleInputs.configured_root_name build_root in
+    let config_hash = if config_present then List.assoc (relative root config) inputs else "-" in
+    let scope = SomaMerkle.string (Printf.sprintf "%S %S %s" (if build_root = root then "" else relative root build_root) root_name config_hash) in
+    let candidates = S.fold (fun source paths ->
+        if not (compiler_source source) then paths else
+        let source = Filename.concat root source in
+        (* Imported units use the entry's actual project root; a nested
+           file's parent is not a second independent standalone project. *)
+        if not (under build_root source) then
+          if allow_outside then paths else error "a source has an unsupported compiler root"
+        else
+        SomaRuleInputs.candidate_paths ~root:build_root ~root_name ~source @ paths) sources [config]
+      |> List.sort_uniq compare
+      |> List.map (fun path -> relative root path, Sys.file_exists path) in
+    Some {scope; candidates}
+  with Error _ | Sys_error _ | Unix.Unix_error _ | Failure _ | SomaToml.Error _ -> None
+
+let captured_context root inputs = function
+  | None -> false
+  | Some context -> List.for_all (fun (path, present) ->
+      if not present then true else
+      let file = Filename.concat root path in
+      try
+        let target = Unix.realpath file in
+        List.mem_assoc path inputs && under root target && List.mem_assoc (relative root target) inputs
+      with Error _ | Unix.Unix_error _ -> false) context.candidates
+
+let context_contains before after = match before, after with
+  | Some before, Some after when before.scope = after.scope ->
+    List.for_all (fun (path, present) -> List.assoc_opt path before.candidates = Some present) after.candidates
+  | _ -> false
 let load file =
   if not (SomaCache.trusted file) then error "no trusted dependency record";
   match lines (read file) with
-  | "soma-test 2" :: identity :: body ->
-    let inputs = ref [] and dependencies = ref S.empty and external_inputs = ref [] in
+  | "soma-test 3" :: identity :: body ->
+    let inputs = ref [] and dependencies = ref S.empty and sources = ref S.empty and context = ref None and external_inputs = ref [] in
     List.iter (fun line ->
-        if String.starts_with ~prefix:"input " line then
+        if String.starts_with ~prefix:"context " line then
+          (match !context with None -> context := Some (Scanf.sscanf line "context %s%!" Fun.id)
+           | Some _ -> error "duplicate physical context")
+        else if String.starts_with ~prefix:"input " line then
           inputs := Scanf.sscanf line "input %S %s%!" (fun p d -> p, d) :: !inputs
         else if String.starts_with ~prefix:"external " line then
           external_inputs := Scanf.sscanf line "external %S %s%!" (fun p d -> p, d) :: !external_inputs
+        else if String.starts_with ~prefix:"source " line then
+          sources := S.add (Scanf.sscanf line "source %S%!" Fun.id) !sources
         else if String.starts_with ~prefix:"dependency " line then
           dependencies := S.add (Scanf.sscanf line "dependency %S%!" Fun.id) !dependencies
         else error "unknown test receipt field") body;
-    if S.is_empty !dependencies then error "empty dependency record";
-    { identity; inputs = List.sort_uniq compare !inputs; dependencies = !dependencies;
+    if S.is_empty !dependencies || S.is_empty !sources then error "empty dependency/source record";
+    let context = match !context with Some context when SomaMerkle.valid_hash context -> context
+      | _ -> error "missing physical context" in
+    { identity; sources = !sources; context; inputs = List.sort_uniq compare !inputs; dependencies = !dependencies;
       external_inputs = List.sort_uniq compare !external_inputs }
   | _ -> error "missing dependency record"
 
@@ -255,7 +310,9 @@ let store file receipt =
   let tmp = Filename.temp_file ~temp_dir:(Filename.dirname file) ".test-" ".tmp" in
   Fun.protect ~finally:(fun () -> if Sys.file_exists tmp then Sys.remove tmp) (fun () ->
       Out_channel.with_open_bin tmp (fun oc ->
-          Printf.fprintf oc "soma-test 2\n%s\n" receipt.identity;
+          Printf.fprintf oc "soma-test 3\n%s\n" receipt.identity;
+          Printf.fprintf oc "context %s\n" receipt.context;
+          S.iter (fun path -> Printf.fprintf oc "source %S\n" path) receipt.sources;
           List.iter (fun (p, d) -> Printf.fprintf oc "input %S %s\n" p d) receipt.inputs;
           S.iter (fun p -> Printf.fprintf oc "dependency %S\n" p) receipt.dependencies;
           List.iter (fun (p, d) -> Printf.fprintf oc "external %S %s\n" p d) receipt.external_inputs);
@@ -392,7 +449,11 @@ let run ~identity ~build args =
       | Full _ -> true
       | Diff (changed, _, include_drift) ->
         try let receipt = load (record root test) in
-          not (S.mem test receipt.dependencies) || affected ~identity ~inputs ~changed ~include_drift receipt
+          not (S.mem test receipt.dependencies) ||
+          (let context = physical_context root test receipt.sources inputs in
+           not (captured_context root inputs context) ||
+           match context with Some context -> context.scope <> receipt.context | None -> true) ||
+          affected ~identity ~inputs ~changed ~include_drift receipt
         with Error _ | Sys_error _ | Scanf.Scan_failure _ | End_of_file | Failure _ -> true) tests in
   if !list_only then List.iter print_endline selected else begin
     let reason = match selection with Full reason -> reason | Diff (_, reason, _) -> reason ^ "; missing or uncertain records also run" in
@@ -402,6 +463,9 @@ let run ~identity ~build args =
         let receipt_file = record root test in
         if Sys.file_exists receipt_file then Sys.remove receipt_file;
         let before = snapshot root repo in
+        let possible_sources = List.fold_left (fun sources (path, _) ->
+            if compiler_source path then S.add path sources else sources) (S.singleton test) before in
+        let physical_before = physical_context ~allow_outside:true root test possible_sources before in
         let trace = Filename.temp_file "soma-test-" ".deps" in
         Fun.protect ~finally:(fun () -> Sys.remove trace) (fun () ->
             Printf.eprintf "soma test: %s\n%!" test;
@@ -443,6 +507,13 @@ let run ~identity ~build args =
                  S.exists (fun p -> Sys.file_exists (Filename.concat root p) && not (List.mem_assoc p before)) dependencies
               then error "dependency is not tracked by Git discovery";
               if snapshot root repo <> before then error "project changed while the test was building";
-              store receipt_file { identity; inputs = before; dependencies; external_inputs }
+              let sources = List.map (relative root) sources |> S.of_list in
+              let physical_after = physical_context root test sources before in
+              if not (captured_context root before physical_after) then
+                error "a known compiler input is omitted by Git discovery";
+              if not (context_contains physical_before physical_after) then
+                error "compiler input membership/configuration changed while the test was building";
+              let context = match physical_after with Some context -> context.scope | None -> assert false in
+              store receipt_file { identity; inputs = before; dependencies; sources; context; external_inputs }
             with Error reason -> Printf.eprintf "soma test: %s: next run will include this test (%s)\n%!" test reason)) selected
   end
