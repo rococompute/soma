@@ -231,6 +231,7 @@ type build_metadata = {
   external_build : bool;
   certified_bytecode : bool;
   checked_imports : string list option;
+  phase_draft : string option;
 }
 
 let compile_products args =
@@ -238,13 +239,17 @@ let compile_products args =
   let inputs = Filename.temp_file "soma-inputs" ".manifest" in
   let external_manifest = Filename.temp_file "soma-external" ".manifest" in
   let imports = Filename.temp_file "soma-imports" ".manifest" in
+  let phase = Filename.temp_file "soma-phase" ".manifest" in
+  let keep_phase = ref false in
   let variables = ["SOMA_BUILD_PRODUCTS", products; "SOMA_BUILD_INPUTS", inputs;
-                   "SOMA_BUILD_EXTERNAL", external_manifest; "SOMA_BUILD_CHECKED_IMPORTS", imports] in
+                   "SOMA_BUILD_EXTERNAL", external_manifest; "SOMA_BUILD_CHECKED_IMPORTS", imports;
+                   "SOMA_BUILD_PHASE", phase] in
   let previous = List.map (fun (name, _) -> name, Sys.getenv_opt name) variables in
   List.iter (fun (name, value) -> Unix.putenv name value) variables;
   Fun.protect ~finally:(fun () ->
       List.iter (fun (name, value) -> Unix.putenv name (Stdlib.Option.value ~default:"" value)) previous;
-      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest; imports]) (fun () ->
+      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ())
+        ([products; inputs; external_manifest; imports] @ (if !keep_phase then [] else [phase]))) (fun () ->
       let code, output = compile args in
       let rec pairs = function
         | path :: signature :: rest -> (path, signature) :: pairs rest
@@ -257,6 +262,8 @@ let compile_products args =
         external_build = phases <> [];
         certified_bytecode = List.mem "bytecode-check" phases &&
           List.for_all (fun phase -> phase = "external" || phase = "bytecode-check") phases;
+        phase_draft = (if code = 0 && SomaPhase.read phase <> None then (keep_phase := true; Some phase)
+                       else (Sys.remove phase; None));
         checked_imports = (match manifest_fields imports with
           | "soma-checked-imports 1" :: paths -> Some paths
           | _ -> None) })
@@ -1507,6 +1514,89 @@ let freshness_verdict c =
     | Unix.Unix_error (e, _, _) -> Error (Unix.error_message e)
     | Scanf.Scan_failure _ | Failure _ | End_of_file -> Error "the record of the last build is unreadable"
 
+(* Completed checking/extraction is a separate fact from native success.
+   Every hit executes Dune and copies its validated product again. *)
+type phase_snapshot = { phase_key : string; phase_root : string;
+                        phase_source : string; phase_output : string;
+                        phase_rows : string list }
+
+let phase_rc_absent () =
+  try
+    let worker = get_worker_path {package="soma-runtime";basename="rocqworker"} in
+    let paths = List.concat_map (fun executable ->
+        Boot.UserConfig.rc_candidates_for_executable executable ~warn:(fun _ -> ()))
+        [worker; Unix.realpath worker] |> List.sort_uniq String.compare in
+    List.for_all (fun path -> match Unix.lstat path with
+        | _ -> false
+        | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR),_,_) -> true) paths
+  with Sys_error _ | Unix.Unix_error _ | Not_found -> false
+
+let phase_inputs ?(final=false) c =
+  if c.verbose || c.fill || c.no_image || c.args <> [] || not (phase_rc_absent ()) then None else
+  try
+    List.iter (fun name -> match initial_getenv name with
+        | Some value when value <> "" && value <> "0" -> uncertain "phase output mode %s" name
+        | _ -> ()) ["SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS";
+                    "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_WASM_FILE";
+                    "SOMA_INTERFACE"; "SOMA_TEST_DEPENDENCIES"; "SOMA_BUILD_TIMINGS"];
+    let source,root = fresh_project c.file in
+    let output = Filename.remove_extension source ^ ".exe" in
+    let _,_,rows = fresh_inputs ~products:[output] ~reuse_initial_toolchain:(not final) ~toolchain:true c in
+    let rows = rows @ ["phase-format soma-native-phase 1";
+        "phase-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))] in
+    Some {phase_key=SomaMerkle.string (String.concat "\n" rows);phase_root=root;
+          phase_source=source;phase_output=output;phase_rows=rows}
+  with Uncertain _ | Sys_error _ | Unix.Unix_error _ | Not_found -> None
+
+let prepare_phase c =
+  let snapshot = phase_inputs c in
+  Unix.putenv "SOMA_PHASE_KEY" (match snapshot with Some p -> p.phase_key | None -> "");
+  Unix.putenv "SOMA_PHASE_ROOT" (match snapshot with Some p -> p.phase_root | None -> "");
+  (match Boot.Env.initialized () with
+   | Some (Boot.Env.Env env) ->
+     Unix.putenv "SOMA_PHASE_COQLIB" (Boot.Env.Path.to_string (Boot.Env.coqlib env));
+     Unix.putenv "SOMA_PHASE_RUNTIMELIB" (Boot.Env.Path.to_string (Boot.Env.runtimelib env))
+   | _ -> ());
+  snapshot
+
+let phase_unchanged c before = match phase_inputs ~final:true c with
+  | Some after -> after.phase_rows = before.phase_rows
+  | None -> false
+
+let resume_phase c before = match before with
+  | None -> false
+  | Some before ->
+    match Option.bind (SomaPhase.record_path before.phase_key) SomaPhase.read with
+    | Some plan when plan.SomaPhase.key=before.phase_key &&
+                     plan.source=before.phase_source && plan.root=before.phase_root &&
+                     plan.output=before.phase_output && SomaPhase.validate plan ->
+      let run ~directory ~log =
+        let cwd = Sys.getcwd () in
+        Fun.protect ~finally:(fun () -> Sys.chdir cwd) (fun () ->
+            Sys.chdir directory;
+            Sys.command (Filename.quote_command "opam"
+              ["exec";"--switch=" ^ plan.switch;"--";"dune";"build";"--profile";"release";
+               "--root";".";"./soma_main.exe"] ~stdout:log ~stderr:log) = 0) in
+      let succeeded = SomaPhase.resume plan ~run in
+      if succeeded && phase_unchanged c before then begin
+        Printf.printf "%s: reused checking/extraction; native validation completed\n%s\n%!"
+          c.file before.phase_output;
+        true
+      end else false
+    | _ -> false
+
+let complete_phase c before metadata =
+  Option.iter (fun draft ->
+      Fun.protect ~finally:(fun () -> try Sys.remove draft with Sys_error _ -> ()) (fun () ->
+          match before,metadata.checked_imports,SomaPhase.read draft with
+          | Some before,Some checked,Some plan when phase_unchanged c before &&
+              plan.SomaPhase.source=before.phase_source && plan.root=before.phase_root &&
+              plan.output=before.phase_output &&
+              List.sort String.compare (List.map fst plan.imports) =
+                List.sort String.compare (List.map Unix.realpath checked) ->
+            ignore (SomaPhase.promote ~draft ~key:before.phase_key)
+          | _ -> ())) metadata.phase_draft
+
 (* "unchanged", or why not *)
 let check_freshness c =
   match freshness_verdict c with
@@ -1689,10 +1779,19 @@ let () =
             exit 0
           | Error _ -> ()
         end;
+        let phase_before = if record && not timings then prepare_phase config
+            else (Unix.putenv "SOMA_PHASE_KEY" ""; None) in
+        if record && (try resume_phase config phase_before with
+            | Failure reason -> Printf.eprintf "soma build: %s\n%!" reason; exit 1) then exit 0;
+        (* A failed lookup can race a source edit. Start a new independent
+           boundary for the worker rather than certifying the old snapshot. *)
+        let phase_before = if record && not timings then prepare_phase config
+            else (Unix.putenv "SOMA_PHASE_KEY" ""; None) in
         let dir = output_dir (program_of file) args in
         let before_build = if record then modification_times dir else [] in
         let before = if record then forget_freshness config else None in
         let metadata = build ~review:(command = "compile") ~timings ~share:(not no_module_cache) ~verbose ~fill (program_of file) args in
+        if record then complete_phase config phase_before metadata;
         if record then
           record_freshness config before ~metadata ~kept:(created ~before:before_build ~source:(program_of file) dir)
     end

@@ -74,7 +74,32 @@ let emit_time state com tstart tend =
     | ToFeedback -> Feedback.msg_notice pp
     | ToChannel ch -> Pp.pp_with ch (pp ++ fnl())
 
+(* Phase reuse has a positive parsed-command boundary. Unknown extensions,
+   tactics and output effects still execute normally; they simply cannot
+   certify a reusable completed checking phase. *)
+let phase_command com =
+  let open Vernacexpr in
+  let safe = com.CAst.v.control = [] && match com.CAst.v.expr with
+    | VernacSynterp (VernacRequire _ | VernacImport _ |
+        VernacBeginSection _ | VernacEndSegment _ | VernacDeclareModule _ |
+        VernacDefineModule _ | VernacDeclareModuleType _ | VernacInclude _ |
+        VernacReservedNotation _ | VernacNotation _ | VernacDeclareCustomEntry _ |
+        VernacSetOption _) -> true
+    | VernacSynterp (VernacExtend (name, _)) ->
+      name.ext_plugin = "soma-runtime.plugins.soma_ocaml" &&
+      name.ext_entry = "SomaOCamlBind"
+    | VernacSynPure (VernacDefinition (_,_,DefineBody (_,None,_,_)) |
+        VernacAssumption _ | VernacSymbol _ | VernacInductive _ |
+        VernacFixpoint _ | VernacCoFixpoint _ | VernacUniverse _ |
+        VernacConstraint _ | VernacOpenCloseScope _ | VernacDeclareScope _ |
+        VernacDelimiters _ | VernacBindScope _ | VernacArguments _ |
+        VernacContext _ | VernacGeneralizable _ | VernacComments _ |
+        VernacPrimitive _ | VernacRegister _) -> true
+    | _ -> false in
+  if not safe then SomaPhase.refuse ()
+
 let interp_vernac ~check ~state ({CAst.loc;_} as com) =
+  phase_command com;
   let open State in
     try
       let doc, nsid, ntip = Stm.add ~doc:state.doc ~ontop:state.sid (not !Flags.quiet) com in

@@ -132,6 +132,7 @@ end = struct
       else begin
         (* no point in using Fl_dynload since we [add_deps] to get digests *)
         let plugins = Fl_internals.fl_find_plugins lib in
+        SomaPhase.plugin ~package:lib ~files:plugins;
         dbg_dynlink Pp.(fun () ->
             str lib ++ str ": linking" ++ spc() ++
             prlist_with_sep spc str plugins);
@@ -163,6 +164,7 @@ end = struct
     match s with
     | { lib } ->
       let plugins = Fl_internals.fl_find_plugins lib in
+        SomaPhase.plugin ~package:lib ~files:plugins;
       List.map Digest.file plugins
 
   let pp = function

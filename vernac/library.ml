@@ -282,6 +282,7 @@ module Intern = struct
 end
 
 let intern_from_file file =
+  SomaPhase.with_import file (fun () ->
   let ch = raw_intern_library file in
   let lsd, digest_lsd = ObjFile.marshal_in_segment ch ~segment:summary_seg in
   let lmd, digest_lmd = ObjFile.marshal_in_segment ch ~segment:library_seg in
@@ -291,7 +292,7 @@ let intern_from_file file =
   System.check_caml_version ~caml:lsd.md_ocaml ~file;
   register_library_filename lsd.md_name file;
   Library_info.warn_library_info ~transitive:true lsd.md_name lsd.md_info;
-  mk_intern_library lsd lmd digest_lmd del_opaque vmlib
+  mk_intern_library lsd lmd digest_lmd del_opaque vmlib)
 
 let intern_from_file file =
   let provenance = ("file", file) in
