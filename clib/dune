@@ -9,7 +9,7 @@
   (select memprof_coq.ml from
    (!memprof-limits -> memprof_coq.std.ml)
    (memprof-limits -> memprof_coq.memprof.ml))
-   str unix threads))
+   str unix threads digestif.c))
 
 (executable
  (name unicodetable_gen)

@@ -13,4 +13,6 @@ type snapshot = {
 }
 
 val string : string -> string
+val file_hash : string -> string
+val valid_hash : string -> bool
 val scan : ?cache:string -> ?write:bool -> ?skip:string list -> string -> snapshot
