@@ -41,7 +41,9 @@ def new_project(root, libraries, use_library=True, dirs=None):
     for index, (side, name, directory) in enumerate(zip(sides, libraries, dirs)):
         lib = root / "vendor" / directory
         lib.mkdir(parents=True, exist_ok=True)
-        (lib / "_RocqProject").write_text("-Q . %s\n" % name)
+        # Distinct source directories in the two-key case must also have
+        # distinct bytes: content-addressed keys intentionally ignore paths.
+        (lib / "_RocqProject").write_text("-Q . %s\n# fixture source: %s\n" % (name, directory))
         for i in range(1, N + 1):
             (lib / ("f%d.v" % i)).write_text(
                 "Definition f%d := %d.\nLemma f%d_is : f%d = %d. Proof. reflexivity. Qed.\n"
