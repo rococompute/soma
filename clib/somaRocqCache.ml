@@ -48,7 +48,9 @@ let inventory directory =
         let rel = if relative_path = "" then name else relative_path ^ "/" ^ name in
         match (Unix.lstat path).Unix.st_kind with
         | Unix.S_DIR -> walk (depth + 1) rel path
-        | Unix.S_REG -> if Filename.check_suffix name ".vo" || is_source name then [rel, hash path] else []
+        | Unix.S_REG ->
+          if relative_path = "" && List.mem name [marker; inputs_name; theory_name] then []
+          else [rel, hash path]
         | _ -> invalid ()) entries in
     if names () <> entries || not (same before (Unix.lstat dir)) then invalid ();
     files in
@@ -72,7 +74,7 @@ let publish ~key ~directory ~sources ~theories =
   let outputs = inventory directory in
   if not (List.exists (fun (path, _) -> Filename.check_suffix path ".vo") outputs) ||
      List.filter (fun (path, _) -> is_source path) outputs <> sources then invalid ();
-  let contents = "soma-rocq-complete 1\n" ^ Printf.sprintf "key %S\n" key ^
+  let contents = "soma-rocq-complete 2\n" ^ Printf.sprintf "key %S\n" key ^
                  "inputs " ^ SomaMerkle.string inputs ^ "\ntheories " ^ hash theory_file ^ "\n" ^
                  String.concat "" (List.map (fun (path, digest) -> Printf.sprintf "artifact %S %s\n" path digest) outputs) in
   let file = Filename.concat directory marker in
@@ -84,16 +86,18 @@ let load ~key ~directory ~resolve_input =
     let contents = read file in
     if not (SomaCache.trusted_metadata file ~contents) then invalid ();
     let inputs_digest, theories_digest, outputs = match lines contents with
-      | "soma-rocq-complete 1" :: key_row :: input_row :: theory_row :: rows ->
+      | "soma-rocq-complete 2" :: key_row :: input_row :: theory_row :: rows ->
         if Scanf.sscanf key_row "key %S%!" Fun.id <> key then invalid ();
         let input = Scanf.sscanf input_row "inputs %s%!" Fun.id in
         let theory = Scanf.sscanf theory_row "theories %s%!" Fun.id in
         if not (SomaMerkle.valid_hash input && SomaMerkle.valid_hash theory) then invalid ();
         let rec parse seen = function
-          | [] -> if seen = [] then invalid () else List.sort compare seen
+          | [] ->
+            if not (List.exists (fun (path, _) -> Filename.check_suffix path ".vo") seen) then invalid ();
+            List.sort compare seen
           | row :: rows ->
             let path, digest = Scanf.sscanf row "artifact %S %s%!" (fun p h -> p, h) in
-            if not (safe_relative path && (Filename.check_suffix path ".vo" || is_source path) && SomaMerkle.valid_hash digest) || List.mem_assoc path seen then invalid ();
+            if not (safe_relative path && SomaMerkle.valid_hash digest) || List.mem_assoc path seen then invalid ();
             parse ((path, digest) :: seen) rows in
         input, theory, parse [] rows
       | _ -> invalid () in

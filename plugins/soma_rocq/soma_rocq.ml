@@ -66,7 +66,7 @@ let soma_key () =
   match List.find_map (fun p -> match Loadpath.locate_absolute_library (lib p) with
       | Ok f -> Some f | Error _ -> None) [["Soma"; "Soma"]; ["Corelib"; "Init"; "Prelude"]] with
   | Some f -> SomaMerkle.string
-      ("soma-rocq-toolchain 3\000" ^ SomaCache.identity () ^ "\000" ^ SomaMerkle.file_hash f)
+      ("soma-rocq-toolchain 4\000" ^ SomaCache.identity () ^ "\000" ^ SomaMerkle.file_hash f)
   | None -> error (str "Soma's Corelib is not found.")
 
 (* * The theories of a source *)

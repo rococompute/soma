@@ -58,6 +58,10 @@ let () =
   write extra "Definition extra := 2.\n";
   assert (load () = None);
   Sys.remove extra;
+  let native = Filename.concat src "unrecorded.cmxs" in
+  write native "unrecorded executable artifact";
+  assert (load () = None);
+  Sys.remove native;
   write original "Definition value := 2.\n";
   assert (load () = None);
   write original "Definition value := 1.\n";
