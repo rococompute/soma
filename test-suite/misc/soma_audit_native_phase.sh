@@ -104,6 +104,22 @@ source.write_text(original);build(False);build(True)
 # Default RC absence is itself an input, even without changing env/HOME.
 rc=work/'config'/'coq'/'coqrc';rc.parent.mkdir(parents=True);rc.write_text('(* late startup file *)\n')
 build(False);build(False);rc.unlink();build(True)
+# A code-free Findlib umbrella cannot hide an executable implementation.
+# Load a harmless real custom cmxs and require its implementing package to
+# hit the actual loader guard, in addition to parsed-command refusal.
+packages=work/'packages';implementation=packages/'phase_probe_impl';umbrella=packages/'phase_probe_umbrella'
+implementation.mkdir(parents=True);umbrella.mkdir()
+(implementation/'implementation.ml').write_text('let () = ()\n')
+compiled=subprocess.run([real_opam,'exec','--switch='+env['SOMA_OCAML_SWITCH'],'--','ocamlopt','-shared','-o',str(implementation/'phase_probe_impl.cmxs'),str(implementation/'implementation.ml')],cwd=work,env=env,text=True,capture_output=True,timeout=60)
+assert compiled.returncode==0,(compiled.stdout,compiled.stderr)
+(implementation/'META').write_text('version="1"\nrequires=""\nplugin(native)="phase_probe_impl.cmxs"\n')
+(umbrella/'META').write_text('version="1"\nrequires="phase_probe_impl"\nplugin(native)=""\n')
+env['OCAMLPATH']=str(packages)+(':'+env['OCAMLPATH'] if env.get('OCAMLPATH') else '')
+env['SOMA_PHASE_DEBUG']='1'
+source.write_text('Declare ML Module "phase_probe_umbrella".\n'+original)
+p=build(False);assert 'uncertified plugin: phase_probe_impl' in p.stderr,p.stderr
+p=build(False);assert 'uncertified plugin: phase_probe_impl' in p.stderr,p.stderr
+source.write_text(original);env.pop('SOMA_PHASE_DEBUG');env.pop('OCAMLPATH');build(True)
 # A native validator failure never becomes success through an earlier plan.
 (work/'fail').write_text('fail native validator');build(None,False);(work/'fail').unlink();build(True)
 # Broken source cannot hide behind a previously successful phase.
