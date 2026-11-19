@@ -92,7 +92,8 @@ let pp_gradual_rt table usf =
     str "end" ++ fnl ()
   else mt ()
 
-let pp_shared_dependency_checks table used_modules usf =
+let pp_shared_dependency_checks table usf =
+  let used_modules = Common.used_libraries table in
   if not (State.get_modular table && usf.gradual_rt) || DirPath.Set.is_empty used_modules then mt () else
   str "(* Re-extract dependencies with Separate Extraction or Recursive Extraction Library under Gradual. *)" ++ fnl () ++
   str "module type Soma_shared_dependency_requires_reextraction = sig" ++ fnl () ++
@@ -112,7 +113,7 @@ let preamble table _ comment used_modules usf =
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf ++ pp_mldummy usf) ++
   then_nl (pp_gradual_rt table usf) ++
-  then_nl (pp_shared_dependency_checks table used_modules usf)
+  then_nl (pp_shared_dependency_checks table usf)
 
 let pp_gradual_rt_sig table usf =
   if usf.gradual_rt then

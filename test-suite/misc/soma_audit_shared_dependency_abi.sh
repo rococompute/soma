@@ -14,10 +14,13 @@ with tempfile.TemporaryDirectory(prefix='soma-shared-dependency-') as tmp:
         result = subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, timeout=60)
         assert result.returncode == 0, (args, result.returncode, result.stdout, result.stderr)
         return result
-    (root / 'PureProducer.v').write_text('Definition generic_head {A : Type} (fallback : A) (xs : list A) : A :=\n'
+    (root / 'PureProducer.v').write_text('Module Datatypes. Definition witness := 0. End Datatypes.\n'
+        'Definition generic_head {A : Type} (fallback : A) (xs : list A) : A :=\n'
         ' match xs with nil => fallback | cons x _ => x end.\n')
     (root / 'PureRequest.v').write_text('Require PureProducer.\nFrom Corelib Require Extraction.\n'
-        'Set Extraction Output Directory "%s".\nSeparate Extraction PureProducer.generic_head.\n' % out)
+        'Extraction NoInline PureProducer.Datatypes.witness.\n'
+        'Set Extraction Output Directory "%s".\n'
+        'Separate Extraction PureProducer.generic_head PureProducer.Datatypes.witness.\n' % out)
     run(['rocq', 'c', '-q', '-no-soma-prelude', 'PureProducer.v'])
     run(['rocq', 'c', '-q', '-no-soma-prelude', 'PureRequest.v'])
     previous = (out / 'PureProducer.ml').read_bytes()
@@ -26,11 +29,12 @@ with tempfile.TemporaryDirectory(prefix='soma-shared-dependency-') as tmp:
         'From Corelib.Gradual Require Import Gradual.\n'
         'Definition unknown_list (_ : unit) : list nat := unk.\n'
         'Definition trigger (_ : unit) : nat := PureProducer.generic_head 0 (unknown_list tt).\n'
+        'Definition witness := PureProducer.Datatypes.witness.\n'
         'Goal trigger tt = unk. Proof. reflexivity. Qed.\n')
     run(['rocq', 'c', '-q', 'Consumer.v'])
     prefix = ('Require Consumer.\nFrom Corelib Require Extraction.\n'
               'Extract Inductive unit => "unit" [ "()" ].\n'
-              'Extraction NoInline PureProducer.generic_head.\n'
+              'Extraction NoInline PureProducer.generic_head PureProducer.Datatypes.witness.\n'
               'Set Extraction Output Directory "%s".\n' % out)
     (root / 'Request.v').write_text(prefix +
         'Separate Extraction Consumer.unknown_list.\nExtraction Library Consumer.\n')
