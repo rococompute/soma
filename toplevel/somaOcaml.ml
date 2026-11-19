@@ -345,6 +345,9 @@ let export ~state ~source dir =
     error Pp.(str "a program that requires Sandbox is a MirageOS unikernel, which soma extract does not" ++ spc () ++
               str "write as an OCaml project yet: soma build builds its image.");
   let modules, libraries = checked_modules () in
+  if Sys.file_exists dir && not (Sys.is_directory dir) then
+    error Pp.(str dir ++ str " is not a directory:" ++ spc () ++
+              str "extract into a new directory (-o DIR).");
   if Sys.file_exists dir && Sys.readdir dir <> [||] then begin
     let project = Filename.concat dir "dune-project" in
     (* its second line, the first being dune's (lang ...) *)
