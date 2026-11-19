@@ -75,7 +75,7 @@ for name in ('opam', 'dune', 'ocamlc'):
 (root / 'native.ml').write_text('let message = "hello"\n')
 (root / 'native.definition').write_text('message : string.\n')
 (root / 'foreign.soma').write_text('Import native.\nmain : string := message.\n')
-(root / 'sandbox.soma').write_text('Import Sandbox native.\nmain : io unit := print message.\n')
+(root / 'guest_app.soma').write_text('Import Sandbox native.\nmain : io unit := print message.\n')
 overrides = {'SOMA_OCAML_BUILD': '1', 'SOMA_MIRAGE_BUILD': '1',
              'SOMA_OCAML_EXTRACT': str(tmp / 'unwanted-export'),
              'SOMA_MIRAGE_DIR': str(tmp / 'unwanted-mirage'),
@@ -83,7 +83,7 @@ overrides = {'SOMA_OCAML_BUILD': '1', 'SOMA_MIRAGE_BUILD': '1',
              'SOMA_TEST_CHECK_CALLS': str(calls),
              'PATH': str(tools) + os.pathsep + env['PATH']}
 run(['check', 'foreign.soma'], extra=overrides)
-run(['check', 'sandbox.soma'], extra=overrides)
+run(['check', 'guest_app.soma'], extra=overrides)
 assert not calls.exists(), calls.read_text() if calls.exists() else ''
 assert not (tmp / 'unwanted-export').exists()
 assert not (tmp / 'unwanted-mirage').exists()
