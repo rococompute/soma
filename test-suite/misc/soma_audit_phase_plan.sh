@@ -30,6 +30,10 @@ let () =
   let library=path install "dependency.vo" in write library "fixture loaded object bytes";
   ignore (SomaPhase.with_import library (fun () ->
       if mode="drift" then write library "replacement object bytes"; text library));
+  (* Code-free umbrellas execute nothing; every implementing dependency still
+     reaches its own nonempty-file guard independently. *)
+  SomaPhase.plugin ~package:"digestif" ~files:[];
+  SomaPhase.plugin ~package:"fixture.umbrella" ~files:[];
   if mode="plugin" then SomaPhase.plugin ~package:"unknown.plugin" ~files:[library];
   SomaPhase.finish_checking ~imports:[library];
   let generated=path dir "prog.ml" and ownership=path dir ".soma-ocaml-files" in

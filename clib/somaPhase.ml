@@ -48,9 +48,9 @@ let installed_files = lazy (
 let installed file = Hashtbl.mem (Lazy.force installed_files) file
 
 let plugin ~package ~files =
-  if requested () &&
+  if requested () && files <> [] &&
      (not (String.starts_with ~prefix:"soma-runtime.plugins." package) ||
-      files = [] || not (List.for_all (fun file -> try installed (canonical file) with _ -> false) files))
+      not (List.for_all (fun file -> try installed (canonical file) with _ -> false) files))
   then begin debug ("uncertified plugin: " ^ package);safe := false end
 
 let rec mkdir dir =
