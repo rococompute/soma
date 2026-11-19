@@ -16,7 +16,7 @@ how it's built.
 ## Installation
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yevbar/soma/gradual/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rococompute/soma/gradual/install.sh | sh
 ```
 
 [`install.sh`](install.sh) builds Soma from source in `~/.soma` and puts
@@ -29,7 +29,7 @@ then Soma and its standard library. Run it again to update.
 From a checkout, `./install.sh` builds that checkout in place:
 
 ```sh
-git clone --depth 1 -b gradual https://github.com/yevbar/soma.git
+git clone --depth 1 -b gradual https://github.com/rococompute/soma.git
 soma/install.sh
 ```
 
@@ -108,7 +108,7 @@ The last two both define `gradually_typed_square`, two ways to write the
 same function, so a file keeps one of them. Without the rejected lines,
 the first three go in one file, `square.soma`: `soma run square.soma`
 prints the last value, `= 4194304%N : N`, and `soma build -v square.soma`
-prints each. `soma help` lists the commands: build, run,
+prints each. `soma help` lists the commands: check, build, test, run,
 explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
@@ -123,6 +123,11 @@ explore, compile, extract, hash, search, diff, get and repl.
 - [doc/](doc): the reference manual that came with the kernel, for the
   parts of the language Soma doesn't change.
 
+Use `soma check FILE` for type and proof feedback without building foreign
+products. `soma test --help` describes affected-test selection and `--full`.
+The installer uses `${SOMA_DIR:-$HOME/.soma}`; use that same `SOMA_DIR` when
+other tools need the source checkout.
+
 ## Versions
 
 Soma has no releases yet: `gradual` is the branch to build, and its git
@@ -136,7 +141,7 @@ their upstream names. [GRADUAL.md](GRADUAL.md#versions) has the details.
 ## Bug reports
 
 Report bugs and feature requests in [the issue
-tracker](https://github.com/yevbar/soma/issues). A good report says which
+tracker](https://github.com/rococompute/soma/issues). A good report says which
 commit you built (`git -C ~/.soma log -1 --format=%h`), your OS and OCaml
 version, and includes the smallest `.soma` file that shows the problem.
 

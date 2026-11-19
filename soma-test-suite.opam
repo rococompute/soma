@@ -18,9 +18,9 @@ This package runs the test suite."""
 maintainer: ["Yev Barkalov <yevbar1729@gmail.com>"]
 authors: ["The Rocq development team, INRIA, CNRS, and contributors"]
 license: "LGPL-2.1-only"
-homepage: "https://github.com/yevbar/soma"
+homepage: "https://github.com/rococompute/soma"
 doc: "https://rocq-prover.org/docs/"
-bug-reports: "https://github.com/yevbar/soma/issues"
+bug-reports: "https://github.com/rococompute/soma/issues"
 depends: [
   "dune" {>= "3.21"}
   "soma-core" {= version}
@@ -29,7 +29,7 @@ depends: [
   "conf-time"
   "odoc" {with-doc}
 ]
-dev-repo: "git+https://github.com/yevbar/soma.git"
+dev-repo: "git+https://github.com/rococompute/soma.git"
 x-maintenance-intent: ["(any)"]
 build: [
   [ "dune" "exec" "-p" name "-j" jobs "test-suite/tools/coq_config_to_make.exe" "rocq" "test-suite/test_suite_config.inc" ]

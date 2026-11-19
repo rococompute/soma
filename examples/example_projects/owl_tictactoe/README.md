@@ -1,10 +1,10 @@
 # Owl tic-tac-toe
 
-A minimal neural-network example using the private
-[soma-owl](https://github.com/yevbar/soma-owl) package over Git SSH.
-Requires a Soma build with SSH dependency support and a GitHub SSH key or
-agent authorized for that repository. Public clones of Soma cannot run this
-example without access to the private package.
+A minimal neural-network example using the optional
+[soma-owl](https://github.com/rococompute/soma-owl) package over HTTPS.
+If access is restricted, authenticate GitHub first (`gh auth login` and
+`gh auth setup-git`) before running this example. Owl's native dependencies
+are additional requirements; the pure Soma examples do not need them.
 
 ```sh
 cd examples/example_projects/owl_tictactoe
@@ -13,11 +13,11 @@ soma run main.soma
 ./test.sh
 ```
 
-The first build resolves `v0.1.0` of `git@github.com:yevbar/soma-owl.git`,
+The first build resolves `v0.1.0` of `https://github.com/rococompute/soma-owl.git`,
 records its commit in `soma.lock`, checks the package's Soma code, and links
 its OCaml adapter against Owl 1.2. Subsequent builds use the locked commit.
-Soma uses the normal SSH agent and configuration; establish the host key and
-authentication before building, since fetches do not prompt for credentials.
+Soma uses Git's configured credential helper. Configure authentication before
+building if needed, since dependency fetches do not prompt for credentials.
 
 Owl needs system BLAS/LAPACKE libraries. On Debian/Ubuntu install
 `libopenblas-dev liblapacke-dev`; on Homebrew install `openblas llvm libomp`.

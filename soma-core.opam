@@ -20,15 +20,15 @@ Corelib.* and Ltac2.* namespaces."""
 maintainer: ["Yev Barkalov <yevbar1729@gmail.com>"]
 authors: ["The Rocq development team, INRIA, CNRS, and contributors"]
 license: "LGPL-2.1-only"
-homepage: "https://github.com/yevbar/soma"
+homepage: "https://github.com/rococompute/soma"
 doc: "https://rocq-prover.org/docs/"
-bug-reports: "https://github.com/yevbar/soma/issues"
+bug-reports: "https://github.com/rococompute/soma/issues"
 depends: [
   "dune" {>= "3.21"}
   "soma-runtime" {= version}
   "odoc" {with-doc}
 ]
-dev-repo: "git+https://github.com/yevbar/soma.git"
+dev-repo: "git+https://github.com/rococompute/soma.git"
 x-maintenance-intent: ["(any)"]
 build: [
   ["dune" "subst"] {dev}
