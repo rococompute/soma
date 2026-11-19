@@ -1500,7 +1500,12 @@ and gradual_ind_cast table sg ctx (ind, u) =
       let d = ctgt.rt_depth in
       let computed = Array.map_to_list (gradual_reify_arg table sg ctgt) cs.cs_concl_realargs in
       let ys = List.map (fun l -> MLmagic (rt_var l d)) ys in
-      let v = if mi.ind_kind == Singleton then List.hd ys else MLcons (typ, r, ys) in
+      let v = if mi.ind_kind == Singleton then
+          match ys with
+          | [y] -> y
+          | _ -> gradual_error env sg
+              (Pp.str "a singleton cast must retain exactly one constructor argument") ind_term
+        else MLcons (typ, r, ys) in
       rt_app "check_indices" [rt_var l_tgt d; MLraw (string_of_int npar); rt_list computed; MLmagic v]
     in
     let e = lets { ctgt with rt_depth = depth } [] args in
@@ -1516,7 +1521,10 @@ and gradual_ind_cast table sg ctx (ind, u) =
     if Array.length cstrs = 0 then MLexn "absurd case"
     else if mi.ind_kind == Singleton then
       let (ids, _, e) = branch 0 cstrs.(0) in
-      MLletin (tmp_id (List.hd ids), v, e)
+      (match ids with
+       | [id] -> MLletin (tmp_id id, v, e)
+       | _ -> gradual_error env sg
+           (Pp.str "a singleton cast must retain exactly one constructor argument") ind_term)
     else MLcase (typ, v, Array.mapi branch cstrs)
   in
   let lam s e = MLlam (Id (Id.of_string s), e) in

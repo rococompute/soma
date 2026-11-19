@@ -265,6 +265,7 @@ let cast_with fs a b v =
 (* The indices computed for a rebuilt constructor must be compatible with
    the indices of the target type ([?] is compatible with anything). *)
 let check_indices tgt nparams computed v =
+  let nargs = Array.length tgt.args in
   let compatible k c = match tgt.args.(nparams + k), c with
     | Unk, _ | _, Unk | Ty _, _ | _, Ty _ -> true
     | Val i, Val c ->
@@ -273,7 +274,9 @@ let check_indices tgt nparams computed v =
       else same_value i c
     | (Val _ | Error), _ -> false
   in
-  if List.for_all Fun.id (List.mapi compatible computed) then v
+  if nparams < 0 || nparams > nargs || List.length computed <> nargs - nparams then
+    error_at (Ind tgt) ("incompatible number of indices for " ^ describe (Ind tgt))
+  else if List.for_all Fun.id (List.mapi compatible computed) then v
   else error_at (Ind tgt) ("expected " ^ describe (Ind tgt) ^ ", but got one at other indices")
 
 (* Builders used by the extracted code. *)
