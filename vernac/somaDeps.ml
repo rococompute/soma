@@ -119,14 +119,28 @@ let source_dir ~path ~version ~commit =
   Filename.concat (source_root ())
     (Printf.sprintf "%s@%s-%s" path (version_to_string version) commit)
 
+(* What a folder of the source cache says of itself: the commit it holds.
+   It is written in the folder last, before that folder is moved into place,
+   so a folder another build published first can be checked rather than
+   trusted: a whole source has it, an incomplete one does not. *)
+let source_marker = ".soma-source"
+
+let marker_commit dir =
+  let f = Filename.concat dir source_marker in
+  try Some (String.trim (read_file f)) with Sys_error _ -> None
+
 (* The repository at [commit], in the shared cache, once. It appears whole,
-   or not at all: it is checked out beside it, and moved there. *)
+   or not at all: it is checked out beside it, and moved there. Builds share
+   the cache, so one may publish it while another fetches the same commit:
+   the one that loses the move takes the published folder, when its marker
+   says it is whole, and of this commit. *)
 let fetch (p : dependency_path) ~version ~commit =
   let dir = source_dir ~path:p.canonical ~version ~commit in
   if not (Sys.file_exists dir) then begin
     Printf.eprintf "Fetching %s %s (%s)\n%!" p.canonical (version_to_string version) (short commit);
     SomaOpam.mkdir_p (Filename.dirname dir);
-    let tmp = Printf.sprintf "%s.tmp-%d" dir (Unix.getpid ()) in
+    let tmp = Printf.sprintf "%s.tmp-%d-%06x" dir (Unix.getpid ())
+        (Random.State.bits (Random.State.make_self_init ())) in
     remove_tree tmp;
     Fun.protect ~finally:(fun () -> remove_tree tmp) (fun () ->
         Unix.mkdir tmp 0o755;
@@ -148,7 +162,23 @@ let fetch (p : dependency_path) ~version ~commit =
         if got <> commit then
           error (str p.canonical ++ str ": fetched " ++ str got ++ str ", which is not the commit " ++ str commit ++ str ".");
         remove_tree (Filename.concat tmp ".git");
-        Sys.rename tmp dir)
+        write_file (Filename.concat tmp source_marker) (commit ^ "\n");
+        try Unix.rename tmp dir with
+        | Unix.Unix_error ((Unix.EEXIST | Unix.ENOTEMPTY), _, _) when Sys.file_exists dir ->
+          (* the folder was published while this one fetched: it is this
+             build's source only when it says so, whole, and of this commit.
+             Any other error of the move is not this race, and is reported. *)
+          (match marker_commit dir with
+           | Some c when c = commit -> ()
+           | Some c ->
+             error (str dir ++ str ": the source cache holds " ++ str c ++
+                    str ", and not the commit " ++ str commit ++ str " that was fetched.")
+           | None ->
+             error (str dir ++ str ": it has no " ++ str source_marker ++ str ", so it may be" ++ spc () ++
+                    str "incomplete, or left behind by a build that stopped. Remove it, and build again."))
+        | Unix.Unix_error (e, _, _) ->
+          error (str "cannot move the source of " ++ str p.canonical ++ str " into " ++ str dir ++
+                 str ": " ++ str (Unix.error_message e) ++ str "."))
   end;
   dir
 
