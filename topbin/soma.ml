@@ -1250,7 +1250,7 @@ let fresh_inputs ?(products=[]) ?(reuse_initial_toolchain=false) ~toolchain c =
       match Unix.lstat path with
       | _ -> uncertain "rc file candidate %s requires validation" path
       | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> ())
-    (Coqrc.default_candidates ~warn:(fun _ -> ()));
+    (Boot.UserConfig.rc_candidates ~warn:(fun _ -> ()));
   (match initial_getenv "SOMA_OCAML_EXTRACT" with
    | Some path when path <> "" -> uncertain "explicit extraction exports require validation"
    | _ -> ());

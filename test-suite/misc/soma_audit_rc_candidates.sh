@@ -10,11 +10,6 @@ loader=(source/'toplevel/coqrc.ml').read_text()
 cli=(source/'topbin/soma.ml').read_text();start=cli.index('  List.iter (fun path ->\n      match Unix.lstat path with',cli.index('let fresh_inputs '))
 end=cli.index('  (match initial_getenv "SOMA_OCAML_EXTRACT"',start);guard=cli[start:end]
 prefix=r'''
-module Coq_config=struct let version="audit-version" end
-module Envars=struct
- let home ~warn:_=Sys.getenv "HOME"
- let xdg_config_home _=Filename.concat(Sys.getenv "XDG_CONFIG_HOME")"coq"
-end
 module CUnix=struct let file_readable_p p=try Unix.access p [Unix.R_OK];not(Sys.is_directory p) with Unix.Unix_error _->false end
 module Pp=struct let str s=s end
 module Feedback=struct let msg_warning _=() let msg_info _=() end
@@ -33,18 +28,14 @@ module Coqrc=struct
 '''
 suffix=r'''
 end
-exception Uncertain of string
-let uncertain fmt=Printf.ksprintf(fun s->raise(Uncertain s))fmt
-let can_skip ()=try
-'''+guard+r'''
- true with Uncertain _->false
+let can_skip = Cli_guard.can_skip
 let write file text=Out_channel.with_open_bin file(fun oc->output_string oc text)
 let ()=
  let root=Sys.argv.(1) in
  let home=Filename.concat root "home" and config=Filename.concat root "config" in
  Unix.mkdir home 0o700;Unix.mkdir config 0o700;Unix.mkdir(Filename.concat config "coq")0o700;
  Unix.putenv "HOME" home;Unix.putenv "XDG_CONFIG_HOME" config;
- let candidates=Coqrc.default_candidates ~warn:ignore in
+ let candidates=Boot.UserConfig.rc_candidates ~warn:ignore in
  assert(candidates=[Filename.concat config "coq/coqrc.audit-version";Filename.concat config "coq/coqrc";Filename.concat home ".coqrc.audit-version";Filename.concat home ".coqrc"]);
  assert(can_skip() && Coqrc.load_rcfile ~rcfile:None ~state:0=0);
  List.iteri(fun i file->write file(string_of_int i))candidates;
@@ -69,7 +60,16 @@ let ()=
  print_endline "shared rc order, absent/present/edit/remove guard, dangling candidate, explicit load and preparse provenance: passed"
 '''
 with tempfile.TemporaryDirectory(prefix='soma-rc-candidates-') as tmp:
- root=pathlib.Path(tmp);(root/'check.ml').write_text(prefix+loader+suffix)
- subprocess.run(['ocamlfind','ocamlopt','-package','unix','-linkpkg','check.ml','-o','check'],cwd=root,check=True)
+ root=pathlib.Path(tmp)
+ for name in ['util.ml','util.mli','userConfig.ml','userConfig.mli']:
+  (root/name).write_bytes((source/'boot'/name).read_bytes())
+ (root/'coq_config.ml').write_text('let version="audit-version"\n')
+ (root/'boot.ml').write_text('module UserConfig = UserConfig\n')
+ (root/'cli_guard.ml').write_text('exception Uncertain of string\nlet uncertain fmt=Printf.ksprintf(fun s->raise(Uncertain s))fmt\nlet can_skip ()=try\n'+guard+'true with Uncertain _->false\n')
+ # Compile the actual driver guard BEFORE any Coqrc/compiler endpoint exists.
+ # This catches accidentally adding a toplevel-only driver dependency.
+ subprocess.run(['ocamlfind','ocamlopt','-package','unix','-c','coq_config.ml','util.mli','util.ml','userConfig.mli','userConfig.ml','boot.ml','cli_guard.ml'],cwd=root,check=True)
+ (root/'check.ml').write_text(prefix+loader+suffix)
+ subprocess.run(['ocamlfind','ocamlopt','-package','unix','-linkpkg','coq_config.cmx','util.cmx','userConfig.cmx','boot.cmx','cli_guard.cmx','check.ml','-o','check'],cwd=root,check=True)
  subprocess.run([str(root/'check'),tmp],cwd=root,check=True)
 PY
