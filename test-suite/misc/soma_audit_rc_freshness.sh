@@ -53,6 +53,13 @@ with tempfile.TemporaryDirectory(prefix='soma-rc-freshness-') as tmp:
     legacy=home/'.coqrc';legacy.write_text('Set Printing All.\n')
     fresh('home-rc-stale',False);run('home-rc-build',['build','main.soma'])
     legacy.unlink();run('home-rc-removed-build',['build','main.soma']);fresh('home-rc-removed-fresh',True)
+    companion=root/'part.ext';companion.write_text('Set Printing All.\n')
+    rc.symlink_to(companion)
+    run('rc-companion-alias-build',['build','main.soma'])
+    expect(stamp.read_text().splitlines()[0]=='soma-stamp incomplete',
+           'rc alias to known companion was certified')
+    rc.unlink();companion.unlink()
+    run('rc-alias-removed-build',['build','main.soma']);fresh('rc-alias-removed-fresh',True)
 report=os.environ.get('SOMA_RC_AUDIT_REPORT')
 if report:pathlib.Path(report).write_text(json.dumps(dict(records=records,failures=failures),indent=2)+'\n')
 if observe:

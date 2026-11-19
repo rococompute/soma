@@ -14,11 +14,16 @@ module CUnix=struct let file_readable_p p=try Unix.access p [Unix.R_OK];not(Sys.
 module Pp=struct let str s=s end
 module Feedback=struct let msg_warning _=() let msg_info _=() end
 module Exninfo=struct let capture e=e let iraise e=raise e end
-module SomaImport=struct let noted=ref [] let note_loaded_source f=noted:=f :: !noted end
+module SomaImport=struct
+ let noted=ref []
+ let rc_noted=ref []
+ let note_loaded_source f=noted:=f :: !noted
+ let note_rc_source f=note_loaded_source f;rc_noted:=f :: !rc_noted
+end
 module Vernac=struct
  let executed=ref []
  let load_vernac ~check:_ ~state file=
-  assert(List.hd !SomaImport.noted=file);
+  assert(List.hd !SomaImport.noted=file && List.hd !SomaImport.rc_noted=file);
   let text=In_channel.with_open_bin file In_channel.input_all in
   executed:=(file,text)::!executed;
   if text="invalid" then failwith "rc failed";
@@ -52,12 +57,17 @@ let ()=
  (* Dangling candidates conservatively block skipping, though not selected. *)
  let dangling=List.hd candidates in Unix.symlink(Filename.concat root "missing")dangling;
  assert(not(can_skip()) && Coqrc.load_rcfile ~rcfile:None ~state:0=0);Sys.remove dangling;
+ (* Even a candidate aliasing a known companion must take the RC hook. *)
+ let companion=Filename.concat root "main.ext" in write companion "companion";
+ Unix.symlink companion dangling;
+ ignore(Coqrc.load_rcfile ~rcfile:None ~state:0);
+ assert(List.hd !SomaImport.rc_noted=dangling);Sys.remove dangling;
  let explicit=Filename.concat root "explicit.rc" in write explicit "explicit";
  assert(Coqrc.load_rcfile ~rcfile:(Some explicit) ~state:0=1);
  write explicit "invalid";
  assert(try ignore(Coqrc.load_rcfile ~rcfile:(Some explicit) ~state:0);false with Failure _->true);
  assert(List.hd !SomaImport.noted=explicit);
- print_endline "shared rc order, absent/present/edit/remove guard, dangling candidate, explicit load and preparse provenance: passed"
+ print_endline "shared rc order, absent/present/edit/remove guard, dangling candidate, explicit/companion-alias loads and preparse RC provenance: passed"
 '''
 with tempfile.TemporaryDirectory(prefix='soma-rc-candidates-') as tmp:
  root=pathlib.Path(tmp)
