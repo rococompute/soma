@@ -38,10 +38,13 @@ let () =
   assert (load () = None);
   publish ();
   assert (load () <> None);
+  let validated = Option.get (load ()) in
+  assert (SomaRocqCache.artifact_digest validated ~directory:entry ~file:output <> None);
   assert (SomaRocqCache.load ~key:"another-key" ~directory:entry ~resolve_input:(Filename.concat project) = None);
   let complete = Filename.concat entry SomaRocqCache.marker in
   assert (not (SomaCache.trusted_metadata complete ~contents:"forged parser bytes"));
   write output "different compiled object";
+  assert (SomaRocqCache.artifact_digest validated ~directory:entry ~file:output = None);
   assert (SomaCache.trusted inputs && load () = None);
   write output "compiler output one";
   assert (load () <> None);
