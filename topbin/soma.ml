@@ -226,31 +226,40 @@ let manifest_fields file =
   end
 
 type build_metadata = {
-  products : string list;
+  products : SomaBuildInfo.input list;
   external_inputs : SomaBuildInfo.input list;
   external_build : bool;
+  certified_bytecode : bool;
+  checked_imports : string list option;
 }
 
 let compile_products args =
   let products = Filename.temp_file "soma-products" ".manifest" in
   let inputs = Filename.temp_file "soma-inputs" ".manifest" in
   let external_manifest = Filename.temp_file "soma-external" ".manifest" in
+  let imports = Filename.temp_file "soma-imports" ".manifest" in
   let variables = ["SOMA_BUILD_PRODUCTS", products; "SOMA_BUILD_INPUTS", inputs;
-                   "SOMA_BUILD_EXTERNAL", external_manifest] in
+                   "SOMA_BUILD_EXTERNAL", external_manifest; "SOMA_BUILD_CHECKED_IMPORTS", imports] in
   let previous = List.map (fun (name, _) -> name, Sys.getenv_opt name) variables in
   List.iter (fun (name, value) -> Unix.putenv name value) variables;
   Fun.protect ~finally:(fun () ->
       List.iter (fun (name, value) -> Unix.putenv name (Stdlib.Option.value ~default:"" value)) previous;
-      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest]) (fun () ->
+      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest; imports]) (fun () ->
       let code, output = compile args in
       let rec pairs = function
         | path :: signature :: rest -> (path, signature) :: pairs rest
         | [] -> []
         | _ -> usage_error "soma: incomplete build-input manifest" in
+      let phases = manifest_fields external_manifest in
       code, output,
-      { products = List.sort_uniq String.compare (manifest_fields products);
+      { products = List.sort_uniq compare (pairs (manifest_fields products));
         external_inputs = pairs (manifest_fields inputs);
-        external_build = manifest_fields external_manifest <> [] })
+        external_build = phases <> [];
+        certified_bytecode = List.mem "bytecode-check" phases &&
+          List.for_all (fun phase -> phase = "external" || phase = "bytecode-check") phases;
+        checked_imports = (match manifest_fields imports with
+          | "soma-checked-imports 1" :: paths -> Some paths
+          | _ -> None) })
 
 let starts_with ~prefix s =
   String.length s >= String.length prefix &&
@@ -996,8 +1005,18 @@ let run ~events ~supervise file args image_args =
           starts_with ~prefix:"Mirage: checked" l then print_endline l)
     (lines output);
   if code <> 0 then finish code;
+  let rec published = function
+    | path :: expected :: rest ->
+      if SomaBuildInfo.signature path <> expected || not (SomaCache.trusted path) then
+        usage_error "soma run: the published product %s changed before it could be run" path;
+      path :: published rest
+    | [] -> []
+    | _ -> usage_error "soma run: incomplete product manifest" in
+  let products = published (manifest_fields products_file) in
   match manifest_fields argv_file with
   | prog :: _ as command when prog <> "" ->
+    if not (List.exists (fun path -> Filename.check_suffix path ".hvt" && List.mem path command) products) then
+      usage_error "soma run: the image command has no matching published product";
     (* the image's tools come from the same opam switch as its build *)
     let switch = match Sys.getenv_opt "SOMA_MIRAGE_SWITCH" with
       | Some s when s <> "" -> s | _ -> "hvf" in
@@ -1044,7 +1063,6 @@ let run ~events ~supervise file args image_args =
       loop (memory_of command) 0
     end
   | _ ->
-    let products = manifest_fields products_file in
     if List.exists (fun path -> Filename.check_suffix path ".hvt") products then
       usage_error "soma run: the compiler published an image without its command arguments";
     let built = List.find_map (fun path ->
@@ -1169,7 +1187,10 @@ let fresh_project file =
   canonical, find start
 
 (* soma, its worker, and the libraries and plugins they load *)
+let fingerprinted_library_files : (string, unit) Hashtbl.t = Hashtbl.create 4096
+
 let fresh_toolchain () =
+  Hashtbl.clear fingerprinted_library_files;
   let env = match Boot.Env.initialized () with
     | Some (Boot.Env.Env env) -> env
     | Some Boot.Env.Boot | None -> uncertain "the location of Rocq's libraries is unknown" in
@@ -1183,6 +1204,10 @@ let fresh_toolchain () =
   let tree label dir =
     let snapshot = try SomaMerkle.scan ~write:!fingerprint_writes dir with
       | Failure reason -> uncertain "%s" reason in
+    let root = Unix.realpath dir in
+    List.iter (fun (relative, _) ->
+        Hashtbl.replace fingerprinted_library_files (Unix.realpath (Filename.concat root relative)) ())
+      snapshot.SomaMerkle.files;
     [Printf.sprintf "library %s sha256:%s" label snapshot.SomaMerkle.digest] in
   [ tool "soma" Sys.executable_name; tool "worker" worker ] @
   (if Sys.file_exists soma_env then [ tool "environment" soma_env ] else []) @
@@ -1209,6 +1234,9 @@ let fresh_inputs ?(products=[]) ~toolchain c =
   let canonical, root = fresh_project c.file in
   let cache = Filename.concat root ".soma-cache" in
   if c.fill then uncertain "--fill writes into the program's .exp";
+  (match initial_getenv "SOMA_OCAML_EXTRACT" with
+   | Some path when path <> "" -> uncertain "explicit extraction exports require validation"
+   | _ -> ());
   let rec allowed = function
     | [] -> ()
     | "-w" :: _ :: rest -> allowed rest
@@ -1252,7 +1280,7 @@ let forget_freshness c =
     let canonical, root = fresh_project c.file in
     let record = freshness_record (Filename.concat root ".soma-cache") canonical in
     (try Sys.remove record with Sys_error _ -> ());
-    if Sys.file_exists record then None else Some (fresh_inputs ~toolchain:false c)
+    if Sys.file_exists record then None else Some (fresh_inputs ~toolchain:true c)
   with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> None
 
 let certified_product root path =
@@ -1289,7 +1317,16 @@ let record_freshness c before ~kept ~metadata =
   | None -> ()
   | Some (root, _, before_lines) ->
     try
-      let products = List.map (certified_product root) metadata.products |> List.sort_uniq String.compare in
+      (* A native/image builder can invoke compiler selectors, linkers and
+         SDKs beyond its opam prefix. Until that closure is certified, always
+         rerun native validation; hashing wrappers/environment is insufficient. *)
+      if metadata.products <> [] || (metadata.external_build && not metadata.certified_bytecode) then
+        uncertain "native validation is required";
+      let products = List.map (fun (path, expected) ->
+          let path = certified_product root path in
+          if build_input_signature path <> expected || not (SomaCache.trusted path) then
+            uncertain "published product %s changed before certification" path;
+          path) metadata.products |> List.sort_uniq String.compare in
       if List.exists (fun path -> not (List.mem (certified_product root path) products)) kept then
         uncertain "the build kept an unreported output";
       if (metadata.external_build || products <> []) && metadata.external_inputs = [] then
@@ -1302,13 +1339,22 @@ let record_freshness c before ~kept ~metadata =
           ["external-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))]
         else [] in
       let before_lines = omit_products root products before_lines in
-      let _, cache, during = fresh_inputs ~products ~toolchain:false c in
+      let _, cache, during = fresh_inputs ~products ~toolchain:true c in
       if during <> before_lines then uncertain "the project changed during the build";
-      let _, _, inputs = fresh_inputs ~products ~toolchain:true c in
+      (match metadata.checked_imports with
+       | None -> uncertain "the checked import closure was not recorded"
+       | Some paths ->
+         List.iter (fun path ->
+             let actual = Unix.realpath path in
+             if not (Hashtbl.mem fingerprinted_library_files actual ||
+                     String.starts_with ~prefix:(root ^ "/") actual) then
+               uncertain "checked library %s is outside the certified inputs" path) paths);
+      (* Record exactly the input snapshot the successful build started with,
+         not an unchecked later rescan that might contain a source edit. *)
+      let inputs = before_lines in
       let outputs = fresh_outputs cache in
       let products = List.map (fun path ->
           let signature = build_input_signature path in
-          SomaCache.record path;
           if not (SomaCache.trusted path) then uncertain "build product %s has no provenance" path;
           Printf.sprintf "product %S %S" path signature) products in
       let dir = Filename.concat cache ".interfaces" in
@@ -1351,6 +1397,7 @@ let freshness_verdict c =
           is_external_env l || starts_with ~prefix:"interface " l)) recorded in
       let recorded_outputs = List.filter is_output recorded in
       let recorded_products = List.filter is_product recorded in
+      if recorded_products <> [] then uncertain "native validation is required";
       let recorded_environment = List.filter is_external_env recorded in
       if recorded_environment <> [] && recorded_environment <>
          ["external-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))] then

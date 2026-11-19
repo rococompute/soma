@@ -28,10 +28,15 @@ esac
 exec "$REAL_OCAMLC" "$@"
 WRAPPER
 chmod +x "$WORK/compiler/ocamlc"
-export PATH="$WORK/compiler:$PATH"
 soma build mirage_minimal.soma > "$WORK/fallback.log" 2>&1
 grep -q '(no image)' "$WORK/fallback.log"
 grep -q '^flags .*no_image=false$' .soma-cache/.freshness/*
+soma build mirage_minimal.soma > "$WORK/unchanged.log" 2>&1
+grep -q 'unchanged since its last build' "$WORK/unchanged.log"
+soma build --no-image mirage_minimal.soma > "$WORK/explicit-native.log" 2>&1
+grep -q '(no image)' "$WORK/explicit-native.log"
+grep -q '^flags .*no_image=true$' .soma-cache/.freshness/*
+export PATH="$WORK/compiler:$PATH"
 if INJECT_BROKEN=1 soma build --no-image mirage_minimal.soma > "$WORK/broken.log" 2>&1; then
     echo '--no-image reused another build configuration or accepted ill-typed prog.ml' >&2
     exit 1
@@ -40,5 +45,10 @@ grep -q 'prog.ml' "$WORK/broken.log"
 grep -q 'Error:' "$WORK/broken.log"
 soma build --no-image mirage_minimal.soma > "$WORK/explicit.log" 2>&1
 grep -q '(no image)' "$WORK/explicit.log"
-grep -q '^flags .*no_image=true$' .soma-cache/.freshness/*
+# The wrapper executes a compiler outside its own script. Its dependency
+# closure is unknown, so a successful wrapped check stays uncertified.
+if soma build --check-fresh --no-image mirage_minimal.soma > "$WORK/wrapper-fresh.log" 2>&1; then
+    echo 'an opaque compiler wrapper was certified for skipping' >&2
+    exit 1
+fi
 [ ! -f mirage_minimal.hvt ]

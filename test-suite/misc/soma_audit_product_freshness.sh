@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Real kernel/extraction stages, stand-in external image build: certify only
-# successful products whose source, external inputs and provenance are intact.
+# Real kernel/extraction stages, stand-in external image build: unidentified
+# foreign tool/SDK closures must remain non-fresh even when products exist.
 set -euo pipefail
 export PATH="$BIN:$PATH"
 WORK="$(mktemp -d)"
@@ -68,7 +68,7 @@ def run(args, success=True):
 def build():
     return run(['build', 'main.soma'])
 
-def fresh(success=True):
+def fresh(success=False):
     return run(['build', '--check-fresh', 'main.soma'], success)
 
 _, cold = build()
@@ -76,8 +76,8 @@ assert (root / 'main.hvt').is_file()
 fresh()
 before_calls = calls.read_text()
 p, warm = build()
-assert 'unchanged since its last build' in p.stdout, p.stdout
-assert calls.read_text() == before_calls, 'unchanged image was linked again'
+assert 'unchanged since its last build' not in p.stdout, p.stdout
+assert calls.read_text() != before_calls, 'uncertified native validation was skipped'
 
 # Product edits/deletion, source edits, external compiler and source dependency
 # edits all require the real checking/build path again.
@@ -122,7 +122,7 @@ env['PRIVATE_BUILD_SETTING'] = 'private-value-must-not-appear-in-record'
 fresh(False)
 build()
 fresh()
-for record in (root / '.soma-cache' / '.freshness').iterdir():
+for record in (root / '.soma-cache' / '.freshness').glob('*'):
     assert env['PRIVATE_BUILD_SETTING'] not in record.read_text()
 
 # Arbitrary compiler flags may name inputs the manifest cannot enumerate.
@@ -152,6 +152,6 @@ assert receipts.is_dir()
 for receipt in receipts.iterdir():
     receipt.unlink()
 fresh(False)
-print('image product freshness validates sources, toolchains, product bytes and provenance: ok')
-print('timings cold=%.3fs warm=%.3fs' % (cold, warm))
+print('uncertified image toolchains always rerun native validation: ok')
+print('timings first=%.3fs repeat-validation=%.3fs' % (cold, warm))
 PY
