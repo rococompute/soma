@@ -8,18 +8,23 @@ python3 - <<'PY'
 import os,pathlib,subprocess,tempfile
 with tempfile.TemporaryDirectory(prefix='soma-rocq-external-') as tmp:
     outer=pathlib.Path(tmp).resolve()
-    for mode in ['direct','imported']:
+    for mode in ['direct','imported','nested-link']:
         root=outer/mode
         root.mkdir();(root/'tests').mkdir()
         external=outer/(mode+'-library')
         external.mkdir()
-        (external/'_RocqProject').write_text('-Q . mylib\n')
-        (external/'A.v').write_text('Definition from_library := 1.\n')
+        library_root = external
+        if mode == 'nested-link':
+            library_root = root/'vendor'
+            library_root.mkdir()
+            (library_root/'extra').symlink_to(external, target_is_directory=True)
+        (library_root/'_RocqProject').write_text('-Q . mylib\n')
+        (library_root/'A.v').write_text('Definition from_library := 1.\n')
         (root/'soma.toml').write_text('[project]\nname="external_trace"\nversion="0.1.0"\n')
         (root/'.gitignore').write_text('.soma-cache/\n')
         # TemporaryDirectory uses ordinary path bytes, so a Soma literal is safe.
-        library='Rocq Library "mylib" in "'+str(external)+'".\nFrom mylib Require Import A.\nvalue := from_library.\n'
-        if mode=='direct':
+        library='Rocq Library "mylib" in "'+str(library_root)+'".\nFrom mylib Require Import A.\nvalue := from_library.\n'
+        if mode in ['direct','nested-link']:
             (root/'tests/main.soma').write_text(library)
         else:
             (root/'lib.soma').write_text(library)

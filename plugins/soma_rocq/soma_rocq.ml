@@ -417,11 +417,26 @@ let prerequisite_key toolchain selections =
         Printf.sprintf "%S %s\n" package selection.entry.SomaRocqCache.completion_digest) selections in
     SomaMerkle.string ("soma-rocq-prerequisites 1\000" ^ toolchain ^ "\000" ^ String.concat "" rows)
 
+(* A file-hash trace cannot see additions through a directory symlink,
+   including a currently empty external directory. Keep such local source
+   trees uncertified on warm hits too, rather than guessing their membership. *)
+let local_tree_traced root =
+  let rec walk depth path =
+    if depth > 128 then false else
+    match (Unix.lstat path).Unix.st_kind with
+    | Unix.S_REG -> true
+    | Unix.S_DIR ->
+      Array.for_all (fun name ->
+          name = "_build" || name = "_opam" || (name <> "" && name.[0] = '.') ||
+          walk (depth + 1) (Filename.concat path name)) (Sys.readdir path)
+    | _ -> false in
+  try walk 0 root with Sys_error _ | Unix.Unix_error _ -> false
+
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
   (match source with
    | Opam None -> SomaImport.note_uncertified_rocq_library ()
-   | Local path when not (SomaImport.rocq_source_in_project path) ->
+   | Local path when not (SomaImport.rocq_source_in_project path && local_tree_traced path) ->
      (* File hashes cannot observe added .v/dune/configuration files in an
         external source tree. Until tree traces exist, keep it uncertified. *)
      SomaImport.note_uncertified_rocq_library ()
