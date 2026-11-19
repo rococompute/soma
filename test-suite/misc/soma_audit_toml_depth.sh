@@ -4,7 +4,7 @@ set -euo pipefail
 source_root="${SOMA_AUDIT_SOURCE:-$(cd "$(dirname "$0")/../.." && pwd -P)}"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
-cp "$source_root/vernac/somaToml.ml" "$fixture/somaToml.ml"
+cp "$source_root/clib/somaToml.ml" "$fixture/somaToml.ml"
 cat > "$fixture/check.ml" <<'ML'
 let repeat text count = String.concat "" (List.init count (fun _ -> text))
 let parsed text = ignore (SomaToml.parse text)

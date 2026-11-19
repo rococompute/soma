@@ -8,7 +8,7 @@ import os,pathlib,shutil,subprocess,tempfile
 source=pathlib.Path(os.environ['SOMA_AUDIT_SOURCE'])
 with tempfile.TemporaryDirectory(prefix='soma-rule-inputs-') as tmp:
     root=pathlib.Path(tmp)
-    for f in ['somaMerkle.ml','somaCache.ml','somaModuleStore.ml','soma_cache_fs.c','somaRuleInputs.ml']:shutil.copyfile(source/'clib'/f,root/f)
+    for f in ['somaMerkle.ml','somaCache.ml','somaModuleStore.ml','soma_cache_fs.c','somaToml.ml','somaRuleInputs.ml']:shutil.copyfile(source/'clib'/f,root/f)
     text=(source/'vernac/somaImport.ml').read_text();function=text[text.index('let source_hash '):text.index('\nlet digest ',text.index('let source_hash '))]
     (root/'check.ml').write_text(r'''
 let env_value = Sys.getenv_opt
@@ -69,6 +69,6 @@ let () =
   print_endline "Exact rule membership, suppressors, orphan/legacy inputs, kind and location-independent import identity: passed"
 ''')
     env=dict(os.environ,XDG_CACHE_HOME=str(root/'xdg'),SOMA_CACHE_ID='rule-input-harness')
-    subprocess.run(['ocamlfind','ocamlc','-custom','-package','digestif.c,unix','-linkpkg','somaMerkle.ml','somaCache.ml','soma_cache_fs.c','somaModuleStore.ml','somaRuleInputs.ml','check.ml','-o','check'],cwd=root,env=env,check=True)
+    subprocess.run(['ocamlfind','ocamlc','-custom','-package','digestif.c,unix','-linkpkg','somaMerkle.ml','somaCache.ml','soma_cache_fs.c','somaModuleStore.ml','somaToml.ml','somaRuleInputs.ml','check.ml','-o','check'],cwd=root,env=env,check=True)
     subprocess.run([str(root/'check')],cwd=root,env=env,check=True)
 PY

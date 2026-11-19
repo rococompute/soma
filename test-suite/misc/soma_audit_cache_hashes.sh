@@ -20,9 +20,9 @@ with tempfile.TemporaryDirectory(prefix='soma-cache-hashes-') as tmp:
     shutil.copyfile(source / 'clib/somaCache.ml', root / 'somaCache.ml')
     extra = []
     if (source / 'clib/somaModuleStore.ml').exists():
-        for name in ['somaModuleStore.ml', 'soma_cache_fs.c', 'somaRuleInputs.ml']:
+        for name in ['somaModuleStore.ml', 'soma_cache_fs.c', 'somaToml.ml', 'somaRuleInputs.ml']:
             shutil.copyfile(source / 'clib' / name, root / name)
-        extra = ['soma_cache_fs.c', 'somaModuleStore.ml', 'somaRuleInputs.ml']
+        extra = ['soma_cache_fs.c', 'somaModuleStore.ml', 'somaToml.ml', 'somaRuleInputs.ml']
     text = (source / 'vernac/somaImport.ml').read_text()
     start = text.index('let source_hash ')
     end = text.index('(* What an importer', start)

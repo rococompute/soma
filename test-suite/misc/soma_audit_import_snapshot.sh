@@ -13,8 +13,8 @@ with tempfile.TemporaryDirectory(prefix='soma-import-snapshot-') as tmp:
     for f in ['somaMerkle.ml','somaCache.ml']: shutil.copyfile(source/'clib'/f,root/f)
     extra=[]
     if (source/'clib/somaModuleStore.ml').exists():
-        for f in ['somaModuleStore.ml','soma_cache_fs.c','somaRuleInputs.ml']: shutil.copyfile(source/'clib'/f,root/f)
-        extra=['soma_cache_fs.c','somaModuleStore.ml','somaRuleInputs.ml']
+        for f in ['somaModuleStore.ml','soma_cache_fs.c','somaToml.ml','somaRuleInputs.ml']: shutil.copyfile(source/'clib'/f,root/f)
+        extra=['soma_cache_fs.c','somaModuleStore.ml','somaToml.ml','somaRuleInputs.ml']
     prelude=r'''
 module Pp = struct let str x = x let ( ++ ) = ( ^ ) end
 module CErrors = struct let user_err x = failwith x end

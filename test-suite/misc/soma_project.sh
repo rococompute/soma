@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# A project's soma.toml (vernac/somaProject.ml, vernac/somaToml.ml): its
+# A project's soma.toml (vernac/somaProject.ml, clib/somaToml.ml): its
 # folder is the project's root, from which any of its files imports, and
 # its [project] (name, version, description) is checked.
 
