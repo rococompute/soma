@@ -1370,14 +1370,14 @@ let () =
     let is_verbose a = a = "-v" || a = "--verbose" in
     let verbose = List.exists is_verbose rest in
     let rest = List.filter (fun a -> not (is_verbose a)) rest in
+    List.iter (fun arg ->
+        if List.mem arg ["-vos"; "-vok"; "-o"; "-dump-glob"; "-native-output-dir";
+                         "-beautify"; "-output-context"] then
+          usage_error "soma check: %s is unavailable: checks do not skip proofs or keep compiler outputs" arg)
+      rest;
     begin match rest with
       | [] -> usage_error "soma check: no file given"
       | file :: args ->
-        List.iter (fun arg ->
-            if List.mem arg ["-vos"; "-vok"; "-o"; "-dump-glob"; "-native-output-dir";
-                             "-beautify"; "-output-context"] then
-              usage_error "soma check: %s is unavailable: checks do not skip proofs or keep compiler outputs" arg)
-          args;
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         check ~verbose (program_of file) args

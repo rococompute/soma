@@ -44,6 +44,9 @@ for flag in ('-vos', '-vok', '-o'):
     p = run(['check', 'plain.soma', flag, 'outside.vo'] if flag == '-o'
             else ['check', 'plain.soma', flag], expected=1)
     assert 'checks do not skip proofs or keep compiler outputs' in p.stderr, p.stderr
+for flag in ('-vos', '-vok'):
+    p = run(['check', flag, 'plain.soma'], expected=1)
+    assert 'checks do not skip proofs or keep compiler outputs' in p.stderr, p.stderr
 assert not (root / 'outside.vo').exists()
 
 (root / 'bad.soma').write_text('value : nat := true.\n')
