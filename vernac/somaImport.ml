@@ -459,6 +459,19 @@ let read_load_paths () =
 (* A Rocq library records the exact source/configuration inputs it compiled.
    Paths inside this project are relative so copied project caches retain
    their meaning; other paths are explicitly fingerprinted by test receipts. *)
+(* Selection policies belong to this compilation, not to a reusable cache
+   entry. A floating request or an external source tree must remain uncertain
+   even when it reuses an entry first compiled by a pinned/local request. *)
+let rocq_selection_uncertified = ref false
+let note_uncertified_rocq_library () = rocq_selection_uncertified := true
+
+let rocq_source_in_project directory =
+  try
+    let root = Unix.realpath (built_root ()) in
+    let directory = Unix.realpath directory in
+    directory = root || CString.is_prefix (root ^ "/") directory
+  with Sys_error _ | Unix.Unix_error _ -> false
+
 let rocq_inputs_name = ".soma-inputs"
 
 let record_rocq_inputs ~directory ~complete files =
@@ -617,7 +630,7 @@ let compile_command ?loc ?(delayed=false) ~interface p path src =
     end else [], src in
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; proof_job_var; interface_var; interface_digest_var]))
+                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
@@ -954,7 +967,7 @@ let write_stamp () =
     let in_cache f = match env_value build_var, env_root () with
       | Some root, _ | None, Some root -> CString.is_prefix (cache root ^ "/") f
       | None, None -> false in
-    let inputs = ref [] and complete = ref true in
+    let inputs = ref [] and complete = ref (not !rocq_selection_uncertified) in
     let libraries = List.filter_map (fun dir -> match library_file dir with
         | Some f ->
           (match rocq_entry f with
@@ -1001,7 +1014,7 @@ let record_test_dependencies ~source =
     let p = current () in
     let prefix = p.cache_dir ^ "/" in
     let sources = ref [absolute source] and external_inputs = ref [] in
-    let complete = ref true in
+    let complete = ref (not !rocq_selection_uncertified) in
     let add_input (path, hash) =
       let file = resolve_project_file path in
       (try if SomaMerkle.file_hash file <> hash then complete := false

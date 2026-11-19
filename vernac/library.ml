@@ -189,6 +189,9 @@ let register_native_library libname =
 
 let loaded_libraries () = List.map snd !libraries_loaded_list
 
+let loaded_library_files () =
+  List.map (fun (_, name) -> name, library_full_filename name) !libraries_loaded_list
+
 (** Delayed / available tables of opaque terms *)
 
 type table_status =

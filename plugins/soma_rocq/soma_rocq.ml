@@ -274,7 +274,7 @@ let compile ~name ~log ts =
       let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
       if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
-               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log))), None
+               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
     order
 
 (* * The source *)
@@ -381,6 +381,13 @@ let compiled_theories file =
 
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
+  (match source with
+   | Opam None -> SomaImport.note_uncertified_rocq_library ()
+   | Local path when not (SomaImport.rocq_source_in_project path) ->
+     (* File hashes cannot observe added .v/dune/configuration files in an
+        external source tree. Until tree traces exist, keep it uncertified. *)
+     SomaImport.note_uncertified_rocq_library ()
+   | _ -> ());
   (* before a cache directory is created or removed, and before opam *)
   require_component "package" package;
   (match source with Opam (Some version) -> require_component "version" version | Opam None | Local _ -> ());
