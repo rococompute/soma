@@ -562,13 +562,20 @@ let { Goptions.get = output_directory } =
   declare_stringopt_option_and_ref ~stage:Summary.Stage.Interp ~value:None
     ~key:output_directory_key ()
 
-let output_directory () =
+(* Inspect the setting without creating a directory or choosing the caller's
+   cwd. Soma uses this to root modular output in the source project first. *)
+let output_directory_setting () =
   match output_directory (), !System.output_directory with
-  | Some dir, _ | None, Some dir ->
+  | Some dir, _ | None, Some dir -> Some dir
+  | None, None -> None
+
+let output_directory () =
+  match output_directory_setting () with
+  | Some dir ->
       (* Ensure that the directory exists *)
       System.mkdir dir;
       dir
-  | None, None ->
+  | None ->
     let pwd = Sys.getcwd () in
     warn_using_current_directory pwd;
     (* Note: in case of error in the caller of output_directory, the effect of the setting will be undo *)

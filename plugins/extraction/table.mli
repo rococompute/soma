@@ -110,6 +110,7 @@ val remove_opaque : t -> GlobRef.t -> unit
 (*s Output Directory parameter *)
 
 val output_directory : unit -> string
+val output_directory_setting : unit -> string option
 
 (*s AccessOpaque parameter *)
 
