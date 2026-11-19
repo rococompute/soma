@@ -318,6 +318,42 @@ let rec copy_tree src dst =
 
 let is_directory_opt p = try Sys.is_directory p with Sys_error _ -> false
 
+(* The source files of the project, as (path relative to the root, digest).
+   Symbolic links are followed, so a link to a directory already on the
+   current path ([ln -s . loop.soma]) is not entered again: its files are
+   already in the list under the path that reached it, and following it
+   would recurse until the kernel reported ELOOP, which [Digest.file] then
+   raised on the path it could not follow. A link that cannot be stat'ed,
+   and a file that cannot be read, contribute a marker instead of an
+   exception, so that repairing them changes the key. *)
+let project_cache_sources root =
+  let source name =
+    name = "soma.lock" ||
+    List.exists (Filename.check_suffix name)
+      [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
+  let stat_opt p = try Some (Unix.stat p) with Unix.Unix_error _ | Sys_error _ -> None in
+  let dir_id st = st.Unix.st_dev, st.Unix.st_ino in
+  let digest p =
+    match (try Some (Digest.file p) with Sys_error _ | Unix.Unix_error _ -> None) with
+    | Some d -> Digest.to_hex d
+    | None -> "<unreadable>" in
+  let rec walk rel dir ancestors acc =
+    Array.fold_left (fun acc name ->
+        if List.mem name [".soma-cache"; ".git"; "_build"] then acc
+        else
+          let full = Filename.concat dir name in
+          let r = if rel = "" then name else rel ^ "/" ^ name in
+          match stat_opt full with
+          | Some st when st.Unix.st_kind = Unix.S_DIR ->
+            let id = dir_id st in
+            if List.mem id ancestors then acc
+            else walk r full (id :: ancestors) acc
+          | Some _ -> if source name then (r, digest full) :: acc else acc
+          | None -> if source name then (r, "<unreadable>") :: acc else acc)
+      acc (try Sys.readdir dir with Sys_error _ -> [||]) in
+  let ancestors = match stat_opt root with Some st -> [dir_id st] | None -> [] in
+  List.sort compare (walk "" root ancestors [])
+
 let project_cache_key file =
   let abs_file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
   let start_dir = Filename.dirname abs_file in
@@ -325,22 +361,9 @@ let project_cache_key file =
     if Sys.file_exists (Filename.concat dir "soma.toml") then dir
     else let up = Filename.dirname dir in if up = dir then start_dir else find_root up in
   let root = find_root start_dir in
-  let source name =
-    name = "soma.lock" ||
-    List.exists (Filename.check_suffix name)
-      [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
-  let rec walk rel dir acc =
-    Array.fold_left (fun acc name ->
-        if List.mem name [".soma-cache"; ".git"; "_build"] then acc
-        else
-          let full = Filename.concat dir name in
-          let r = if rel = "" then name else rel ^ "/" ^ name in
-          if is_directory_opt full then walk r full acc
-          else if source name then (r, full) :: acc else acc)
-      acc (try Sys.readdir dir with Sys_error _ -> [||]) in
-  let files = List.sort compare (walk "" root []) in
+  let files = project_cache_sources root in
   let key = Digest.to_hex (Digest.string (String.concat "\n"
-      (!cache_toolchain () :: List.map (fun (rel, full) -> rel ^ " " ^ Digest.to_hex (Digest.file full)) files))) in
+      (!cache_toolchain () :: List.map (fun (rel, digest) -> rel ^ " " ^ digest) files))) in
   root, Filename.concat root ".soma-cache", key
 
 (* A dependency on a folder ({ path = "../wip" }) is compiled from sources
