@@ -188,6 +188,11 @@ let resume p ~run =
               | _ -> failwith "native target is not a file" in
             if SomaBuildInfo.signature built<>expected || copied<>expected_copy then
               failwith "native product changed while copying";
-            Unix.rename tmp p.output;SomaCache.record p.output);
+            Unix.rename tmp p.output;
+            if SomaBuildInfo.signature p.output<>expected_copy then
+              failwith "native product changed after publication";
+            SomaCache.record p.output;
+            if SomaBuildInfo.signature p.output<>expected_copy then
+              failwith "native product changed during certification");
         true
       end)
