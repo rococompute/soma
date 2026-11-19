@@ -136,8 +136,16 @@ let () =
   let extension = Filename.concat project "program.ext" in
   write current "value := 1.\n"; write extension "(* captured *)\n";
   SomaImport.source_file := Some current;
+  SomaImport.note_source_load_attempt extension;
   SomaImport.note_loaded_source extension;
   assert (not !(SomaImport.rocq_selection_uncertified));
+  SomaImport.note_rc_source extension;
+  assert !(SomaImport.loaded_sources_uncertain);
+  assert !(SomaImport.rocq_selection_uncertified);
+  SomaImport.loaded_sources_uncertain := false;
+  SomaImport.rocq_selection_uncertified := false;
+  SomaImport.note_source_load_attempt (Filename.concat external_dir "missing.v");
+  assert !(SomaImport.loaded_sources_uncertain);
   let unknown = Filename.concat external_dir "loaded.v" in
   write unknown "Definition loaded := 1.\n";
   SomaImport.note_loaded_source unknown;

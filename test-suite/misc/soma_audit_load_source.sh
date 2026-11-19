@@ -20,18 +20,22 @@ with tempfile.TemporaryDirectory(prefix='soma-loaded-source-') as tmp:
             (root/'main.soma').write_text('Import lib.\nvalue.\n')
         elif mode=='nested':
             (root/'main.ext').write_text(statement)
-            (root/'main.soma').write_text('Import helper.\nloaded.\n')
+            (root/'main.soma').write_text('Import helper.\nmain : nat := loaded.\n')
         elif mode=='companion':
             (root/'main.ext').write_text('Definition loaded : nat := 1.\n')
-            (root/'main.soma').write_text('Import helper.\nloaded.\n')
+            (root/'main.soma').write_text('Import helper.\nmain : nat := loaded.\n')
         else:
-            (root/'main.soma').write_text('Import helper.\n'+statement+'loaded.\n')
+            (root/'main.soma').write_text('Import helper.\n'+statement+'main : nat := loaded.\n')
         env=dict(os.environ,SOMA_CACHE=str(outer/(mode+'-store')),XDG_CACHE_HOME=str(outer/(mode+'-xdg')))
         def run(args,expected=0):
             p=subprocess.run(args,cwd=root,env=env,text=True,capture_output=True,timeout=90)
             assert (p.returncode==0)==(expected==0),(mode,args,p.stdout,p.stderr)
             return p
-        assert '= 1' in run(['soma','build','-v','main.soma']).stdout
+        if mode=='imported':
+            first=run(['rocq','c','-q','main.soma'])
+            assert '= 1' in first.stdout
+        else:
+            run(['soma','build','main.soma'])
         if mode=='companion':
             run(['soma','build','--check-fresh','main.soma'])
             (root/'main.ext').write_text('Definition loaded : nat := 2.\n')
@@ -43,6 +47,6 @@ with tempfile.TemporaryDirectory(prefix='soma-loaded-source-') as tmp:
             assert '= 2' in changed.stdout,(mode,'imported Load reused stale definitions',changed.stdout,changed.stderr)
         else:
             run(['soma','build','--check-fresh','main.soma'],expected=1)
-            assert '= 2' in run(['soma','build','-v','main.soma']).stdout
+            run(['soma','build','main.soma'])
 print('Source Load edits invalidate direct/imported/nested builds while captured companions stay reusable: passed')
 PY

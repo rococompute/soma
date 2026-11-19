@@ -576,15 +576,9 @@ let note_uncertified_rocq_library () = rocq_selection_uncertified := true
 let loaded_source_inputs : (string, string) Hashtbl.t = Hashtbl.create 7
 let loaded_sources_uncertain = ref false
 
-let note_loaded_source file =
-  let file = absolute file in
-  let hash = SomaMerkle.file_hash file in
-  (match Hashtbl.find_opt loaded_source_inputs file with
-   | Some old when old <> hash ->
-     CErrors.user_err Pp.(str "A loaded source changed during compilation; rebuild.")
-   | _ -> Hashtbl.replace loaded_source_inputs file hash);
+let loaded_source_captured file =
   let known = match env_value source_var with Some source -> Some source | None -> !source_file in
-  let captured = match known with
+  match known with
     | None -> false
     | Some source ->
       let base = Filename.remove_extension source in
@@ -593,11 +587,29 @@ let note_loaded_source file =
          List.exists (fun candidate ->
              try Unix.realpath candidate = file with Unix.Unix_error _ -> false)
            [source; base ^ ".ext"; base ^ ".exp"]
-       with Unix.Unix_error _ -> false) in
-  if not captured then begin
+       with Unix.Unix_error _ -> false)
+
+let note_source_load_attempt file =
+  if not (loaded_source_captured file) then begin
     loaded_sources_uncertain := true;
     note_uncertified_rocq_library ()
   end
+
+let note_loaded_source file =
+  let file = absolute file in
+  let hash = SomaMerkle.file_hash file in
+  (match Hashtbl.find_opt loaded_source_inputs file with
+   | Some old when old <> hash ->
+     CErrors.user_err Pp.(str "A loaded source changed during compilation; rebuild.")
+   | _ -> Hashtbl.replace loaded_source_inputs file hash);
+  note_source_load_attempt file
+
+(* RC selection is implicit state, even when its bytes alias a captured
+   companion. It must always prevent reuse under a different RC context. *)
+let note_rc_source file =
+  note_loaded_source file;
+  loaded_sources_uncertain := true;
+  note_uncertified_rocq_library ()
 
 let write_loaded_source_inputs () =
   match env_value loaded_source_inputs_var with
