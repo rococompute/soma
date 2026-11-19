@@ -55,7 +55,7 @@ let latest ~switch:_ ~log:_ _ = "1.0"
 let lock_file root name = Filename.concat root (name ^ ".lock")
 let with_lock _ f = f ()
 let theories ~package:_ _ : theory list = failwith "unexpected compile"
-let compile ~name:_ ~log:_ _ : unit = failwith "unexpected compile"
+let compile ~prerequisites:_ ~name:_ ~log:_ _ : unit = failwith "unexpected compile"
 '''
     (root/'harness.ml').write_text(prelude+ensure+r'''
 let write p s = Out_channel.with_open_bin p (fun oc -> output_string oc s)
@@ -90,6 +90,30 @@ let () =
   ignore (prepare local_name);
   ignore (ensure ~package:"pkg" (Local external_dir));
   if not !(SomaImport.rocq_selection_uncertified) then failwith "external warm cache hit was incorrectly certified";
+  selected_libraries := [];
+  let alpha1 = "alpha.1.0-test-toolchain" in
+  ignore (prepare alpha1);
+  ignore (ensure ~package:"alpha" (Opam (Some "1.0")));
+  let prereq1 = prerequisite_key "test-toolchain" !selected_libraries in
+  let beta1 = "beta.1.0-" ^ prereq1 in
+  ignore (prepare beta1);
+  ignore (ensure ~package:"beta" (Opam (Some "1.0")));
+  let paths = prerequisite_paths (List.filter (fun (name,_) -> name <> "beta") !selected_libraries) in
+  assert (paths = ["mylib", Filename.concat (Filename.concat cache_root alpha1) "src"]);
+  ignore (ensure ~package:"beta" (Opam (Some "1.0")));
+  assert (List.length !selected_libraries = 2);
+  selected_libraries := [];
+  ignore (prepare "alpha.2.0-test-toolchain");
+  ignore (ensure ~package:"alpha" (Opam (Some "2.0")));
+  let prereq2 = prerequisite_key "test-toolchain" !selected_libraries in
+  assert (prereq1 <> prereq2);
+  ignore (prepare ("beta.1.0-" ^ prereq2));
+  ignore (ensure ~package:"beta" (Opam (Some "1.0")));
+  write (Filename.concat project "original.v") "Definition changed := 2.\n";
+  let rejected = try ignore (ensure ~package:"beta" (Opam (Some "1.0"))); false with Failure _ -> true in
+  assert rejected;
+  write (Filename.concat project "original.v") "Definition value := 1.\n";
+  selected_libraries := [];
   let pinned_dir = Filename.concat cache_root opam_name in
   List.iter (fun name ->
       let path = Filename.concat pinned_dir name in

@@ -1,7 +1,7 @@
 (* A checkout can supply cache files, but cannot supply a producer receipt.
    A completion binds the selected key, source metadata, theory directories
    and the complete .vo set. No load path is accepted before that binding. *)
-type entry = { theories : (string * string) list; inputs : (string * string) list; inputs_complete : bool; artifacts : (string * string) list }
+type entry = { completion_digest : string; theories : (string * string) list; inputs : (string * string) list; inputs_complete : bool; artifacts : (string * string) list }
 let marker = ".soma-complete"
 let inputs_name = ".soma-inputs"
 let theory_name = "theories"
@@ -124,7 +124,7 @@ let load ~key ~directory ~resolve_input =
             if (Unix.lstat path).Unix.st_kind <> Unix.S_DIR || relative directory path <> rel then invalid ();
             name, path) rows
       | _ -> invalid () in
-    Some { theories; inputs; inputs_complete; artifacts = outputs }
+    Some { completion_digest = SomaMerkle.string contents; theories; inputs; inputs_complete; artifacts = outputs }
   with Sys_error _ | Unix.Unix_error _ | Failure _ | Invalid_argument _ | Scanf.Scan_failure _ | End_of_file -> None
 
 (* After one whole-entry validation, verify each actually loaded artifact
