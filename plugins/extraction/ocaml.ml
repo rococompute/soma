@@ -647,7 +647,8 @@ let pp_ind_brands ~signature table ind =
       else
         let value = match ind.ind_equiv with
           | NoEquiv -> str "object end"
-          | Equiv kn -> pp_brand table { glob = GlobRef.IndRef (MutInd.make1 kn, i); inst = r.inst } in
+          | Equiv kn -> pp_brand table { glob = GlobRef.IndRef (MutInd.make1 kn, i); inst = r.inst }
+          | RenEquiv module_name -> str (module_name ^ "." ^ name) in
         str ("let " ^ name ^ " = ") ++ value)
     ind.ind_packets
   |> Array.to_list |> prlist identity
