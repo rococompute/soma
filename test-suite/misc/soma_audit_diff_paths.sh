@@ -60,6 +60,9 @@ compared "$TMP/both'\"old" "$TMP/both'\"new"
 project 'back\slash-old' 'main : nat := 1.'
 project 'back\slash-new' 'main : nat := 2.'
 project 'back\\slash-old' 'decoy : nat := 1.'
+[ -d 'back\slash-old' ] && [ -d 'back\\slash-old' ]
+[ "$(cat 'back\slash-old/main.soma')" = 'main : nat := 1.' ]
+[ "$(cat 'back\\slash-old/main.soma')" = 'decoy : nat := 1.' ]
 compared "$TMP/back\\slash-old" "$TMP/back\\slash-new"
 not_says 'decoy'
 
