@@ -137,6 +137,13 @@ let ind_iter_references do_term do_cons do_type ind =
   let cons_iter cp l = do_cons cp; List.iter type_iter l in
   let packet_iter i p =
     let () = do_type p.ip_typename_ref in
+    let () = if lang () == Ocaml && Option.has_some (Gradual.get (Global.env ()) Gradual.GCast) then
+      match p.ip_typename_ref.glob with
+      | GlobRef.IndRef (kn, index) when
+          not (KerName.equal (MutInd.canonical kn) (MutInd.user kn)) ->
+        do_type { glob = GlobRef.IndRef (MutInd.make1 (MutInd.canonical kn), index);
+                  inst = p.ip_typename_ref.inst }
+      | _ -> () in
     let () = if lang () == Ocaml then begin
         let inst = ind.ind_packets.(0).ip_typename_ref.inst in
         (match ind.ind_equiv with

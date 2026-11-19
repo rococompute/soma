@@ -646,7 +646,15 @@ let pp_ind_brands ~signature table ind =
       if signature then str ("val " ^ name ^ " : < >")
       else
         let value = match ind.ind_equiv with
-          | NoEquiv -> str "object end"
+          | NoEquiv ->
+            (* Monolithic extraction may deliberately duplicate an alias's
+               type declaration (NoEquiv) when flattening file modules. That
+               printer choice must not create a new semantic type identity. *)
+            (match r.glob with
+             | GlobRef.IndRef (kn, index) when
+                 not (KerName.equal (MutInd.canonical kn) (MutInd.user kn)) ->
+               pp_brand table { glob = GlobRef.IndRef (MutInd.make1 (MutInd.canonical kn), index); inst = r.inst }
+             | _ -> str "object end")
           | Equiv kn -> pp_brand table { glob = GlobRef.IndRef (MutInd.make1 kn, i); inst = r.inst }
           | RenEquiv module_name -> str (module_name ^ "." ^ name) in
         str ("let " ^ name ^ " = ") ++ value)
