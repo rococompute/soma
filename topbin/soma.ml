@@ -1246,6 +1246,11 @@ let fresh_inputs ?(products=[]) ?(reuse_initial_toolchain=false) ~toolchain c =
   let canonical, root = fresh_project c.file in
   let cache = Filename.concat root ".soma-cache" in
   if c.fill then uncertain "--fill writes into the program's .exp";
+  List.iter (fun path ->
+      match Unix.lstat path with
+      | _ -> uncertain "rc file candidate %s requires validation" path
+      | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> ())
+    (Coqrc.default_candidates ~warn:(fun _ -> ()));
   (match initial_getenv "SOMA_OCAML_EXTRACT" with
    | Some path when path <> "" -> uncertain "explicit extraction exports require validation"
    | _ -> ());
