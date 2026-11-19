@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-cp "$ROOT/topbin/somaTest.ml" "$TMP/"
+cp "$ROOT/topbin/somaTest.ml" "$ROOT/clib/somaMerkle.ml" "$TMP/"
 cd "$TMP"
 printf 'let trusted _ = true\nlet record _ = ()\n' > somaCache.ml
 cat > check.ml <<'ML'
@@ -32,7 +32,20 @@ let () =
   Sys.remove file;
   write file "value : nat := 1.\n";
   let snapshot = SomaTest.snapshot root None in
-  assert (List.assoc "input.soma" snapshot = Digest.to_hex (Digest.file file));
+  assert (List.assoc "input.soma" snapshot = SomaMerkle.file_hash file);
+  let external_file = Filename.concat outer "external.v" in
+  write external_file "Definition input := 1.\n";
+  let receipt = { SomaTest.identity = "unit"; inputs = snapshot;
+                  dependencies = SomaTest.S.singleton "input.soma";
+                  external_inputs = [external_file, SomaMerkle.file_hash external_file] } in
+  assert (not (SomaTest.affected ~identity:"unit" ~inputs:snapshot
+                 ~changed:SomaTest.S.empty ~include_drift:false receipt));
+  write external_file "Definition input := 2.\n";
+  assert (SomaTest.affected ~identity:"unit" ~inputs:snapshot
+            ~changed:SomaTest.S.empty ~include_drift:false receipt);
+  Sys.remove external_file;
+  assert (SomaTest.affected ~identity:"unit" ~inputs:snapshot
+            ~changed:SomaTest.S.empty ~include_drift:false receipt);
   (* Internal aliases hash the target bytes, including an ignored/unlisted
      target; external symlinks are not opened (this target is a FIFO). *)
   let alias = Filename.concat root "alias.soma" in
@@ -54,5 +67,5 @@ let () =
   assert (not (Sys.file_exists (SomaTest.record root "input.soma")));
   print_endline "soma test replacement identity, confined links and changed-input receipt refusal: passed"
 ML
-ocamlc -I +unix unix.cma somaCache.ml somaTest.ml check.ml -o check
+ocamlfind ocamlc -package digestif.c,unix -linkpkg somaMerkle.ml somaCache.ml somaTest.ml check.ml -o check
 ./check

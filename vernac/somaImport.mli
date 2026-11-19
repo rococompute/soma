@@ -121,3 +121,6 @@ val acquire_proof_slot : unit -> (unit -> unit)
 (** Where a compilation writes its .vo [vo], and puts it in place *)
 val checked_output : string -> string
 val install_checked : vo:string -> unit
+
+(** Record the source snapshot behind a content-keyed Rocq library. *)
+val record_rocq_inputs : directory:string -> complete:bool -> string list -> unit

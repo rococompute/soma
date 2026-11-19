@@ -468,7 +468,7 @@ let cache_of ~root (s : selected) =
   | Some commit -> Filename.concat (Filename.concat base s.path) commit
   | None ->
     List.fold_left Filename.concat base
-      ["local"; s.path; String.sub (Digest.to_hex (Digest.string s.project.root)) 0 8]
+      ["local"; s.path; SomaMerkle.string s.project.root]
 
 (* * soma get *)
 

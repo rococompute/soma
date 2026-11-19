@@ -74,14 +74,24 @@ let cache_load cache key =
 let stamp (s : Unix.LargeFile.stats) =
   Printf.sprintf "%d:%d:%d:%Ld:%.17g:%.17g" s.st_dev s.st_ino s.st_perm s.st_size s.st_mtime s.st_ctime
 
-let file_hash file =
+let channel ?len ic =
   let buffer = Bytes.create 65536 in
-  In_channel.with_open_bin file (fun ic ->
-      let rec loop ctx =
-        let len = input ic buffer 0 (Bytes.length buffer) in
-        if len = 0 then H.to_hex (H.get ctx)
-        else loop (H.feed_bytes ctx ~len buffer) in
-      loop H.empty)
+  let rec loop ctx left =
+    match left with
+    | Some 0L -> H.to_hex (H.get ctx)
+    | _ ->
+      let wanted = match left with
+        | None -> Bytes.length buffer
+        | Some n -> Int64.to_int (Int64.min n (Int64.of_int (Bytes.length buffer))) in
+      let got = input ic buffer 0 wanted in
+      if got = 0 then
+        (match left with None -> H.to_hex (H.get ctx) | Some _ -> raise End_of_file)
+      else loop (H.feed_bytes ctx ~len:got buffer)
+          (Option.map (fun n -> Int64.sub n (Int64.of_int got)) left) in
+  (match len with Some n when n < 0L -> invalid_arg "SomaMerkle.channel" | _ -> ());
+  loop H.empty len
+
+let file_hash file = In_channel.with_open_bin file (fun ic -> channel ic)
 
 let scan ?cache ?(write = true) ?(skip = []) root =
   let root = Unix.realpath root in

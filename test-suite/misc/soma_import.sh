@@ -101,7 +101,7 @@ grep -q '= 5' out.log
 # a stamp holds the digests of the libraries from elsewhere (Stdlib, ...)
 # that the file was compiled with: one that changed (an upgrade of Soma)
 # compiles the file again, and so does a stamp of an older format
-grep -q '^soma-stamp 3$' .soma-cache/show.stamp
+grep -q '^soma-stamp 4$' .soma-cache/show.stamp
 grep -q '^library Corelib.Init.Prelude ' .soma-cache/show.stamp
 sed -i.bak 's/^\(library Corelib.Init.Prelude\) .*/\1 0/' .soma-cache/show.stamp
 soma build main.soma > out.log 2> err.log

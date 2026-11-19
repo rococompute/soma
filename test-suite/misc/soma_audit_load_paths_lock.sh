@@ -17,15 +17,15 @@ import tempfile
 import time
 
 source = pathlib.Path(os.environ["SOMA_AUDIT_SOURCE"])
-compiler = shutil.which("ocamlc")
-assert compiler, "ocamlc is required (run within the Soma build environment)"
+compiler = shutil.which("ocamlfind")
+assert compiler, "ocamlfind is required (run within the Soma build environment)"
 with tempfile.TemporaryDirectory(prefix="soma-load-paths-") as tmp:
     root = pathlib.Path(tmp).resolve()
     text = (source / "vernac" / "somaImport.ml").read_text()
     # Extract the exact production transaction, including the lock when
     # present; the same regression also runs against the pre-fix revision.
     start = text.index("let load_paths_file () =")
-    end = text.index("\nlet add_load_path unix_path", start)
+    end = text.index("\n(* A Rocq library records", start) if "\n(* A Rocq library records" in text[start:] else text.index("\nlet add_load_path unix_path", start)
     transaction = text[start:end]
     if "let read_load_paths () =" in transaction:
         read_operation = "read_load_paths ()"
@@ -36,6 +36,7 @@ with tempfile.TemporaryDirectory(prefix="soma-load-paths-") as tmp:
     opam = (source / "vernac" / "somaOpam.ml").read_text()
     lines_start = opam.index("let read_lines f =")
     lines_end = opam.index("\nlet tail_of_file", lines_start)
+    (root / "somaMerkle.ml").write_text((source / "clib" / "somaMerkle.ml").read_text())
     (root / "receipt_cache.ml").write_text((source / "clib" / "somaCache.ml").read_text())
     harness = r'''
 let root = Sys.argv.(2)
@@ -80,8 +81,8 @@ let () =
   | _ -> failwith "unknown role"
 '''
     (root / "transaction.ml").write_text(harness)
-    subprocess.run([compiler, "-I", "+unix", "-o", "transaction", "unix.cma",
-                    "receipt_cache.ml", "transaction.ml"], cwd=root, check=True)
+    subprocess.run([compiler, "ocamlc", "-package", "digestif.c,unix", "-linkpkg", "-o", "transaction",
+                    "somaMerkle.ml", "receipt_cache.ml", "transaction.ml"], cwd=root, check=True)
     env = dict(os.environ, XDG_CACHE_HOME=str(root / "xdg"), SOMA_CACHE_ID="audit-load-paths")
     cache = root / "cache"
     cache.mkdir()
