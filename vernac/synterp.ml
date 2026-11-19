@@ -547,6 +547,7 @@ let rec synterp ~intern ?loc ~atts v =
 and synterp_load ~intern verbosely fname =
   let fname =
     Envars.expand_path_macros ~warn:(fun x -> Feedback.msg_warning (Pp.str x)) fname in
+  SomaImport.note_source_load_attempt fname;
   let longfname = Loadpath.locate_source_file fname in
   SomaImport.note_loaded_source longfname;
   let source = Loc.InFile { dirpath=None; file=longfname} in

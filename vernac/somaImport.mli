@@ -135,6 +135,11 @@ val note_uncertified_rocq_library : unit -> unit
     sources conservatively prevent reusable stamps and skip certificates;
     the current source and its already-fingerprinted companions are covered. *)
 val note_loaded_source : string -> unit
+(** Register a Load attempt before lookup, including missing sources caught by
+    Fail. Arbitrary absent-to-present inputs must not bypass freshness. *)
+val note_source_load_attempt : string -> unit
+(** RC files are implicit compilation state even when aliasing a companion. *)
+val note_rc_source : string -> unit
 
 (** Private compiler-child metadata: the plugin names a unique output and
     receives producer-attested source-load hashes after successful checking. *)
