@@ -44,6 +44,9 @@ From Corelib.Gradual Require Import Gradual.
 Definition from_dynamic_nat (x : Any) : nat := cast Any nat x.
 Definition from_dynamic_box (x : Any) : Box nat := cast Any (Box nat) x.
 Definition box_to_dynamic (b : Box nat) : Box Any := cast (Box nat) (Box Any) b.
+Definition consume_head {A} (fallback : A) (xs : list A) := Consumer.generic_head fallback xs.
+Definition consume_box {A} (fallback : A) (b : Box A) := Consumer.generic_unbox fallback b.
+Definition consume_zero := Consumer.reserved_zero.
 '''
 references = (
     ["Producer." + name for name in
@@ -96,6 +99,7 @@ try:
                    'From Corelib Require Extraction.\n'
                    'Extract Inductive unit => "unit" [ "()" ].\n'
                    'Extract Inductive bool => "bool" [ "true" "false" ].\n'
+                   'Extraction NoInline Consumer.generic_head Consumer.generic_unbox Consumer.reserved_zero.\n'
                    'Set Extraction Output Directory "%s".\n' % output)
         if mode == "separate":
             command = "Separate Extraction " + " ".join(references) + ".\n"
