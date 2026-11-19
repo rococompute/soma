@@ -169,7 +169,9 @@ let restore ~store ~context ~root ~cache =
                        selection may force the ordinary compiler to recheck. *)
                     let entries = Array.to_list (Sys.readdir candidates) |> List.filter SomaMerkle.valid_hash |>
                       List.map (fun n -> Filename.concat candidates n) |>
-                      List.sort (fun a b -> compare (Unix.lstat b).Unix.st_mtime (Unix.lstat a).Unix.st_mtime) in
+                      List.sort (fun a b ->
+                          let by_time = compare (Unix.lstat b).Unix.st_mtime (Unix.lstat a).Unix.st_mtime in
+                          if by_time = 0 then String.compare a b else by_time) in
                     match List.find_map (fun entry -> match verified_entry entry with
                         | Some found when found.unit_name = d.unit_name && found.source = d.source -> Some (entry, found)
                         | _ -> None) entries with
