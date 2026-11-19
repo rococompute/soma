@@ -249,6 +249,35 @@ let dependency_order files text =
              str "; filenames are matched against the library's source files.") in
   parse 0 []
 
+(* A receipt binds bytes to this toolchain; the request also binds them to
+   this particular successful compiler child, rejecting stale sidecar replay. *)
+let read_loaded_source_inputs ~request metadata =
+  let contents = read_file metadata in
+  if not (SomaCache.trusted_metadata metadata ~contents) then
+    error (str "Rocq compiler did not attest its loaded-source inputs.");
+  match String.split_on_char '\n' contents with
+  | "soma-loaded-inputs 2" :: request_row :: uncertainty :: rows ->
+    let actual = try Scanf.sscanf request_row "request %S%!" Fun.id
+      with _ -> error (str "Invalid loaded-source compiler request.") in
+    if not (SomaMerkle.valid_hash request) || actual <> request then
+      error (str "Loaded-source metadata belongs to another compiler request.");
+    let complete = match uncertainty with
+      | "uncertain true" -> false
+      | "uncertain false" -> true
+      | _ -> error (str "Invalid loaded-source metadata.") in
+    let rec parse inputs = function
+      | [""] -> List.rev inputs, complete
+      | row :: rows ->
+        let path, expected = try Scanf.sscanf row "input %S %s%!" (fun p h -> p, h)
+          with _ -> error (str "Invalid loaded-source metadata.") in
+        if Filename.is_relative path || List.mem_assoc path inputs ||
+           not (SomaMerkle.valid_hash expected) || SomaMerkle.file_hash path <> expected then
+          error (str "A loaded Rocq source changed while compiling; rebuild.");
+        parse ((path, expected) :: inputs) rows
+      | [] -> error (str "Truncated loaded-source metadata.") in
+    parse [] rows
+  | _ -> error (str "Invalid loaded-source metadata.")
+
 (* [ts] compiled by Soma, in dependency order *)
 let compile ~prerequisites ~prerequisite_sources ~name ~log ts =
   let loads = List.concat_map (fun (logical, dir) -> ["-Q"; dir; logical]) prerequisites @ load_args ts in
@@ -278,31 +307,22 @@ let compile ~prerequisites ~prerequisite_sources ~name ~log ts =
          refuses the parsed [Declare ML Module] (SomaImport), before it
          loads anything, however it is spaced or commented *)
       let metadata = Filename.temp_file ~temp_dir:dir ".soma-loaded-" ".inputs" in
+      let request = SomaMerkle.string (Printf.sprintf "%s:%d:%.17g:%d" metadata (Unix.getpid ())
+          (Unix.gettimeofday ()) (Random.State.bits (Random.State.make_self_init ()))) in
       Fun.protect ~finally:(fun () -> if Sys.file_exists metadata then Sys.remove metadata) (fun () ->
           let env = [SomaImport.rocq_library_var ^ "=" ^ name;
                      SomaImport.loaded_source_inputs_var ^ "=" ^ metadata;
+                     SomaImport.loaded_source_request_var ^ "=" ^ request;
                      "SOMA_CACHE_ID=" ^ SomaCache.identity ()] in
           if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ loads @ [f])) then
             error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
                    str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log));
-          let contents = read_file metadata in
-          if not (SomaCache.trusted_metadata metadata ~contents) then
-            error (str "Rocq compiler did not attest its loaded-source inputs.");
-          match String.split_on_char '\n' contents with
-          | "soma-loaded-inputs 1" :: uncertainty :: rows ->
-            if uncertainty = "uncertain true" then complete := false
-            else if uncertainty <> "uncertain false" then error (str "Invalid loaded-source metadata.");
-            List.iter (function "" -> () | row ->
-                let path, expected = try Scanf.sscanf row "input %S %s%!" (fun p h -> p, h)
-                  with _ -> error (str "Invalid loaded-source metadata.") in
-                if Filename.is_relative path || not (SomaMerkle.valid_hash expected) ||
-                   SomaMerkle.file_hash path <> expected then
-                  error (str "A loaded Rocq source changed while compiling; rebuild.");
-                match List.assoc_opt path !loaded_inputs with
-                | Some old when old <> expected -> error (str "A loaded Rocq source changed while compiling; rebuild.")
-                | Some _ -> ()
-                | None -> loaded_inputs := (path, expected) :: !loaded_inputs) rows
-          | _ -> error (str "Invalid loaded-source metadata.")))
+          let inputs, child_complete = read_loaded_source_inputs ~request metadata in
+          if not child_complete then complete := false;
+          List.iter (fun (path, expected) -> match List.assoc_opt path !loaded_inputs with
+              | Some old when old <> expected -> error (str "A loaded Rocq source changed while compiling; rebuild.")
+              | Some _ -> ()
+              | None -> loaded_inputs := (path, expected) :: !loaded_inputs) inputs))
     order;
   !loaded_inputs, !complete
 

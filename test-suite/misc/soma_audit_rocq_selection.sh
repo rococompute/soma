@@ -38,6 +38,7 @@ let source_var = "SOMA_IMPORT_SOURCE"
 let source_file = ref None
 let absolute file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file
 let loaded_source_inputs_var = "SOMA_LOADED_SOURCE_INPUTS"
+let loaded_source_request_var = "SOMA_LOADED_SOURCE_REQUEST"
 '''+policy+r'''
 let resolve_project_file file = if Filename.is_relative file then Filename.concat project file else file
 let record_rocq_inputs ~directory:_ ~complete:_ _ : unit = failwith "unexpected cache miss"
@@ -143,10 +144,12 @@ let () =
   assert !(SomaImport.rocq_selection_uncertified);
   let sidecar = Filename.concat project "loaded.inputs" in
   Unix.putenv SomaImport.loaded_source_inputs_var sidecar;
+  let request = SomaMerkle.string "current compiler request" in
+  Unix.putenv SomaImport.loaded_source_request_var request;
   SomaImport.write_loaded_source_inputs ();
   let contents = In_channel.with_open_bin sidecar In_channel.input_all in
   assert (SomaCache.trusted_metadata sidecar ~contents);
-  assert (String.starts_with ~prefix:"soma-loaded-inputs 1\nuncertain true\n" contents);
+  assert (String.starts_with ~prefix:(Printf.sprintf "soma-loaded-inputs 2\nrequest %S\nuncertain true\n" request) contents);
   write unknown "Definition loaded := 2.\n";
   let changed = try SomaImport.write_loaded_source_inputs (); false with Failure _ -> true in
   assert changed;
