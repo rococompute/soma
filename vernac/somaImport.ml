@@ -266,7 +266,7 @@ let locate ?loc p path =
                  else "Import " ^ example ^ ". Its root has " ^ String.concat ", " files ^ "."))
 
 (* What a compilation reads of a program: its source, .exp and .ext *)
-let source_hash = SomaModuleStore.source_hash
+let source_hash src = SomaModuleStore.source_hash src
 
 let digest f = SomaMerkle.file_hash f
 
@@ -1151,7 +1151,7 @@ let write_stamp () =
       (match env_value root_var, env_value cache_var with
        | Some root, Some cache ->
          SomaModuleStore.record ~root ~cache
-           ~prefix:(Option.default "" (env_value prefix_var)) ~source:_src
+           ~prefix:(match env_value prefix_var with Some p -> p | None -> "") ~source:_src
            ~vo ~stamp ~expected
        | _ -> ());
       ignore (expected_import_source ());

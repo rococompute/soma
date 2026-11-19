@@ -18,6 +18,11 @@ with tempfile.TemporaryDirectory(prefix='soma-cache-hashes-') as tmp:
         merkle = source / 'topbin/somaMerkle.ml'
     shutil.copyfile(merkle, root / 'somaMerkle.ml')
     shutil.copyfile(source / 'clib/somaCache.ml', root / 'somaCache.ml')
+    extra = []
+    if (source / 'clib/somaModuleStore.ml').exists():
+        for name in ['somaModuleStore.ml', 'soma_cache_fs.c']:
+            shutil.copyfile(source / 'clib' / name, root / name)
+        extra = ['soma_cache_fs.c', 'somaModuleStore.ml']
     text = (source / 'vernac/somaImport.ml').read_text()
     start = text.index('let source_hash src =')
     end = text.index('(* What an importer', start)
@@ -59,8 +64,8 @@ let () =
   print_endline "SHA-256 source/paired receipts and strict stamp parsing: passed"
 ''')
     env = dict(os.environ, XDG_CACHE_HOME=str(root / 'xdg'), SOMA_CACHE_ID='hash-regression')
-    subprocess.run(['ocamlfind', 'ocamlc', '-package', 'digestif.c,unix', '-linkpkg',
-                    'somaMerkle.ml', 'somaCache.ml', 'cache_functions.ml', 'check.ml', '-o', 'check'],
+    subprocess.run(['ocamlfind', 'ocamlc', '-custom', '-package', 'digestif.c,unix', '-linkpkg',
+                    'somaMerkle.ml', 'somaCache.ml', *extra, 'cache_functions.ml', 'check.ml', '-o', 'check'],
                    cwd=root, env=env, check=True)
     subprocess.run([str(root / 'check')], cwd=root, env=env, check=True)
 PY
