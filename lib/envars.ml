@@ -40,12 +40,7 @@ let ( / ) a b =
 
 let coqify d = d / "coq"
 
-let home ~warn =
-  getenv_else "HOME" (fun () ->
-    try (Sys.getenv "HOMEDRIVE")^(Sys.getenv "HOMEPATH") with Not_found ->
-      getenv_else "USERPROFILE" (fun () ->
-        warn ("Cannot determine user home directory, using '.' .");
-        Filename.current_dir_name))
+let home = Boot.UserConfig.home
 
 let path_to_list p =
   let sep = if String.equal Sys.os_type "Win32" then ';' else ':' in
@@ -117,9 +112,7 @@ let xdg_data_home warn =
   coqify
     (getenv_else "XDG_DATA_HOME" (fun () -> (home ~warn) / ".local/share"))
 
-let xdg_config_home warn =
-  coqify
-    (getenv_else "XDG_CONFIG_HOME" (fun () -> (home ~warn) / ".config"))
+let xdg_config_home = Boot.UserConfig.xdg_config_home
 
 let xdg_data_dirs warn =
   let sys_dirs =

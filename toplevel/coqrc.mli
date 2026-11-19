@@ -8,8 +8,4 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** Ordered default candidates, shared with conservative build freshness checks.
-    Selection still chooses the first readable file. *)
-val default_candidates : warn:(string -> unit) -> string list
-
 val load_rcfile : rcfile:(string option) -> state:Vernac.State.t -> Vernac.State.t
