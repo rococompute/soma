@@ -58,13 +58,15 @@ let index_from s from sub =
   let rec at i = if i + n > String.length s then None else if String.sub s i n = sub then Some i else at (i + 1) in
   at from
 
-(* What the compiled files depend on: Soma's Corelib and Stdlib, as
-   compiled, which the compiled prelude, Soma.Soma, has the digests of *)
+(* The driver's complete toolchain identity includes compiler and plugins.
+   Raw rocq invocations fall back to the worker and prelude bytes. Never
+   truncate this identity: a Corelib-only key misses compiler upgrades. *)
 let soma_key () =
   let lib path = Names.DirPath.make (List.rev_map Names.Id.of_string path) in
   match List.find_map (fun p -> match Loadpath.locate_absolute_library (lib p) with
       | Ok f -> Some f | Error _ -> None) [["Soma"; "Soma"]; ["Corelib"; "Init"; "Prelude"]] with
-  | Some f -> String.sub (Digest.to_hex (Digest.file f)) 0 8
+  | Some f -> SomaMerkle.string
+      ("soma-rocq-toolchain 2\000" ^ SomaCache.identity () ^ "\000" ^ SomaMerkle.file_hash f)
   | None -> error (str "Soma's Corelib is not found.")
 
 (* * The theories of a source *)
@@ -84,6 +86,22 @@ let rec files_under dir =
         if e = "_build" || e = "_opam" || (e <> "" && e.[0] = '.') then []
         else if Sys.is_directory f then files_under f
         else [f])
+
+(* Precisely the source files copied into a Rocq library build. Ignore
+   local .vo/build products so compiling a checkout does not change its key. *)
+let is_source_file file =
+  Filename.check_suffix file ".v" ||
+  List.mem (Filename.basename file) ["dune"; "_RocqProject"; "_CoqProject"]
+
+let source_files root = List.filter is_source_file (files_under root)
+
+let source_key root =
+  let root = Unix.realpath root in
+  let prefix = root ^ "/" in
+  let rows = source_files root |> List.map (fun f ->
+      let relative = String.sub f (String.length prefix) (String.length f - String.length prefix) in
+      Printf.sprintf "%S %s" relative (SomaMerkle.file_hash f)) in
+  SomaMerkle.string ("soma-rocq-source 2\n" ^ String.concat "\n" rows)
 
 (* the word after [key] in the s-expression [s] from [from]: [(name stdpp)] *)
 let field s from key =
@@ -203,6 +221,34 @@ let run_to ?(env = []) ~dir ~out args =
 let load_args ts =
   List.concat_map (fun t -> ["-Q"; t.dir; t.logical]) ts
 
+(* rocq dep -sort writes raw filenames separated by spaces, not shell
+   quoting and not one record per line (tools/coqdep/lib/common.ml). Match
+   complete filenames from its input set rather than splitting their bytes.
+   If two input names make the stream ambiguous, refuse rather than compile
+   a silently truncated or invented path. *)
+let dependency_order files text =
+  let files = List.sort_uniq String.compare files in
+  let length = String.length text in
+  let space = function ' ' | '\t' | '\r' | '\n' -> true | _ -> false in
+  let rec skip i = if i < length && space text.[i] then skip (i + 1) else i in
+  let seen = Hashtbl.create 31 in
+  let rec parse i acc =
+    let i = skip i in
+    if i = length then List.rev acc else
+    let candidates = List.filter (fun file ->
+        let n = String.length file in
+        i + n <= length && String.sub text i n = file &&
+        (i + n = length || space text.[i + n])) files in
+    match candidates with
+    | [file] when not (Hashtbl.mem seen file) ->
+      Hashtbl.add seen file ();
+      parse (i + String.length file) (file :: acc)
+    | _ ->
+      error (str "rocq dep -sort returned an unknown, repeated or ambiguous filename near " ++
+             qstring (String.sub text i (min 120 (length - i))) ++
+             str "; filenames are matched against the library's source files.") in
+  parse 0 []
+
 (* [ts] compiled by Soma, in dependency order *)
 let compile ~name ~log ts =
   let files = List.concat_map sources ts in
@@ -212,8 +258,7 @@ let compile ~name ~log ts =
   if not (run_to ~dir ~out:order ([rocq_binary (); "dep"; "-sort"] @ load_args ts @ files)) then
     error (str "rocq dep failed on " ++ str name ++ str "; the end of " ++ str order ++ str ":" ++ fnl () ++
            str (SomaOpam.tail_of_file order));
-  let order = List.filter (fun f -> Filename.check_suffix f ".v")
-      (List.concat_map (String.split_on_char ' ') (SomaOpam.read_lines order)) in
+  let order = dependency_order files (read_file order) in
   let total = List.length order in
   List.iteri (fun i f ->
       let rel = match List.find_opt (fun t -> String.starts_with ~prefix:(t.dir ^ "/") f) ts with
@@ -229,7 +274,7 @@ let compile ~name ~log ts =
       let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
       if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
-               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
+               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log))), None
     order
 
 (* * The source *)
@@ -240,7 +285,7 @@ let rec copy_tree src dst =
       let s = Filename.concat src e and d = Filename.concat dst e in
       if e = "_build" || e = "_opam" || (e <> "" && e.[0] = '.') then ()
       else if Sys.is_directory s then copy_tree s d
-      else if Filename.check_suffix e ".v" || List.mem e ["dune"; "_RocqProject"; "_CoqProject"] then
+      else if is_source_file e then
         Out_channel.with_open_bin d (fun oc -> output_string oc (read_file s)))
     (Sys.readdir src)
 
@@ -342,15 +387,14 @@ let ensure ~package source =
   let root = cache () in
   SomaOpam.mkdir_p root;
   let key = soma_key () in
-  let dir, fetch = match source with
+  let dir, fetch, local_key = match source with
     | Local path ->
       if not (Sys.file_exists path && Sys.is_directory path) then
         error (str path ++ str ", where " ++ str package ++ str " is said to be, is no directory.");
       (* its sources are part of its name: a change compiles it again *)
-      let digest = Digest.to_hex (Digest.string (String.concat "\n" (List.map (fun f ->
-          f ^ " " ^ Digest.to_hex (Digest.file f)) (files_under path)))) in
-      Filename.concat root (package ^ "-local-" ^ String.sub digest 0 8 ^ "-" ^ key),
-      (fun src -> copy_tree path src)
+      let digest = source_key path in
+      Filename.concat root (package ^ "-local-" ^ SomaMerkle.string (digest ^ "\000" ^ key)),
+      (fun src -> copy_tree path src), Some digest
     | Opam version ->
       let log = Filename.concat root "opam.log" in
       let switch = SomaOpam.ensure_switch ~who:"Rocq" ~log in
@@ -367,7 +411,7 @@ let ensure ~package source =
          Printf.eprintf "Rocq: fetching %s %s (opam source)\n%!" package version;
          if not (SomaOpam.run ~log ["opam"; "source"; "--switch=" ^ switch; package ^ "." ^ version; "--dir=" ^ src])
          then error (str "opam source " ++ str package ++ str "." ++ str version ++ str " failed; the end of " ++
-                     str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
+                     str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log))), None
   in
   let name = Filename.basename dir in
   let done_file = Filename.concat dir "theories" in
@@ -390,6 +434,15 @@ let ensure ~package source =
           error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
                  spc () ++ str "and there is no _RocqProject or _CoqProject.");
         compile ~name ~log:(Filename.concat dir "compile.log") ts;
+        (match source, local_key with
+         | Local path, Some expected when source_key src <> expected || source_key path <> expected ->
+           error (str "the local library's sources changed while it was compiled; build again.")
+         | _ -> ());
+        let input_files, complete = match source with
+          | Local path -> source_files (Unix.realpath path), true
+          | Opam (Some _) -> source_files src, true
+          | Opam None -> source_files src, false in
+        SomaImport.record_rocq_inputs ~directory:dir ~complete input_files;
         (* written last, and renamed into place: a compilation that stopped
            leaves no [theories] that a later one would take for a finished
            library *)

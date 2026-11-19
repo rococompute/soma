@@ -48,8 +48,12 @@ grep -q '^Compiling a.soma' "$TMP/err"
 
 # A forged matching stamp cannot authorize an object from another source.
 printf 'x : nat := 2.\n' > a.soma
-source_digest=$(md5sum a.soma | cut -d ' ' -f 1)
-stamp_digest=$(printf '%s - - - - -' "$source_digest" | md5sum | cut -d ' ' -f 1)
+stamp_digest=$(python3 - <<'PYHASH'
+import hashlib, pathlib
+source = hashlib.sha256(pathlib.Path('a.soma').read_bytes()).hexdigest()
+print(hashlib.sha256((source + ' - - - - -').encode()).hexdigest())
+PYHASH
+)
 sed "s/^source .*/source $stamp_digest/" .soma-cache/a.stamp > a.stamp.new && mv a.stamp.new .soma-cache/a.stamp  # not sed -i: BSD's differs
 git add -f .soma-cache/a.vo .soma-cache/a.stamp
 build

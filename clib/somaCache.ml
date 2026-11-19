@@ -2,7 +2,7 @@
    evidence that the compiler produced the bytes next to it. *)
 let identity () = match Sys.getenv_opt "SOMA_CACHE_ID" with
   | Some s when s <> "" -> s
-  | _ -> Digest.to_hex (Digest.file Sys.executable_name)
+  | _ -> SomaMerkle.file_hash Sys.executable_name
 
 let rec mkdir d =
   if not (Sys.file_exists d) then begin
@@ -20,11 +20,11 @@ let receipt file =
      a checkout to mix the stamp of one compilation with another object. *)
   let contents =
     if Filename.check_suffix file ".vo" then
-      Digest.file file ^ Digest.file (Filename.chop_suffix file ".vo" ^ ".stamp")
+      SomaMerkle.file_hash file ^ SomaMerkle.file_hash (Filename.chop_suffix file ".vo" ^ ".stamp")
     else if Filename.check_suffix file ".stamp" then
-      Digest.file (Filename.chop_suffix file ".stamp" ^ ".vo") ^ Digest.file file
-    else Digest.file file in
-  let key = Digest.to_hex (Digest.string (identity () ^ contents)) in
+      SomaMerkle.file_hash (Filename.chop_suffix file ".stamp" ^ ".vo") ^ SomaMerkle.file_hash file
+    else SomaMerkle.file_hash file in
+  let key = SomaMerkle.string ("soma-receipt 2\000" ^ identity () ^ "\000" ^ contents) in
   Filename.concat (receipts ()) key
 
 let tracked file =

@@ -107,7 +107,7 @@ let regular_hash file expected =
   Fun.protect ~finally:(fun () -> close_in_noerr ic) (fun () ->
       let before = Unix.fstat fd in
       if not (same_file expected before) then raise Changed_input;
-      let digest = Digest.to_hex (Digest.channel ic (-1)) in
+      let digest = SomaMerkle.channel ic in
       if not (same_file before (Unix.fstat fd)) ||
          not (same_file before (Unix.lstat file)) then raise Changed_input;
       digest)
@@ -141,7 +141,7 @@ let snapshot root repo =
               | _ -> "external"
               | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR | Unix.ELOOP), _, _) -> "unresolved" in
             if not (same_file stat (Unix.lstat full)) || Unix.readlink full <> target then raise Changed_input;
-            Digest.to_hex (Digest.string ("symlink\000" ^ target ^ "\000" ^ contents))
+            SomaMerkle.string ("symlink\000" ^ target ^ "\000" ^ contents)
           | Unix.S_DIR ->
             (* Git lists a gitlink as one directory, not as its sources. Keep
                its checkout state as an opaque input. A dependency inside it
@@ -151,7 +151,7 @@ let snapshot root repo =
               | Some head -> head | None -> "uninitialized" in
             let dirty = match (if initialized then capture_opt ~quiet:true ["-C"; full; "status"; "--porcelain=v1"; "-z"; "--untracked-files=all"] else None) with
               | Some dirty -> dirty | None -> "unknown" in
-            Digest.to_hex (Digest.string ("gitlink\000" ^ state ^ "\000" ^ dirty))
+            SomaMerkle.string ("gitlink\000" ^ state ^ "\000" ^ dirty)
           | _ -> error "cannot track special input %s" full in
         Some (relative root full, digest)
       with
@@ -217,22 +217,37 @@ let companions file =
   List.map (fun ext -> stem ^ ext) source_extensions
 let narrow file = List.exists (Filename.check_suffix file) [".soma"; ".exp"; ".definition"]
 let record root test =
-  Filename.concat root (".soma-cache/.tests/" ^ Digest.to_hex (Digest.string test))
+  Filename.concat root (".soma-cache/.tests/" ^ SomaMerkle.string test)
 
-type receipt = { identity : string; inputs : (string * string) list; dependencies : S.t }
+let external_hash path =
+  if Filename.is_relative path then error "external dependency is not absolute: %s" path;
+  let stat = Unix.lstat path in
+  if stat.Unix.st_kind <> Unix.S_REG then error "external dependency is not a regular file: %s" path;
+  regular_hash path stat
+
+let external_fresh inputs =
+  List.for_all (fun (path, expected) ->
+      try SomaMerkle.valid_hash expected && external_hash path = expected
+      with Error _ | Sys_error _ | Unix.Unix_error _ | Changed_input -> false) inputs
+
+type receipt = { identity : string; inputs : (string * string) list; dependencies : S.t;
+                 external_inputs : (string * string) list }
 let load file =
   if not (SomaCache.trusted file) then error "no trusted dependency record";
   match lines (read file) with
-  | "soma-test 1" :: identity :: body ->
-    let inputs = ref [] and dependencies = ref S.empty in
+  | "soma-test 2" :: identity :: body ->
+    let inputs = ref [] and dependencies = ref S.empty and external_inputs = ref [] in
     List.iter (fun line ->
         if String.starts_with ~prefix:"input " line then
           inputs := Scanf.sscanf line "input %S %s%!" (fun p d -> p, d) :: !inputs
+        else if String.starts_with ~prefix:"external " line then
+          external_inputs := Scanf.sscanf line "external %S %s%!" (fun p d -> p, d) :: !external_inputs
         else if String.starts_with ~prefix:"dependency " line then
           dependencies := S.add (Scanf.sscanf line "dependency %S%!" Fun.id) !dependencies
         else error "unknown test receipt field") body;
     if S.is_empty !dependencies then error "empty dependency record";
-    { identity; inputs = List.sort_uniq compare !inputs; dependencies = !dependencies }
+    { identity; inputs = List.sort_uniq compare !inputs; dependencies = !dependencies;
+      external_inputs = List.sort_uniq compare !external_inputs }
   | _ -> error "missing dependency record"
 
 let store file receipt =
@@ -240,9 +255,10 @@ let store file receipt =
   let tmp = Filename.temp_file ~temp_dir:(Filename.dirname file) ".test-" ".tmp" in
   Fun.protect ~finally:(fun () -> if Sys.file_exists tmp then Sys.remove tmp) (fun () ->
       Out_channel.with_open_bin tmp (fun oc ->
-          Printf.fprintf oc "soma-test 1\n%s\n" receipt.identity;
+          Printf.fprintf oc "soma-test 2\n%s\n" receipt.identity;
           List.iter (fun (p, d) -> Printf.fprintf oc "input %S %s\n" p d) receipt.inputs;
-          S.iter (fun p -> Printf.fprintf oc "dependency %S\n" p) receipt.dependencies);
+          S.iter (fun p -> Printf.fprintf oc "dependency %S\n" p) receipt.dependencies;
+          List.iter (fun (p, d) -> Printf.fprintf oc "external %S %s\n" p d) receipt.external_inputs);
       Sys.rename tmp file;
       SomaCache.record file)
 
@@ -254,7 +270,7 @@ let drift before after =
   |> S.of_list
 
 let affected ~identity ~inputs ~changed ~include_drift receipt =
-  if receipt.identity <> identity then true else
+  if receipt.identity <> identity || not (external_fresh receipt.external_inputs) then true else
   let delta = drift receipt.inputs inputs in
   (* An explicit baseline retains the historical snapshot-drift safeguard.
      Automatic mode deliberately focuses on one diff: lower-priority staged
@@ -380,10 +396,24 @@ let run ~identity ~build args =
             let code = build ~source ~trace ~no_image:!no_image in
             if code <> 0 then raise (Test_failure code);
             try
-              let sources = match lines (read trace) with
-                | "soma-test-dependencies 1" :: paths -> List.map quoted paths
+              let sources, external_inputs = match lines (read trace) with
+                | "soma-test-dependencies 1" :: paths -> List.map quoted paths, []
+                | "soma-test-dependencies 2" :: rows ->
+                  let sources = ref [] and externals = ref [] in
+                  List.iter (fun row ->
+                      if String.starts_with ~prefix:"source " row then
+                        sources := Scanf.sscanf row "source %S%!" Fun.id :: !sources
+                      else if String.starts_with ~prefix:"external " row then
+                        externals := Scanf.sscanf row "external %S %s%!" (fun p h -> p, h) :: !externals
+                      else error "unknown compiler dependency field") rows;
+                  List.rev !sources, List.sort_uniq compare !externals
                 | _ -> error "compiler could not record complete dependencies" in
-              let dependencies = List.concat_map (fun p -> companions (relative root p)) sources |> S.of_list in
+              if not (external_fresh external_inputs) then
+                error "an external library input changed while the test was building";
+              let dependencies = List.concat_map (fun p ->
+                  let p = relative root p in
+                  if List.exists (Filename.check_suffix p) [".soma"; ".exp"; ".ext"; ".definition"]
+                  then companions p else [p]) sources |> S.of_list in
               (* Git reports edits under a symlink target's name. Retain both
                  that name and the lexical companion the compiler actually
                  reads; do not substitute the target's own .exp/.ext files. *)
@@ -400,6 +430,6 @@ let run ~identity ~build args =
                  S.exists (fun p -> Sys.file_exists (Filename.concat root p) && not (List.mem_assoc p before)) dependencies
               then error "dependency is not tracked by Git discovery";
               if snapshot root repo <> before then error "project changed while the test was building";
-              store receipt_file { identity; inputs = before; dependencies }
+              store receipt_file { identity; inputs = before; dependencies; external_inputs }
             with Error reason -> Printf.eprintf "soma test: %s: next run will include this test (%s)\n%!" test reason)) selected
   end

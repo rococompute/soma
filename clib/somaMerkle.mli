@@ -14,5 +14,6 @@ type snapshot = {
 
 val string : string -> string
 val file_hash : string -> string
+val channel : ?len:int64 -> in_channel -> string
 val valid_hash : string -> bool
 val scan : ?cache:string -> ?write:bool -> ?skip:string list -> string -> snapshot

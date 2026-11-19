@@ -266,7 +266,7 @@ let locate ?loc p path =
 (* What a compilation reads of a program: its source, .exp and .ext *)
 let source_hash src =
   let base = Filename.remove_extension src in
-  let one f = if Sys.file_exists f then Digest.to_hex (Digest.file f) else "-" in
+  let one f = if Sys.file_exists f then SomaMerkle.file_hash f else "-" in
   (* FILE.wasm, FILE.ml or FILE.lean, which FILE.definition declares.
      A present FILE.ml is marked "rel:": a stamp from before the module
      cache named that .ml by an absolute path, and its digest did not.
@@ -275,12 +275,12 @@ let source_hash src =
      file stays "-", which is what a stamp of a .soma file records. *)
   let ml = base ^ ".ml" in
   let ml_digest =
-    if Sys.file_exists ml then "rel:" ^ Digest.to_hex (Digest.file ml) else "-" in
-  Digest.to_hex (Digest.string (String.concat " "
+    if Sys.file_exists ml then "rel:" ^ SomaMerkle.file_hash ml else "-" in
+  SomaMerkle.string (String.concat " "
     [one src; one (base ^ ".exp"); one (base ^ ".ext"); one (base ^ ".wasm");
-     ml_digest; one (base ^ ".lean")]))
+     ml_digest; one (base ^ ".lean")])
 
-let digest f = Digest.to_hex (Digest.file f)
+let digest f = SomaMerkle.file_hash f
 
 (* What an importer of a compiled file depends on: all but its proofs. Its
    "library" segment has what Rocq identifies a library by, and will not load
@@ -295,8 +295,12 @@ let interface_digest vo =
   | ch ->
     Fun.protect ~finally:(fun () -> ObjFile.close_in ch) (fun () ->
         let segments = ObjFile.segments ch in
-        let hash name = (CString.Map.get name segments).ObjFile.hash in
-        Digest.to_hex (Digest.string (hash "summary" ^ hash "library")))
+        In_channel.with_open_bin vo (fun ic ->
+            let hash name =
+              let segment = CString.Map.get name segments in
+              LargeFile.seek_in ic segment.ObjFile.pos;
+              SomaMerkle.channel ~len:segment.ObjFile.len ic in
+            SomaMerkle.string ("soma-interface 4\000" ^ hash "summary" ^ hash "library")))
 
 (* The digests of the files of libraries, each read once *)
 let digests : (string, string) Hashtbl.t = Hashtbl.create 97
@@ -309,26 +313,43 @@ let library_file dir = match Loadpath.locate_absolute_library dir with
   | Ok f -> Some f
   | Error _ -> None
 
-let stamp_format = "soma-stamp 3"
+let stamp_format = "soma-stamp 4"
 
 (* A stamp: its format, "source HASH", then "import PATH DIGEST" for each import of
    the project, and "library NAME DIGEST" for each library from elsewhere
    (Stdlib, Soma.JSX, ...), whose change, by an upgrade of Soma, makes
    what was compiled with it inconsistent *)
 let read_stamp file =
+  let valid_name s = s <> "" && String.for_all (fun c -> c > ' ' && c <> '\127') s in
   try
-    let lines = String.split_on_char '\n' (In_channel.with_open_bin file In_channel.input_all) in
-    let source = ref None and imports = ref [] and libraries = ref [] in
-    (* the first line is the format: an older stamp is out of date *)
-    if List.hd lines <> stamp_format then None else begin
-    List.iter (fun l -> match String.split_on_char ' ' l with
-        | ["source"; h] -> source := Some h
-        | ["import"; p; d] -> imports := (p, d) :: !imports
-        | ["library"; l; d] -> libraries := (l, d) :: !libraries
-        | _ -> ()) lines;
-    Option.map (fun h -> h, List.rev !imports, !libraries) !source
-    end
-  with Sys_error _ -> None
+    let contents = In_channel.with_open_bin file In_channel.input_all in
+    (* A writer always terminates every row. A cut-off final row, an unknown
+       field, duplicate keys or a malformed digest invalidates the whole stamp. *)
+    if contents = "" || contents.[String.length contents - 1] <> '\n' then None else
+    match String.split_on_char '\n' contents with
+    | format :: source :: rows when format = stamp_format ->
+      (match String.split_on_char ' ' source with
+       | ["source"; h] when SomaMerkle.valid_hash h ->
+         let rec read imports libraries inputs = function
+           | [""] -> Some (h, List.rev imports, List.rev libraries, List.rev inputs)
+           | row :: rows ->
+             (match String.split_on_char ' ' row with
+              | ["import"; p; d] when valid_name p && SomaMerkle.valid_hash d && not (List.mem_assoc p imports) ->
+                read ((p, d) :: imports) libraries inputs rows
+              | ["library"; name; d] when valid_name name && SomaMerkle.valid_hash d && not (List.mem_assoc name libraries) ->
+                read imports ((name, d) :: libraries) inputs rows
+              | "input" :: _ ->
+                (match Scanf.sscanf row "input %S %s%!" (fun p d -> p, d) with
+                 | p, d when p <> "" && SomaMerkle.valid_hash d && not (List.mem_assoc p inputs) ->
+                   read imports libraries ((p, d) :: inputs) rows
+                 | _ -> None
+                 | exception (Scanf.Scan_failure _ | Failure _ | End_of_file) -> None)
+              | _ -> None)
+           | [] -> None in
+         read [] [] [] rows
+       | _ -> None)
+    | _ -> None
+  with Sys_error _ | Unix.Unix_error _ | Failure _ | End_of_file -> None
 
 let rec mkdir_p d =
   if not (Sys.file_exists d) then begin
@@ -434,6 +455,47 @@ let read_load_paths () =
   let file = load_paths_file () in
   with_load_paths_lock file (fun () ->
       if SomaCache.trusted file then SomaOpam.read_lines file else [])
+
+(* A Rocq library records the exact source/configuration inputs it compiled.
+   Paths inside this project are relative so copied project caches retain
+   their meaning; other paths are explicitly fingerprinted by test receipts. *)
+let rocq_inputs_name = ".soma-inputs"
+
+let record_rocq_inputs ~directory ~complete files =
+  let file = Filename.concat directory rocq_inputs_name in
+  let rows = List.sort_uniq String.compare files |> List.map (fun f ->
+      Printf.sprintf "input %S %s" (project_file f) (SomaMerkle.file_hash f)) in
+  Out_channel.with_open_bin file (fun oc ->
+      output_string oc ((if complete then "soma-rocq-inputs 1" else "incomplete") ^ "\n" ^
+                        String.concat "\n" rows ^ "\n"));
+  SomaCache.record file
+
+let rocq_entry file =
+  if not (CString.is_prefix (project_cache () ^ "/") file) then None else
+  let rec find dir =
+    let parent = Filename.dirname dir in
+    if Filename.basename parent = "rocq" then Some dir
+    else if dir = parent then None else find parent in
+  find (Filename.dirname file)
+
+let rocq_inputs file =
+  match rocq_entry file with
+  | None -> None
+  | Some dir ->
+    let file = Filename.concat dir rocq_inputs_name in
+    if not (SomaCache.trusted file) then None else
+    try
+      match SomaOpam.read_lines file with
+      | "soma-rocq-inputs 1" :: rows ->
+        let rec parse seen = function
+          | [] -> Some (List.rev seen)
+          | row :: rows ->
+            let p, hash = Scanf.sscanf row "input %S %s%!" (fun p h -> p, h) in
+            if p = "" || not (SomaMerkle.valid_hash hash) || List.mem_assoc p seen then None
+            else parse ((p, hash) :: seen) rows in
+        parse [] rows
+      | _ -> None
+    with Sys_error _ | Scanf.Scan_failure _ | Failure _ | End_of_file -> None
 
 let add_load_path unix_path coq_path =
   Loadpath.add_vo_path { Loadpath.unix_path; coq_path; implicit = false; recursive = true; installed = false }
@@ -709,8 +771,11 @@ and fresh ?loc p path src =
   let vo = vo_of p path in
   SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
   | None -> false
-  | Some (hash, imports, libraries) ->
+  | Some (hash, imports, libraries, inputs) ->
     hash = source_hash src &&
+    List.for_all (fun (path, expected) ->
+        try SomaMerkle.file_hash (resolve_project_file path) = expected
+        with Sys_error _ | Unix.Unix_error _ -> false) inputs &&
     List.for_all (fun (l, d) -> match library_file (Libnames.dirpath_of_string l) with
         | Some f -> file_digest f = d
         | None -> false) libraries &&
@@ -889,11 +954,23 @@ let write_stamp () =
     let in_cache f = match env_value build_var, env_root () with
       | Some root, _ | None, Some root -> CString.is_prefix (cache root ^ "/") f
       | None, None -> false in
+    let inputs = ref [] and complete = ref true in
     let libraries = List.filter_map (fun dir -> match library_file dir with
-        | Some f when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
-        | _ -> None) (Library.loaded_libraries ()) in
-    let lines = stamp_format :: ("source " ^ source_hash src) ::
-                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @ libraries in
+        | Some f ->
+          (match rocq_entry f with
+           | Some _ ->
+             (match rocq_inputs f with
+              | Some files -> inputs := files @ !inputs
+              | None -> complete := false);
+             Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+           | None when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+           | None -> None)
+        | None -> None) (Library.loaded_libraries ()) in
+    let input_lines = List.sort_uniq compare !inputs |> List.map (fun (path, hash) ->
+        Printf.sprintf "input %S %s" path hash) in
+    let lines = (if !complete then stamp_format else "soma-stamp incomplete") :: ("source " ^ source_hash src) ::
+                List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @
+                libraries @ input_lines in
     Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"));
     SomaCache.record stamp;
     SomaCache.record (Filename.chop_suffix stamp ".stamp" ^ ".vo")
@@ -923,8 +1000,15 @@ let record_test_dependencies ~source =
   | Some requested, Some output when absolute source = requested ->
     let p = current () in
     let prefix = p.cache_dir ^ "/" in
-    let sources = ref [absolute source] in
+    let sources = ref [absolute source] and external_inputs = ref [] in
     let complete = ref true in
+    let add_input (path, hash) =
+      let file = resolve_project_file path in
+      (try if SomaMerkle.file_hash file <> hash then complete := false
+       with Sys_error _ | Unix.Unix_error _ -> complete := false);
+      if CString.is_prefix (p.root ^ "/") file && not (CString.is_prefix prefix file)
+      then sources := file :: !sources
+      else external_inputs := (file, hash) :: !external_inputs in
     let visited = Hashtbl.create 17 in
     let rec visit path =
       if not (Hashtbl.mem visited path) then begin
@@ -932,10 +1016,13 @@ let record_test_dependencies ~source =
         (match source_of p.root path with
          | Some src -> sources := absolute src :: !sources
          | None -> complete := false);
-        (* Deferred proofs may load libraries absent from the interface the
-           entry point loaded. Their completed stamps contain those imports. *)
-        match read_stamp (stamp_of p path) with
-        | Some (_, imports, _) -> List.iter (fun (path, _) -> visit path) imports
+        (* Untrusted or truncated stamps cannot certify a smaller graph.
+           Deferred proof stamps also include expectation-only imports. *)
+        match if SomaCache.trusted (stamp_of p path) && SomaCache.trusted (vo_of p path)
+              then read_stamp (stamp_of p path) else None with
+        | Some (_, imports, _, inputs) ->
+          List.iter add_input inputs;
+          List.iter (fun (path, _) -> visit path) imports
         | None -> complete := false
       end in
     let installed file = match Boot.Env.initialized () with
@@ -944,19 +1031,27 @@ let record_test_dependencies ~source =
           [Boot.Env.coqlib env; Boot.Env.runtimelib env]
       | _ -> false in
     List.iter (fun dir -> match library_file dir with
+        | Some file when rocq_entry file <> None ->
+          (match rocq_inputs file with
+           | Some inputs ->
+             List.iter add_input inputs;
+             add_input (file, file_digest file)
+           | None -> complete := false)
         | Some file when CString.is_prefix prefix file ->
           let relative = String.sub file (String.length prefix)
               (String.length file - String.length prefix) |> Filename.remove_extension in
           visit relative
         | Some file -> if not (installed file) then complete := false
         | None -> complete := false) (Library.loaded_libraries ());
-    (* External project sources and arbitrary load paths need a broader graph.
-       Keep running those tests until that graph is available. *)
+    (* External project dependencies still require their own complete graph.
+       Floating opam libraries likewise have no immutable resolution to certify. *)
     if dependencies () <> [] then complete := false;
     Out_channel.with_open_bin output (fun oc ->
-        output_string oc (if !complete then "soma-test-dependencies 1\n" else "incomplete\n");
+        output_string oc (if !complete then "soma-test-dependencies 2\n" else "incomplete\n");
         List.sort_uniq String.compare !sources |> List.iter (fun file ->
-            Printf.fprintf oc "%S\n" file))
+            Printf.fprintf oc "source %S\n" file);
+        List.sort_uniq compare !external_inputs |> List.iter (fun (file, hash) ->
+            Printf.fprintf oc "external %S %s\n" file hash))
   | _ -> ()
 
 (* Soma: proofs checked beside the build (see [check_proofs_beside]), as the
