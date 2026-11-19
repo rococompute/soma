@@ -5,8 +5,8 @@
 # $XDG_CACHE_HOME both fetch the same pinned commit; one moves its folder
 # into the cache first. The other must take that folder, whole and of the
 # same commit, instead of failing with ENOTEMPTY or taking a partial one.
-# A folder published without its marker, or with another commit's, is not
-# trusted. A fetch that fails publishes nothing, leaves no work folder, and
+# An uncoordinated writer that appears while the publication lock is held
+# is refused; no metadata is injected into the dependency source. A fetch that fails publishes nothing, leaves no work folder, and
 # a later build fetches again.
 #
 # git's url.insteadOf, from the environment (never the global configuration),
@@ -60,7 +60,7 @@ source_of() {
   local found
   found="$(find "$XDG_CACHE_HOME/soma/src" -mindepth 1 -maxdepth 4 -type d -name "maps@1.0.0-$COMMIT" 2>/dev/null || true)"
   [ -n "$found" ] || { echo "no source folder for $COMMIT"; find "$XDG_CACHE_HOME" -maxdepth 6; exit 1; }
-  [ "$(printf '%s\n' "$found" | wc -l)" = 1 ] || { echo "more than one source folder:"; echo "$found"; exit 1; }
+  [ "$(printf '%s\n' "$found" | wc -l)" -eq 1 ] || { echo "more than one source folder:"; echo "$found"; exit 1; }
   printf '%s\n' "$found"
 }
 no_work() { # no folder of a fetch left beside the source
@@ -74,14 +74,13 @@ no_source() { # nothing published in the source cache
              ! -name '*.tmp-*' 2>/dev/null || true)"
   [ -z "$found" ] || { echo "a failed fetch published a source:"; echo "$found"; exit 1; }
 }
-# whole SOURCE: the pinned tree, complete, and its marker
+# whole SOURCE: the complete pinned tree, without injected metadata
 whole() {
   local src="$1" f
   [ -d "$src" ] || { echo "no source at $src"; exit 1; }
   [ ! -e "$src/.git" ] || { echo ".git left in $src"; exit 1; }
-  [ "$(cat "$src/.soma-source")" = "$COMMIT" ] || { echo "marker is not $COMMIT:"; cat "$src/.soma-source"; exit 1; }
   diff <(git -C "$W" ls-tree -r --name-only v1.0.0 | sort) \
-       <(cd "$src" && find . -type f ! -name .soma-source | sed 's|^\./||' | sort) \
+       <(cd "$src" && find . -type f | sed 's|^\./||' | sort) \
     || { echo "the source is not the pinned tree"; exit 1; }
   while read -r f; do
     git -C "$W" show "v1.0.0:$f" | cmp -s - "$src/$f" || { echo "differs from the pin: $f"; exit 1; }
@@ -95,6 +94,7 @@ Import util.
 twice (n : nat) : nat := helper n + helper n.
 EOT
 echo 'helper (n : nat) : nat := n.' > work/github.com/owner/maps/util.soma
+printf 'dependency-owned metadata\n' > work/github.com/owner/maps/.soma-source
 publish github.com/owner/maps v1.0.0
 W="$TMP/work/github.com/owner/maps"
 COMMIT="$(git -C "$W" rev-parse 'v1.0.0^{commit}')"
@@ -141,8 +141,8 @@ for round in 1 2 3; do
   [ $ra = 0 ] || { echo "round $round: a failed ($ra)"; cat "$TMP/a.log"; exit 1; }
   [ $rb = 0 ] || { echo "round $round: b failed ($rb)"; cat "$TMP/b.log"; exit 1; }
   says '= 8' "$TMP/a.log"; says '= 8' "$TMP/b.log"
-  says 'Fetching github.com/owner/maps 1.0.0' "$TMP/a.log"
-  says 'Fetching github.com/owner/maps 1.0.0' "$TMP/b.log"
+  [ "$(grep -h -c 'Fetching github.com/owner/maps 1.0.0' "$TMP/a.log" "$TMP/b.log" | awk '{n += $1} END {print n}')" = 1 ] \
+    || { echo 'the waiter fetched instead of reusing the winner'; cat "$TMP/a.log" "$TMP/b.log"; exit 1; }
   SRC="$(source_of)"; whole "$SRC"; no_work
   # both built from that source, and both pinned the same commit
   [ -n "$(find "$TMP/a/.soma-cache/.deps" -name gmap.vo)" ]
@@ -155,20 +155,20 @@ for round in 1 2 3; do
   says '= 8' "$TMP/a.log"
 done
 
-# * A folder that another build published is taken only when it says it is
-# whole, and of the commit fetched: a plant without a marker is refused
+# * A writer that ignores the lock must not publish under an active fetch.
+# Refuse both partial data and marker-shaped data without trusting either.
 cold
 PLANT="$XDG_CACHE_HOME/soma/src/github.com/owner/maps@1.0.0-$COMMIT"
 if (cd "$TMP/a" && PATH="$SLOW" SOMA_TEST_FETCH_DELAY=0.1 SOMA_TEST_PLANT=incomplete \
       SOMA_TEST_PLANT_DIR="$PLANT" soma build -v main.soma > "$TMP/a.log" 2>&1); then
-  echo "took a folder with no marker as the source"; cat "$TMP/a.log"; exit 1
+  echo "took an uncoordinated partial source"; cat "$TMP/a.log"; exit 1
 fi
-says 'may be' "$TMP/a.log"
+says 'publication lock was held' "$TMP/a.log"
 says 'incomplete' "$TMP/a.log"
 says "$PLANT" "$TMP/a.log"
 if grep -q 'Directory not empty' "$TMP/a.log"; then cat "$TMP/a.log"; exit 1; fi
 no_work
-# ... and one whose marker is another commit's
+# ... and marker-shaped contents do not certify a source either
 cold
 PLANT="$XDG_CACHE_HOME/soma/src/github.com/owner/maps@1.0.0-$COMMIT"
 if (cd "$TMP/a" && PATH="$SLOW" SOMA_TEST_FETCH_DELAY=0.1 SOMA_TEST_PLANT=other \
@@ -176,8 +176,7 @@ if (cd "$TMP/a" && PATH="$SLOW" SOMA_TEST_FETCH_DELAY=0.1 SOMA_TEST_PLANT=other 
       soma build -v main.soma > "$TMP/a.log" 2>&1); then
   echo "took another commit's folder as the source"; cat "$TMP/a.log"; exit 1
 fi
-says 'the source cache holds 0000000000000000000000000000000000000000' "$TMP/a.log"
-says "not the commit $COMMIT" "$TMP/a.log"
+says 'publication lock was held' "$TMP/a.log"
 no_work
 # removing what was refused, the next build publishes the source
 rm -rf "$PLANT"

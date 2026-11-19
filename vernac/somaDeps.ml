@@ -119,66 +119,63 @@ let source_dir ~path ~version ~commit =
   Filename.concat (source_root ())
     (Printf.sprintf "%s@%s-%s" path (version_to_string version) commit)
 
-(* What a folder of the source cache says of itself: the commit it holds.
-   It is written in the folder last, before that folder is moved into place,
-   so a folder another build published first can be checked rather than
-   trusted: a whole source has it, an incomplete one does not. *)
-let source_marker = ".soma-source"
+(* Lock beside the cache entry, never inside the dependency's checked-out
+   tree: even .soma-source and a symlink of that name belong to the source.
+   Close releases the lock on errors; process exit releases it after a crash. *)
+let with_source_lock dir f =
+  let locks = Filename.concat (Filename.dirname dir) ".locks" in
+  SomaOpam.mkdir_p locks;
+  let file = Filename.concat locks (Filename.basename dir ^ ".lock") in
+  let fd = Unix.openfile file
+      [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 in
+  Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
+      let rec lock () =
+        match Unix.lockf fd Unix.F_LOCK 0 with
+        | () -> ()
+        | exception Unix.Unix_error (Unix.EINTR, _, _) -> lock () in
+      lock ();
+      f ())
 
-let marker_commit dir =
-  let f = Filename.concat dir source_marker in
-  try Some (String.trim (read_file f)) with Sys_error _ -> None
-
-(* The repository at [commit], in the shared cache, once. It appears whole,
-   or not at all: it is checked out beside it, and moved there. Builds share
-   the cache, so one may publish it while another fetches the same commit:
-   the one that loses the move takes the published folder, when its marker
-   says it is whole, and of this commit. *)
+(* Concurrent cold fetchers wait, then recheck the atomically published
+   source. Existing caches need no marker and no source bytes are changed. *)
 let fetch (p : dependency_path) ~version ~commit =
   let dir = source_dir ~path:p.canonical ~version ~commit in
   if not (Sys.file_exists dir) then begin
-    Printf.eprintf "Fetching %s %s (%s)\n%!" p.canonical (version_to_string version) (short commit);
     SomaOpam.mkdir_p (Filename.dirname dir);
-    let tmp = Printf.sprintf "%s.tmp-%d-%06x" dir (Unix.getpid ())
-        (Random.State.bits (Random.State.make_self_init ())) in
-    remove_tree tmp;
-    Fun.protect ~finally:(fun () -> remove_tree tmp) (fun () ->
-        Unix.mkdir tmp 0o755;
-        ignore (git ~dir:tmp ["init"; "-q"]);
-        (* one commit, when the host gives it by its id; or else all it has,
-           as a commit of soma.lock need not be what its tag points at now, and
-           a host need not give what it does not advertise *)
-        (try ignore (git ~dir:tmp ["fetch"; "-q"; "--depth"; "1"; p.url; commit])
-         with e when CErrors.noncritical e ->
-           ignore (git ~dir:tmp ["fetch"; "-q"; p.url; "+refs/*:refs/remotes/all/*"]));
-        (try ignore (git ~dir:tmp ["checkout"; "-q"; "--detach"; commit])
-         with e when CErrors.noncritical e ->
-           let v = version_to_string version in
-           error (str p.canonical ++ str " " ++ str v ++ str ": the commit " ++ str commit ++
-                  str " is no longer on " ++ str p.url ++ str ", and is not in the source cache." ++ spc () ++
-                  str "Its tag was moved, and the history rewritten. What the tag is now is another" ++ spc () ++
-                  str "program than the one soma.lock pinned: review it, then soma get writes it."));
-        let got = String.trim (git ~dir:tmp ["rev-parse"; "HEAD"]) in
-        if got <> commit then
-          error (str p.canonical ++ str ": fetched " ++ str got ++ str ", which is not the commit " ++ str commit ++ str ".");
-        remove_tree (Filename.concat tmp ".git");
-        write_file (Filename.concat tmp source_marker) (commit ^ "\n");
-        try Unix.rename tmp dir with
-        | Unix.Unix_error ((Unix.EEXIST | Unix.ENOTEMPTY), _, _) when Sys.file_exists dir ->
-          (* the folder was published while this one fetched: it is this
-             build's source only when it says so, whole, and of this commit.
-             Any other error of the move is not this race, and is reported. *)
-          (match marker_commit dir with
-           | Some c when c = commit -> ()
-           | Some c ->
-             error (str dir ++ str ": the source cache holds " ++ str c ++
-                    str ", and not the commit " ++ str commit ++ str " that was fetched.")
-           | None ->
-             error (str dir ++ str ": it has no " ++ str source_marker ++ str ", so it may be" ++ spc () ++
-                    str "incomplete, or left behind by a build that stopped. Remove it, and build again."))
-        | Unix.Unix_error (e, _, _) ->
-          error (str "cannot move the source of " ++ str p.canonical ++ str " into " ++ str dir ++
-                 str ": " ++ str (Unix.error_message e) ++ str "."))
+    with_source_lock dir (fun () ->
+      if not (Sys.file_exists dir) then begin
+        Printf.eprintf "Fetching %s %s (%s)\n%!" p.canonical (version_to_string version) (short commit);
+        let tmp = Printf.sprintf "%s.tmp-%d-%06x" dir (Unix.getpid ())
+            (Random.State.bits (Random.State.make_self_init ())) in
+        remove_tree tmp;
+        Fun.protect ~finally:(fun () -> remove_tree tmp) (fun () ->
+            Unix.mkdir tmp 0o755;
+            ignore (git ~dir:tmp ["init"; "-q"]);
+            (* one commit, when the host gives it by its id; or else all it has,
+               as a commit of soma.lock need not be what its tag points at now, and
+               a host need not give what it does not advertise *)
+            (try ignore (git ~dir:tmp ["fetch"; "-q"; "--depth"; "1"; p.url; commit])
+             with e when CErrors.noncritical e ->
+               ignore (git ~dir:tmp ["fetch"; "-q"; p.url; "+refs/*:refs/remotes/all/*"]));
+            (try ignore (git ~dir:tmp ["checkout"; "-q"; "--detach"; commit])
+             with e when CErrors.noncritical e ->
+               let v = version_to_string version in
+               error (str p.canonical ++ str " " ++ str v ++ str ": the commit " ++ str commit ++
+                      str " is no longer on " ++ str p.url ++ str ", and is not in the source cache." ++ spc () ++
+                      str "Its tag was moved, and the history rewritten. What the tag is now is another" ++ spc () ++
+                      str "program than the one soma.lock pinned: review it, then soma get writes it."));
+            let got = String.trim (git ~dir:tmp ["rev-parse"; "HEAD"]) in
+            if got <> commit then
+              error (str p.canonical ++ str ": fetched " ++ str got ++ str ", which is not the commit " ++ str commit ++ str ".");
+            remove_tree (Filename.concat tmp ".git");
+            try Unix.rename tmp dir with
+            | Unix.Unix_error ((Unix.EEXIST | Unix.ENOTEMPTY), _, _) ->
+              error (str dir ++ str ": the source cache appeared while its publication lock was held." ++
+                     spc () ++ str "An older writer or incomplete cache may be present; inspect it and retry.")
+            | Unix.Unix_error (e, _, _) ->
+              error (str "cannot move the source of " ++ str p.canonical ++ str " into " ++ str dir ++
+                     str ": " ++ str (Unix.error_message e) ++ str "."))
+      end)
   end;
   dir
 
