@@ -66,10 +66,19 @@ let rec freeze t =
 
 (* * Reading *)
 
-type st = { s : string; mutable i : int; mutable line : int }
+type st = { s : string; mutable i : int; mutable line : int; mutable depth : int }
+
+(* Project manifests are shallow data. Bound nested values and dotted paths
+   before they can exhaust the parser's or table freezer's native stack. *)
+let max_depth = 128
 
 let fail_at line fmt = Printf.ksprintf (fun m -> raise (Error (line, m))) fmt
 let fail st fmt = fail_at st.line fmt
+
+let nested st f =
+  if st.depth >= max_depth then fail st "nesting exceeds the limit of %d" max_depth;
+  st.depth <- st.depth + 1;
+  Fun.protect ~finally:(fun () -> st.depth <- st.depth - 1) f
 
 let peek st = if st.i < String.length st.s then Some st.s.[st.i] else None
 let peek_at st k = if st.i + k < String.length st.s then Some st.s.[st.i + k] else None
@@ -231,12 +240,13 @@ let simple_key st = match peek st with
 
 (* a.b."c d" *)
 let key st =
-  let rec go acc =
+  let rec go depth acc =
+    if depth > max_depth then fail st "key nesting exceeds the limit of %d" max_depth;
     skip_ws st;
     let k = simple_key st in
     skip_ws st;
-    if peek st = Some '.' then (advance st; go (k :: acc)) else List.rev (k :: acc) in
-  go []
+    if peek st = Some '.' then (advance st; go (depth + 1) (k :: acc)) else List.rev (k :: acc) in
+  go 1 []
 
 let dotted keys =
   String.concat "." (List.map (fun k ->
@@ -337,8 +347,8 @@ let rec value st = match peek st with
   | Some '\'' when looking_at st "'''" -> String (multiline_string st ~quote:'\'')
   | Some '"' -> String (basic_string st)
   | Some '\'' -> String (literal_string st)
-  | Some '[' -> advance st; array st
-  | Some '{' -> advance st; inline_table st
+  | Some '[' -> nested st (fun () -> advance st; array st)
+  | Some '{' -> nested st (fun () -> advance st; inline_table st)
   | Some 't' when looking_at st "true" -> skip st 4; Bool true
   | Some 'f' when looking_at st "false" -> skip st 5; Bool false
   | Some ('+' | '-' | '0'..'9' | 'i' | 'n') -> number st
@@ -418,7 +428,7 @@ let header st root keys ~array =
   go root [] keys
 
 let parse s =
-  let st = { s; i = 0; line = 1 } in
+  let st = { s; i = 0; line = 1; depth = 0 } in
   if looking_at st "\xEF\xBB\xBF" then st.i <- 3;
   let root = new_tbl Header in
   let rec go cur =
