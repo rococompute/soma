@@ -983,6 +983,7 @@ let instantiate_notation_constr loc intern intern_pat ntnvars subst infos c =
       in
       DAst.make ?loc @@ GHole (knd)
     | NGenarg arg ->
+      SomaPhase.refuse ();
       let glob_of_term (c, scopes) =
         let nenv = set_env_scopes env scopes in
         let gc = intern nenv c in
@@ -2225,8 +2226,10 @@ module Interner = struct
     | CHole k ->
       self.hole self genv env lvar ?loc k
     | CGenarg gen ->
+      SomaPhase.refuse ();
       self.genarg self genv env lvar ?loc gen
     | CGenargGlob gen ->
+      SomaPhase.refuse ();
       self.genargglob self genv env lvar ?loc gen
     | CPatVar n ->
       self.patvar self genv env lvar ?loc n

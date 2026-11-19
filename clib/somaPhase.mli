@@ -6,6 +6,7 @@ type plan = {
   generated : SomaBuildInfo.input list;
   imports : SomaBuildInfo.input list;
 }
+val debug : string -> unit
 val requested : unit -> bool
 val refuse : unit -> unit
 val with_import : string -> (unit -> 'a) -> 'a
