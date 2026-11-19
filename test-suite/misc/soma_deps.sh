@@ -356,8 +356,10 @@ writes_here() { # NAME COMMANDS MESSAGE
   (cd "$TMP/work/github.com/owner/$1" && soma build f.soma > own.log 2>&1) || { cat "$TMP/work/github.com/owner/$1/own.log"; exit 1; }
 }
 writes_here w_separate 'Separate Extraction d.' 'Separate Extraction writes a file'
-writes_here w_library 'Extraction Library Datatypes.' 'Extraction Library writes a file'
-writes_here w_reclibrary 'Recursive Extraction Library Datatypes.' 'Recursive Extraction Library writes a file'
+# Logic is runtime-free; computational matches in Datatypes require a gradual
+# runtime, which is supported by monolithic rather than modular extraction.
+writes_here w_library 'Extraction Library Logic.' 'Extraction Library writes a file'
+writes_here w_reclibrary 'Recursive Extraction Library Logic.' 'Recursive Extraction Library writes a file'
 writes_here w_outdir "Set Extraction Output Directory \"$OUT\"." 'Set Extraction Output Directory says where files are written'
 writes_here w_testcompile 'Extraction TestCompile d.' 'Extraction TestCompile writes a file'
 writes_here w_native 'Set NativeCompute Profile Filename "p".' 'Set NativeCompute Profile Filename says where files are written'

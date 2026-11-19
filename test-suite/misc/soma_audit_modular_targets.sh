@@ -51,12 +51,14 @@ with tempfile.TemporaryDirectory(prefix="soma-modular-targets-") as tmp:
     assert (root / "main.mli").is_file()
     assert (root / "Datatypes.ml").is_file()
 
-    for command in ("Extraction Library Datatypes.",
-                    "Recursive Extraction Library Datatypes."):
+    # Logic has runtime-free extracted output. Datatypes has computational
+    # matches needing the gradual runtime and is covered by the refusal test.
+    for command in ("Extraction Library Logic.",
+                    "Recursive Extraction Library Logic."):
         root = project()
         success(build(root, command))
-        assert (root / "Datatypes.ml").is_file()
-        assert (root / "Datatypes.mli").is_file()
+        assert (root / "Logic.ml").is_file()
+        assert (root / "Logic.mli").is_file()
 
     for absolute in (False, True):
         root = project()
