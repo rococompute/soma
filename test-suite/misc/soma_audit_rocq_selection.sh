@@ -90,6 +90,15 @@ let () =
   ignore (prepare local_name);
   ignore (ensure ~package:"pkg" (Local external_dir));
   if not !(SomaImport.rocq_selection_uncertified) then failwith "external warm cache hit was incorrectly certified";
+  SomaImport.rocq_selection_uncertified := false;
+  let inside = Filename.concat project "local" in
+  Unix.mkdir inside 0o755;
+  write (Filename.concat inside "A.v") "Definition value := 1.\n";
+  ignore (ensure ~package:"pkg" (Local inside));
+  assert (not !(SomaImport.rocq_selection_uncertified));
+  Unix.symlink external_dir (Filename.concat inside "empty-directory-alias");
+  ignore (ensure ~package:"pkg" (Local inside));
+  assert !(SomaImport.rocq_selection_uncertified);
   selected_libraries := [];
   let alpha1 = "alpha.1.0-test-toolchain" in
   ignore (prepare alpha1);

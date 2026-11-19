@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(prefix='soma-rocq-trace-') as tmp:
     root = pathlib.Path(tmp).resolve()
     (root / 'vendor').mkdir()
     (root / 'tests').mkdir()
+    (root / '.gitignore').write_text('.soma-cache/\nshared/\nxdg/\n')
     (root / 'soma.toml').write_text('[project]\nname="trace"\nversion="0.1.0"\n')
     (root / 'vendor/_RocqProject').write_text('-Q . mylib\n')
     (root / 'vendor/A.v').write_text('Definition from_library := 1.\n')
