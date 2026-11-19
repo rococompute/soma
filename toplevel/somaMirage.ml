@@ -1820,11 +1820,30 @@ let check_project ~wasm ~libraries ~native_files dir =
                 str switch ++ str "." ++ fnl () ++
                 str "Put OCaml on PATH (eval $(opam env)), set SOMA_OCAML_SWITCH to an opam switch with OCaml," ++
                 spc () ++ str "or soma build any program with a .definition once: it makes that switch.") in
+  let inputs = match Sys.getenv_opt "SOMA_BUILD_INPUTS" with
+    | None | Some "" -> None
+    | Some _ ->
+      (try
+         let query arguments =
+           let out = Filename.temp_file "soma-check-inputs" ".log" in
+           Fun.protect ~finally:(fun () -> try Sys.remove out with Sys_error _ -> ()) (fun () ->
+               if not (SomaOpam.run ~log:out (runner @ arguments)) then failwith "unknown OCaml check inputs";
+               read_file out) in
+         let stdlib = String.trim (query ["ocamlc"; "-where"]) in
+         if not (Sys.is_directory stdlib) then failwith "unknown OCaml standard library";
+         let package_dirs = if packages = [] then [] else
+             String.split_on_char '\n' (query (["ocamlfind"; "query"; "-recursive"; "-format"; "%d"] @ packages))
+             |> List.filter (fun path -> path <> "") in
+         if not (List.for_all Sys.is_directory package_dirs) then failwith "unknown OCaml package directory";
+         SomaBuildInfo.prepare_inputs
+           (stdlib :: package_dirs @ List.map (Filename.concat checks) kept)
+       with Sys_error _ | Unix.Unix_error _ | Failure _ -> None) in
   let args = runner @ ["sh"; "-c"; script] in
   let cmd = Filename.quote_command (List.hd args) (List.tl args) ~stdout:log ~stderr:log in
   if Sys.command cmd <> 0 then
     error Pp.(str "OCaml check failed in " ++ str checks ++ str ":" ++ fnl () ++
               str (read_file log));
+  SomaBuildInfo.publish_inputs inputs;
   Feedback.msg_notice Pp.(str "Mirage: checked " ++ str dir ++ str " (no image)")
 
 (* The lock make depends would write, made without opam's current switch:

@@ -1295,6 +1295,12 @@ let record_freshness c before ~kept ~metadata =
       if (metadata.external_build || products <> []) && metadata.external_inputs = [] then
         uncertain "external build inputs were not certified";
       let external_inputs = certified_external_inputs metadata.external_inputs in
+      (* Foreign tools can consult arbitrary user environment variables, not
+         just Soma's documented switches. Their complete launch environment
+         therefore participates in a certified external build's identity. *)
+      let external_environment = if metadata.external_build || products <> [] then
+          ["external-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))]
+        else [] in
       let before_lines = omit_products root products before_lines in
       let _, cache, during = fresh_inputs ~products ~toolchain:false c in
       if during <> before_lines then uncertain "the project changed during the build";
@@ -1316,7 +1322,8 @@ let record_freshness c before ~kept ~metadata =
       Fun.protect ~finally:(fun () ->
           close_out_noerr oc;
           try Sys.remove tmp with Sys_error _ -> ()) (fun () ->
-          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs @ products @ external_inputs @ interfaces);
+          List.iter (fun l -> output_string oc (l ^ "\n"))
+            (inputs @ outputs @ products @ external_inputs @ external_environment @ interfaces);
           close_out oc;
           Unix.rename tmp record);
       SomaCache.record record
@@ -1339,9 +1346,15 @@ let freshness_verdict c =
       let is_output l = starts_with ~prefix:"output " l in
       let is_product l = starts_with ~prefix:"product " l in
       let is_external l = starts_with ~prefix:"external " l in
-      let recorded_inputs = List.filter (fun l -> not (is_output l || is_product l || is_external l || starts_with ~prefix:"interface " l)) recorded in
+      let is_external_env l = starts_with ~prefix:"external-env " l in
+      let recorded_inputs = List.filter (fun l -> not (is_output l || is_product l || is_external l ||
+          is_external_env l || starts_with ~prefix:"interface " l)) recorded in
       let recorded_outputs = List.filter is_output recorded in
       let recorded_products = List.filter is_product recorded in
+      let recorded_environment = List.filter is_external_env recorded in
+      if recorded_environment <> [] && recorded_environment <>
+         ["external-env " ^ SomaMerkle.string (String.concat "\000" (List.sort String.compare initial_env))] then
+        uncertain "the external build environment changed";
       let products = List.map (fun row -> Scanf.sscanf row "product %S %S%!" (fun path signature ->
           let path = certified_product root path in
           if build_input_signature path <> signature then uncertain "build product %s changed" path;

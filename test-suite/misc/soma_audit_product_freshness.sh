@@ -109,6 +109,31 @@ with (fake / 'make').open('a') as f:
 fresh(False)
 build()
 fresh()
+override = fake / 'ocamlfind'
+override.write_text('#!/bin/sh\nexit 0\n')
+override.chmod(0o755)
+fresh(False)
+build()
+fresh()
+
+# Even an undocumented wrapper variable may affect a foreign build. Bind the
+# full environment by hash, without writing its plaintext into the record.
+env['PRIVATE_BUILD_SETTING'] = 'private-value-must-not-appear-in-record'
+fresh(False)
+build()
+fresh()
+for record in (root / '.soma-cache' / '.freshness').iterdir():
+    assert env['PRIVATE_BUILD_SETTING'] not in record.read_text()
+
+# Arbitrary compiler flags may name inputs the manifest cannot enumerate.
+# Continue building normally, but leave this case uncertified for skipping.
+env['CFLAGS'] = '-Iunknown-extra-input'
+fresh(False)
+build()
+fresh(False)
+del env['CFLAGS']
+build()
+fresh()
 
 # A failed check clears success metadata. A subsequent check command must not
 # manufacture a successful product build record.

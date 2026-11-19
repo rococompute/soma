@@ -56,7 +56,8 @@ let host_inputs () =
       | Some value when value <> "" -> failwith ("uncertified native flags: " ^ name)
       | _ -> ()) ["CFLAGS"; "CXXFLAGS"; "CPPFLAGS"; "LDFLAGS"];
   let tools = List.concat_map program_candidates
-      ["opam"; "sh"; "cc"; "ld"; "pkg-config"; "make"; "mirage"; "ocamlc"; "ocamlopt"; "dune"] in
+      ["opam"; "sh"; "cc"; "ld"; "as"; "ar"; "pkg-config"; "make"; "mirage";
+       "ocamlc"; "ocamlopt"; "ocamldep"; "ocamlfind"; "dune"] in
   let compilers = List.concat_map (fun name -> match Sys.getenv_opt name with
       | Some value when value <> "" ->
         (match program value with Some _ -> program_candidates value | None -> failwith ("unknown compiler: " ^ value))
