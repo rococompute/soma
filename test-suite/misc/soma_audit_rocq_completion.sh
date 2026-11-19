@@ -83,6 +83,15 @@ let () =
   let rejected = try publish (); false with Failure _ -> true in
   assert rejected;
   assert (load () = None);
+  write source "Definition value := 1.\n";
+  write inputs ("incomplete\ninput \"original.v\" " ^ SomaMerkle.file_hash original ^ "\n");
+  SomaCache.record inputs; publish ();
+  assert (SomaRocqCache.incomplete_entry ~key ~directory:entry ~resolve_input:(Filename.concat project));
+  write original "Definition value := 2.\n";
+  assert (load () = None);
+  assert (SomaRocqCache.incomplete_entry ~key ~directory:entry ~resolve_input:(Filename.concat project));
+  write output "corrupt old incomplete artifact";
+  assert (not (SomaRocqCache.incomplete_entry ~key ~directory:entry ~resolve_input:(Filename.concat project)));
   print_endline "Rocq completion provenance binds source metadata, theory paths and all compiled outputs: passed"
 ''')
     env=dict(os.environ,XDG_CACHE_HOME=str(root/'xdg'),SOMA_CACHE_ID='completion-test')

@@ -265,6 +265,7 @@ let compile ~prerequisites ~prerequisite_sources ~name ~log ts =
   let order = dependency_order (files @ prerequisite_sources) (read_file order)
       |> List.filter (fun file -> List.mem file files) in
   let total = List.length order in
+  let loaded_inputs = ref [] and complete = ref true in
   List.iteri (fun i f ->
       let rel = match List.find_opt (fun t -> String.starts_with ~prefix:(t.dir ^ "/") f) ts with
         | Some t -> t.logical ^ "/" ^ String.sub f (String.length t.dir + 1) (String.length f - String.length t.dir - 1)
@@ -276,11 +277,34 @@ let compile ~prerequisites ~prerequisite_sources ~name ~log ts =
       (* a plugin would have to be built against Soma: the compilation
          refuses the parsed [Declare ML Module] (SomaImport), before it
          loads anything, however it is spaced or commented *)
-      let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
-      if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ loads @ [f])) then
-        error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
-               str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
-    order
+      let metadata = Filename.temp_file ~temp_dir:dir ".soma-loaded-" ".inputs" in
+      Fun.protect ~finally:(fun () -> if Sys.file_exists metadata then Sys.remove metadata) (fun () ->
+          let env = [SomaImport.rocq_library_var ^ "=" ^ name;
+                     SomaImport.loaded_source_inputs_var ^ "=" ^ metadata;
+                     "SOMA_CACHE_ID=" ^ SomaCache.identity ()] in
+          if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ loads @ [f])) then
+            error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
+                   str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log));
+          let contents = read_file metadata in
+          if not (SomaCache.trusted_metadata metadata ~contents) then
+            error (str "Rocq compiler did not attest its loaded-source inputs.");
+          match String.split_on_char '\n' contents with
+          | "soma-loaded-inputs 1" :: uncertainty :: rows ->
+            if uncertainty = "uncertain true" then complete := false
+            else if uncertainty <> "uncertain false" then error (str "Invalid loaded-source metadata.");
+            List.iter (function "" -> () | row ->
+                let path, expected = try Scanf.sscanf row "input %S %s%!" (fun p h -> p, h)
+                  with _ -> error (str "Invalid loaded-source metadata.") in
+                if Filename.is_relative path || not (SomaMerkle.valid_hash expected) ||
+                   SomaMerkle.file_hash path <> expected then
+                  error (str "A loaded Rocq source changed while compiling; rebuild.");
+                match List.assoc_opt path !loaded_inputs with
+                | Some old when old <> expected -> error (str "A loaded Rocq source changed while compiling; rebuild.")
+                | Some _ -> ()
+                | None -> loaded_inputs := (path, expected) :: !loaded_inputs) rows
+          | _ -> error (str "Invalid loaded-source metadata.")))
+    order;
+  !loaded_inputs, !complete
 
 (* * The source *)
 
@@ -475,6 +499,7 @@ let ensure ~package source =
          then error (str "opam source " ++ str package ++ str "." ++ str version ++ str " failed; the end of " ++
                      str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log))), None
   in
+  let rec use_entry dir =
   let name = Filename.basename dir in
   let done_file = Filename.concat dir "theories" in
   let src = Filename.concat dir "src" in
@@ -483,9 +508,18 @@ let ensure ~package source =
      library did while this one waited for it is then seen, not undone. The
      lock of another library is another file, so libraries whose keys differ
      still compile at the same time. *)
-  let result, entry = with_lock (lock_file root name) (fun () ->
+  with_lock (lock_file root name) (fun () ->
+      let fresh_generation () =
+        (* Unknown Load/search-path membership is not a reusable snapshot.
+           Compile a new immutable generation without deleting any live entry. *)
+        let fresh = Filename.temp_file ~temp_dir:root (name ^ "-uncached-") "" in
+        Sys.remove fresh;
+        use_entry fresh in
       match compiled_theories ~key:name dir with
-      | Some ts -> ts
+      | Some (_, entry) when not entry.SomaRocqCache.inputs_complete -> fresh_generation ()
+      | None when SomaRocqCache.incomplete_entry ~key:name ~directory:dir
+                    ~resolve_input:SomaImport.resolve_project_file -> fresh_generation ()
+      | Some (paths, entry) -> paths, entry, dir
       | None ->
         (* Never delete a completed entry a build/REPL may still be using.
            Altered/untrusted completed entries fail closed; only unpublished
@@ -504,8 +538,9 @@ let ensure ~package source =
           error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
                  spc () ++ str "and there is no _RocqProject or _CoqProject.");
         let snapshot = SomaRocqCache.source_snapshot ~directory:dir in
-        compile ~prerequisites:(prerequisite_paths prerequisites)
-          ~prerequisite_sources:(prerequisite_sources prerequisites) ~name ~log:(Filename.concat dir "compile.log") ts;
+        let loaded_inputs, complete = compile ~prerequisites:(prerequisite_paths prerequisites)
+          ~prerequisite_sources:(prerequisite_sources prerequisites) ~name ~log:(Filename.concat dir "compile.log") ts in
+        if not complete then SomaImport.note_uncertified_rocq_library ();
         check_prerequisites prerequisites;
         (match source, local_key with
          | Local path, Some expected when source_key src <> expected || source_key path <> expected ->
@@ -520,7 +555,7 @@ let ensure ~package source =
             Filename.concat root relative, digest) snapshot in
         (* Coverage describes the compiled snapshot. Selection policy (a
            floating version or external tree) is attached to this use above. *)
-        SomaImport.record_rocq_inputs ~directory:dir ~complete:true input_files;
+        SomaImport.record_rocq_inputs ~directory:dir ~complete (List.sort_uniq compare (input_files @ loaded_inputs));
         SomaRocqCache.publish ~key:name ~directory:dir ~sources:snapshot
           ~theories:(List.map (fun t -> t.logical, t.dir) ts);
         (* Completed entries stay immutable and are kept until the project
@@ -529,11 +564,12 @@ let ensure ~package source =
            even taking that key's lock would not make its deletion safe. *)
         match SomaRocqCache.load ~key:name ~directory:dir
                 ~resolve_input:SomaImport.resolve_project_file with
-        | Some entry -> entry.SomaRocqCache.theories, entry
+        | Some entry -> entry.SomaRocqCache.theories, entry, dir
         | None -> error (str "the completed Rocq library changed before selection; rebuild.")) in
+  let result, entry, dir = use_entry dir in
   check_prerequisites prerequisites;
   selected_libraries := List.filter (fun (old, _) -> old <> package) !selected_libraries @
-                        [package, { key = name; directory = dir; entry }];
+                        [package, { key = Filename.basename dir; directory = dir; entry }];
   result
 
 (* [Rocq Library "package".]: in the load path, compiled if need be *)

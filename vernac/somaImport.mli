@@ -130,6 +130,16 @@ val record_rocq_inputs : directory:string -> complete:bool -> (string * string) 
     source tree cannot certify affected-test skips, independently of how a
     reused library cache entry was originally produced. *)
 val note_uncertified_rocq_library : unit -> unit
+
+(** Register an actual source [Load] before parsing it. Arbitrary loaded
+    sources conservatively prevent reusable stamps and skip certificates;
+    the current source and its already-fingerprinted companions are covered. *)
+val note_loaded_source : string -> unit
+
+(** Private compiler-child metadata: the plugin names a unique output and
+    receives producer-attested source-load hashes after successful checking. *)
+val loaded_source_inputs_var : string
+val write_loaded_source_inputs : unit -> unit
 val rocq_source_in_project : string -> bool
 
 (** The same conservative loaded dependency certification used by affected

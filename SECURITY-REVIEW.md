@@ -124,6 +124,15 @@ model that runs `soma build`.
 | Native plugins require an explicit trust boundary | `vernac/somaImport.ml`, `plugins/soma_rocq/soma_rocq.ml` | Rocq-library compilation refuses parsed `Declare ML Module` commands, including whitespace/comment variants. General Soma source may load already installed plugins; installed native code is trusted and a build is not a sandbox. |
 | Foreign bindings can read named files; building is not filesystem isolation | `plugins/soma_ocaml/soma_ocaml.ml`, `topbin/soma.ml` (`project_cache_sources`, `copy_tree`) | Use an isolated build user for untrusted sources. The cache copier uses `lstat` and does not recurse through symlinked directories. Source discovery detects ancestor inode cycles and records unusable links without recursing indefinitely; this does not make foreign bindings a sandbox. |
 
+Source `Load` inputs are checked conservatively. Arbitrary loads prevent
+reusable import stamps and build/test skip certificates; the current Soma
+source's `.ext` and `.exp` companions are already fingerprinted. Rocq library
+children attest actual loaded paths and hashes. Libraries with unsupported
+loads compile a fresh immutable generation on every use, including unchanged
+runs. Prior generations remain available to live readers, so these entries can
+accumulate until the project cache is archived. This detects ordinary edits;
+it does not claim an atomic filesystem snapshot against a hostile local writer.
+
 ## Smaller items
 
 - The historical `soma diff` folder-path quoting issue is fixed:

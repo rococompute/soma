@@ -548,6 +548,7 @@ and synterp_load ~intern verbosely fname =
   let fname =
     Envars.expand_path_macros ~warn:(fun x -> Feedback.msg_warning (Pp.str x)) fname in
   let longfname = Loadpath.locate_source_file fname in
+  SomaImport.note_loaded_source longfname;
   let source = Loc.InFile { dirpath=None; file=longfname} in
   let input =
     let in_chan = Util.open_utf8_file_in longfname in

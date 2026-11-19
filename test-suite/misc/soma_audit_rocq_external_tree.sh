@@ -8,7 +8,7 @@ python3 - <<'PY'
 import os,pathlib,subprocess,tempfile
 with tempfile.TemporaryDirectory(prefix='soma-rocq-external-') as tmp:
     outer=pathlib.Path(tmp).resolve()
-    for mode in ['direct','imported','nested-link']:
+    for mode in os.environ.get('SOMA_AUDIT_EXTERNAL_MODES','direct,imported,nested-link').split(','):
         root=outer/mode
         root.mkdir();(root/'tests').mkdir()
         external=outer/(mode+'-library')
