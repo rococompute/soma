@@ -581,7 +581,13 @@ let record_rocq_inputs ~directory ~complete files =
   let rows = List.sort_uniq compare files |> List.map (fun (f, expected) ->
       if SomaMerkle.file_hash f <> expected then
         CErrors.user_err Pp.(str "Rocq library source changed while recording its inputs; build again.");
-      Printf.sprintf "input %S %s" (project_file f) expected) in
+      (* Input metadata is resolved against the build root, not the root
+         discovered by walking upward from each external library source. *)
+      let root = Unix.realpath (built_root ()) and file = Unix.realpath f in
+      let path = if CString.is_prefix (root ^ "/") file then
+          String.sub file (String.length root + 1) (String.length file - String.length root - 1)
+        else file in
+      Printf.sprintf "input %S %s" path expected) in
   Out_channel.with_open_bin file (fun oc ->
       output_string oc ((if complete then "soma-rocq-inputs 1" else "incomplete") ^ "\n" ^
                         String.concat "\n" rows ^ "\n"));
