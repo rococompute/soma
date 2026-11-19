@@ -324,11 +324,12 @@ let with_lock file f =
         f ())
   end
 
-(* [d], a directory of the cache compiled before, removed while holding its
-   lock: one that another compilation is building now is left to it, and is
-   removed by a later build, when no one holds it *)
-let remove_stale d =
-  match Unix.openfile (d ^ ".lock") [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 with
+(* [root/e], a directory of the cache compiled before, removed while
+   holding its lock: one that another compilation is building now is left to
+   it, and is removed by a later build, when no one holds it *)
+let remove_stale root e =
+  let d = Filename.concat root e in
+  match Unix.openfile (lock_file root e) [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 with
   | exception Unix.Unix_error _ -> ()
   | fd ->
     Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
@@ -417,7 +418,7 @@ let ensure ~package source =
         let prefix = match source with Local _ -> package ^ "-local-" | Opam _ -> package ^ "." in
         Array.iter (fun e ->
             let d = Filename.concat root e in
-            if String.starts_with ~prefix e && d <> dir && Sys.is_directory d then remove_stale d)
+            if String.starts_with ~prefix e && d <> dir && Sys.is_directory d then remove_stale root e)
           (Sys.readdir root);
         List.map (fun t -> (t.logical, t.dir)) ts)
 
