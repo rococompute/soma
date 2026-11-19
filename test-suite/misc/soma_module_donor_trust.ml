@@ -28,6 +28,13 @@ let () =
   assert (won <> child_won);
   assert (read "race/winner" = (if won then "two" else "one"));
   assert (exists (if won then "racer-one/winner" else "racer-two/winner"));
+  mkdir "nul-stage";
+  let rejects source destination =
+    try ignore (SomaModuleStore.rename_absent source destination); false
+    with Unix.Unix_error _ | Invalid_argument _ -> true in
+  assert (rejects "nul-stage\000suffix" "nul-target");
+  assert (rejects "nul-stage" "nul-target\000suffix");
+  assert (exists "nul-stage" && not (exists "nul-target"));
   print_endline "atomic success/existing-empty/live/concurrent no-replace: passed";
   mkdir "root"; mkdir "cache";
   write "root/a.soma" "value : nat := 1.\n";

@@ -16,6 +16,8 @@ CAMLprim value soma_cache_rename_absent(value source, value destination)
 {
     CAMLparam2(source, destination);
     int rc;
+    caml_unix_check_path(source, "rename absent cache");
+    caml_unix_check_path(destination, "rename absent cache");
 #if defined(__APPLE__) && defined(RENAME_EXCL)
     rc = renamex_np(String_val(source), String_val(destination), RENAME_EXCL);
 #elif defined(__linux__) && defined(SYS_renameat2)
