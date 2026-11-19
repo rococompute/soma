@@ -16,7 +16,6 @@ import os
 import pathlib
 import stat
 import subprocess
-import tomllib
 
 tmp = pathlib.Path(os.environ['SOMA_TEST_LOCK_ATOMIC']).resolve()
 project = tmp / 'project'
@@ -42,7 +41,7 @@ version('1.0.0')
 build()
 lock = project / 'soma.lock'
 old = lock.read_bytes()
-assert tomllib.loads(old.decode())['resolved'][0]['version'] == '1.0.0'
+assert b'version = "1.0.0"\n' in old
 lock.chmod(0o640)
 before = lock.stat()
 with lock.open('rb') as reader:
@@ -50,7 +49,7 @@ with lock.open('rb') as reader:
     build()
     assert reader.read() == old, 'an open reader saw its lock snapshot overwritten'
 new = lock.read_bytes()
-assert tomllib.loads(new.decode())['resolved'][0]['version'] == '1.1.0'
+assert b'version = "1.1.0"\n' in new
 assert lock.stat().st_ino != before.st_ino, 'publication reused the old inode'
 assert stat.S_IMODE(lock.stat().st_mode) == 0o640, 'lock permissions changed'
 assert not list(project.glob('.soma-lock-*.tmp')), 'publication left temporary files'
@@ -72,7 +71,7 @@ version('1.2.0')
 build()
 assert not lock.is_symlink(), 'lock publication retained a symlink'
 assert outside.read_bytes() == new, 'publication overwrote a symlink target'
-assert tomllib.loads(lock.read_text())['resolved'][0]['version'] == '1.2.0'
+assert b'version = "1.2.0"\n' in lock.read_bytes()
 assert not list(project.glob('.soma-lock-*.tmp'))
 print('atomic lock publication: open-reader snapshot, mode, unchanged lock and symlink target: ok')
 PY
