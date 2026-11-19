@@ -88,11 +88,17 @@ let run suffix ~late ~other =
   let dir = Filename.concat (Sys.getcwd ()) ("case-" ^ suffix ^ string_of_bool late ^ string_of_bool other) in
   Unix.mkdir dir 0o755;
   let src = Filename.concat dir "item.soma" in
-  let companion = if suffix = "source" then src else Filename.remove_extension src ^ "." ^ suffix in
+  let rule = Filename.concat dir (Filename.basename dir) in
+  let companion = match suffix with
+    | "source" -> src
+    | "rule" -> rule ^ ".ext"
+    | "suppressor" -> rule ^ ".soma"
+    | _ -> Filename.remove_extension src ^ "." ^ suffix in
   let vo = Filename.concat dir "item.vo" in
   let stamp = Filename.concat dir "item.stamp" in
   write src "old-source";
-  if companion <> src then write companion "old-companion";
+  if suffix = "suppressor" then write (rule ^ ".ext") "old-rule";
+  if companion <> src && suffix <> "rule" then write companion "old-companion";
   let environment = captured_environment {root=dir;cache_dir=dir;prefix=""} "item" src in
   let ready_r,ready_w = Unix.pipe () in
   let resume_r,resume_w = Unix.pipe () in
@@ -121,7 +127,7 @@ let run suffix ~late ~other =
   | pid ->
     Unix.close ready_w; Unix.close resume_r;
     await ready_r;
-    write companion "new-bytes";
+    if suffix = "suppressor" then Sys.remove companion else write companion "new-bytes";
     if other then write vo "other-writer-output";
     signal resume_w;
     let status = snd (Unix.waitpid [] pid) in
@@ -141,9 +147,11 @@ let run suffix ~late ~other =
     assert (Array.to_list (Sys.readdir dir) |> List.for_all (fun n -> not (String.starts_with ~prefix:".soma-" n)))
 let () =
   List.iter (fun suffix -> run suffix ~late:false ~other:false)
-    ["source";"exp";"ext";"wasm";"ml";"lean"];
+    ["source";"exp";"ext";"wasm";"ml";"lean";"rule";"suppressor"];
   run "source" ~late:false ~other:true;
   run "source" ~late:true ~other:false;
+  run "rule" ~late:true ~other:false;
+  run "suppressor" ~late:true ~other:false;
   run "source" ~late:true ~other:true;
   assert (checked_output "root.vo" = "root.vo");
   write "deferred.soma" "old-interface";

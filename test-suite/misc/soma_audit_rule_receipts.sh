@@ -8,7 +8,7 @@ python3 - <<'PY'
 import os,pathlib,subprocess,tempfile
 with tempfile.TemporaryDirectory(prefix='soma-rule-receipts-') as tmp:
     outer=pathlib.Path(tmp).resolve()
-    for mode in ['standalone','manifest','nested']:
+    for mode in os.environ.get('SOMA_AUDIT_RECEIPT_MODES','standalone,manifest,nested').split(','):
         parent=outer/mode;parent.mkdir();root=parent/'alpha';root.mkdir()
         src=root/'tests' if mode=='nested' else root
         src.mkdir(exist_ok=True);(src/'lib').mkdir()
