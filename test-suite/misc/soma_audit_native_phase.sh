@@ -111,7 +111,14 @@ build(False);build(False);rc.unlink();build(True)
 packages=work/'packages';implementation=packages/'phase_probe_impl';umbrella=packages/'phase_probe_umbrella'
 implementation.mkdir(parents=True);umbrella.mkdir()
 (implementation/'implementation.ml').write_text('let () = ()\n')
-compiled=subprocess.run([real_opam,'exec','--switch='+env['SOMA_OCAML_SWITCH'],'--','ocamlopt','-shared','-o',str(implementation/'phase_probe_impl.cmxs'),str(implementation/'implementation.ml')],cwd=work,env=env,text=True,capture_output=True,timeout=60)
+configured=subprocess.run([str(pathlib.Path(compiler).parent/'rocq'),'c','-config'],cwd=work,env=env,text=True,capture_output=True,timeout=30)
+assert configured.returncode==0,(configured.stdout,configured.stderr)
+findlib=next(line.split('=',1)[1] for line in configured.stdout.splitlines() if line.startswith('OCAMLFIND='))
+findlib=pathlib.Path(shutil.which(findlib) or findlib)
+# The kernel and application switches may have different OCaml ABIs.
+# Build a loaded kernel plugin with its configured toolchain, not the app's.
+plugin_compiler=findlib.parent/'ocamlopt';assert plugin_compiler.is_file(),plugin_compiler
+compiled=subprocess.run([str(plugin_compiler),'-shared','-o',str(implementation/'phase_probe_impl.cmxs'),str(implementation/'implementation.ml')],cwd=work,env=env,text=True,capture_output=True,timeout=60)
 assert compiled.returncode==0,(compiled.stdout,compiled.stderr)
 (implementation/'META').write_text('version="1"\nrequires=""\nplugin(native)="phase_probe_impl.cmxs"\n')
 (umbrella/'META').write_text('version="1"\nrequires="phase_probe_impl"\nplugin(native)=""\n')
