@@ -186,7 +186,8 @@ try:
     (functor / "BrandFunctor.v").write_text(body)
     run(["rocq", "c", "-q", "BrandFunctor.v"], functor)
     names = ["roundtrip", "wrong", "wrong_inside", "aliased", "second_wrong",
-             "wrapped_roundtrip", "wrapped_roundtrip2"]
+             "wrapped_roundtrip", "wrapped_roundtrip2", "argument_roundtrip",
+             "argument_alias", "argument_reexport", "argument_wrong"]
     refs = " ".join("BrandFunctor." + name for name in names)
     functor_harness = r'''
 let rec nat = function D.O -> 0 | D.S n -> 1 + nat n
@@ -202,6 +203,10 @@ let () =
   (match R.force (F.roundtrip ()) with F.N.B1 n -> assert (nat n = 2) | _ -> assert false);
   (match R.force (F.aliased ()) with F.Alias.B1 n -> assert (nat n = 2) | _ -> assert false);
   err (F.wrong ()); err (F.wrong_inside ()); err (F.second_wrong ());
+  (match R.force (F.argument_roundtrip ()) with F.Input.T1 n -> assert (nat n = 2) | _ -> assert false);
+  (match R.force (F.argument_alias ()) with F.InputAlias.T1 n -> assert (nat n = 2) | _ -> assert false);
+  (match R.force (F.argument_reexport ()) with F.InputReexport.T1 n -> assert (nat n = 2) | _ -> assert false);
+  err (F.argument_wrong ());
   print_endline "functor applications, aliases, constructor brands and kernel cast parity: ok"
 '''
     for mode in ["monolithic", "separate", "library", "recursive"]:
