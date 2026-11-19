@@ -55,7 +55,8 @@ let host_inputs tools =
   List.iter (fun name -> match Sys.getenv_opt name with
       | Some value when value <> "" -> failwith ("uncertified native flags: " ^ name)
       | _ -> ()) ["CFLAGS"; "CXXFLAGS"; "CPPFLAGS"; "LDFLAGS"; "CC"; "CXX"; "CPP";
-                    "OCAMLFIND_COMMANDS"];
+                    "OCAMLFIND_COMMANDS"; "OCAMLPARAM"; "OCAMLFLAGS"; "OCAMLCFLAGS";
+                    "OCAMLOPTFLAGS"; "OCAML_PP"; "CAML_CPLUGINS"];
   List.iter (fun name -> match program name with
       | None -> ()
       | Some path ->
