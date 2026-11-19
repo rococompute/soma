@@ -24,8 +24,9 @@ with tempfile.TemporaryDirectory(prefix="soma-modular-gradual-") as tmp:
 
     def refused(result):
         assert result.returncode != 0, (result.stdout, result.stderr)
-        assert "Modular extraction of gradual code is not supported" in result.stderr, result.stderr
-        assert 'Extraction "file"' in result.stderr, result.stderr
+        diagnostic = " ".join(result.stderr.split())
+        assert "Modular extraction of gradual code is not supported" in diagnostic, result.stderr
+        assert 'Extraction "file"' in diagnostic, result.stderr
 
     project = root / "project"
     project.mkdir()
