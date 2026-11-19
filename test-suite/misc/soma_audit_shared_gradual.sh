@@ -191,7 +191,8 @@ try:
     run(["rocq", "c", "-q", "BrandFunctor.v"], functor)
     names = ["roundtrip", "wrong", "wrong_inside", "aliased", "second_wrong",
              "wrapped_roundtrip", "wrapped_roundtrip2", "argument_roundtrip",
-             "argument_alias", "argument_reexport", "argument_wrong"]
+             "argument_alias", "argument_reexport", "argument_wrong",
+             "nested_roundtrip", "nested_alias", "nested_wrong"]
     refs = " ".join("BrandFunctor." + name for name in names)
     functor_harness = r'''
 let rec nat = function D.O -> 0 | D.S n -> 1 + nat n
@@ -211,6 +212,9 @@ let () =
   (match R.force (F.argument_alias ()) with F.InputAlias.T1 n -> assert (nat n = 2) | _ -> assert false);
   (match R.force (F.argument_reexport ()) with F.InputReexport.T1 n -> assert (nat n = 2) | _ -> assert false);
   err (F.argument_wrong ());
+  (match R.force (F.nested_roundtrip ()) with F.NN.C1 (n, m) -> assert (nat n = 2 && nat m = 3) | _ -> assert false);
+  (match R.force (F.nested_alias ()) with F.NNAlias.C1 (n, m) -> assert (nat n = 2 && nat m = 3) | _ -> assert false);
+  err (F.nested_wrong ());
   print_endline "functor applications, aliases, constructor brands and kernel cast parity: ok"
 '''
     for mode in ["monolithic", "separate", "library", "recursive"]:
