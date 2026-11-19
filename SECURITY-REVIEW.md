@@ -121,7 +121,7 @@ model that runs `soma build`.
 |---|---|---|
 | Soma is not a sandbox | `GRADUAL.md:440-444` | Understates opam/dune/Mirage/Lean (S-5). |
 | Lean theorems are axioms to Soma | `theories/Soma/Lean.v` | Trusted as Lean's kernel; `soma explore` lists them. |
-| Soma `Declare ML Module` is refused by a text search | `soma_rocq.ml:209-213` | `Declare  ML  Module` (extra spaces) loads a plugin; the docs say refused. |
+| Native plugins require an explicit trust boundary | `vernac/somaImport.ml`, `plugins/soma_rocq/soma_rocq.ml` | Rocq-library compilation refuses parsed `Declare ML Module` commands, including whitespace/comment variants. General Soma source may load already installed plugins; installed native code is trusted and a build is not a sandbox. |
 | Foreign bindings can read named files; building is not filesystem isolation | `plugins/soma_ocaml/soma_ocaml.ml`, `topbin/soma.ml` (`project_cache_sources`, `copy_tree`) | Use an isolated build user for untrusted sources. The cache copier uses `lstat` and does not recurse through symlinked directories. Source discovery detects ancestor inode cycles and records unusable links without recursing indefinitely; this does not make foreign bindings a sandbox. |
 
 ## Smaller items
@@ -130,8 +130,7 @@ model that runs `soma build`.
   `SomaDiff.toml_string` emits escaped TOML basic strings. Its source walk
   also detects directory cycles, and incomplete comparisons fail explicitly.
   `SomaToml` bounds nested values and dotted paths at 128 levels, reporting
-  a TOML error rather than exhausting the native parser stack. The older
-  multiline-string closing observation remains separate from those fixes.
+  a TOML error rather than exhausting the native parser stack.
 - `somaOcaml.ocaml_type` uses `List.hd` on `list`/`option`/`prod` arguments
   without checking arity (`plugins/soma_ocaml/soma_ocaml.ml:159-165`); a
   `.definition` such as `x : list.` can raise `Failure` and fail the build.
