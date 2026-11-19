@@ -84,10 +84,10 @@ let () =
     Unix.mkdir (path dir "_build") 0o700;Unix.mkdir (path dir "_build/default") 0o700;
     let run ~directory ~log:_ =
       incr calls;let built=path directory "_build/default/soma_main.exe" in
-      write built "fresh validated native product";Unix.chmod built 0o751;true in
+      write built "fresh validated native product";Unix.chmod built 0o555;true in
     assert (SomaPhase.resume plan ~run);assert (!calls=2);
     assert (text output="fresh validated native product");
-    assert ((Unix.stat output).Unix.st_perm=0o751 && SomaCache.trusted output);
+    assert ((Unix.stat output).Unix.st_perm=0o755 && SomaCache.trusted output);
     write (path dir "prog.ml") "tampered";
     assert (not (SomaPhase.resume plan ~run));assert (!calls=2);
     write (path dir "prog.ml") "let main = 1";
