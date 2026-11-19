@@ -21,6 +21,7 @@ type t
 val safe_basename_of_global : t -> global -> Id.t
 
 val make_table : unit -> t
+val shared_gradual_runtime_module : string
 
 (*s Warning and Error messages. *)
 

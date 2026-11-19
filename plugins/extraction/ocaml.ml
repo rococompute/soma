@@ -53,7 +53,8 @@ let keywords =
     "module"; "mutable"; "new"; "nonrec"; "object"; "of"; "open"; "or";
     "parser"; "private"; "rec"; "sig"; "struct"; "then"; "to"; "true";
     "try"; "type"; "val"; "virtual"; "when"; "while"; "with"; "mod";
-    "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr" ; "unit" ; "_" ; "__" ]
+    "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr" ; "unit" ; "_" ; "__";
+    "Gradual_rt"; shared_gradual_runtime_module ]
   Id.Set.empty
 
 (* Note: do not shorten [str "foo" ++ fnl ()] into [str "foo\n"],
@@ -79,8 +80,11 @@ let pp_mldummy usf =
 
 (* The runtime of gradual casts (gradual_rt.ml), printed line by line since
    '\n' interacts badly with Format boxes. *)
-let pp_gradual_rt usf =
+let pp_gradual_rt table usf =
   if usf.gradual_rt then
+    if State.get_modular table then
+      str ("module Gradual_rt = " ^ shared_gradual_runtime_module) ++ fnl ()
+    else
     let lines = String.split_on_char '\n' Gradual_rt_source.source in
     str "module Gradual_rt = struct" ++ fnl () ++
     prlist (fun l -> str l ++ fnl ()) lines ++
@@ -91,10 +95,13 @@ let preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf ++ pp_mldummy usf) ++
-  then_nl (pp_gradual_rt usf)
+  then_nl (pp_gradual_rt table usf)
 
-let pp_gradual_rt_sig usf =
+let pp_gradual_rt_sig table usf =
   if usf.gradual_rt then
+    if State.get_modular table then
+      str ("module Gradual_rt = " ^ shared_gradual_runtime_module) ++ fnl ()
+    else
     str "module Gradual_rt : sig" ++ fnl () ++
     str "  exception Cast_error of string" ++ fnl () ++
     str "  exception Unknown_term of string" ++ fnl () ++
@@ -109,7 +116,7 @@ let sig_preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf) ++
-  then_nl (pp_gradual_rt_sig usf)
+  then_nl (pp_gradual_rt_sig table usf)
 
 (*s The pretty-printer for Ocaml syntax*)
 
