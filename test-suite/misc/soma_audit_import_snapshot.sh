@@ -13,8 +13,8 @@ with tempfile.TemporaryDirectory(prefix='soma-import-snapshot-') as tmp:
     for f in ['somaMerkle.ml','somaCache.ml']: shutil.copyfile(source/'clib'/f,root/f)
     extra=[]
     if (source/'clib/somaModuleStore.ml').exists():
-        for f in ['somaModuleStore.ml','soma_cache_fs.c']: shutil.copyfile(source/'clib'/f,root/f)
-        extra=['soma_cache_fs.c','somaModuleStore.ml']
+        for f in ['somaModuleStore.ml','soma_cache_fs.c','somaRuleInputs.ml']: shutil.copyfile(source/'clib'/f,root/f)
+        extra=['soma_cache_fs.c','somaModuleStore.ml','somaRuleInputs.ml']
     prelude=r'''
 module Pp = struct let str x = x let ( ++ ) = ( ^ ) end
 module CErrors = struct let user_err x = failwith x end
@@ -40,6 +40,10 @@ let job_status _ = ()
 let stamp_var = "SOMA_IMPORT_STAMP"
 let source_var = "SOMA_IMPORT_SOURCE"
 let expected_source_var = "SOMA_IMPORT_EXPECTED_SOURCE"
+let expected_candidate_var = "SOMA_IMPORT_EXPECTED_CANDIDATE"
+let rules_source_var = "SOMA_IMPORT_RULE_SOURCE"
+let root_of_dir = Unix.realpath
+let root_rules_name = Filename.basename
 let build_var = "SOMA_BUILD_ROOT"
 let interface_digest_var = "SOMA_INTERFACE_DIGEST"
 let loaded_source_inputs_var = "SOMA_LOADED_SOURCE_INPUTS"
@@ -59,10 +63,10 @@ let stack ?loc:_ () = []
 let qualified _ path = path
 module Boot = struct module Env = struct let self = "controlled-worker" end end
 '''
-    functions=section('let source_hash src =','(* What an importer')
+    functions=section('let source_hash ','(* What an importer')
     if 'let import_outputs :' in text:
         functions+=section('let import_outputs :','(* The digests of the files')
-    functions+=section('let compile_command ','\n(* Starts a compilation')
+    functions+=section('let rule_source_of ' if 'let rule_source_of ' in text else 'let compile_command ','\n(* Starts a compilation')
     # Exercise the real caller's pre-spawn environment, not a reconstructed
     # expected hash. The old production function returned a triple.
     if 'prog, argv, env, expected_source' in functions:

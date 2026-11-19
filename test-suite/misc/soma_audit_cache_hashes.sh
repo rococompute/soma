@@ -20,15 +20,22 @@ with tempfile.TemporaryDirectory(prefix='soma-cache-hashes-') as tmp:
     shutil.copyfile(source / 'clib/somaCache.ml', root / 'somaCache.ml')
     extra = []
     if (source / 'clib/somaModuleStore.ml').exists():
-        for name in ['somaModuleStore.ml', 'soma_cache_fs.c']:
+        for name in ['somaModuleStore.ml', 'soma_cache_fs.c', 'somaRuleInputs.ml']:
             shutil.copyfile(source / 'clib' / name, root / name)
-        extra = ['soma_cache_fs.c', 'somaModuleStore.ml']
+        extra = ['soma_cache_fs.c', 'somaModuleStore.ml', 'somaRuleInputs.ml']
     text = (source / 'vernac/somaImport.ml').read_text()
-    start = text.index('let source_hash src =')
+    start = text.index('let source_hash ')
     end = text.index('(* What an importer', start)
     stamp = text.index('let stamp_format =')
     stamp_end = text.index('\nlet rec mkdir_p', stamp)
-    (root / 'cache_functions.ml').write_text(text[start:end] + text[stamp:stamp_end])
+    (root / 'cache_functions.ml').write_text(r'''
+let rules_source_var = "SOMA_IMPORT_RULE_SOURCE"
+let env_value = Sys.getenv_opt
+let env_root () = None
+let absolute p = if Filename.is_relative p then Filename.concat (Sys.getcwd ()) p else p
+let root_of_dir = Unix.realpath
+let root_rules_name = Filename.basename
+''' + text[start:end] + text[stamp:stamp_end])
     (root / 'check.ml').write_text(r'''
 let write f s = Out_channel.with_open_bin f (fun oc -> output_string oc s)
 let () =

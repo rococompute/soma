@@ -43,6 +43,8 @@ let stack_var = "SOMA_IMPORT_STACK"
 let stamp_var = "SOMA_IMPORT_STAMP"
 let source_var = "SOMA_IMPORT_SOURCE"
 let expected_source_var = "SOMA_IMPORT_EXPECTED_SOURCE"
+let expected_candidate_var = "SOMA_IMPORT_EXPECTED_CANDIDATE"
+let rules_source_var = "SOMA_IMPORT_RULE_SOURCE"
 let cache_var = "SOMA_PROJECT_CACHE"
 let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
@@ -82,7 +84,7 @@ let root_of_dir dir =
 let root_rules_name root =
   if Sys.file_exists (Filename.concat root SomaProject.file_name)
   then (SomaProject.load root).name
-  else Filename.basename root
+  else SomaRuleInputs.fallback_root_name root
 
 let project_root ?loc () =
   match env_root () with
@@ -266,8 +268,18 @@ let locate ?loc p path =
             str (if files = [] then "It has no .soma file at its root."
                  else "Import " ^ example ^ ". Its root has " ^ String.concat ", " files ^ "."))
 
-(* What a compilation reads of a program: its source, .exp and .ext *)
-let source_hash src = SomaModuleStore.source_hash src
+(* The checked input identity: source/companions, original source kind and
+   exact implicit-rule selection. Selected rule bodies/proofs remain checked
+   through their recursively validated import stamps. *)
+let source_hash ?root ?rules_source src =
+  let rules_source = match rules_source with
+    | Some file -> file
+    | None -> (match env_value rules_source_var with Some file -> file | None -> src) in
+  let root = match root with Some root -> root | None ->
+    (match env_root () with Some root -> root | None -> root_of_dir (Filename.dirname (absolute rules_source))) in
+  let rules = SomaRuleInputs.select ~root ~root_name:(root_rules_name root) ~source:rules_source in
+  SomaMerkle.string ("soma-import-inputs 2\000" ^ Filename.extension src ^ "\000" ^
+    SomaModuleStore.source_hash src ^ "\000" ^ SomaRuleInputs.fingerprint rules)
 
 let digest f = SomaMerkle.file_hash f
 
@@ -314,8 +326,8 @@ let discard_import_outputs () =
 let () = at_exit (fun () ->
     Hashtbl.iter (fun _ tmp -> remove_if_present tmp) import_outputs)
 
-let require_source_snapshot src expected =
-  let matches = try SomaMerkle.valid_hash expected && source_hash src = expected
+let require_source_snapshot ?root ?rules_source src expected =
+  let matches = try SomaMerkle.valid_hash expected && source_hash ?root ?rules_source src = expected
     with Sys_error _ | Unix.Unix_error _ -> false in
   if not matches then begin
     discard_import_outputs ();
@@ -768,10 +780,10 @@ let has_proofs src =
 
 (* What compiles [path]: the program, its arguments and its environment.
    [interface]: without the proofs of its lemmas, into PATH.vos. *)
+let rule_source_of p path src =
+  if Filename.check_suffix src ".wasm" then Filename.concat p.cache_dir (path ^ ".definition") else src
+
 let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src =
-  let expected_source = match expected_source with
-    | Some expected -> require_source_snapshot src expected; expected
-    | None -> source_hash src in
   let vo = vo_of p path in
   mkdir_p (Filename.dirname vo);
   (* a module without a definition: an empty one, in the cache, for the
@@ -784,9 +796,16 @@ let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src
                             " has no .definition: its exports are all of type Any *)\n"));
       [ "SOMA_WASM_FILE=" ^ src ], definition
     end else [], src in
+  let expected_source = match expected_source with
+    | Some expected -> require_source_snapshot ~root:p.root ~rules_source:input src expected; expected
+    | None -> source_hash ~root:p.root ~rules_source:input src in
+  let candidate = SomaModuleStore.source_hash src in
+  (* The raw donor hint and full rule/kind stamp belong to one pre-spawn
+     snapshot. A hint never replaces the checked full source identity. *)
+  require_source_snapshot ~root:p.root ~rules_source:input src expected_source;
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [loaded_source_inputs_var; loaded_source_request_var; root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
+                                   [loaded_source_inputs_var; loaded_source_request_var; root_var; stack_var; stamp_var; source_var; expected_source_var; expected_candidate_var; rules_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
@@ -796,6 +815,8 @@ let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src
           stamp_var ^ "=" ^ stamp_of p path;
           source_var ^ "=" ^ src;
           expected_source_var ^ "=" ^ expected_source;
+          expected_candidate_var ^ "=" ^ candidate;
+          rules_source_var ^ "=" ^ input;
           (* what a program imports is not a unikernel of its own *)
           "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file
       @ (if interface then [ interface_var ^ "=1" ] else [])) in
@@ -849,7 +870,7 @@ let say_compiling p path src =
 (* [path] compiled without its proofs is what its importers need: in place,
    as PATH.vo, and its proofs checked beside the build, into the same .vo *)
 let check_proofs_beside dir ?loc ~expected_source p path src =
-  require_source_snapshot src expected_source;
+  require_source_snapshot ~root:p.root ~rules_source:(rule_source_of p path src) src expected_source;
   let vo = vo_of p path in
   Sys.rename (vo ^ "s") vo;
   let id = qualified p path in
@@ -943,7 +964,7 @@ and fresh ?loc p path src =
   not !loaded_sources_uncertain && SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
   | None -> false
   | Some (hash, imports, libraries, inputs) ->
-    hash = source_hash src &&
+    hash = source_hash ~root:p.root ~rules_source:(rule_source_of p path src) src &&
     List.for_all (fun (path, expected) ->
         try SomaMerkle.file_hash (resolve_project_file path) = expected
         with Sys_error _ | Unix.Unix_error _ -> false) inputs &&
@@ -1087,30 +1108,17 @@ let folder_rules file =
   (* what the build depends on is known before anything is compiled *)
   ignore (dependencies ~loc ());
   let p = current ~loc () in
-  let folders =
-    if dir = root then Some []
-    else if CString.is_prefix (root ^ "/") dir then
-      Some (String.split_on_char '/' (String.sub dir (String.length root + 1)
-                                        (String.length dir - String.length root - 1)))
-    else None in
-  match folders with
+  match SomaRuleInputs.select ~root ~root_name:(root_rules_name root) ~source:file with
   | None -> []
-  | Some folders ->
-    (* the root's rules are ROOT/ROOT.ext, a folder X's X/X.ext *)
-    let rec paths prefix = function
-      | [] -> []
-      | x :: rest -> let p = prefix ^ x in (p ^ "/" ^ x) :: paths (p ^ "/") rest in
-    let self = Filename.concat dir (Filename.remove_extension (Filename.basename file)) in
-    let rules = List.filter_map (fun path ->
-        let base = Filename.concat root path in
-        let lang = base ^ ".ext" in
-        refuse_old_names base;
-        if base = self || Sys.file_exists (base ^ ".soma") then None
-        else if Sys.file_exists lang then Some (path, lang)
-        else if Sys.file_exists (base ^ ".exp") then
-          CErrors.user_err Pp.(str (path ^ ".exp") ++ str " has the proofs of the rules of its folder, " ++
-                               str (path ^ ".ext") ++ str ", which does not exist.")
-        else None) (root_rules_name root :: paths "" folders) in
+  | Some candidates ->
+    let rules = List.filter_map (fun (candidate : SomaRuleInputs.candidate) ->
+        refuse_old_names candidate.base;
+        match candidate.status with
+        | SomaRuleInputs.Self | SomaRuleInputs.Suppressed | SomaRuleInputs.Absent -> None
+        | SomaRuleInputs.Selected -> Some (candidate.path, candidate.base ^ ".ext")
+        | SomaRuleInputs.Orphan ->
+          CErrors.user_err Pp.(str (candidate.path ^ ".exp") ++ str " has the proofs of the rules of its folder, " ++
+                               str (candidate.path ^ ".ext") ++ str ", which does not exist.")) candidates in
     List.iter (fun (path, src) ->
         ensure p path src;
         if not (List.mem_assoc path !imported) then
@@ -1164,14 +1172,21 @@ let write_stamp () =
     require_published_import_output vo;
     require_published_import_output stamp;
     if !complete then begin
+      let candidate = match env_value expected_candidate_var with
+        | Some candidate when SomaMerkle.valid_hash candidate && SomaModuleStore.source_hash _src = candidate -> candidate
+        | _ -> discard_import_outputs (); CErrors.user_err Pp.(str "The donor candidate source changed during compilation; rebuild.") in
       (match env_value root_var, env_value cache_var with
        | Some root, Some cache ->
          SomaModuleStore.record ~root ~cache
            ~prefix:(match env_value prefix_var with Some p -> p | None -> "") ~source:_src
            ~vo ~stamp ~expected
-           ~candidate:(match env_value "SOMA_IMPORT_EXPECTED_CANDIDATE" with Some h -> h | None -> expected)
+           ~candidate
        | _ -> ());
       ignore (expected_import_source ());
+      if SomaModuleStore.source_hash _src <> candidate then begin
+        discard_import_outputs ();
+        CErrors.user_err Pp.(str "The donor candidate source changed during compilation; rebuild.")
+      end;
       require_published_import_output vo;
       require_published_import_output stamp
     end
