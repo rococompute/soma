@@ -1824,6 +1824,9 @@ let check_project ~wasm ~libraries ~native_files dir =
     | None | Some "" -> None
     | Some _ ->
       (try
+         (* These require an opam-exec tool/search-path closure or findlib
+            configuration coverage, not merely the currently selected dirs. *)
+         if runner <> [] || packages <> [] then failwith "uncertified OCaml runner or package lookup";
          let query arguments =
            let out = Filename.temp_file "soma-check-inputs" ".log" in
            Fun.protect ~finally:(fun () -> try Sys.remove out with Sys_error _ -> ()) (fun () ->
@@ -1835,7 +1838,8 @@ let check_project ~wasm ~libraries ~native_files dir =
              String.split_on_char '\n' (query (["ocamlfind"; "query"; "-recursive"; "-format"; "%d"] @ packages))
              |> List.filter (fun path -> path <> "") in
          if not (List.for_all Sys.is_directory package_dirs) then failwith "unknown OCaml package directory";
-         SomaBuildInfo.prepare_inputs
+         let tools = ["sh"; "ocamlc"] @ (if own = [] then [] else ["ocamldep"]) in
+         SomaBuildInfo.prepare_inputs ~tools
            (stdlib :: package_dirs @ List.map (Filename.concat checks) kept)
        with Sys_error _ | Unix.Unix_error _ | Failure _ -> None) in
   let args = runner @ ["sh"; "-c"; script] in
@@ -1844,6 +1848,7 @@ let check_project ~wasm ~libraries ~native_files dir =
     error Pp.(str "OCaml check failed in " ++ str checks ++ str ":" ++ fnl () ++
               str (read_file log));
   SomaBuildInfo.publish_inputs inputs;
+  SomaBuildInfo.mark_external ~phase:"bytecode-check" ();
   Feedback.msg_notice Pp.(str "Mirage: checked " ++ str dir ++ str " (no image)")
 
 (* The lock make depends would write, made without opam's current switch:
@@ -1939,6 +1944,13 @@ let build ~state ~source ~vo_file =
     check_main ();
     let calls = foreign_calls () in
     let ocaml_modules, libraries = ocaml_modules () in
+    (* Bind the original bytes before extraction/staging reads them. Capturing
+       originals only after copying could certify new originals with old copies. *)
+    let original_sources = List.map (fun (_, (call : SomaForeign.image_call)) -> call.module_file) calls @
+        List.filter_map (fun (m : SomaForeign.ocaml_module) -> m.ml_file) ocaml_modules in
+    let original_inputs = if original_sources = [] then Some [] else
+        SomaBuildInfo.prepare_inputs ~tools:[] original_sources in
+    SomaBuildInfo.publish_inputs original_inputs;
     (* extracted once to find out which project the program needs *)
     let staging = Filename.concat (cache_dir ()) "extract" in
     mkdir_p staging;
@@ -2011,9 +2023,7 @@ let build ~state ~source ~vo_file =
       Feedback.msg_notice Pp.(str "Mirage: setting up the MirageOS project in " ++ str dir ++
                               str " (once; fetches the dependencies)");
     if setup <> "" then execute (setup ^ "true");
-    let sources = List.map (fun (_, (call : SomaForeign.image_call)) -> call.module_file) calls @
-        List.filter_map (fun (m : SomaForeign.ocaml_module) -> m.ml_file) ocaml_modules in
-    let inputs = image_build_inputs ~switch ~dir sources in
+    let inputs = image_build_inputs ~switch ~dir [] in
     execute "make build";
     let hvt = Filename.remove_extension vo_file ^ ".hvt" in
     copy_file ~src:(List.fold_left Filename.concat dir ["dist"; "soma.hvt"]) ~dst:hvt;
