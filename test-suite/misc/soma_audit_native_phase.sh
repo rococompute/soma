@@ -82,6 +82,12 @@ exp.write_text('Lemma bad_property : False.\nProof. exact I. Qed.\n');invoke(['b
 exp.unlink();build(True)
 ext=app/'main.ext';ext.write_text('(* extension source *)\n');build(False);build(False)
 ext.unlink();build(True)
+rules=app/'native_phase_probe.ext';rules.write_text('(* folder rules *)\n');build(False)
+rules.write_text('(* changed folder rules *)\n');build(False);rules.unlink();build(True)
+# Even benign launch-environment/unsupported argument changes cannot hit a
+# certificate for a different semantic request.
+env['PHASE_PROBE_UNKNOWN_OPTION']='changed';build(False);env.pop('PHASE_PROBE_UNKNOWN_OPTION');build(True)
+p=invoke(['build','main.soma','-w','-all']);assert 'reused checking/extraction' not in p.stdout
 foreign.write_text('let succ (n : Soma_nat.nat) : Soma_nat.nat = n + 2\n');build(False);assert '2 43' in output();build(True)
 # Source Load is deliberately unsupported, including inputs outside the root.
 outside=work/'outside.v';outside.write_text('Definition loaded_number := 7.\n')
