@@ -95,7 +95,7 @@ let rename src dst = tried (fun () -> Unix.rename src dst)
 let make_dir p = tried (fun () -> Unix.mkdir p 0o755)
 let remove_file p = tried (fun () -> Sys.remove p)
 let temp_new prefix suffix = attempt (fun () -> [ Filename.temp_file prefix suffix ])
-let temp_dir prefix = ans_data [ Filename.temp_dir prefix "" ]
+let temp_dir prefix = attempt (fun () -> [ Filename.temp_dir prefix "" ])
 
 (* PROG started on its own and not waited for: forked twice, so its parent
    is the system's and nothing is left to reap; its input, output and

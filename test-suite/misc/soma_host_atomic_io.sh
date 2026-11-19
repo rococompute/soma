@@ -32,6 +32,7 @@ static int audit_openat(int dir, const char *name, int flags, ...)
 let () =
   let args = Sys.argv in
   let result = match args.(1) with
+  | "tempdir" -> Soma_host.temp_dir args.(2)
   | "kill" -> Soma_host.kill_pid args.(2)
   | "file" -> Soma_host.file_replace args.(2) args.(3) "true"
   | "path" -> Soma_host.path_replace args.(2) args.(3) args.(4)
@@ -50,6 +51,10 @@ let () =
     def run(*args,ok=True,env=None):
         p=subprocess.run([str(root/'probe'),*map(str,args)],capture_output=True,text=True,env=env)
         assert (p.returncode==0)==ok,(args,p.returncode,p.stdout,p.stderr)
+    failed_temp=subprocess.run([str(root/'probe'),'tempdir','audit'],capture_output=True,text=True,
+                               env=dict(os.environ,TMPDIR=str(root/'missing-parent')))
+    assert failed_temp.returncode==1,(failed_temp.stdout,failed_temp.stderr)
+    assert 'Fatal error' not in failed_temp.stderr
     run('kill','0',ok=False)
     run('kill','not-a-pid',ok=False)
     child=subprocess.Popen(['sleep','30'])
