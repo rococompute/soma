@@ -31,6 +31,29 @@ Definition aliased (_ : unit) : Alias.box := Alias.project (N.inject 2).
 Definition second_wrong (_ : unit) : N2.box := N2.project (N.inject 2).
 Definition wrapped_roundtrip (_ : unit) : N.wrap nat := N.wrap_down (N.wrap_up (N.W1 nat 2)).
 Definition wrapped_roundtrip2 (_ : unit) : N2.wrap nat := N2.wrap_down (N2.wrap_up (N2.W1 nat 2)).
+Module Type INPUT.
+Inductive t : Type := T0 : t | T1 : nat -> t.
+End INPUT.
+Module Input : INPUT.
+Inductive t : Type := T0 : t | T1 : nat -> t.
+End Input.
+Module Input2 : INPUT.
+Inductive t : Type := T0 : t | T1 : nat -> t.
+End Input2.
+Module InputAlias := Input.
+Module InputReexport. Include Input. End InputReexport.
+Module UseInput (X : INPUT).
+Definition inject (x : X.t) : Any := cast X.t Any x.
+Definition project (x : Any) : X.t := cast Any X.t x.
+End UseInput.
+Module U := UseInput Input.
+Module UA := UseInput InputAlias.
+Module UR := UseInput InputReexport.
+Module U2 := UseInput Input2.
+Definition argument_roundtrip (_ : unit) : Input.t := U.project (U.inject (Input.T1 2)).
+Definition argument_alias (_ : unit) : InputAlias.t := UA.project (U.inject (Input.T1 2)).
+Definition argument_reexport (_ : unit) : InputReexport.t := UR.project (U.inject (Input.T1 2)).
+Definition argument_wrong (_ : unit) : Input2.t := U2.project (U.inject (Input.T1 2)).
 Goal roundtrip tt = N.B1 2. Proof. reflexivity. Qed.
 Goal wrong tt = raise. Proof. reflexivity. Qed.
 Goal wrong_inside tt = raise. Proof. reflexivity. Qed.
@@ -38,5 +61,10 @@ Goal aliased tt = N.B1 2. Proof. reflexivity. Qed.
 Goal second_wrong tt = raise. Proof. reflexivity. Qed.
 Goal wrapped_roundtrip tt = N.W1 nat 2. Proof. reflexivity. Qed.
 Goal wrapped_roundtrip2 tt = N2.W1 nat 2. Proof. reflexivity. Qed.
+Goal argument_roundtrip tt = Input.T1 2. Proof. reflexivity. Qed.
+Goal argument_alias tt = InputAlias.T1 2. Proof. reflexivity. Qed.
+Goal argument_reexport tt = InputReexport.T1 2. Proof. reflexivity. Qed.
+Goal argument_wrong tt = raise. Proof. reflexivity. Qed.
 Extract Inductive unit => "unit" [ "()" ].
-Extraction "Functor" roundtrip wrong wrong_inside aliased second_wrong wrapped_roundtrip wrapped_roundtrip2.
+Extraction "Functor" roundtrip wrong wrong_inside aliased second_wrong wrapped_roundtrip wrapped_roundtrip2
+  argument_roundtrip argument_alias argument_reexport argument_wrong.
