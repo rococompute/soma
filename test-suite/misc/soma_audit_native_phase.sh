@@ -89,6 +89,13 @@ rules.write_text('(* changed folder rules *)\n');build(False);rules.unlink();bui
 env['PHASE_PROBE_UNKNOWN_OPTION']='changed';build(False);env.pop('PHASE_PROBE_UNKNOWN_OPTION');build(True)
 p=invoke(['build','main.soma','-w','-all']);assert 'reused checking/extraction' not in p.stdout
 foreign.write_text('let succ (n : Soma_nat.nat) : Soma_nat.nat = n + 2\n');build(False);assert '2 43' in output();build(True)
+# Opaque embedded tactic payloads are outside the first supported parsed
+# declaration subset, without altering ordinary module stamps or execution.
+source.write_text('Import succ.\nDefinition tactic_number : nat := ltac:(exact 0).\n'+original.split('\n',1)[1]);build(False);build(False)
+source.write_text('Notation "\'tactic_zero\'" := (ltac:(exact 0)).\nImport succ.\nDefinition tactic_number : nat := tactic_zero.\n'+original.split('\n',1)[1]);build(False);build(False)
+notation=app/'notation_source.soma';notation.write_text('Notation "\'tactic_zero\'" := (ltac:(exact 0)).\n')
+source.write_text('Import notation_source succ.\nDefinition tactic_number : nat := tactic_zero.\n'+original.split('\n',1)[1]);build(False);build(False)
+notation.unlink();source.write_text(original);build(True)
 # Source Load is deliberately unsupported, including inputs outside the root.
 outside=work/'outside.v';outside.write_text('Definition loaded_number := 7.\n')
 source.write_text('Load "'+str(outside)+'".\n'+original);build(False);build(False)
