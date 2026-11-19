@@ -38,8 +38,10 @@ with tempfile.TemporaryDirectory(prefix='soma-rc-freshness-') as tmp:
     expect(stamp.exists() and stamp.read_text().splitlines()[0]=='soma-stamp incomplete',
            'rc build reused/certified import stamp')
     trace=work/'trace'
-    run('rc-trace',['check','main.soma'],extra={'SOMA_TEST_SOURCE':str(source),'SOMA_TEST_DEPENDENCIES':str(trace)})
-    expect(trace.exists() and trace.read_text().splitlines()[0]=='incomplete','rc trace was certified')
+    run('rc-trace',['check',str(source)],extra={'SOMA_TEST_SOURCE':str(source),'SOMA_TEST_DEPENDENCIES':str(trace)})
+    trace_text=trace.read_text() if trace.exists() else '<missing>'
+    records[-1]['dependency_trace']=trace_text
+    expect(trace.exists() and trace_text.splitlines()[0]=='incomplete','rc trace missing/certified: '+trace_text.splitlines()[0])
     rc.write_text('ThisRcMustBeExecuted.\n')
     fresh('edited-rc-stale',False)
     p=run('edited-rc-is-executed',['build','main.soma'],False)
