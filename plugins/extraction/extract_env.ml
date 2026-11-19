@@ -882,14 +882,29 @@ let full_extraction ~opaque_access f lr =
    and guards at every consumer boundary, reject such an output as a whole,
    before printing even its ordinary dependency files. Monolithic extraction
    retains its runtime and all of its guards. *)
+let structure_has_functor struc =
+  let rec expr = function
+    | MEfunctor _ -> true
+    | MEstruct (_, fields) -> fields_have_functor fields
+    | MEapply (f, arg) -> expr f || expr arg
+    | MEident _ -> false
+  and fields_have_functor fields =
+    List.exists (function _, SEmodule m -> expr m.ml_mod_expr | _ -> false) fields in
+  List.exists (fun (_, fields) -> fields_have_functor fields) struc
+
 let modular_gradual_runtime struc =
   let has_runtime = struct_ast_search (function
       | MLraw s -> String.starts_with ~prefix:"Gradual_rt." s
       | _ -> false) struc in
   let has_cases = struct_ast_search (function MLcase _ -> true | _ -> false) struc in
   let gradual = Option.has_some (Gradual.get (Global.env ()) Gradual.GCast) in
-  if lang () == Ocaml && Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" = Some "1" then
-    has_runtime || (gradual && has_cases)
+  if lang () == Ocaml && Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" = Some "1" then begin
+    let shared = has_runtime || (gradual && has_cases) in
+    if shared && structure_has_functor struc then
+      user_err (str "Shared gradual extraction of functors requires application-aware runtime type identities; " ++
+        str "this output is not supported yet.");
+    shared
+  end
   else begin
   if has_runtime then
     user_err (str "Modular extraction of gradual code is not supported: " ++
