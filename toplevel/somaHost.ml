@@ -74,6 +74,17 @@ let file_put p s sync =
           output_string oc s;
           if sync = "true" then (flush oc; Unix.fsync (Unix.descr_of_out_channel oc))))
 
+(* These primitives implement descriptor-relative filesystem IO only.
+   Decisions about when/what to save, and how failure affects the application,
+   remain in Soma. A trusted root is resolved once; relative descendants are
+   traversed through O_NOFOLLOW directory descriptors, not checked then reused. *)
+external replace_file : string -> string -> bool -> unit = "soma_host_file_replace"
+external replace_path : string -> string -> string -> unit = "soma_host_path_replace"
+external remove_path : string -> string -> unit = "soma_host_path_remove"
+let file_replace p text sync = tried (fun () -> replace_file p text (sync = "true"))
+let path_replace root relative text = tried (fun () -> replace_path root relative text)
+let path_remove root relative = tried (fun () -> remove_path root relative)
+
 let sync_dir d =
   tried (fun () ->
       let fd = Unix.openfile d [ Unix.O_RDONLY ] 0 in
@@ -264,4 +275,159 @@ let sock_write id data =
 let sock_error id = ans_flag (with_sock id true (fun fd -> Unix.getsockopt_error fd <> None))
 
 let sock_close id = with_sock id () (fun fd -> close_all [ fd ]; Hashtbl.remove socks id); ans_ok
+|soma}
+
+(* Native implementation copied beside soma_host.ml in generated projects. *)
+let io_c = {soma|/* Descriptor-relative file IO. The caller selects the root, path, contents
+ * and durability; this implements only filesystem atomicity/confinement. */
+#define _GNU_SOURCE
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <caml/mlvalues.h>
+#include <caml/memory.h>
+#include <caml/unixsupport.h>
+
+static int host_parent(const char *root, const char *relative, int make,
+                       char **storage, char **leaf)
+{
+    if (!*relative || *relative == '/') { errno = EINVAL; return -1; }
+    char *copy = strdup(relative);
+    if (!copy) return -1;
+    int dir = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dir < 0) { free(copy); return -1; }
+    char *part = copy, *slash;
+    while ((slash = strchr(part, '/')) != NULL) {
+        *slash = 0;
+        if (!*part || !strcmp(part, ".") || !strcmp(part, "..")) { errno = EINVAL; goto fail; }
+        int next = openat(dir, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (next < 0 && errno == ENOENT && make) {
+            if (mkdirat(dir, part, 0755) < 0 && errno != EEXIST) goto fail;
+            next = openat(dir, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        }
+        if (next < 0) goto fail;
+        close(dir); dir = next; part = slash + 1;
+    }
+    if (!*part || !strcmp(part, ".") || !strcmp(part, "..")) { errno = EINVAL; goto fail; }
+    *storage = copy; *leaf = part; return dir;
+fail: {
+    int saved = errno; close(dir); free(copy); errno = saved; return -1;
+    }
+}
+
+static int host_random(unsigned char *bytes, size_t size)
+{
+    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    size_t off = 0;
+    while (off < size) {
+        ssize_t n = read(fd, bytes + off, size - off);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { int saved = n == 0 ? EIO : errno; close(fd); errno = saved; return -1; }
+        off += (size_t)n;
+    }
+    return close(fd);
+}
+
+static int host_replace(const char *root, const char *rel, const char *text,
+                        size_t size, int durable, int parents)
+{
+    char *storage = NULL, *leaf = NULL;
+    int dir = host_parent(root, rel, parents, &storage, &leaf), fd = -1;
+    if (dir < 0) return -1;
+    struct stat st;
+    int exists = fstatat(dir, leaf, &st, AT_SYMLINK_NOFOLLOW) == 0;
+    if ((!exists && errno != ENOENT) || (exists && !S_ISREG(st.st_mode))) {
+        if (exists) errno = S_ISLNK(st.st_mode) ? ELOOP : EINVAL;
+        goto fail;
+    }
+    char temp[45] = ".soma-write-";
+    for (int attempt = 0; attempt < 8; attempt++) {
+        unsigned char random[16];
+        if (host_random(random, sizeof random) < 0) goto fail;
+        static const char hex[] = "0123456789abcdef";
+        for (int i = 0; i < 16; i++) {
+            temp[12 + 2*i] = hex[random[i] >> 4];
+            temp[13 + 2*i] = hex[random[i] & 15];
+        }
+        temp[44] = 0;
+        fd = openat(dir, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+        if (fd >= 0) break;
+        if (errno != EEXIST) goto fail;
+    }
+    if (fd < 0) goto fail;
+    if (exists && fchmod(fd, st.st_mode & 0777) < 0) goto temporary_fail;
+    size_t off = 0;
+    while (off < size) {
+        ssize_t n = write(fd, text + off, size - off);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { if (!n) errno = EIO; goto temporary_fail; }
+        off += (size_t)n;
+    }
+    if (durable && fsync(fd) < 0) goto temporary_fail;
+    if (close(fd) < 0) { fd = -1; goto temporary_fail; }
+    fd = -1;
+    if (renameat(dir, temp, dir, leaf) < 0) goto temporary_fail;
+    if (durable && fsync(dir) < 0) goto fail;
+    close(dir); free(storage); return 0;
+temporary_fail: {
+    int saved = errno;
+    if (fd >= 0) close(fd);
+    unlinkat(dir, temp, 0);
+    errno = saved;
+    }
+fail: {
+    int saved = errno; close(dir); free(storage); errno = saved; return -1;
+    }
+}
+
+static void host_check_string(value v)
+{
+    if (strlen(String_val(v)) != caml_string_length(v))
+        caml_unix_error(EINVAL, "path contains NUL", v);
+}
+
+CAMLprim value soma_host_file_replace(value path, value text, value sync)
+{
+    CAMLparam3(path, text, sync);
+    host_check_string(path);
+    char *copy = strdup(String_val(path));
+    if (!copy) caml_uerror("strdup", path);
+    char *slash = strrchr(copy, '/');
+    const char *root = ".", *leaf = copy;
+    if (slash) { *slash = 0; root = slash == copy ? "/" : copy; leaf = slash + 1; }
+    int result = host_replace(root, leaf, String_val(text), caml_string_length(text), Bool_val(sync), 0);
+    int saved = errno; free(copy); errno = saved;
+    if (result < 0) caml_uerror("file_replace", path);
+    CAMLreturn(Val_unit);
+}
+
+CAMLprim value soma_host_path_replace(value root, value relative, value text)
+{
+    CAMLparam3(root, relative, text);
+    host_check_string(root); host_check_string(relative);
+    if (host_replace(String_val(root), String_val(relative), String_val(text), caml_string_length(text), 0, 1) < 0)
+        caml_uerror("path_replace", relative);
+    CAMLreturn(Val_unit);
+}
+
+CAMLprim value soma_host_path_remove(value root, value relative)
+{
+    CAMLparam2(root, relative);
+    host_check_string(root); host_check_string(relative);
+    char *storage = NULL, *leaf = NULL;
+    int dir = host_parent(String_val(root), String_val(relative), 0, &storage, &leaf);
+    if (dir < 0) caml_uerror("path_remove", relative);
+    struct stat st;
+    int result = fstatat(dir, leaf, &st, AT_SYMLINK_NOFOLLOW);
+    if (result == 0 && !S_ISREG(st.st_mode)) { errno = EINVAL; result = -1; }
+    if (result == 0) result = unlinkat(dir, leaf, 0);
+    int saved = errno; close(dir); free(storage); errno = saved;
+    if (result < 0) caml_uerror("path_remove", relative);
+    CAMLreturn(Val_unit);
+}
 |soma}
