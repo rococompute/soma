@@ -164,7 +164,7 @@ end = struct
     match s with
     | { lib } ->
       let plugins = Fl_internals.fl_find_plugins lib in
-        SomaPhase.plugin ~package:lib ~files:plugins;
+      SomaPhase.plugin ~package:lib ~files:plugins;
       List.map Digest.file plugins
 
   let pp = function
