@@ -79,6 +79,17 @@ Parameter append_synced : string -> string -> bool * (float * list string).
 (** TEXT put in PATH, created or emptied first; SYNC "true": on disk
     before the answer *)
 Parameter file_put : string -> string -> string -> bool * (float * list string).
+(** TEXT replaces PATH atomically using a fresh exclusive sibling file.
+    A final symlink/non-regular destination is refused; existing permissions
+    are kept. SYNC "true" syncs contents before rename and parent afterwards. *)
+Parameter file_replace : string -> string -> string -> bool * (float * list string).
+(** A file relative to a trusted ROOT replaced atomically, making missing
+    parents. Relative components cannot be empty, . or .., and no descendant
+    symlink is followed, including concurrent replacements. *)
+Parameter path_replace : string -> string -> string -> bool * (float * list string).
+(** A regular file relative to trusted ROOT unlinked without following
+    descendant symlinks; the same relative-component rules apply. *)
+Parameter path_remove : string -> string -> bool * (float * list string).
 (** a file's mode: [[octal]], found when it's there *)
 Parameter file_mode : string -> bool * (float * list string).
 (** SRC renamed DST *)
