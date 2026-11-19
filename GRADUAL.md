@@ -412,6 +412,30 @@ for strict content reads on every scan, for example on filesystems whose
 metadata cannot reliably report changes. These are fingerprints of build
 inputs, not proofs that tests passed; test results still depend on the
 compiler's recorded import graph and successful checks.
+
+An unchanged native entry point can also reuse its completed checking and
+extraction phases. The compiler certifies the exact generated files and loaded
+libraries; the driver binds that certificate to the project, compiler,
+environment and options before and after the build. A hit still takes the
+generated project's lock, runs the ordinary native Dune validation, and copies
+its current executable with the same mode as a normal build. It does not
+declare the native product fresh: `soma build --check-fresh` still requires
+native validation.
+
+This first subset covers ordinary nonverbose, package-free native builds with
+project-local OCaml implementations or the built-in Host module. Mirage,
+JavaScript, external dependencies, selected startup rc files, source `Load`,
+opaque embedded terms, unknown plugins and unsupported checking commands use
+the full build. `--fill`, explicit exports, review and dependency-reporting
+modes, verbose output and `--timings` also use the full path. Changed sources
+and expectations are checked again; this is not incremental checking of edited
+definitions. `soma check` retains its full checking behavior.
+
+The certificates live in `$XDG_CACHE_HOME/soma-native-phases` (otherwise
+`~/.cache/soma-native-phases`) and require the compiler's private content
+receipts. Missing, edited or corrupt records cause a full build. Set
+`SOMA_PHASE_DEBUG=1` to inspect eligibility and refusal diagnostics.
+
 `test-suite/misc/soma_module_cache.sh`,
 `test-suite/misc/soma_module_cache_checkout.sh`,
 `test-suite/misc/soma_module_cache_path_deps.sh` and
