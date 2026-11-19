@@ -267,21 +267,7 @@ let locate ?loc p path =
                  else "Import " ^ example ^ ". Its root has " ^ String.concat ", " files ^ "."))
 
 (* What a compilation reads of a program: its source, .exp and .ext *)
-let source_hash src =
-  let base = Filename.remove_extension src in
-  let one f = if Sys.file_exists f then SomaMerkle.file_hash f else "-" in
-  (* FILE.wasm, FILE.ml or FILE.lean, which FILE.definition declares.
-     A present FILE.ml is marked "rel:": a stamp from before the module
-     cache named that .ml by an absolute path, and its digest did not.
-     The mark makes that stamp out of date, so the .definition is compiled
-     again and the .vo names the .ml by its path in this project. A missing
-     file stays "-", which is what a stamp of a .soma file records. *)
-  let ml = base ^ ".ml" in
-  let ml_digest =
-    if Sys.file_exists ml then "rel:" ^ SomaMerkle.file_hash ml else "-" in
-  SomaMerkle.string (String.concat " "
-    [one src; one (base ^ ".exp"); one (base ^ ".ext"); one (base ^ ".wasm");
-     ml_digest; one (base ^ ".lean")])
+let source_hash src = SomaModuleStore.source_hash src
 
 let digest f = SomaMerkle.file_hash f
 
@@ -1176,7 +1162,18 @@ let write_stamp () =
     SomaCache.record vo;
     ignore (expected_import_source ());
     require_published_import_output vo;
-    require_published_import_output stamp
+    require_published_import_output stamp;
+    if !complete then begin
+      (match env_value root_var, env_value cache_var with
+       | Some root, Some cache ->
+         SomaModuleStore.record ~root ~cache
+           ~prefix:(match env_value prefix_var with Some p -> p | None -> "") ~source:_src
+           ~vo ~stamp ~expected
+       | _ -> ());
+      ignore (expected_import_source ());
+      require_published_import_output vo;
+      require_published_import_output stamp
+    end
   | _ -> ()
 
 (* Observational metadata only: the import stamps above keep their existing

@@ -3,6 +3,7 @@
  (synopsis "Coq's Utility Library [general purpose]")
  (public_name soma-runtime.clib)
  (wrapped false)
+ (foreign_stubs (language c) (names soma_cache_fs))
  (modules_without_implementation cSig)
  (modules :standard \ unicodetable_gen)
  (libraries

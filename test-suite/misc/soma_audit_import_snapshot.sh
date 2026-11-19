@@ -11,6 +11,10 @@ def section(a,b): return text[text.index(a):text.index(b,text.index(a))]
 with tempfile.TemporaryDirectory(prefix='soma-import-snapshot-') as tmp:
     root=pathlib.Path(tmp)
     for f in ['somaMerkle.ml','somaCache.ml']: shutil.copyfile(source/'clib'/f,root/f)
+    extra=[]
+    if (source/'clib/somaModuleStore.ml').exists():
+        for f in ['somaModuleStore.ml','soma_cache_fs.c']: shutil.copyfile(source/'clib'/f,root/f)
+        extra=['soma_cache_fs.c','somaModuleStore.ml']
     prelude=r'''
 module Pp = struct let str x = x let ( ++ ) = ( ^ ) end
 module CErrors = struct let user_err x = failwith x end
@@ -148,6 +152,6 @@ let () =
   print_endline "Import snapshot changes reject old objects/new stamps; owned-output cleanup and unrelated writer preservation: passed"
 ''')
     env=dict(os.environ,XDG_CACHE_HOME=str(root/'xdg'),SOMA_CACHE_ID='snapshot-regression')
-    subprocess.run(['ocamlfind','ocamlc','-package','digestif.c,unix','-linkpkg','somaMerkle.ml','somaCache.ml','check.ml','-o','check'],cwd=root,env=env,check=True)
+    subprocess.run(['ocamlfind','ocamlc','-custom','-package','digestif.c,unix','-linkpkg','somaMerkle.ml','somaCache.ml',*extra,'check.ml','-o','check'],cwd=root,env=env,check=True)
     subprocess.run([str(root/'check')],cwd=root,env=env,check=True)
 PY

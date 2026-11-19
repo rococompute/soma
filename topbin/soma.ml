@@ -465,18 +465,40 @@ let shared_store_for file =
     let (root, _, _) as k = project_cache_key file in
     if has_path_dependency root then None else Some (store, k)
 
+(* Non-Soma project metadata/foreign source changes remain a conservative
+   namespace miss. Ordinary source/companion dependency changes are checked
+   by the compiler's existing recursive freshness after donor restoration. *)
+let module_store_context root =
+  let files = project_cache_sources root |> List.filter (fun (name, _) ->
+      not (List.exists (Filename.check_suffix name) [".soma"; ".exp"; ".ext"])) in
+  SomaMerkle.string (String.concat "\n" ("soma-module-context 1" :: !cache_toolchain () ::
+      List.map (fun (rel, digest) -> Printf.sprintf "%S %s" rel digest) files))
+
 let restore_shared_cache file =
   match shared_store_for file with
   | None -> ()
-  | Some (store, (_, cache_dir, key)) ->
+  | Some (store, (root, cache_dir, key)) ->
     let stored = Filename.concat store key in
-    if not (Sys.file_exists cache_dir) && is_directory_opt stored then
-      (try copy_tree stored cache_dir with Sys_error _ | Unix.Unix_error _ -> ())
+    (* Never copy into a live local cache, even one another compiler has only
+       just created. The same no-replace primitive is used by module donors. *)
+    if not (Sys.file_exists cache_dir) then begin
+      if is_directory_opt stored then
+        (try
+           let tmp = Filename.temp_file ~temp_dir:(Filename.dirname cache_dir) ".restore-" "" in
+           Sys.remove tmp;
+           Fun.protect ~finally:(fun () ->
+               if Sys.file_exists tmp then SomaModuleStore.remove_staging tmp) (fun () ->
+               copy_tree stored tmp;
+               ignore (SomaModuleStore.rename_absent tmp cache_dir))
+         with Sys_error _ | Unix.Unix_error _ -> ());
+      SomaModuleStore.restore ~store ~context:(module_store_context root) ~root ~cache:cache_dir
+    end
 
 let publish_shared_cache file =
   match shared_store_for file with
   | None -> ()
-  | Some (store, (_, cache_dir, key)) ->
+  | Some (store, (root, cache_dir, key)) ->
+    SomaModuleStore.publish ~store ~context:(module_store_context root) ~root ~cache:cache_dir;
     let stored = Filename.concat store key in
     if is_directory_opt cache_dir && not (Sys.file_exists stored) then
       (try
