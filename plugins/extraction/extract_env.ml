@@ -800,6 +800,21 @@ let full_extraction ~opaque_access f lr =
   let f = Option.map project_extraction_target f in
   full_extr opaque_access f (locate_refs lr)
 
+(* The runtime embedded in one extracted file is not shared with another
+   file's runtime. In particular, its unknown/error marker and cast tables
+   are local to that module, and a consumer with no casts need not have any
+   runtime guards at all. Until modular extraction has one shared runtime
+   and guards at every consumer boundary, reject such an output as a whole,
+   before printing even its ordinary dependency files. Monolithic extraction
+   retains its runtime and all of its guards. *)
+let refuse_modular_gradual struc =
+  if struct_ast_search (function
+      | MLraw s -> String.starts_with ~prefix:"Gradual_rt." s
+      | _ -> false) struc then
+    user_err (str "Modular extraction of gradual code is not supported: " ++
+      str "use Extraction " ++ quote (str "file") ++
+      str " to keep the program and its gradual runtime in one file.")
+
 (*s Separate extraction is similar to recursive extraction, with the output
    decomposed in many files, one per Rocq .v file *)
 
@@ -808,6 +823,7 @@ let separate_extraction ~opaque_access lr =
   let table = init ~modular:true ~library:false () in
   let refs,mps = locate_refs lr in
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
+  let () = refuse_modular_gradual struc in
   let () = List.iter (function
     | MPfile _, _ -> ()
     | (MPdot _ | MPbound _), _ ->
@@ -868,6 +884,7 @@ let extraction_library ~opaque_access is_rec CAst.{loc;v=m} =
   in
   let struc = List.fold_left select [] l in
   let struc = optimize_struct table ([],[]) struc in
+  let () = refuse_modular_gradual struc in
   let () = warns table in
   let print = function
     | (MPfile dir, sel) as e ->
