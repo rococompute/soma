@@ -271,7 +271,7 @@ let record_generated_files dir made =
    bindings, the project's modules (with line directives to them when
    [~directives], so that OCaml's errors are about the files themselves),
    what runs [main], and dune's files *)
-let write_project ~state ~modules ~libraries ~js ~directives dir =
+let write_project ?(read_source=read_file) ~state ~modules ~libraries ~js ~directives dir =
   mkdir_p dir;
   extract ~state ~modules dir;
   let file f contents = ignore (update_file (Filename.concat dir f) contents) in
@@ -284,7 +284,7 @@ let write_project ~state ~modules ~libraries ~js ~directives dir =
     file "soma_host.ml" SomaHost.ml;
     file "soma_host_io.c" SomaHost.io_c
   end;
-  let own = SomaOcamlBindings.write_files ~file ~read_file ~directives modules in
+  let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
       (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_nat.ml"; "soma_bindings.ml"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else []) @ own) in
@@ -480,7 +480,21 @@ let build ~state ~source ~vo_file =
         ["build"; name ^ "-" ^ SomaMerkle.string source] in
     with_project_lock dir (fun dir ->
     let inputs = prepare_build_inputs ~switch modules in
-    write_project ~state ~modules ~libraries ~js ~directives:true dir;
+    let copied_inputs_valid = ref true in
+    let read_source file =
+      let contents = read_file file in
+      (match inputs with
+       | None -> ()
+       | Some inputs ->
+         let path = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
+         match List.assoc_opt path inputs with
+         | Some signature ->
+           (match String.split_on_char ':' signature with
+            | ["file"; _mode; digest] when String.equal digest (SomaMerkle.string contents) -> ()
+            | _ -> copied_inputs_valid := false)
+         | None -> copied_inputs_valid := false);
+      contents in
+    write_project ~read_source ~state ~modules ~libraries ~js ~directives:true dir;
     ignore (update_file (Filename.concat dir "dune-project") "(lang dune 3.0)\n");
     let target = if js then "./soma_main.bc.js" else "./soma_main.exe" in
     let log = Filename.concat dir "build.log" in
@@ -498,13 +512,13 @@ let build ~state ~source ~vo_file =
     if js then begin
       SomaMirage.write_file (out ^ ".js") (read_file built);
       SomaMirage.write_file (out ^ ".html") (page_html (Filename.basename out));
-      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".js"; out ^ ".html"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".html") ++ str ", with " ++
                               str (Filename.basename out ^ ".js") ++ str "; open it in a browser")
     end else begin
       SomaMirage.copy_file ~src:built ~dst:(out ^ ".exe");
-      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".exe"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".exe") ++ str "; run it with: " ++
                               str (out ^ ".exe"))
