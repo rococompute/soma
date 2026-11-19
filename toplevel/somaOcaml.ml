@@ -242,7 +242,7 @@ let checked_modules = SomaOcamlBindings.checked_modules
 (* A directory can outlive a build and contain files the user added or edited.
    Only remove an obsolete generated file whose receipt still matches; dune's
    explicit module list keeps all other files out of this executable. *)
-let record_generated_files dir made expected =
+let record_generated_files ~capture_generated dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h"] in
@@ -261,6 +261,7 @@ let record_generated_files dir made expected =
       match Hashtbl.find_opt expected f, hash f with
       | Some expected, Some digest when String.equal expected digest -> Some (f ^ " " ^ digest ^ "\n")
       | _ -> None) made) in
+  capture_generated ".soma-ocaml-files" contents;
   let tmp, oc = Filename.open_temp_file ~temp_dir:dir ".soma-ocaml-files-" ".tmp" in
   Fun.protect ~finally:(fun () ->
       close_out_noerr oc;
@@ -309,24 +310,12 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
   file "dune" (dune_file ~js ~host ~modules:names libraries);
-  record_generated_files dir made expected
+  record_generated_files ~capture_generated dir made expected
 
 (* The lock is beside the generated directory, and remains held through dune
    and the final product copy. Canonical names serialize aliases of one target
    without preventing independent programs from building concurrently. *)
-let with_project_lock dir f =
-  let dir = if Filename.is_relative dir then Filename.concat (Sys.getcwd ()) dir else dir in
-  mkdir_p (Filename.dirname dir);
-  let dir = try Unix.realpath dir with Unix.Unix_error (Unix.ENOENT, _, _) ->
-      Filename.concat (Unix.realpath (Filename.dirname dir)) (Filename.basename dir) in
-  let lock = Filename.concat (Filename.dirname dir) ("." ^ Filename.basename dir ^ ".soma-ocaml.lock") in
-  let fd = Unix.openfile lock [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 in
-  Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
-      let rec wait () = match Unix.lockf fd Unix.F_LOCK 0 with
-        | () -> ()
-        | exception Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
-      wait ();
-      f dir)
+let with_project_lock = SomaPhase.with_project_lock
 
 let prepare_build_inputs ~switch modules =
   try
@@ -518,6 +507,16 @@ let build ~state ~source ~vo_file =
     let project = "(lang dune 3.0)\n" in
     capture_generated "dune-project" project;
     ignore (update_file (Filename.concat dir "dune-project") project);
+    let phase_generated =
+      try Some (Hashtbl.fold (fun name expected acc ->
+          let path = Filename.concat dir name in
+          let signature = SomaBuildInfo.signature path in
+          (match String.split_on_char ':' signature with
+           | ["file"; _mode; digest] when digest = expected -> ()
+           | _ -> failwith "phase generated input differs from producer");
+          (path,signature)::acc) generated [] @
+          [Filename.concat dir "dune-workspace", SomaBuildInfo.signature (Filename.concat dir "dune-workspace")])
+      with Sys_error _ | Unix.Unix_error _ | Failure _ -> None in
     let inputs = match inputs with
       | None -> None
       | Some inputs when not !copied_inputs_valid -> None
@@ -556,6 +555,16 @@ let build ~state ~source ~vo_file =
       SomaMirage.copy_file ~src:built ~dst:(out ^ ".exe");
       SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".exe"];
+      (match phase_generated with
+       | Some generated when SomaPhase.eligible () && libraries = [] && not js &&
+           SomaImport.loaded_dependencies_certified ~source &&
+           List.for_all (fun (m : SomaForeign.ocaml_module) ->
+             match m.ml_file with None -> m.top = host_module
+             | Some path -> String.starts_with ~prefix:(Sys.getenv "SOMA_PHASE_ROOT" ^ "/")
+                              (Unix.realpath path)) modules ->
+         SomaPhase.publish ~source ~directory:dir ~switch ~output:(out ^ ".exe")
+           ~generated ~imports:(List.map snd (Library.loaded_library_files ()))
+       | _ -> ());
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".exe") ++ str "; run it with: " ++
                               str (out ^ ".exe"))
     end)
