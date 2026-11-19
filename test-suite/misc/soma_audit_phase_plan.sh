@@ -14,6 +14,11 @@ let text path = In_channel.with_open_bin path In_channel.input_all
 let path = Filename.concat
 let () =
   let base=Unix.realpath Sys.argv.(1) and mode=Sys.argv.(2) in
+  if mode="nohome" then begin
+    assert(Sys.getenv_opt "HOME"=None && Sys.getenv_opt "XDG_CACHE_HOME"=None);
+    assert(SomaPhase.record_path "fixture-key"=None);
+    print_endline "unset cache home declines optional reuse: passed";exit 0
+  end;
   let root=path base "project" and dir=path base "generated" and install=path base "install" in
   List.iter (fun d -> Unix.mkdir d 0o700) [root;dir;install];
   Unix.putenv "XDG_CACHE_HOME" (path base "cache"); Unix.putenv "SOMA_CACHE_ID" "phase-unit-compiler";
@@ -100,3 +105,5 @@ for mode in normal drift plugin; do
   mkdir "$work/$mode"
   "$work/check" "$work/$mode" "$mode"
 done
+
+env -u HOME -u XDG_CACHE_HOME "$work/check" "$work" nohome
