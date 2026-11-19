@@ -81,7 +81,7 @@ let () =
   ignore (ensure ~package:"pkg" (Opam (Some "1.0")));
   assert (not !(SomaImport.rocq_selection_uncertified));
   ignore (ensure ~package:"pkg" (Opam None));
-  assert !(SomaImport.rocq_selection_uncertified);
+  if not !(SomaImport.rocq_selection_uncertified) then failwith "floating warm cache hit was incorrectly certified";
   assert (SomaMerkle.file_hash inputs = before);
   SomaImport.rocq_selection_uncertified := false;
   let external_dir = Filename.concat (Unix.realpath (Sys.getcwd ())) "external" in
@@ -89,7 +89,7 @@ let () =
   let local_name = "pkg-local-" ^ SomaMerkle.string ("test-source-snapshot\000test-toolchain") in
   ignore (prepare local_name);
   ignore (ensure ~package:"pkg" (Local external_dir));
-  assert !(SomaImport.rocq_selection_uncertified);
+  if not !(SomaImport.rocq_selection_uncertified) then failwith "external warm cache hit was incorrectly certified";
   let pinned_dir = Filename.concat cache_root opam_name in
   List.iter (fun name ->
       let path = Filename.concat pinned_dir name in
