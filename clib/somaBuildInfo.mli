@@ -4,6 +4,7 @@
 type input = string * string
 val signature : ?write:bool -> string -> string
 val prepare_inputs : string list -> input list option
+val mark_external : unit -> unit
 val publish_inputs : input list option -> unit
 val publish_products : string list -> unit
 val publish_command : string list -> unit

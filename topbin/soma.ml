@@ -225,6 +225,33 @@ let manifest_fields file =
     List.rev (List.tl (List.rev (String.split_on_char '\000' contents)))
   end
 
+type build_metadata = {
+  products : string list;
+  external_inputs : SomaBuildInfo.input list;
+  external_build : bool;
+}
+
+let compile_products args =
+  let products = Filename.temp_file "soma-products" ".manifest" in
+  let inputs = Filename.temp_file "soma-inputs" ".manifest" in
+  let external_manifest = Filename.temp_file "soma-external" ".manifest" in
+  let variables = ["SOMA_BUILD_PRODUCTS", products; "SOMA_BUILD_INPUTS", inputs;
+                   "SOMA_BUILD_EXTERNAL", external_manifest] in
+  let previous = List.map (fun (name, _) -> name, Sys.getenv_opt name) variables in
+  List.iter (fun (name, value) -> Unix.putenv name value) variables;
+  Fun.protect ~finally:(fun () ->
+      List.iter (fun (name, value) -> Unix.putenv name (Option.value ~default:"" value)) previous;
+      List.iter (fun file -> try Sys.remove file with Sys_error _ -> ()) [products; inputs; external_manifest]) (fun () ->
+      let code, output = compile args in
+      let rec pairs = function
+        | path :: signature :: rest -> (path, signature) :: pairs rest
+        | [] -> []
+        | _ -> usage_error "soma: incomplete build-input manifest" in
+      code, output,
+      { products = List.sort_uniq String.compare (manifest_fields products);
+        external_inputs = pairs (manifest_fields inputs);
+        external_build = manifest_fields external_manifest <> [] })
+
 let starts_with ~prefix s =
   String.length s >= String.length prefix &&
   String.sub s 0 (String.length prefix) = prefix
@@ -312,7 +339,8 @@ let clean_review review =
 (* Shared compiled-artifact store: $SOMA_CACHE, or else $XDG_CACHE_HOME/soma
    (~/.cache/soma without it), keyed by a hash of the project sources that
    determine compilation (every .soma, .exp, .ext, .definition, .wasm,
-   .ml and .lean of the project by its path and bytes, soma.toml, soma.lock,
+   .ml, .mli, .v and .lean of the project by its path and bytes, its Rocq/dune
+   library configuration, soma.toml, soma.lock,
    and the toolchain). After a successful build the checkout's .soma-cache
    is published under its key; at the start of a build, an absent local
    .soma-cache is restored from the store when the same key is present. A
@@ -363,14 +391,14 @@ let is_directory_opt p = try Sys.is_directory p with Sys_error _ -> false
    exception, so that repairing them changes the key. *)
 let project_cache_sources root =
   let source name =
-    name = "soma.lock" ||
+    List.mem name ["soma.lock"; "dune"; "dune-project"; "_RocqProject"; "_CoqProject"] ||
     List.exists (Filename.check_suffix name)
-      [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".lean"; ".toml"] in
+      [".soma"; ".v"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".mli"; ".lean"; ".toml"] in
   let stat_opt p = try Some (Unix.stat p) with Unix.Unix_error _ | Sys_error _ -> None in
   let dir_id st = st.Unix.st_dev, st.Unix.st_ino in
   let digest p =
-    match (try Some (Digest.file p) with Sys_error _ | Unix.Unix_error _ -> None) with
-    | Some d -> Digest.to_hex d
+    match (try Some (SomaMerkle.file_hash p) with Sys_error _ | Unix.Unix_error _ -> None) with
+    | Some d -> d
     | None -> "<unreadable>" in
   let rec walk rel dir ancestors acc =
     Array.fold_left (fun acc name ->
@@ -397,8 +425,9 @@ let project_cache_key file =
     else let up = Filename.dirname dir in if up = dir then start_dir else find_root up in
   let root = find_root start_dir in
   let files = project_cache_sources root in
-  let key = Digest.to_hex (Digest.string (String.concat "\n"
-      (!cache_toolchain () :: List.map (fun (rel, digest) -> rel ^ " " ^ digest) files))) in
+  let key = SomaMerkle.string (String.concat "\n"
+      ("soma-project-cache 2" :: !cache_toolchain () ::
+       List.map (fun (rel, digest) -> Printf.sprintf "%S %s" rel digest) files)) in
   root, Filename.concat root ".soma-cache", key
 
 (* A dependency on a folder ({ path = "../wip" }) is compiled from sources
@@ -473,9 +502,9 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
   let args = if review then "-w" :: "-gradual-may-fail" :: args else args in
   let timing_file = if timings then Some (Filename.temp_file "soma-timings" ".log") else None in
   Option.iter (Unix.putenv "SOMA_BUILD_TIMINGS") timing_file;
-  let code, output = Fun.protect
+  let code, output, metadata = Fun.protect
       ~finally:(fun () -> Option.iter (fun _ -> Unix.putenv "SOMA_BUILD_TIMINGS" "") timing_file)
-      (fun () -> compile (file :: args)) in
+      (fun () -> compile_products (file :: args)) in
   let program_output, review_lines = split_review output in
   let output = String.concat "" (List.map (fun l -> l ^ "\n") program_output) in
   let proofs = found_proofs output in
@@ -523,7 +552,8 @@ let build ?(review=false) ?(timings=false) ?(share=true) ~verbose ~fill file arg
     if review_lines <> [] then print_newline ();
     List.iter print_endline review_lines;
     if not (clean_review review_lines) then exit 1
-  end
+  end;
+  metadata
 
 (* FILE.exp, the properties of FILE.soma, stands for the program *)
 let program_of file =
@@ -959,6 +989,7 @@ let run ~events ~supervise file args image_args =
   let argv_file = Filename.concat dir "mirage-argv" in
   Unix.putenv "SOMA_BUILD_PRODUCTS" products_file;
   Unix.putenv "SOMA_MIRAGE_ARGV" argv_file;
+  Unix.putenv "SOMA_BUILD_INPUTS" "";
   let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
   let code, output = compile (file :: "-o" :: vo :: args) in
   List.iter (fun l -> if starts_with ~prefix:"Mirage: setting up" l ||
@@ -1066,10 +1097,10 @@ let run ~events ~supervise file args image_args =
    same but the last part, which it compares file by file. A record is
    written only when what it can say is certain: no dependency outside the
    project (soma.lock, .soma-cache/.deps, Rocq libraries that a dependency
-   named), no option that names files elsewhere or writes into FILE.exp, no
-   kept output (an image, an executable, a page, built with tools outside
-   soma), and the project not changed while it was built. Anything missing,
-   unreadable or unexpected is stale. *)
+   named), no option that names files elsewhere or writes into FILE.exp,
+   and the project not changed while it was built. Kept native products need
+   a compiler manifest and stable fingerprints of their external build inputs.
+   Anything missing, unreadable or unexpected is stale. *)
 
 exception Uncertain of string
 
@@ -1084,7 +1115,7 @@ let fingerprint_writes = ref true
 let fresh_error path e = uncertain "cannot read %s: %s" path (Unix.error_message e)
 
 let fresh_digest path =
-  try Digest.to_hex (Digest.file path)
+  try SomaMerkle.file_hash path
   with Sys_error e -> uncertain "cannot read %s" e
 
 let fresh_readdir dir =
@@ -1094,13 +1125,14 @@ let fresh_readdir dir =
 
 (* Every file under [dir], [prefix/relative path, digest], following
    symbolic links (an installation's files are), but those named [skip] *)
-let fresh_tree ?(skip = []) ~prefix dir =
+let fresh_tree ?(skip = []) ?(omit = []) ~prefix dir =
   let rec walk depth dir rel acc =
     if depth > 64 then uncertain "%s is too deep, or a cycle of links" dir;
     List.fold_left (fun acc name ->
         if List.mem name skip then acc else
         let full = Filename.concat dir name in
         let r = rel ^ "/" ^ name in
+        if List.mem full omit then acc else
         match (Unix.stat full).Unix.st_kind with
         | exception Unix.Unix_error (e, _, _) -> fresh_error full e
         | Unix.S_DIR -> walk (depth + 1) full r acc
@@ -1113,7 +1145,10 @@ let env_matters entry =
   let name = match String.index_opt entry '=' with
     | Some i -> String.sub entry 0 i | None -> entry in
   not (starts_with ~prefix:"SOMA_TEST_" name) &&
-  (List.mem name ["PATH"; "HOME"; "LD_LIBRARY_PATH"; "DYLD_LIBRARY_PATH"] ||
+  (List.mem name ["PATH"; "HOME"; "LD_LIBRARY_PATH"; "DYLD_LIBRARY_PATH";
+                  "CC"; "CXX"; "CPP"; "CFLAGS"; "CXXFLAGS"; "CPPFLAGS"; "LDFLAGS";
+                  "SDKROOT"; "MACOSX_DEPLOYMENT_TARGET"; "LIBRARY_PATH"; "CPATH";
+                  "PKG_CONFIG_PATH"; "PKG_CONFIG_LIBDIR"] ||
   List.exists (fun prefix -> starts_with ~prefix name)
     ["SOMA_"; "ROCQ"; "COQ"; "OCAML"; "CAML_"; "OPAM"; "DUNE_"; "XDG_"])
 
@@ -1170,7 +1205,7 @@ type fresh_config = { verbose : bool; fill : bool; no_image : bool; file : strin
 
 (* What a build of [c] reads of its project, and how it was asked for; with
    [~toolchain], of soma's installation too *)
-let fresh_inputs ~toolchain c =
+let fresh_inputs ?(products=[]) ~toolchain c =
   let canonical, root = fresh_project c.file in
   let cache = Filename.concat root ".soma-cache" in
   if c.fill then uncertain "--fill writes into the program's .exp";
@@ -1196,17 +1231,17 @@ let fresh_inputs ~toolchain c =
       Printf.sprintf "flags verbose=%b no_image=%b" c.verbose c.no_image ] @
     List.map (fun a -> "arg " ^ String.escaped a) c.args @
     List.map (fun e -> "env " ^ String.escaped e) (List.sort compare (List.filter env_matters initial_env)) in
-  let sources = List.map (fun (r, d) -> Printf.sprintf "source %s %s" (String.escaped r) d)
-      (fresh_tree ~skip:[".soma-cache"; ".git"] ~prefix:"." root) in
+  let sources = List.map (fun (r, d) -> Printf.sprintf "source %S %s" r d)
+      (fresh_tree ~skip:[".soma-cache"; ".git"] ~omit:products ~prefix:"." root) in
   root, cache, config @ (if toolchain then fresh_toolchain () else []) @ sources
 
 let freshness_record cache canonical =
-  Filename.concat (Filename.concat cache ".freshness") (Digest.to_hex (Digest.string canonical))
+  Filename.concat (Filename.concat cache ".freshness") (SomaMerkle.string canonical)
 
 let fresh_outputs cache =
   if not (Sys.file_exists cache) then [] else begin
   if not (is_directory_opt cache) then uncertain "%s is no directory" cache;
-  List.map (fun (r, d) -> Printf.sprintf "output %s %s" (String.escaped r) d)
+  List.map (fun (r, d) -> Printf.sprintf "output %S %s" r d)
     (fresh_tree ~skip:[".freshness"; ".interfaces"; ".tests"] ~prefix:"." cache)
   end
 
@@ -1220,18 +1255,56 @@ let forget_freshness c =
     if Sys.file_exists record then None else Some (fresh_inputs ~toolchain:false c)
   with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> None
 
+let certified_product root path =
+  let full = if Filename.is_relative path then Filename.concat (Sys.getcwd ()) path else path in
+  if (Unix.lstat full).Unix.st_kind <> Unix.S_REG then
+    uncertain "build product %s is not a regular file" path;
+  let full = Unix.realpath full in
+  if not (String.starts_with ~prefix:(root ^ "/") full) ||
+     not (List.exists (Filename.check_suffix full) [".exe"; ".hvt"; ".html"; ".js"]) then
+    uncertain "build product %s is outside the supported output set" path;
+  full
+
+let omit_products root products rows =
+  List.filter (fun row ->
+      if not (starts_with ~prefix:"source " row) then true else
+      Scanf.sscanf row "source %S %s%!" (fun path _digest ->
+          let path = if starts_with ~prefix:"./" path then String.sub path 2 (String.length path - 2) else path in
+          not (List.mem (Filename.concat root path) products))) rows
+
+let build_input_signature path =
+  try SomaBuildInfo.signature ~write:!fingerprint_writes path with
+  | Failure reason -> uncertain "%s" reason
+
+let certified_external_inputs rows =
+  List.sort_uniq compare rows |> List.map (fun (path, signature) ->
+      if path = "" || Filename.is_relative path then uncertain "unresolved external build input";
+      if build_input_signature path <> signature then uncertain "external build input %s changed" path;
+      Printf.sprintf "external %S %S" path signature)
+
 (* After a successful build [c]: its record, when it is certain. [before] is
    what [forget_freshness] saw, and [kept] the outputs the build kept. *)
-let record_freshness c before ~kept =
+let record_freshness c before ~kept ~metadata =
   match before with
   | None -> ()
-  | Some (_, _, before_lines) ->
+  | Some (root, _, before_lines) ->
     try
-      if kept <> [] then uncertain "the build kept outputs";
-      let _, cache, during = fresh_inputs ~toolchain:false c in
+      let products = List.map (certified_product root) metadata.products |> List.sort_uniq String.compare in
+      if List.exists (fun path -> not (List.mem (certified_product root path) products)) kept then
+        uncertain "the build kept an unreported output";
+      if (metadata.external_build || products <> []) && metadata.external_inputs = [] then
+        uncertain "external build inputs were not certified";
+      let external_inputs = certified_external_inputs metadata.external_inputs in
+      let before_lines = omit_products root products before_lines in
+      let _, cache, during = fresh_inputs ~products ~toolchain:false c in
       if during <> before_lines then uncertain "the project changed during the build";
-      let _, _, inputs = fresh_inputs ~toolchain:true c in
+      let _, _, inputs = fresh_inputs ~products ~toolchain:true c in
       let outputs = fresh_outputs cache in
+      let products = List.map (fun path ->
+          let signature = build_input_signature path in
+          SomaCache.record path;
+          if not (SomaCache.trusted path) then uncertain "build product %s has no provenance" path;
+          Printf.sprintf "product %S %S" path signature) products in
       let dir = Filename.concat cache ".interfaces" in
       let interfaces = if not (is_directory_opt dir) then [] else
         List.map (fun name -> String.trim (In_channel.with_open_bin
@@ -1239,12 +1312,15 @@ let record_freshness c before ~kept =
       let canonical, _ = fresh_project c.file in
       let record = freshness_record cache canonical in
       mkdir_p (Filename.dirname record);
-      let tmp = record ^ ".tmp" in
-      Out_channel.with_open_bin tmp (fun oc ->
-          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs @ interfaces));
-      Sys.rename tmp record;
+      let tmp, oc = Filename.open_temp_file ~temp_dir:(Filename.dirname record) ".freshness-" ".tmp" in
+      Fun.protect ~finally:(fun () ->
+          close_out_noerr oc;
+          try Sys.remove tmp with Sys_error _ -> ()) (fun () ->
+          List.iter (fun l -> output_string oc (l ^ "\n")) (inputs @ outputs @ products @ external_inputs @ interfaces);
+          close_out oc;
+          Unix.rename tmp record);
       SomaCache.record record
-    with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> ()
+    with Uncertain _ | Sys_error _ | Unix.Unix_error _ | Scanf.Scan_failure _ | End_of_file | Failure _ -> ()
 
 (* [Ok ()] when unchanged, or why not *)
 let freshness_verdict c =
@@ -1261,12 +1337,25 @@ let freshness_verdict c =
       if not (SomaCache.trusted record) then uncertain "no record of a successful build";
       (* Interface digests do not participate in freshness or import stamps. *)
       let is_output l = starts_with ~prefix:"output " l in
-      let recorded_inputs = List.filter (fun l -> not (is_output l || starts_with ~prefix:"interface " l)) recorded in
+      let is_product l = starts_with ~prefix:"product " l in
+      let is_external l = starts_with ~prefix:"external " l in
+      let recorded_inputs = List.filter (fun l -> not (is_output l || is_product l || is_external l || starts_with ~prefix:"interface " l)) recorded in
       let recorded_outputs = List.filter is_output recorded in
-      let _, cache, inputs = fresh_inputs ~toolchain:true c in
+      let recorded_products = List.filter is_product recorded in
+      let products = List.map (fun row -> Scanf.sscanf row "product %S %S%!" (fun path signature ->
+          let path = certified_product root path in
+          if build_input_signature path <> signature then uncertain "build product %s changed" path;
+          if not (SomaCache.trusted path) then uncertain "build product %s has no provenance" path;
+          path)) recorded_products in
+      List.iter (fun row -> Scanf.sscanf row "external %S %S%!" (fun path signature ->
+          if build_input_signature path <> signature then uncertain "external build input %s changed" path))
+        (List.filter is_external recorded);
+      let _, cache, inputs = fresh_inputs ~products ~toolchain:true c in
       if inputs <> recorded_inputs then begin
         let kind l = match String.index_opt l ' ' with Some i -> String.sub l 0 i | None -> l in
-        let name l = match String.split_on_char ' ' l with _ :: n :: _ -> n | _ -> l in
+        let name l =
+          if starts_with ~prefix:"source " l then Scanf.sscanf l "source %S %s%!" (fun path _ -> path)
+          else match String.split_on_char ' ' l with _ :: n :: _ -> n | _ -> l in
         let changed = List.filter (fun l -> not (List.mem l recorded_inputs)) inputs
                       @ List.filter (fun l -> not (List.mem l inputs)) recorded_inputs in
         match changed with
@@ -1278,18 +1367,15 @@ let freshness_verdict c =
          .vo was deliberately removed after all proofs were checked. The
          trusted success record still binds its complete inputs/toolchain. *)
       List.iter (fun l ->
-          match String.split_on_char ' ' l with
-          | ["output"; r; d] ->
-            let path = Filename.concat cache (Scanf.unescaped r) in
+          Scanf.sscanf l "output %S %s%!" (fun r d ->
+            let path = Filename.concat cache r in
             if not (Sys.file_exists path) then uncertain "compiled output %s is missing" r;
-            if fresh_digest path <> d then uncertain "compiled output %s changed" r
-          | _ -> uncertain "the record of the last build is unreadable") recorded_outputs;
-      List.iter (fun l -> match String.split_on_char ' ' l with
-          | ["output"; r; _] ->
-            let path = Filename.concat cache (Scanf.unescaped r) in
+            if fresh_digest path <> d then uncertain "compiled output %s changed" r)) recorded_outputs;
+      List.iter (fun l -> Scanf.sscanf l "output %S %s%!" (fun r _ ->
+            let path = Filename.concat cache r in
             if List.exists (Filename.check_suffix path) [".vo"; ".stamp"] &&
                not (SomaCache.trusted path) then uncertain "compiled output %s has no provenance" r
-          | _ -> ()) recorded_outputs;
+          )) recorded_outputs;
       Ok ()
     with
     | Uncertain reason -> Error reason
@@ -1393,8 +1479,8 @@ let () =
     let identity no_image =
       initialize ();
       let env = List.filter env_matters initial_env |> List.sort String.compare in
-      Digest.to_hex (Digest.string (String.concat "\n"
-          ((!cache_toolchain) () :: string_of_bool no_image :: env))) in
+      SomaMerkle.string (String.concat "\n"
+          ((!cache_toolchain) () :: string_of_bool no_image :: env)) in
     let build_test ~source ~trace ~no_image =
       initialize ();
       let prog = Sys.executable_name in
@@ -1482,9 +1568,9 @@ let () =
         let dir = output_dir (program_of file) args in
         let before_build = if record then modification_times dir else [] in
         let before = if record then forget_freshness config else None in
-        build ~review:(command = "compile") ~timings ~share:(not no_module_cache) ~verbose ~fill (program_of file) args;
+        let metadata = build ~review:(command = "compile") ~timings ~share:(not no_module_cache) ~verbose ~fill (program_of file) args in
         if record then
-          record_freshness config before ~kept:(created ~before:before_build ~source:(program_of file) dir)
+          record_freshness config before ~metadata ~kept:(created ~before:before_build ~source:(program_of file) dir)
     end
   | "extract" :: rest ->
     begin match rest with

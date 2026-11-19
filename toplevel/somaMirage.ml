@@ -1887,8 +1887,36 @@ let with_build_lock f =
       Unix.lockf fd Unix.F_LOCK 0;
       f ())
 
+(* Optional freshness evidence for an actual image build. Resolve the switch
+   that supplies its compiler/tools, then snapshot those inputs after setup,
+   before make build. If the installation cannot be identified, building is
+   still supported, but the CLI must not certify a future build as unchanged. *)
+let image_build_inputs ~switch ~dir sources =
+  match Sys.getenv_opt "SOMA_BUILD_INPUTS" with
+  | None | Some "" -> None
+  | Some _ ->
+    try
+      let out = Filename.temp_file "soma-mirage-prefix" ".log" in
+      let prefix = Fun.protect ~finally:(fun () -> try Sys.remove out with Sys_error _ -> ()) (fun () ->
+          if not (SomaOpam.run ~log:out ["opam"; "var"; "--switch=" ^ switch; "prefix"]) then
+            failwith "unknown image compiler prefix";
+          Unix.realpath (String.trim (read_file out))) in
+      List.iter (fun name -> if not (Sys.is_directory (Filename.concat prefix name)) then
+                    failwith "unknown image compiler installation") ["bin"; "lib"];
+      let opam_root = getenv_default "OPAMROOT" (Filename.concat (getenv_default "HOME" ".") ".opam") in
+      let paths = List.map (Filename.concat prefix)
+          ["bin"; "lib"; ".opam-switch/switch-state"; ".opam-switch/switch-config"; ".opam-switch/overlay"] @
+          [Filename.concat opam_root "config"] @
+          List.map (Filename.concat dir)
+            ["duniverse"; "mirage"; "Makefile"; "dune"; "dune-project"; "config.ml";
+             "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_wasm.ml";
+             "float64.ml"; "uint63.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
+      SomaBuildInfo.prepare_inputs paths
+    with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
+
 let build ~state ~source ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then with_build_lock (fun () ->
+    SomaBuildInfo.mark_external ();
     check_main ();
     let calls = foreign_calls () in
     let ocaml_modules, libraries = ocaml_modules () in
@@ -1951,17 +1979,23 @@ let build ~state ~source ~vo_file =
     let log = Filename.concat dir "build.log" in
     (* opam-monorepo (make depends) asks opam for the current switch,
        which opam exec --switch does not set when there is no default *)
-    let script = Printf.sprintf "export OPAMSWITCH=%s && cd %s && %smake build"
-        (Filename.quote switch) (Filename.quote dir) setup in
-    let cmd = Filename.quote_command "opam" ["exec"; "--switch=" ^ switch; "--"; "sh"; "-c"; script]
-        ~stdout:log ~stderr:log in
+    let execute commands =
+      let script = Printf.sprintf "export OPAMSWITCH=%s && cd %s && %s"
+          (Filename.quote switch) (Filename.quote dir) commands in
+      let cmd = Filename.quote_command "opam" ["exec"; "--switch=" ^ switch; "--"; "sh"; "-c"; script]
+          ~stdout:log ~stderr:log in
+      if Sys.command cmd <> 0 then
+        error Pp.(str "building the image failed (opam switch " ++ str switch ++
+                  str "); the end of " ++ str log ++ str ":" ++ fnl () ++
+                  str (tail_of_file log)) in
     if setup <> "" then
       Feedback.msg_notice Pp.(str "Mirage: setting up the MirageOS project in " ++ str dir ++
                               str " (once; fetches the dependencies)");
-    if Sys.command cmd <> 0 then
-      error Pp.(str "building the image failed (opam switch " ++ str switch ++
-                str "); the end of " ++ str log ++ str ":" ++ fnl () ++
-                str (tail_of_file log));
+    if setup <> "" then execute (setup ^ "true");
+    let sources = List.map (fun (_, (call : SomaForeign.image_call)) -> call.module_file) calls @
+        List.filter_map (fun (m : SomaForeign.ocaml_module) -> m.ml_file) ocaml_modules in
+    let inputs = image_build_inputs ~switch ~dir sources in
+    execute "make build";
     let hvt = Filename.remove_extension vo_file ^ ".hvt" in
     copy_file ~src:(List.fold_left Filename.concat dir ["dist"; "soma.hvt"]) ~dst:hvt;
     (* the memory the image runs in, in MB: $SOMA_MIRAGE_MEM, or 256 *)
@@ -1971,16 +2005,9 @@ let build ~state ~source ~vo_file =
     let hvt_args = ["solo5-hvt"; Printf.sprintf "--mem=%d" mem] @
         (if storage then ["--block:storage=storage.img"] else []) @ ["--"; hvt] in
     let command = (if network then ["solo5-vmnet"; "--"] else []) @ hvt_args in
-    (match Sys.getenv_opt "SOMA_MIRAGE_ARGV" with
-     | Some file when file <> "" ->
-       Out_channel.with_open_bin file (fun oc ->
-           List.iter (fun arg -> output_string oc arg; output_char oc '\000') command)
-     | _ -> ());
-    (match Sys.getenv_opt "SOMA_BUILD_PRODUCTS" with
-     | Some file when file <> "" ->
-       Out_channel.with_open_gen [Open_wronly; Open_creat; Open_append; Open_binary] 0o600 file (fun oc ->
-           output_string oc hvt; output_char oc '\000')
-     | _ -> ());
+    SomaBuildInfo.publish_command command;
+    SomaBuildInfo.publish_inputs inputs;
+    SomaBuildInfo.publish_products [hvt];
     let run = Filename.quote_command (List.hd command) (List.tl command) in
     Feedback.msg_notice Pp.(str "Mirage: built " ++ str hvt ++
                             str "; run it with: " ++ str run)
