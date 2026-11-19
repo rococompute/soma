@@ -50,7 +50,7 @@ let plugin ~package ~files =
   if requested () &&
      (not (String.starts_with ~prefix:"soma-runtime.plugins." package) ||
       files = [] || not (List.for_all (fun file -> try installed (canonical file) with _ -> false) files))
-  then refuse ()
+  then safe := false
 
 let rec mkdir dir =
   if not (Sys.file_exists dir) then begin
