@@ -374,8 +374,20 @@ let run ~identity ~build args =
       |> List.map (Filename.concat root) in
   let tests = List.concat_map (fun p -> discover root (absolute p)) paths |> List.sort_uniq String.compare in
   let inputs = snapshot root repo in
-  let identity = if tests = [] then "" else identity !no_image in
+  let compiler_identity = if tests = [] then "" else identity !no_image in
+  let identity_for test =
+    let source = Filename.concat root test in
+    let dir = Unix.realpath (Filename.dirname source) in
+    let scope = match project dir with
+      | Some _ -> "manifest"
+      | None ->
+        (* A standalone file's build root is its own parent, not the Git
+           checkout root. Its fallback rule name changes when that parent
+           is renamed, even when Git reports no changed file bytes. *)
+        "standalone:" ^ SomaRuleInputs.fallback_root_name dir in
+    SomaMerkle.string ("soma-test-scope 1\000" ^ compiler_identity ^ "\000" ^ scope) in
   let selected = List.filter (fun test ->
+      let identity = identity_for test in
       match selection with
       | Full _ -> true
       | Diff (changed, _, include_drift) ->
@@ -386,6 +398,7 @@ let run ~identity ~build args =
     let reason = match selection with Full reason -> reason | Diff (_, reason, _) -> reason ^ "; missing or uncertain records also run" in
     Printf.eprintf "soma test: %d of %d entry points selected (%s)\n%!" (List.length selected) (List.length tests) reason;
     List.iter (fun test ->
+        let identity = identity_for test in
         let receipt_file = record root test in
         if Sys.file_exists receipt_file then Sys.remove receipt_file;
         let before = snapshot root repo in
