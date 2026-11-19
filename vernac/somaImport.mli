@@ -53,7 +53,8 @@ val rocq_library_var : string
 val refuse_ml_module_in_rocq_library : unit -> unit
 
 (** Written at the end of a compilation that [prepare] started: its stamp,
-    the hash of its source and the digests of what it imported *)
+    the pre-compilation source/companion hash and the digests of its imports.
+    Refuses certification if that snapshot or this worker's output changed. *)
 val write_stamp : unit -> unit
 
 (** Is [f] the rules of its folder: X/X.ext, with no X/X.soma? Their

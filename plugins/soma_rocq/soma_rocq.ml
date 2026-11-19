@@ -250,12 +250,13 @@ let dependency_order files text =
   parse 0 []
 
 (* [ts] compiled by Soma, in dependency order *)
-let compile ~name ~log ts =
+let compile ~prerequisites ~name ~log ts =
+  let loads = List.concat_map (fun (logical, dir) -> ["-Q"; dir; logical]) prerequisites @ load_args ts in
   let files = List.concat_map sources ts in
   if files = [] then error (str name ++ str " has no Rocq file in its theories.");
   let order = Filename.concat (Filename.dirname log) "order" in
   let dir = Filename.dirname log in
-  if not (run_to ~dir ~out:order ([rocq_binary (); "dep"; "-sort"] @ load_args ts @ files)) then
+  if not (run_to ~dir ~out:order ([rocq_binary (); "dep"; "-sort"] @ loads @ files)) then
     error (str "rocq dep failed on " ++ str name ++ str "; the end of " ++ str order ++ str ":" ++ fnl () ++
            str (SomaOpam.tail_of_file order));
   let order = dependency_order files (read_file order) in
@@ -272,7 +273,7 @@ let compile ~name ~log ts =
          refuses the parsed [Declare ML Module] (SomaImport), before it
          loads anything, however it is spaced or commented *)
       let env = [SomaImport.rocq_library_var ^ "=" ^ name] in
-      if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ load_args ts @ [f])) then
+      if not (run_to ~env ~dir ~out:log ([Boot.Env.self; "--kind=compile"; "-q"; "-no-soma-prelude"] @ loads @ [f])) then
         error (str "Soma could not compile " ++ str rel ++ str ", of " ++ str name ++ str "; the end of " ++
                str log ++ str ":" ++ fnl () ++ str (SomaOpam.tail_of_file log)))
     order
@@ -374,8 +375,36 @@ let with_lock file f =
    written last, and renamed into place, so a partial one is no [theories]. *)
 let compiled_theories ~key directory =
   match SomaRocqCache.load ~key ~directory ~resolve_input:SomaImport.resolve_project_file with
-  | Some entry -> Some entry.SomaRocqCache.theories
+  | Some entry -> Some (entry.SomaRocqCache.theories, entry)
   | None -> None
+
+(* Only successful explicit selections in this compilation are prerequisites.
+   The archival ledger is not a dependency declaration. Re-selecting a package
+   does not depend on its own previously selected version. *)
+type selected_library = { key : string; directory : string; entry : SomaRocqCache.entry }
+let selected_libraries : (string * selected_library) list ref = ref []
+
+let check_prerequisites selections =
+  List.iter (fun (package, selection) ->
+      match SomaRocqCache.load ~key:selection.key ~directory:selection.directory
+              ~resolve_input:SomaImport.resolve_project_file with
+      | Some entry when entry.SomaRocqCache.completion_digest = selection.entry.SomaRocqCache.completion_digest -> ()
+      | _ -> error (str "the selected prerequisite " ++ qstring package ++
+                    str " changed while it was being used; select it again and rebuild.")) selections
+
+let prerequisite_paths selections =
+  List.fold_left (fun paths (_, selection) ->
+      List.fold_left (fun paths (logical, dir) ->
+          List.filter (fun (name, _) -> name <> logical) paths @ [logical, dir])
+        paths selection.entry.SomaRocqCache.theories) [] selections
+
+let prerequisite_key toolchain selections =
+  match selections with
+  | [] -> toolchain
+  | _ ->
+    let rows = List.map (fun (package, selection) ->
+        Printf.sprintf "%S %s\n" package selection.entry.SomaRocqCache.completion_digest) selections in
+    SomaMerkle.string ("soma-rocq-prerequisites 1\000" ^ toolchain ^ "\000" ^ String.concat "" rows)
 
 (* [package], compiled: its theories, from [cache ()] or else compiled now *)
 let ensure ~package source =
@@ -391,7 +420,9 @@ let ensure ~package source =
   (match source with Opam (Some version) -> require_component "version" version | Opam None | Local _ -> ());
   let root = cache () in
   SomaOpam.mkdir_p root;
-  let key = soma_key () in
+  let prerequisites = List.filter (fun (name, _) -> name <> package) !selected_libraries in
+  check_prerequisites prerequisites;
+  let key = prerequisite_key (soma_key ()) prerequisites in
   let dir, fetch, local_key = match source with
     | Local path ->
       if not (Sys.file_exists path && Sys.is_directory path) then
@@ -426,7 +457,7 @@ let ensure ~package source =
      library did while this one waited for it is then seen, not undone. The
      lock of another library is another file, so libraries whose keys differ
      still compile at the same time. *)
-  with_lock (lock_file root name) (fun () ->
+  let result, entry = with_lock (lock_file root name) (fun () ->
       match compiled_theories ~key:name dir with
       | Some ts -> ts
       | None ->
@@ -447,7 +478,8 @@ let ensure ~package source =
           error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
                  spc () ++ str "and there is no _RocqProject or _CoqProject.");
         let snapshot = SomaRocqCache.source_snapshot ~directory:dir in
-        compile ~name ~log:(Filename.concat dir "compile.log") ts;
+        compile ~prerequisites:(prerequisite_paths prerequisites) ~name ~log:(Filename.concat dir "compile.log") ts;
+        check_prerequisites prerequisites;
         (match source, local_key with
          | Local path, Some expected when source_key src <> expected || source_key path <> expected ->
            error (str "the local library's sources changed while it was compiled; build again.")
@@ -468,7 +500,14 @@ let ensure ~package source =
            cache is explicitly removed. A build or REPL can still be loading
            a different key after its compilation lock has been released, so
            even taking that key's lock would not make its deletion safe. *)
-        List.map (fun t -> (t.logical, t.dir)) ts)
+        match SomaRocqCache.load ~key:name ~directory:dir
+                ~resolve_input:SomaImport.resolve_project_file with
+        | Some entry -> entry.SomaRocqCache.theories, entry
+        | None -> error (str "the completed Rocq library changed before selection; rebuild.")) in
+  check_prerequisites prerequisites;
+  selected_libraries := List.filter (fun (old, _) -> old <> package) !selected_libraries @
+                        [package, { key = name; directory = dir; entry }];
+  result
 
 (* [Rocq Library "package".]: in the load path, compiled if need be *)
 let library package source =

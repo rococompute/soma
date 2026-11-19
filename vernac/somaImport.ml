@@ -42,6 +42,7 @@ let root_var = "SOMA_PROJECT_ROOT"
 let stack_var = "SOMA_IMPORT_STACK"
 let stamp_var = "SOMA_IMPORT_STAMP"
 let source_var = "SOMA_IMPORT_SOURCE"
+let expected_source_var = "SOMA_IMPORT_EXPECTED_SOURCE"
 let cache_var = "SOMA_PROJECT_CACHE"
 let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
@@ -302,6 +303,66 @@ let interface_digest vo =
               SomaMerkle.channel ~len:segment.ObjFile.len ic in
             SomaMerkle.string ("soma-interface 4\000" ^ hash "summary" ^ hash "library")))
 
+(* Import workers keep the snapshot selected before their process started.
+   A later source edit must never be adopted by the stamp of older code. *)
+let import_outputs : (string, string) Hashtbl.t = Hashtbl.create 3
+let published_import_outputs : (string, Unix.stats) Hashtbl.t = Hashtbl.create 3
+
+let same_output a b =
+  a.Unix.st_dev = b.Unix.st_dev && a.Unix.st_ino = b.Unix.st_ino &&
+  a.Unix.st_kind = b.Unix.st_kind && a.Unix.st_size = b.Unix.st_size &&
+  a.Unix.st_mtime = b.Unix.st_mtime && a.Unix.st_ctime = b.Unix.st_ctime
+
+let remove_if_present file = try Sys.remove file with Sys_error _ -> ()
+
+let discard_import_outputs () =
+  Hashtbl.iter (fun _ tmp -> remove_if_present tmp) import_outputs;
+  Hashtbl.clear import_outputs;
+  Hashtbl.iter (fun file identity ->
+      try if same_output identity (Unix.lstat file) then remove_if_present file
+      with Unix.Unix_error _ -> ()) published_import_outputs;
+  Hashtbl.clear published_import_outputs
+
+let () = at_exit (fun () ->
+    Hashtbl.iter (fun _ tmp -> remove_if_present tmp) import_outputs)
+
+let require_source_snapshot src expected =
+  let matches = try SomaMerkle.valid_hash expected && source_hash src = expected
+    with Sys_error _ | Unix.Unix_error _ -> false in
+  if not matches then begin
+    discard_import_outputs ();
+    CErrors.user_err Pp.(str (Filename.basename src) ++
+      str ": source or companion files changed while compiling; retry the build.")
+  end
+
+let expected_import_source () =
+  match Sys.getenv_opt stamp_var, Sys.getenv_opt source_var,
+        Sys.getenv_opt expected_source_var with
+  | Some stamp, Some src, Some expected when stamp <> "" ->
+    require_source_snapshot src expected;
+    Some expected
+  | Some stamp, _, _ when stamp <> "" ->
+    discard_import_outputs ();
+    CErrors.user_err Pp.(str "Import compilation has no pre-compilation source snapshot; retry the build.")
+  | _ -> None
+
+let require_published_import_output file =
+  let matches = match Hashtbl.find_opt published_import_outputs file with
+    | Some identity ->
+      (try same_output identity (Unix.lstat file) with Unix.Unix_error _ -> false)
+    | None -> false in
+  if not matches then begin
+    discard_import_outputs ();
+    CErrors.user_err Pp.(str (Filename.basename file) ++
+      str ": compiled output changed before certification; retry the build.")
+  end
+
+let publish_import_output ~tmp ~file =
+  ignore (expected_import_source ());
+  Sys.rename tmp file;
+  Hashtbl.remove import_outputs file;
+  Hashtbl.replace published_import_outputs file (Unix.lstat file)
+
 (* The digests of the files of libraries, each read once *)
 let digests : (string, string) Hashtbl.t = Hashtbl.create 97
 
@@ -440,21 +501,62 @@ let with_load_paths_lock file f =
       lock ();
       f ())
 
+let parse_load_path line =
+  match String.index_opt line ' ' with
+  | Some i when i > 0 && i + 1 < String.length line ->
+    Some (String.sub line 0 i, String.sub line (i + 1) (String.length line - i - 1))
+  | _ -> None
+
+(* Older ledgers could contain several versions of the same exact prefix.
+   Keep the most recent choice; independent nested theories keep their rows. *)
+let current_load_paths lines =
+  List.fold_left (fun paths line -> match parse_load_path line with
+      | None -> paths
+      | Some (logical, _) ->
+        List.filter (fun row -> match parse_load_path row with
+            | Some (other, _) -> logical <> other | None -> false) paths @ [line]) [] lines
+
+let retire_load_paths ~logical ~dir ~other_choices old =
+  let within root path = path = root || CString.is_prefix (root ^ "/") path in
+  let logical_within prefix name = name = prefix || CString.is_prefix (prefix ^ ".") name in
+  let paths = Loadpath.get_load_paths () in
+  let old = List.fold_left (fun old path ->
+      if DirPath.to_string (Loadpath.logical path) = logical && Loadpath.physical path <> dir
+      then Loadpath.physical path :: old else old) old paths |> List.sort_uniq compare in
+  List.iter (fun path ->
+      let physical = Loadpath.physical path in
+      let name = DirPath.to_string (Loadpath.logical path) in
+      if logical_within logical name && List.exists (fun root -> within root physical) old &&
+         not (List.exists (fun (prefix, root) ->
+             logical_within prefix name && within root physical) other_choices)
+      then Loadpath.remove_load_path physical) paths
+
 let record_load_path logical dir =
   let file = load_paths_file () in
   with_load_paths_lock file (fun () ->
+      let previous = if SomaCache.trusted file then SomaOpam.read_lines file else [] in
+      let old = List.filter_map (fun row -> match parse_load_path row with
+          | Some (name, physical) when name = logical && physical <> dir -> Some physical
+          | _ -> None) previous in
       let line = logical ^ " " ^ dir in
-      if not (SomaCache.trusted file) then (try Sys.remove file with Sys_error _ -> ());
-      if not (List.mem line (SomaOpam.read_lines file)) then begin
-        Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o644 file (fun oc ->
-            output_string oc (line ^ "\n"));
+      let lines = current_load_paths (previous @ [line]) in
+      let other_choices = List.filter_map (fun row -> match parse_load_path row with
+          | Some (name, physical) when name <> logical -> Some (name, physical)
+          | _ -> None) lines in
+      retire_load_paths ~logical ~dir ~other_choices old;
+      if previous <> lines then begin
+        let tmp = Filename.temp_file ~temp_dir:(Filename.dirname file) ".soma-load-paths-" ".tmp" in
+        Fun.protect ~finally:(fun () -> remove_if_present tmp) (fun () ->
+            Out_channel.with_open_bin tmp (fun oc ->
+                List.iter (fun line -> output_string oc (line ^ "\n")) lines);
+            Sys.rename tmp file);
         SomaCache.record file
       end)
 
 let read_load_paths () =
   let file = load_paths_file () in
   with_load_paths_lock file (fun () ->
-      if SomaCache.trusted file then SomaOpam.read_lines file else [])
+      if SomaCache.trusted file then current_load_paths (SomaOpam.read_lines file) else [])
 
 (* A Rocq library records the exact source/configuration inputs it compiled.
    Paths inside this project are relative so copied project caches retain
@@ -615,7 +717,10 @@ let has_proofs src =
 
 (* What compiles [path]: the program, its arguments and its environment.
    [interface]: without the proofs of its lemmas, into PATH.vos. *)
-let compile_command ?loc ?(delayed=false) ~interface p path src =
+let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src =
+  let expected_source = match expected_source with
+    | Some expected -> require_source_snapshot src expected; expected
+    | None -> source_hash src in
   let vo = vo_of p path in
   mkdir_p (Filename.dirname vo);
   (* a module without a definition: an empty one, in the cache, for the
@@ -630,7 +735,7 @@ let compile_command ?loc ?(delayed=false) ~interface p path src =
     end else [], src in
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
+                                   [root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
@@ -639,6 +744,7 @@ let compile_command ?loc ?(delayed=false) ~interface p path src =
           stack_var ^ "=" ^ String.concat ":" (stack ?loc () @ [qualified p path]);
           stamp_var ^ "=" ^ stamp_of p path;
           source_var ^ "=" ^ src;
+          expected_source_var ^ "=" ^ expected_source;
           (* what a program imports is not a unikernel of its own *)
           "SOMA_MIRAGE_BUILD=0"; "SOMA_OCAML_BUILD=0" ] @ module_file
       @ (if interface then [ interface_var ^ "=1" ] else [])) in
@@ -653,7 +759,7 @@ let compile_command ?loc ?(delayed=false) ~interface p path src =
      same as without them, and so is its library. *)
   let argv = Array.of_list ([ prog; "--kind=compile"; input; "-o"; vo; "-Q"; p.cache_dir; p.prefix ]
                             @ (if interface || delayed then [ "-async-proofs"; "lazy" ] else [])) in
-  prog, argv, env
+  prog, argv, env, expected_source
 
 (* Starts a compilation, its output discarded and its errors shown *)
 let start_compile_process prog argv env =
@@ -691,11 +797,12 @@ let say_compiling p path src =
 
 (* [path] compiled without its proofs is what its importers need: in place,
    as PATH.vo, and its proofs checked beside the build, into the same .vo *)
-let check_proofs_beside dir ?loc p path src =
+let check_proofs_beside dir ?loc ~expected_source p path src =
+  require_source_snapshot src expected_source;
   let vo = vo_of p path in
   Sys.rename (vo ^ "s") vo;
   let id = qualified p path in
-  let prog, argv, env = compile_command ?loc ~delayed:true ~interface:false p path src in
+  let prog, argv, env, _ = compile_command ?loc ~delayed:true ~expected_source ~interface:false p path src in
   let env = Array.append env
       [| proof_job_var ^ "=" ^ id; interface_digest_var ^ "=" ^ interface_digest vo |] in
   let flags = [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC; Unix.O_CLOEXEC] in
@@ -711,11 +818,11 @@ let compile ?loc p path src =
   say_compiling p path src;
   match jobs_dir () with
   | Some dir when has_proofs src ->
-    let prog, argv, env = compile_command ?loc ~interface:true p path src in
+    let prog, argv, env, expected_source = compile_command ?loc ~interface:true p path src in
     compiled ?loc p path src (wait_pid (start_compile_process prog argv env));
-    check_proofs_beside dir ?loc p path src
+    check_proofs_beside dir ?loc ~expected_source p path src
   | _ ->
-    let prog, argv, env = compile_command ?loc ~interface:false p path src in
+    let prog, argv, env, _ = compile_command ?loc ~interface:false p path src in
     compiled ?loc p path src (wait_pid (start_compile_process prog argv env))
 
 (* Compilations this one started and has not waited for ([ensure_all]): what
@@ -820,12 +927,12 @@ let ensure_all ?loc targets =
                 end else begin
                   say_compiling q i s;
                   let interface = has_proofs s in
-                  let prog, argv, env = compile_command ?loc ~interface q i s in
+                  let prog, argv, env, expected_source = compile_command ?loc ~interface q i s in
                   let pid = start_compile_process prog argv env in
                   started := true;
                   let finish status =
                     compiled ?loc q i s status;
-                    if interface then check_proofs_beside dir ?loc q i s;
+                    if interface then check_proofs_beside dir ?loc ~expected_source q i s;
                     mark_ready dir id;
                     Hashtbl.replace ensured id () in
                   running := { pid; lock; finish } :: !running
@@ -963,7 +1070,8 @@ let folder_rules file =
 (* A compilation started by [compile] writes its stamp once it succeeded *)
 let write_stamp () =
   match Sys.getenv_opt stamp_var, Sys.getenv_opt source_var with
-  | Some stamp, Some src when stamp <> "" ->
+  | Some stamp, Some _src when stamp <> "" ->
+    let expected = match expected_import_source () with Some h -> h | None -> assert false in
     let in_cache f = match env_value build_var, env_root () with
       | Some root, _ | None, Some root -> CString.is_prefix (cache root ^ "/") f
       | None, None -> false in
@@ -988,12 +1096,22 @@ let write_stamp () =
          | None -> None)) (Library.loaded_library_files ()) in
     let input_lines = List.sort_uniq compare !inputs |> List.map (fun (path, hash) ->
         Printf.sprintf "input %S %s" path hash) in
-    let lines = (if !complete then stamp_format else "soma-stamp incomplete") :: ("source " ^ source_hash src) ::
+    let lines = (if !complete then stamp_format else "soma-stamp incomplete") :: ("source " ^ expected) ::
                 List.rev_map (fun (p, vo) -> "import " ^ p ^ " " ^ interface_digest vo) !imported @
                 libraries @ input_lines in
-    Out_channel.with_open_bin stamp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"));
+    let tmp = Filename.temp_file ~temp_dir:(Filename.dirname stamp) ".soma-stamp-" ".tmp" in
+    Fun.protect ~finally:(fun () -> remove_if_present tmp) (fun () ->
+        Out_channel.with_open_bin tmp (fun oc -> output_string oc (String.concat "\n" lines ^ "\n"));
+        publish_import_output ~tmp ~file:stamp);
+    let vo = Filename.chop_suffix stamp ".stamp" ^ ".vo" in
+    ignore (expected_import_source ());
+    require_published_import_output vo;
+    require_published_import_output stamp;
     SomaCache.record stamp;
-    SomaCache.record (Filename.chop_suffix stamp ".stamp" ^ ".vo")
+    SomaCache.record vo;
+    ignore (expected_import_source ());
+    require_published_import_output vo;
+    require_published_import_output stamp
   | _ -> ()
 
 (* Observational metadata only: the import stamps above keep their existing
@@ -1213,9 +1331,17 @@ let acquire_proof_slot () =
 (* Where a proof check writes its .vo first, to put it in place whole:
    importers may be reading the one without proofs *)
 let checked_output vo =
-  match proof_job () with
-  | Some _ -> Filename.chop_suffix vo ".vo" ^ ".checking.vo"
-  | None -> vo
+  match Sys.getenv_opt stamp_var, proof_job () with
+  | Some stamp, _ when stamp <> "" ->
+    (match Hashtbl.find_opt import_outputs vo with
+     | Some tmp -> tmp
+     | None ->
+       let tmp = Filename.temp_file ~temp_dir:(Filename.dirname vo)
+           ".soma-import-" (Filename.extension vo) in
+       Hashtbl.add import_outputs vo tmp;
+       tmp)
+  | _, Some _ -> Filename.chop_suffix vo ".vo" ^ ".checking.vo"
+  | _ -> vo
 
 (* The .vo of a proof check in place, if it is the library its importers
    compiled against: the same values, though not always the same bytes (two
@@ -1226,19 +1352,26 @@ let checked_output vo =
 let install_checked ~vo =
   let tmp = checked_output vo in
   if tmp <> vo then begin
+    ignore (expected_import_source ());
+    if proof_job () = None then publish_import_output ~tmp ~file:vo
+    else begin
     let segments = ["summary"; "library"] in
     if not (Sys.file_exists vo && ObjFile.same_values tmp vo segments) then begin
       job_status "different";
       CErrors.user_err Pp.(str (Filename.basename vo) ++ str ": the library with its proofs is not the one without them: its proofs add universe constraints, which Rocq keeps in the library. Build without SOMA_DEFER_PROOFS=1.")
     end;
-    let spliced = Filename.chop_suffix vo ".vo" ^ ".spliced.vo" in
+    let spliced = Filename.temp_file ~temp_dir:(Filename.dirname vo) ".soma-spliced-" ".vo" in
+    Hashtbl.replace import_outputs tmp tmp;
+    Hashtbl.replace import_outputs vo spliced;
     ObjFile.splice ~base:tmp ~from:vo segments ~out:spliced;
     Sys.remove tmp;
+    Hashtbl.remove import_outputs tmp;
     (* what importers compiled against, by construction *)
     (match env_value interface_digest_var with
      | Some d when interface_digest spliced <> d ->
        job_status "different";
        CErrors.user_err Pp.(str (Filename.basename vo) ++ str ": the library with its proofs is not the one without them: its proofs add universe constraints, which Rocq keeps in the library. Build without SOMA_DEFER_PROOFS=1.")
      | _ -> ());
-    Sys.rename spliced vo
+    publish_import_output ~tmp:spliced ~file:vo
+    end
   end
