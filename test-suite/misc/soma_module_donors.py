@@ -12,6 +12,7 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--soma', required=True)
+parser.add_argument('--evidence', help='preserve controlled fixture outputs, cache files and producer receipts')
 parser.add_argument('--observe', action='store_true', help='record baseline without enforcing improved counts')
 args = parser.parse_args()
 compiler = str(Path(args.soma).resolve())
@@ -41,6 +42,19 @@ with tempfile.TemporaryDirectory(prefix='soma-module-donor-') as tmp:
         compiles = re.findall(r'^Compiling ([^\n]+)', run.stderr, re.MULTILINE)
         rec = {'case':root.name, 'result':expected, 'actual_compiles':len(compiles),
                'expected_compiles':count, 'modules':compiles}
+        rec['stdout'] = run.stdout
+        rec['stderr'] = run.stderr
+        if args.evidence:
+            artifact = Path(args.evidence).resolve()/root.name
+            artifact.mkdir(parents=True)
+            (artifact/'stdout.txt').write_text(run.stdout)
+            (artifact/'stderr.txt').write_text(run.stderr)
+            shutil.copytree(root/'.soma-cache', artifact/'cache', symlinks=True)
+            receipts = outer/'xdg/soma-receipts'
+            shutil.copytree(receipts, artifact/'receipts', symlinks=True)
+            rec['cache_sha256'] = {str(f.relative_to(artifact/'cache')):hashlib.sha256(f.read_bytes()).hexdigest()
+                                   for f in (artifact/'cache').rglob('*') if f.is_file() and not f.is_symlink()}
+            rec['receipts'] = sorted(f.name for f in receipts.iterdir())
         records.append(rec)
         if not args.observe:
             assert len(compiles)==count, rec
@@ -85,6 +99,8 @@ with tempfile.TemporaryDirectory(prefix='soma-module-donor-') as tmp:
     # still records baseline's two compilations. Fixed mode poisons a real
     # trusted candidate and requires just B to be safely recompiled.
     build(twins('wrong-library-candidate', '(* distinct entry *)\n'), 14, 1)
+    if args.evidence:
+        shutil.copytree(outer/'store', Path(args.evidence).resolve()/'shared-store', symlinks=True)
 
 print(json.dumps({'compiler':compiler, 'mode':'baseline-observation' if args.observe else 'assert-fixed',
                   'checks':records}, indent=2))
