@@ -59,7 +59,7 @@ def latest(): return max(plans(),key=lambda x:x.stat().st_mtime_ns)
 
 build(False); assert '1 42' in output()
 assert plans(), 'compiler did not certify a supported native checking/extraction phase'
-build(True); assert calls()[-1][-8:]==['dune','build','--profile','release','--root','.','./soma_main.exe'][-8:] or 'dune' in calls()[-1]
+build(True); assert calls()[-1][-7:]==['dune','build','--profile','release','--root','.','./soma_main.exe']
 assert '1 42' in output()
 # Native products are not freshness proofs; missing/tampered outputs are
 # repaired through an actual Dune run and a producer-checked copy.
@@ -71,12 +71,13 @@ p=latest();p.write_bytes(p.read_bytes()+b'forged\0');build(False);build(True)
 # A modified generated input cannot become a producer-certified extraction.
 project=next((work/'cache'/'soma'/'ocaml'/'build').glob('main-*'))
 (project/'prog.ml').write_text('let forged = 1\n');build(False);build(True)
+(project/'.soma-ocaml-files').write_text('forged ownership\n');build(False);build(True)
 # Root, companion expectations, automatic extension, and foreign source drift.
 source.write_text(original+'\n(* source change *)\n');build(False);build(True)
 exp=app/'main.exp';exp.write_text('Lemma phase_property : True.\nProof. exact I. Qed.\n');build(False);build(False)
-exp.unlink();build(False);build(True)
+exp.unlink();build(True)
 ext=app/'main.ext';ext.write_text('(* extension source *)\n');build(False);build(False)
-ext.unlink();build(False);build(True)
+ext.unlink();build(True)
 foreign.write_text('let succ (n : Soma_nat.nat) : Soma_nat.nat = n + 2\n');build(False);assert '2 43' in output();build(True)
 # Source Load is deliberately unsupported, including inputs outside the root.
 outside=work/'outside.v';outside.write_text('Definition loaded_number := 7.\n')

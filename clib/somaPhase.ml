@@ -89,6 +89,8 @@ let publish ~source ~directory ~switch ~output ~generated ~imports =
 
 let read path =
   try
+    let info=Unix.lstat path in
+    if info.Unix.st_kind<>Unix.S_REG || info.Unix.st_size>16*1024*1024 then failwith "oversized phase plan";
     let text = In_channel.with_open_bin path In_channel.input_all in
     if String.length text > 16 * 1024 * 1024 || not (SomaCache.trusted_metadata path ~contents:text) then None else
     let fs = String.split_on_char '\000' text in
