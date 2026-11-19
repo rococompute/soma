@@ -1,7 +1,7 @@
 (* A checkout can supply cache files, but cannot supply a producer receipt.
    A completion binds the selected key, source metadata, theory directories
    and the complete .vo set. No load path is accepted before that binding. *)
-type entry = { theories : (string * string) list; inputs : (string * string) list; inputs_complete : bool }
+type entry = { theories : (string * string) list; inputs : (string * string) list; inputs_complete : bool; artifacts : (string * string) list }
 let marker = ".soma-complete"
 let inputs_name = ".soma-inputs"
 let theory_name = "theories"
@@ -120,5 +120,18 @@ let load ~key ~directory ~resolve_input =
             if (Unix.lstat path).Unix.st_kind <> Unix.S_DIR || relative directory path <> rel then invalid ();
             name, path) rows
       | _ -> invalid () in
-    Some { theories; inputs; inputs_complete }
+    Some { theories; inputs; inputs_complete; artifacts = outputs }
   with Sys_error _ | Unix.Unix_error _ | Failure _ | Invalid_argument _ | Scanf.Scan_failure _ | End_of_file -> None
+
+(* After one whole-entry validation, verify each actually loaded artifact
+   against that manifest. A metadata collection need not reread a large
+   library's entire object set for every transitive module it loaded. *)
+let artifact_digest entry ~directory ~file =
+  try
+    let prefix = directory ^ "/" in
+    if not (String.starts_with ~prefix file) then None else
+    let relative = String.sub file (String.length prefix) (String.length file - String.length prefix) in
+    match List.assoc_opt relative entry.artifacts with
+    | Some expected when hash file = expected -> Some expected
+    | _ -> None
+  with Sys_error _ | Unix.Unix_error _ | Failure _ -> None

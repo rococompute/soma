@@ -493,12 +493,21 @@ let rocq_entry file =
     else if dir = parent then None else find parent in
   find (Filename.dirname file)
 
-let rocq_inputs file =
+let rocq_inputs checked file =
   match rocq_entry file with
   | None -> None
   | Some directory ->
-    (match SomaRocqCache.load ~key:(Filename.basename directory) ~directory ~resolve_input:resolve_project_file with
-     | Some entry when entry.SomaRocqCache.inputs_complete -> Some entry.SomaRocqCache.inputs
+    let entry = match Hashtbl.find_opt checked directory with
+      | Some entry -> entry
+      | None ->
+        let entry = SomaRocqCache.load ~key:(Filename.basename directory) ~directory ~resolve_input:resolve_project_file in
+        Hashtbl.add checked directory entry;
+        entry in
+    (match entry with
+     | Some entry when entry.SomaRocqCache.inputs_complete ->
+       (match SomaRocqCache.artifact_digest entry ~directory ~file with
+        | Some digest -> Some (entry.SomaRocqCache.inputs, digest)
+        | None -> None)
      | _ -> None)
 
 let add_load_path unix_path coq_path =
@@ -959,15 +968,22 @@ let write_stamp () =
       | Some root, _ | None, Some root -> CString.is_prefix (cache root ^ "/") f
       | None, None -> false in
     let inputs = ref [] and complete = ref (not !rocq_selection_uncertified) in
+    let checked_rocq = Hashtbl.create 7 and seen_inputs = Hashtbl.create 97 in
+    let remember_input (path, digest) =
+      match Hashtbl.find_opt seen_inputs path with
+      | Some old when old <> digest -> complete := false
+      | Some _ -> ()
+      | None -> Hashtbl.add seen_inputs path digest; inputs := (path, digest) :: !inputs in
     let libraries = List.filter_map (fun (dir, file) ->
         if file = "<unavailable filename>" then (complete := false; None) else
         let f = absolute file in
         (match rocq_entry f with
          | Some _ ->
-           (match rocq_inputs f with
-            | Some files -> inputs := files @ !inputs
-            | None -> complete := false);
-           Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+           (match rocq_inputs checked_rocq f with
+            | Some (files, digest) ->
+              List.iter remember_input files;
+              Some ("library " ^ DirPath.to_string dir ^ " " ^ digest)
+            | None -> complete := false; None)
          | None when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
          | None -> None)) (Library.loaded_library_files ()) in
     let input_lines = List.sort_uniq compare !inputs |> List.map (fun (path, hash) ->
@@ -1004,8 +1020,13 @@ let collect_loaded_dependencies ~source =
   let prefix = p.cache_dir ^ "/" in
   let sources = ref [absolute source] and external_inputs = ref [] in
   let complete = ref (not !rocq_selection_uncertified) in
+  let checked_rocq = Hashtbl.create 7 and seen_inputs = Hashtbl.create 97 in
   let add_input (path, hash) =
     let file = resolve_project_file path in
+    match Hashtbl.find_opt seen_inputs file with
+    | Some old -> if old <> hash then complete := false
+    | None ->
+    Hashtbl.add seen_inputs file hash;
     (try if SomaMerkle.file_hash file <> hash then complete := false
      with Sys_error _ | Unix.Unix_error _ -> complete := false);
     if CString.is_prefix (p.root ^ "/") file && not (CString.is_prefix prefix file)
@@ -1036,8 +1057,8 @@ let collect_loaded_dependencies ~source =
       if file = "<unavailable filename>" then complete := false else
       let file = absolute file in
       if rocq_entry file <> None then
-        (match rocq_inputs file with
-         | Some inputs -> List.iter add_input inputs; add_input (file, file_digest file)
+        (match rocq_inputs checked_rocq file with
+         | Some (inputs, digest) -> List.iter add_input inputs; add_input (file, digest)
          | None -> complete := false)
       else if CString.is_prefix prefix file then
         let relative = String.sub file (String.length prefix)
