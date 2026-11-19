@@ -472,14 +472,20 @@ let shared_store_for file =
     let (root, _, _) as k = project_cache_key file in
     if has_path_dependency root then None else Some (store, k)
 
-(* Non-Soma project metadata/foreign source changes remain a conservative
-   namespace miss. Ordinary source/companion dependency changes are checked
-   by the compiler's existing recursive freshness after donor restoration. *)
+(* Implicit folder rules depend on source-unit membership as well as .ext
+   bytes: adding/removing X/X.soma suppresses/enables X/X.ext. Keep those
+   negatives in the namespace while allowing unrelated .soma content edits.
+   This boundary is conservative; ordinary recursive import freshness is
+   still authoritative for every restored candidate. *)
 let module_store_context root =
-  let files = project_cache_sources root |> List.filter (fun (name, _) ->
-      not (List.exists (Filename.check_suffix name) [".soma"; ".exp"; ".ext"])) in
-  SomaMerkle.string (String.concat "\n" ("soma-module-context 1" :: !cache_toolchain () ::
-      List.map (fun (rel, digest) -> Printf.sprintf "%S %s" rel digest) files))
+  let files = project_cache_sources root in
+  let root_rules = if Sys.file_exists (Filename.concat root "soma.toml")
+    then "manifest-root" else "implicit-root " ^ Filename.basename root in
+  let rows = List.map (fun (rel, digest) ->
+      if Filename.check_suffix rel ".soma" then Printf.sprintf "unit %S" rel
+      else Printf.sprintf "input %S %s" rel digest) files in
+  SomaMerkle.string (String.concat "\n"
+      ("soma-module-context 2" :: !cache_toolchain () :: root_rules :: rows))
 
 let restore_shared_cache file =
   match shared_store_for file with

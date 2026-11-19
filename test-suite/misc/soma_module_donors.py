@@ -87,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix='soma-module-donor-') as tmp:
         hashes = {u:hashlib.sha256((seed/'.soma-cache'/(u+'.vo')).read_bytes()).hexdigest()
                   for u in ['a', 'b']}
         candidates = {}
-        for descriptor in (outer/'store/modules-v1').rglob('descriptor'):
+        for descriptor in (outer/'store').rglob('descriptor'):
             text = descriptor.read_text()
             for unit in ['a', 'b']:
                 if ('unit "'+unit+'"\n') in text and ('object '+hashes[unit]+'\n') in text:
