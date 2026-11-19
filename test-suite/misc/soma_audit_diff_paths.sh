@@ -39,7 +39,7 @@ project plain-old 'main : nat := 1.'
 project plain-new 'main : nat := 2.'
 compared "$TMP/plain-old" "$TMP/plain-new"
 
-# * A single quote: the folder is compared, and the same folder is read
+# * A single quote: the folder is compared, and identical content is 1 unchanged
 project "it's-old" 'main : nat := 1.'
 project "it's-new" 'main : nat := 2.'
 compared "$TMP/it's-old" "$TMP/it's-new"
@@ -79,6 +79,6 @@ project $'tab\there-old' 'main : nat := 1.'
 project $'tab\there-new' 'main : nat := 2.'
 compared "$TMP/"$'tab\there-old' "$TMP/"$'tab\there-new'
 
-# * What it is checked as, and not run: nothing is written to either folder
+# * It is checked, as a dependency, and not run; and nothing is written to it
 [ ! -e "it's-old/soma.lock" ] && [ ! -e "it's-old/.soma-cache" ]
 [ "$(ls -A "it's-old" | sort | tr '\n' ' ')" = 'main.soma soma.toml ' ]
