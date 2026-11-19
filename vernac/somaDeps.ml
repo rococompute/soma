@@ -175,7 +175,10 @@ let fetch (p : dependency_path) ~version ~commit =
                     str ", and not the commit " ++ str commit ++ str " that was fetched.")
            | None ->
              error (str dir ++ str ": it has no " ++ str source_marker ++ str ", so it may be" ++ spc () ++
-                    str "incomplete, or left behind by a build that stopped. Remove it, and build again.")))
+                    str "incomplete, or left behind by a build that stopped. Remove it, and build again."))
+        | Unix.Unix_error (e, _, _) ->
+          error (str "cannot move the source of " ++ str p.canonical ++ str " into " ++ str dir ++
+                 str ": " ++ str (Unix.error_message e) ++ str "."))
   end;
   dir
 
