@@ -38,10 +38,33 @@ let source_var = "SOMA_IMPORT_SOURCE"
 let expected_source_var = "SOMA_IMPORT_EXPECTED_SOURCE"
 let build_var = "SOMA_BUILD_ROOT"
 let interface_digest_var = "SOMA_INTERFACE_DIGEST"
+let root_var = "SOMA_PROJECT_ROOT"
+let cache_var = "SOMA_PROJECT_CACHE"
+let prefix_var = "SOMA_PROJECT_PREFIX"
+let stack_var = "SOMA_IMPORT_STACK"
+let proof_job_var = "SOMA_PROOF_JOB"
+let interface_var = "SOMA_IMPORT_INTERFACE"
+type project = { root : string; cache_dir : string; prefix : string }
+let mkdir_p = SomaCache.mkdir
+let vo_of p path = Filename.concat p.cache_dir (path ^ ".vo")
+let stamp_of p path = Filename.concat p.cache_dir (path ^ ".stamp")
+let build_root ?loc:_ () = Sys.getcwd ()
+let stack ?loc:_ () = []
+let qualified _ path = path
+module Boot = struct module Env = struct let self = "controlled-worker" end end
 '''
     functions=section('let source_hash src =','(* What an importer')
     if 'let import_outputs :' in text:
         functions+=section('let import_outputs :','(* The digests of the files')
+    functions+=section('let compile_command ','\n(* Starts a compilation')
+    # Exercise the real caller's pre-spawn environment, not a reconstructed
+    # expected hash. The old production function returned a triple.
+    if 'prog, argv, env, expected_source' in functions:
+        functions+='\nlet captured_environment p path src = let _,_,env,_ = compile_command ~interface:false p path src in env\n'
+        functions+='let deferred_environment p path src expected = let _,_,env,_ = compile_command ~interface:false ~expected_source:expected p path src in env\n'
+    else:
+        functions+='\nlet captured_environment p path src = let _,_,env = compile_command ~interface:false p path src in env\n'
+        functions+='let deferred_environment p path src _ = captured_environment p path src\n'
     functions+=section('let stamp_format =','\nlet rec mkdir_p')
     functions+=section('let write_stamp () =','\n(* Observational metadata')
     functions+=text[text.index('let checked_output vo ='):]
@@ -60,14 +83,16 @@ let run suffix ~late ~other =
   let stamp = Filename.concat dir "item.stamp" in
   write src "old-source";
   if companion <> src then write companion "old-companion";
-  let expected = source_hash src in
+  let environment = captured_environment {root=dir;cache_dir=dir;prefix=""} "item" src in
   let ready_r,ready_w = Unix.pipe () in
   let resume_r,resume_w = Unix.pipe () in
   match Unix.fork () with
   | 0 ->
     Unix.close ready_r; Unix.close resume_w;
-    Unix.putenv stamp_var stamp; Unix.putenv source_var src;
-    Unix.putenv expected_source_var expected;
+    Array.iter (fun binding ->
+        let split = String.index binding '=' in
+        Unix.putenv (String.sub binding 0 split)
+          (String.sub binding (split+1) (String.length binding-split-1))) environment;
     let parsed = read src in
     let result = try
       if late then begin
@@ -111,6 +136,13 @@ let () =
   run "source" ~late:true ~other:false;
   run "source" ~late:true ~other:true;
   assert (checked_output "root.vo" = "root.vo");
+  write "deferred.soma" "old-interface";
+  let expected = source_hash "deferred.soma" in
+  write "deferred.soma" "new-source";
+  let rejected = try ignore (deferred_environment
+      {root=Sys.getcwd ();cache_dir=Sys.getcwd ();prefix=""} "deferred" "deferred.soma" expected); false
+    with Failure _ -> true in
+  if not rejected then failwith "deferred proof adopted changed source snapshot";
   print_endline "Import snapshot changes reject old objects/new stamps; owned-output cleanup and unrelated writer preservation: passed"
 ''')
     env=dict(os.environ,XDG_CACHE_HOME=str(root/'xdg'),SOMA_CACHE_ID='snapshot-regression')
