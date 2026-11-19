@@ -755,14 +755,17 @@ let structure_has_gradual_runtime struc =
       | MLraw s -> String.starts_with ~prefix:"Gradual_rt." s
       | _ -> false) struc
 
+let refuse_unsafe_gradual_functors struc =
+  if structure_has_functor struc && structure_has_gradual_runtime struc &&
+     Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" <> Some "1" then
+    user_err (str "Gradual extraction of functors requires application-aware runtime type identities; " ++
+      str "this output is not supported yet.")
+
 let full_extr opaque_access f (refs,mps) =
   let table = init ~modular:false ~library:false () in
   List.iter (fun mp -> if is_modfile mp then error_MPfile_as_mod mp true) mps;
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
-  if structure_has_functor struc && structure_has_gradual_runtime struc &&
-     Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" <> Some "1" then
-    user_err (str "Gradual extraction of functors requires application-aware runtime type identities; " ++
-      str "this output is not supported yet.");
+  refuse_unsafe_gradual_functors struc;
   let () = warns table in
   print_structure_to_file table (mono_filename f) false struc
 
@@ -956,6 +959,7 @@ let simple_extraction ~opaque_access r =
        (currently just the Type one) *)
     let table = init ~modular:false ~library:false () in
     let struc = optimize_struct table ([r],[]) (mono_environment table ~opaque_access [r] []) in
+    refuse_unsafe_gradual_functors struc;
     let d = get_decl_in_structure r struc in
     let () = warns table in
     let flag =
