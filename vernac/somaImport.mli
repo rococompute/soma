@@ -123,10 +123,14 @@ val checked_output : string -> string
 val install_checked : vo:string -> unit
 
 (** Record the source snapshot behind a content-keyed Rocq library. *)
-val record_rocq_inputs : directory:string -> complete:bool -> string list -> unit
+val record_rocq_inputs : directory:string -> complete:bool -> (string * string) list -> unit
 
 (** A current compilation using a floating library selection or an external
     source tree cannot certify affected-test skips, independently of how a
     reused library cache entry was originally produced. *)
 val note_uncertified_rocq_library : unit -> unit
 val rocq_source_in_project : string -> bool
+
+(** The same conservative loaded dependency certification used by affected
+    tests, for the root build's producer metadata after proof jobs joined. *)
+val loaded_dependencies_certified : source:string -> bool

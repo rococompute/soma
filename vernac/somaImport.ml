@@ -476,8 +476,10 @@ let rocq_inputs_name = ".soma-inputs"
 
 let record_rocq_inputs ~directory ~complete files =
   let file = Filename.concat directory rocq_inputs_name in
-  let rows = List.sort_uniq String.compare files |> List.map (fun f ->
-      Printf.sprintf "input %S %s" (project_file f) (SomaMerkle.file_hash f)) in
+  let rows = List.sort_uniq compare files |> List.map (fun (f, expected) ->
+      if SomaMerkle.file_hash f <> expected then
+        CErrors.user_err Pp.(str "Rocq library source changed while recording its inputs; build again.");
+      Printf.sprintf "input %S %s" (project_file f) expected) in
   Out_channel.with_open_bin file (fun oc ->
       output_string oc ((if complete then "soma-rocq-inputs 1" else "incomplete") ^ "\n" ^
                         String.concat "\n" rows ^ "\n"));
@@ -494,21 +496,10 @@ let rocq_entry file =
 let rocq_inputs file =
   match rocq_entry file with
   | None -> None
-  | Some dir ->
-    let file = Filename.concat dir rocq_inputs_name in
-    if not (SomaCache.trusted file) then None else
-    try
-      match SomaOpam.read_lines file with
-      | "soma-rocq-inputs 1" :: rows ->
-        let rec parse seen = function
-          | [] -> Some (List.rev seen)
-          | row :: rows ->
-            let p, hash = Scanf.sscanf row "input %S %s%!" (fun p h -> p, h) in
-            if p = "" || not (SomaMerkle.valid_hash hash) || List.mem_assoc p seen then None
-            else parse ((p, hash) :: seen) rows in
-        parse [] rows
-      | _ -> None
-    with Sys_error _ | Scanf.Scan_failure _ | Failure _ | End_of_file -> None
+  | Some directory ->
+    (match SomaRocqCache.load ~key:(Filename.basename directory) ~directory ~resolve_input:resolve_project_file with
+     | Some entry when entry.SomaRocqCache.inputs_complete -> Some entry.SomaRocqCache.inputs
+     | _ -> None)
 
 let add_load_path unix_path coq_path =
   Loadpath.add_vo_path { Loadpath.unix_path; coq_path; implicit = false; recursive = true; installed = false }
@@ -968,17 +959,17 @@ let write_stamp () =
       | Some root, _ | None, Some root -> CString.is_prefix (cache root ^ "/") f
       | None, None -> false in
     let inputs = ref [] and complete = ref (not !rocq_selection_uncertified) in
-    let libraries = List.filter_map (fun dir -> match library_file dir with
-        | Some f ->
-          (match rocq_entry f with
-           | Some _ ->
-             (match rocq_inputs f with
-              | Some files -> inputs := files @ !inputs
-              | None -> complete := false);
-             Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
-           | None when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
-           | None -> None)
-        | None -> None) (Library.loaded_libraries ()) in
+    let libraries = List.filter_map (fun (dir, file) ->
+        if file = "<unavailable filename>" then (complete := false; None) else
+        let f = absolute file in
+        (match rocq_entry f with
+         | Some _ ->
+           (match rocq_inputs f with
+            | Some files -> inputs := files @ !inputs
+            | None -> complete := false);
+           Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+         | None when not (in_cache f) -> Some ("library " ^ DirPath.to_string dir ^ " " ^ file_digest f)
+         | None -> None)) (Library.loaded_library_files ()) in
     let input_lines = List.sort_uniq compare !inputs |> List.map (fun (path, hash) ->
         Printf.sprintf "input %S %s" path hash) in
     let lines = (if !complete then stamp_format else "soma-stamp incomplete") :: ("source " ^ source_hash src) ::
@@ -1008,63 +999,68 @@ let record_interface ~source ~dirpath ~vo_file =
    imports from expectations, and those introduced by folder rules/macros.
    Only the requested entry point writes the trace; its imported compilers
    inherit the request too. This metadata never participates in compilation. *)
+let collect_loaded_dependencies ~source =
+  let p = current () in
+  let prefix = p.cache_dir ^ "/" in
+  let sources = ref [absolute source] and external_inputs = ref [] in
+  let complete = ref (not !rocq_selection_uncertified) in
+  let add_input (path, hash) =
+    let file = resolve_project_file path in
+    (try if SomaMerkle.file_hash file <> hash then complete := false
+     with Sys_error _ | Unix.Unix_error _ -> complete := false);
+    if CString.is_prefix (p.root ^ "/") file && not (CString.is_prefix prefix file)
+    then sources := file :: !sources
+    else external_inputs := (file, hash) :: !external_inputs in
+  let visited = Hashtbl.create 17 in
+  let rec visit path =
+    if not (Hashtbl.mem visited path) then begin
+      Hashtbl.add visited path ();
+      (match source_of p.root path with
+       | Some src -> sources := absolute src :: !sources
+       | None -> complete := false);
+      (* Untrusted or truncated stamps cannot certify a smaller graph.
+         Deferred proof stamps also include expectation-only imports. *)
+      match if SomaCache.trusted (stamp_of p path) && SomaCache.trusted (vo_of p path)
+            then read_stamp (stamp_of p path) else None with
+      | Some (_, imports, _, inputs) ->
+        List.iter add_input inputs;
+        List.iter (fun (path, _) -> visit path) imports
+      | None -> complete := false
+    end in
+  let installed file = match Boot.Env.initialized () with
+    | Some (Boot.Env.Env env) ->
+      List.exists (fun dir -> CString.is_prefix (Boot.Env.Path.to_string dir ^ "/") file)
+        [Boot.Env.coqlib env; Boot.Env.runtimelib env]
+    | _ -> false in
+  List.iter (fun (_, file) ->
+      if file = "<unavailable filename>" then complete := false else
+      let file = absolute file in
+      if rocq_entry file <> None then
+        (match rocq_inputs file with
+         | Some inputs -> List.iter add_input inputs; add_input (file, file_digest file)
+         | None -> complete := false)
+      else if CString.is_prefix prefix file then
+        let relative = String.sub file (String.length prefix)
+            (String.length file - String.length prefix) |> Filename.remove_extension in
+        visit relative
+      else if not (installed file) then complete := false)
+    (Library.loaded_library_files ());
+  (* External project dependencies still require their own complete graph.
+     Floating opam libraries likewise have no immutable resolution to certify. *)
+  if dependencies () <> [] then complete := false;
+  List.sort_uniq String.compare !sources, List.sort_uniq compare !external_inputs, !complete
+
+let loaded_dependencies_certified ~source =
+  let _, _, complete = collect_loaded_dependencies ~source in complete
+
 let record_test_dependencies ~source =
   match Sys.getenv_opt "SOMA_TEST_SOURCE", Sys.getenv_opt "SOMA_TEST_DEPENDENCIES" with
   | Some requested, Some output when absolute source = requested ->
-    let p = current () in
-    let prefix = p.cache_dir ^ "/" in
-    let sources = ref [absolute source] and external_inputs = ref [] in
-    let complete = ref (not !rocq_selection_uncertified) in
-    let add_input (path, hash) =
-      let file = resolve_project_file path in
-      (try if SomaMerkle.file_hash file <> hash then complete := false
-       with Sys_error _ | Unix.Unix_error _ -> complete := false);
-      if CString.is_prefix (p.root ^ "/") file && not (CString.is_prefix prefix file)
-      then sources := file :: !sources
-      else external_inputs := (file, hash) :: !external_inputs in
-    let visited = Hashtbl.create 17 in
-    let rec visit path =
-      if not (Hashtbl.mem visited path) then begin
-        Hashtbl.add visited path ();
-        (match source_of p.root path with
-         | Some src -> sources := absolute src :: !sources
-         | None -> complete := false);
-        (* Untrusted or truncated stamps cannot certify a smaller graph.
-           Deferred proof stamps also include expectation-only imports. *)
-        match if SomaCache.trusted (stamp_of p path) && SomaCache.trusted (vo_of p path)
-              then read_stamp (stamp_of p path) else None with
-        | Some (_, imports, _, inputs) ->
-          List.iter add_input inputs;
-          List.iter (fun (path, _) -> visit path) imports
-        | None -> complete := false
-      end in
-    let installed file = match Boot.Env.initialized () with
-      | Some (Boot.Env.Env env) ->
-        List.exists (fun dir -> CString.is_prefix (Boot.Env.Path.to_string dir ^ "/") file)
-          [Boot.Env.coqlib env; Boot.Env.runtimelib env]
-      | _ -> false in
-    List.iter (fun dir -> match library_file dir with
-        | Some file when rocq_entry file <> None ->
-          (match rocq_inputs file with
-           | Some inputs ->
-             List.iter add_input inputs;
-             add_input (file, file_digest file)
-           | None -> complete := false)
-        | Some file when CString.is_prefix prefix file ->
-          let relative = String.sub file (String.length prefix)
-              (String.length file - String.length prefix) |> Filename.remove_extension in
-          visit relative
-        | Some file -> if not (installed file) then complete := false
-        | None -> complete := false) (Library.loaded_libraries ());
-    (* External project dependencies still require their own complete graph.
-       Floating opam libraries likewise have no immutable resolution to certify. *)
-    if dependencies () <> [] then complete := false;
+    let sources, external_inputs, complete = collect_loaded_dependencies ~source in
     Out_channel.with_open_bin output (fun oc ->
-        output_string oc (if !complete then "soma-test-dependencies 2\n" else "incomplete\n");
-        List.sort_uniq String.compare !sources |> List.iter (fun file ->
-            Printf.fprintf oc "source %S\n" file);
-        List.sort_uniq compare !external_inputs |> List.iter (fun (file, hash) ->
-            Printf.fprintf oc "external %S %s\n" file hash))
+        output_string oc (if complete then "soma-test-dependencies 2\n" else "incomplete\n");
+        List.iter (fun file -> Printf.fprintf oc "source %S\n" file) sources;
+        List.iter (fun (file, hash) -> Printf.fprintf oc "external %S %s\n" file hash) external_inputs)
   | _ -> ()
 
 (* Soma: proofs checked beside the build (see [check_proofs_beside]), as the
