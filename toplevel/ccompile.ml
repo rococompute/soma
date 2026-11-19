@@ -190,7 +190,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = if mode = BuildVo && not interface &&
                   SomaImport.loaded_dependencies_certified ~source:long_f_dot_in then
           SomaBuildInfo.publish_imports (List.map snd (Library.loaded_library_files ())) in
-      SomaPhase.finish_checking ();
+      SomaPhase.finish_checking ~imports:(List.map snd (Library.loaded_library_files ()));
       let wall_clock2 = Unix.gettimeofday () in
       (* In .vo production, dump a complete .vo file. *)
       let () = if interface then begin

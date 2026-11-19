@@ -10,11 +10,26 @@ let requested () = getenv "SOMA_BUILD_PHASE" <> "" && getenv "SOMA_PHASE_KEY" <>
 let checking = ref true
 let safe = ref true
 let refuse () = if !checking && requested () then safe := false
-let finish_checking () = checking := false
+let checked_imports = ref []
+let finish_checking ~imports = checked_imports := imports; checking := false
 let eligible () = requested () && !safe && not !checking
 let within root file = String.starts_with ~prefix:(root ^ "/") file
 let canonical file = Unix.realpath file
 let regular file = (Unix.lstat file).Unix.st_kind = Unix.S_REG
+let imported = Hashtbl.create 97
+let with_import file f =
+  let before = if requested () then
+      (try Some (canonical file, SomaBuildInfo.signature file) with _ -> safe := false; None)
+    else None in
+  let result = f () in
+  (match before with
+   | Some (path,expected) ->
+     (try
+        if SomaBuildInfo.signature file <> expected || canonical file <> path then safe := false
+        else Hashtbl.replace imported path expected
+      with Sys_error _ | Unix.Unix_error _ | Failure _ -> safe := false)
+   | None -> ());
+  result
 (* Installation trees contain symlinks into the compiler build tree. Match
    the actual file set the installation exposes, not a permissive parent
    directory prefix around their realpaths. *)
@@ -69,7 +84,7 @@ let atomic_write path contents =
   Fun.protect ~finally:(fun () -> close_out_noerr oc; try Sys.remove tmp with Sys_error _ -> ()) (fun () ->
       output_string oc contents; close_out oc; Unix.rename tmp path)
 
-let publish ~source ~directory ~switch ~output ~generated ~imports =
+let publish ~source ~directory ~switch ~output ~generated =
   if eligible () then
     try
       let source = canonical source and root = canonical (getenv "SOMA_PHASE_ROOT") in
@@ -77,7 +92,9 @@ let publish ~source ~directory ~switch ~output ~generated ~imports =
           let path = canonical path in
           if not (installed path || (within root path && SomaCache.trusted path)) then
             failwith "uncertified phase import";
-          path, SomaBuildInfo.signature path) imports in
+          let expected = Hashtbl.find imported path in
+          if SomaBuildInfo.signature path <> expected then failwith "loaded phase import changed";
+          path, expected) !checked_imports in
       let plan = {key=getenv "SOMA_PHASE_KEY"; source; root; directory=canonical directory;
                   switch; output=canonical output; generated; imports} in
       let text = contents plan in
@@ -85,7 +102,7 @@ let publish ~source ~directory ~switch ~output ~generated ~imports =
       (* The compiler producer certifies these exact bytes. The driver may
          relocate them, but must never create a receipt for observed plans. *)
       SomaCache.record (getenv "SOMA_BUILD_PHASE")
-    with Sys_error _ | Unix.Unix_error _ | Failure _ -> ()
+    with Sys_error _ | Unix.Unix_error _ | Failure _ | Not_found -> ()
 
 let read path =
   try

@@ -563,7 +563,7 @@ let build ~state ~source ~vo_file =
              | Some path -> String.starts_with ~prefix:(Sys.getenv "SOMA_PHASE_ROOT" ^ "/")
                               (Unix.realpath path)) modules ->
          SomaPhase.publish ~source ~directory:dir ~switch ~output:(out ^ ".exe")
-           ~generated ~imports:(List.map snd (Library.loaded_library_files ()))
+           ~generated
        | _ -> ());
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".exe") ++ str "; run it with: " ++
                               str (out ^ ".exe"))
