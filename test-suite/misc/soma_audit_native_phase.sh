@@ -39,6 +39,7 @@ measurements=[]
 def invoke(command,ok=True):
     started=time.monotonic();p=subprocess.run([compiler]+command,cwd=app,env=env,text=True,capture_output=True,timeout=180)
     measurements.append({'argv':command,'seconds':time.monotonic()-started,'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr})
+    print(json.dumps(measurements[-1]),flush=True)
     assert (p.returncode==0)==ok,(command,p.stdout,p.stderr)
     return p
 
@@ -60,8 +61,8 @@ def output():
 def plans(): return sorted((work/'cache'/'soma-native-phases').glob('*'))
 def latest(): return max(plans(),key=lambda x:x.stat().st_mtime_ns)
 
-build(False); assert '1 42' in output()
-assert plans(), 'compiler did not certify a supported native checking/extraction phase'
+first=build(False); assert '1 42' in output()
+assert plans(), ('compiler did not certify a supported native checking/extraction phase',first.stdout,first.stderr)
 build(True); assert calls()[-1][-7:]==['dune','build','--profile','release','--root','.','./soma_main.exe']
 assert '1 42' in output()
 # Native products are not freshness proofs; missing/tampered outputs are
@@ -95,12 +96,12 @@ source.write_text('Import succ.\nDefinition tactic_number : nat := ltac:(exact 0
 source.write_text('Notation "\'tactic_zero\'" := (ltac:(exact 0)).\nImport succ.\nDefinition tactic_number : nat := tactic_zero.\n'+original.split('\n',1)[1]);build(False);build(False)
 notation=app/'notation_source.soma';notation.write_text('Notation "\'tactic_zero\'" := (ltac:(exact 0)).\n')
 source.write_text('Import notation_source succ.\nDefinition tactic_number : nat := tactic_zero.\n'+original.split('\n',1)[1]);build(False);build(False)
-notation.unlink();source.write_text(original);build(True)
+notation.unlink();source.write_text(original);build(False);build(True)
 # Source Load is deliberately unsupported, including inputs outside the root.
 outside=work/'outside.v';outside.write_text('Definition loaded_number := 7.\n')
 source.write_text('Load "'+str(outside)+'".\n'+original);build(False);build(False)
 outside.write_text('Definition loaded_number := 8.\n');build(False)
-source.write_text(original);build(False);build(True)
+source.write_text(original);build(True)
 # Default RC absence is itself an input, even without changing env/HOME.
 rc=work/'config'/'coq'/'coqrc';rc.parent.mkdir(parents=True);rc.write_text('(* late startup file *)\n')
 build(False);build(False);rc.unlink();build(True)
@@ -135,6 +136,5 @@ source.write_text(original);build(True)
 (work/'mutate').write_text(json.dumps({'path':str(source),'text':'Import succ.\nmain : nat := true.\n'}))
 build(None,False)
 source.write_text(original);build(True)
-for row in measurements: print(json.dumps(row))
 print('native phase reuse preserves Dune, input drift, provenance and failure validation: passed')
 PY

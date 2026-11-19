@@ -175,11 +175,18 @@ let resume p ~run =
         let expected=SomaBuildInfo.signature built in
         if expected="absent" then failwith "native validation produced no executable";
         let text=In_channel.with_open_bin built In_channel.input_all in
-        let mode=(Unix.stat built).Unix.st_perm in
+        (* Match SomaMirage.copy_file's public native product mode. Dune's
+           private executable is often read-only; exporting that mode would
+           change the ordinary builder's output contract. *)
+        let mode=0o755 in
         let tmp,oc=Filename.open_temp_file ~temp_dir:(Filename.dirname p.output) ".soma-native-" ".tmp" in
         Fun.protect ~finally:(fun () -> close_out_noerr oc;try Sys.remove tmp with Sys_error _ -> ()) (fun () ->
             output_string oc text;close_out oc;Unix.chmod tmp mode;
-            if SomaBuildInfo.signature built<>expected || SomaBuildInfo.signature tmp<>expected then
+            let copied=SomaBuildInfo.signature tmp in
+            let expected_copy=match String.split_on_char ':' expected with
+              | ["file"; _; digest] -> Printf.sprintf "file:%o:%s" mode digest
+              | _ -> failwith "native target is not a file" in
+            if SomaBuildInfo.signature built<>expected || copied<>expected_copy then
               failwith "native product changed while copying";
             Unix.rename tmp p.output;SomaCache.record p.output);
         true
