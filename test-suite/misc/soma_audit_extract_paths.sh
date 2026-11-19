@@ -133,6 +133,14 @@ assert result.returncode == 0, result.returncode
 assert (mirage_root / 'plain' / 'prog.ml').is_file(), sorted(os.listdir(mirage_root))
 assert 'soma_main' in (mirage_root / 'plain' / 'prog.ml').read_text()
 assert (mirage_root / 'extract' / 'prog.ml').is_file()
+# The Mirage extraction leaves its generated source in the staging
+# directory; it must use the same Rocq quoting as the host extraction.
+mirage_cmds = (mirage_root / 'extract' / 'extract.soma').read_text()
+mirage_line = next(l for l in mirage_cmds.splitlines()
+                   if l.startswith('Set Extraction Output Directory '))
+mirage_expected = ('Set Extraction Output Directory "'
+                   + str(mirage_root / 'extract').replace('"', '""') + '".')
+assert mirage_line == mirage_expected, (mirage_line, mirage_expected)
 # no directory made by OCaml-style doubled backslashes
 assert not any('\\\\' in p.name for p in mirage_root.iterdir()), \
     [p.name for p in mirage_root.iterdir()]
