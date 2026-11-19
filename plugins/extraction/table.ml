@@ -133,6 +133,9 @@ type table = {
   (* projs: working modulo name equivalence is ok *)
   info_axioms : GlobRef.Set_env.t;
   log_axioms : GlobRef.Set_env.t;
+  (* Diagnostic aggregation only, deliberately by symbol: extraction does not
+     implement rewrite rules, and warns about all rules of each used symbol.
+     The type/term/inductive extraction caches above retain their instances. *)
   symbols : Id.t list GlobRef.Map_env.t;
   opaques:  GlobRef.Set_env.t;
   modfile_ids : Id.Set.t;
@@ -287,7 +290,8 @@ let safe_basename_of_globref_gen table r =
       let id = Id.to_string (MutInd.label kn) in
       Id.of_string (id ^ "_" ^ String.concat "_" (List.map string_of_int pos))
   in
-  let unsafe_lookup_ind table kn = snd @@ snd (InfvMap.choose (Mindmap_env.find kn !table.inductives)) in
+  let unsafe_lookup_ind (table, inst) kn =
+    snd (InfvMap.find inst (Mindmap_env.find kn !table.inductives)) in
   let open GlobRef in
   match r with
     | ConstRef kn -> Constant.label kn
@@ -308,7 +312,7 @@ let safe_basename_of_globref_gen table r =
       end
     | VarRef v -> v
 
-let safe_basename_of_global table r = safe_basename_of_globref_gen (Some table) r.glob
+let safe_basename_of_global table r = safe_basename_of_globref_gen (Some (table, r.inst)) r.glob
 
 let string_of_globref r  =
  try string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty r)

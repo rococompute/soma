@@ -402,8 +402,14 @@ let rec extract_structure table access venv env mp reso ~all = function
     let inds = List.map_filter map insts in
     inds @ ms
   | (l, SFBrules rrb) :: struc ->
-      let inst = InfvInst.empty in (* FIXME ? *)
-      let b = List.exists (fun (cst, _) -> Visit.needed_cst venv cst inst) rrb.rewrules_rules in
+      (* A sort-polymorphic symbol has nonempty informative instances. An
+         empty-instance lookup misses every use of it and falsely reports
+         "no rules". Rules are warnings, not extracted implementations: keep
+         their label when any extracted instance of the symbol is needed. *)
+      let b = List.exists (fun (cst, _) ->
+          let cb = Environ.lookup_constant cst env in
+          List.exists (Visit.needed_cst venv cst) (get_mono_inst_univs cb.const_universes))
+          rrb.rewrules_rules in
       let ms = extract_structure table access venv env mp reso ~all struc in
       if all || b then begin
         List.iter (fun (cst, _) -> Table.add_symbol_rule (State.get_table table) (ConstRef cst) l) rrb.rewrules_rules;
