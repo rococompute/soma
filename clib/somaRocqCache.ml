@@ -80,7 +80,7 @@ let publish ~key ~directory ~sources ~theories =
   let file = Filename.concat directory marker in
   atomic file contents;
   SomaCache.record file
-let load ~key ~directory ~resolve_input =
+let load_internal ~check_inputs ~key ~directory ~resolve_input =
   try
     let file = Filename.concat directory marker in
     let contents = read file in
@@ -111,7 +111,7 @@ let load ~key ~directory ~resolve_input =
     let inputs = List.fold_left (fun seen row ->
         let path, digest = Scanf.sscanf row "input %S %s%!" (fun p h -> p, h) in
         if path = "" || String.contains path '\000' || List.mem_assoc path seen ||
-           not (SomaMerkle.valid_hash digest) || hash (Unix.realpath (resolve_input path)) <> digest then invalid ();
+           not (SomaMerkle.valid_hash digest) || (check_inputs && hash (Unix.realpath (resolve_input path)) <> digest) then invalid ();
         (path, digest) :: seen) [] input_rows |> List.rev in
     let theory_contents = read (Filename.concat directory theory_name) in
     if SomaMerkle.string theory_contents <> theories_digest || inventory directory <> outputs then invalid ();
@@ -126,6 +126,17 @@ let load ~key ~directory ~resolve_input =
       | _ -> invalid () in
     Some { completion_digest = SomaMerkle.string contents; theories; inputs; inputs_complete; artifacts = outputs }
   with Sys_error _ | Unix.Unix_error _ | Failure _ | Invalid_argument _ | Scanf.Scan_failure _ | End_of_file -> None
+
+let load ~key ~directory ~resolve_input =
+  load_internal ~check_inputs:true ~key ~directory ~resolve_input
+
+(* Classification cannot expose an entry for selection. Its metadata and
+   artifacts must still match the producer receipt, even if an external Load
+   input has since changed. Such a generation can only trigger fresh work. *)
+let incomplete_entry ~key ~directory ~resolve_input =
+  match load_internal ~check_inputs:false ~key ~directory ~resolve_input with
+  | Some entry -> not entry.inputs_complete
+  | None -> false
 
 (* After one whole-entry validation, verify each actually loaded artifact
    against that manifest. A metadata collection need not reread a large

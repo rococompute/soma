@@ -187,6 +187,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
          for a compilation of their own (vernac/somaImport.ml) *)
       let interface = SomaImport.is_interface () in
       let () = if not interface then Stm.join ~doc:state.doc in
+      let () = if not interface then SomaImport.write_loaded_source_inputs () in
       let wall_clock2 = Unix.gettimeofday () in
       (* In .vo production, dump a complete .vo file. *)
       let () = if interface then begin

@@ -29,8 +29,15 @@ let spc () = " "
 let fnl () = "\n"
 let error x = failwith x
 module CString = struct let is_prefix prefix value = String.starts_with ~prefix value end
+module Pp = struct let str x = x let ( ++ ) = ( ^ ) end
+module CErrors = struct let user_err = failwith end
 module SomaImport = struct
 let built_root () = project
+let env_value = Sys.getenv_opt
+let source_var = "SOMA_IMPORT_SOURCE"
+let source_file = ref None
+let absolute file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file
+let loaded_source_inputs_var = "SOMA_LOADED_SOURCE_INPUTS"
 '''+policy+r'''
 let resolve_project_file file = if Filename.is_relative file then Filename.concat project file else file
 let record_rocq_inputs ~directory:_ ~complete:_ _ : unit = failwith "unexpected cache miss"
@@ -55,7 +62,7 @@ let latest ~switch:_ ~log:_ _ = "1.0"
 let lock_file root name = Filename.concat root (name ^ ".lock")
 let with_lock _ f = f ()
 let theories ~package:_ _ : theory list = failwith "unexpected compile"
-let compile ~prerequisites:_ ~prerequisite_sources:_ ~name:_ ~log:_ _ : unit = failwith "unexpected compile"
+let compile ~prerequisites:_ ~prerequisite_sources:_ ~name:_ ~log:_ _ : (string * string) list * bool = failwith "unexpected compile"
 '''
     (root/'harness.ml').write_text(prelude+ensure+r'''
 let write p s = Out_channel.with_open_bin p (fun oc -> output_string oc s)
@@ -123,6 +130,26 @@ let () =
   assert rejected;
   write (Filename.concat project "original.v") "Definition value := 1.\n";
   selected_libraries := [];
+  SomaImport.rocq_selection_uncertified := false;
+  let current = Filename.concat project "program.soma" in
+  let extension = Filename.concat project "program.ext" in
+  write current "value := 1.\n"; write extension "(* captured *)\n";
+  SomaImport.source_file := Some current;
+  SomaImport.note_loaded_source extension;
+  assert (not !(SomaImport.rocq_selection_uncertified));
+  let unknown = Filename.concat external_dir "loaded.v" in
+  write unknown "Definition loaded := 1.\n";
+  SomaImport.note_loaded_source unknown;
+  assert !(SomaImport.rocq_selection_uncertified);
+  let sidecar = Filename.concat project "loaded.inputs" in
+  Unix.putenv SomaImport.loaded_source_inputs_var sidecar;
+  SomaImport.write_loaded_source_inputs ();
+  let contents = In_channel.with_open_bin sidecar In_channel.input_all in
+  assert (SomaCache.trusted_metadata sidecar ~contents);
+  assert (String.starts_with ~prefix:"soma-loaded-inputs 1\nuncertain true\n" contents);
+  write unknown "Definition loaded := 2.\n";
+  let changed = try SomaImport.write_loaded_source_inputs (); false with Failure _ -> true in
+  assert changed;
   let pinned_dir = Filename.concat cache_root opam_name in
   List.iter (fun name ->
       let path = Filename.concat pinned_dir name in

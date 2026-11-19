@@ -124,6 +124,15 @@ model that runs `soma build`.
 | Soma `Declare ML Module` is refused by a text search | `soma_rocq.ml:209-213` | `Declare  ML  Module` (extra spaces) loads a plugin; the docs say refused. |
 | `OCaml Bind`/`Wasm Bind` take arbitrary paths; `project_cache_key`/`copy_tree` follow symlinks | `soma_ocaml.ml:255-258`, `soma.ml:290-318` | A file name can read outside the project; a symlink loop can make a build hang. |
 
+Source `Load` inputs are checked conservatively. Arbitrary loads prevent
+reusable import stamps and build/test skip certificates; the current Soma
+source's `.ext` and `.exp` companions are already fingerprinted. Rocq library
+children attest actual loaded paths and hashes. Libraries with unsupported
+loads compile a fresh immutable generation on every use, including unchanged
+runs. Prior generations remain available to live readers, so these entries can
+accumulate until the project cache is archived. This detects ordinary edits;
+it does not claim an atomic filesystem snapshot against a hostile local writer.
+
 ## Smaller items
 
 - `soma`'s `somaToml` multiline-string closing allows only two extra quotes

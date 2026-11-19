@@ -47,6 +47,7 @@ let cache_var = "SOMA_PROJECT_CACHE"
 let prefix_var = "SOMA_PROJECT_PREFIX"
 let build_var = "SOMA_BUILD_ROOT"
 let rocq_library_var = "SOMA_ROCQ_LIBRARY"
+let loaded_source_inputs_var = "SOMA_LOADED_SOURCE_INPUTS"
 
 let is_soma_file f = List.exists (Filename.check_suffix f) [".soma"; ".exp"; ".ext"; ".definition"]
 
@@ -567,6 +568,48 @@ let read_load_paths () =
 let rocq_selection_uncertified = ref false
 let note_uncertified_rocq_library () = rocq_selection_uncertified := true
 
+(* [Load] reads source directly, outside the compiled-library table. Until
+   those bytes have a producer-verified dependency receipt, arbitrary loads
+   cannot certify a reusable import stamp or an affected-test/build skip.
+   The current source's companions are already covered by [source_hash]. *)
+let loaded_source_inputs : (string, string) Hashtbl.t = Hashtbl.create 7
+let loaded_sources_uncertain = ref false
+
+let note_loaded_source file =
+  let file = absolute file in
+  let hash = SomaMerkle.file_hash file in
+  (match Hashtbl.find_opt loaded_source_inputs file with
+   | Some old when old <> hash ->
+     CErrors.user_err Pp.(str "A loaded source changed during compilation; rebuild.")
+   | _ -> Hashtbl.replace loaded_source_inputs file hash);
+  let known = match env_value source_var with Some source -> Some source | None -> !source_file in
+  let captured = match known with
+    | None -> false
+    | Some source ->
+      let base = Filename.remove_extension source in
+      (try
+         let file = Unix.realpath file in
+         List.exists (fun candidate ->
+             try Unix.realpath candidate = file with Unix.Unix_error _ -> false)
+           [source; base ^ ".ext"; base ^ ".exp"]
+       with Unix.Unix_error _ -> false) in
+  if not captured then begin
+    loaded_sources_uncertain := true;
+    note_uncertified_rocq_library ()
+  end
+
+let write_loaded_source_inputs () =
+  match env_value loaded_source_inputs_var with
+  | None -> ()
+  | Some output ->
+    let rows = Hashtbl.fold (fun file expected rows ->
+        if SomaMerkle.file_hash file <> expected then
+          CErrors.user_err Pp.(str "A loaded source changed during compilation; rebuild.");
+        Printf.sprintf "input %S %s\n" file expected :: rows) loaded_source_inputs [] |> List.sort compare in
+    Out_channel.with_open_bin output (fun oc ->
+        Printf.fprintf oc "soma-loaded-inputs 1\nuncertain %b\n%s" !loaded_sources_uncertain (String.concat "" rows));
+    SomaCache.record output
+
 let rocq_source_in_project directory =
   try
     let root = Unix.realpath (built_root ()) in
@@ -741,7 +784,7 @@ let compile_command ?loc ?(delayed=false) ?expected_source ~interface p path src
     end else [], src in
   let env = Array.of_list (
       List.filter (fun v -> not (List.exists (fun k -> String.starts_with ~prefix:(k ^ "=") v)
-                                   [root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
+                                   [loaded_source_inputs_var; root_var; stack_var; stamp_var; source_var; expected_source_var; cache_var; prefix_var; build_var; "SOMA_MIRAGE_BUILD"; "SOMA_OCAML_BUILD"; "SOMA_OCAML_EXTRACT"; "SOMA_REVIEW"; "SOMA_HASH"; "SOMA_HASH_FIELDS"; "SOMA_SEARCH"; "SOMA_SEARCH_OUT"; "SOMA_SEARCH_OPTIONS"; "SOMA_WASM_FILE"; "SOMA_BUILD_CHECKED_IMPORTS"; "SOMA_BUILD_PRODUCTS"; "SOMA_BUILD_INPUTS"; "SOMA_BUILD_EXTERNAL"; "SOMA_MIRAGE_ARGV"; proof_job_var; interface_var; interface_digest_var]))
         (Array.to_list (Unix.environment ()))
       @ [ root_var ^ "=" ^ p.root;
           cache_var ^ "=" ^ p.cache_dir;
@@ -895,7 +938,7 @@ let rec ensure ?loc p path src =
    source unchanged, and what it imports as it was *)
 and fresh ?loc p path src =
   let vo = vo_of p path in
-  SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
+  not !loaded_sources_uncertain && SomaCache.trusted vo && SomaCache.trusted (stamp_of p path) && match read_stamp (stamp_of p path) with
   | None -> false
   | Some (hash, imports, libraries, inputs) ->
     hash = source_hash src &&
