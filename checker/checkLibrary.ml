@@ -436,6 +436,11 @@ let recheck_library senv ~norec ~admit ~check =
   in
   let needed = List.fold_right (intern_library ~intern_mode:Rec ~validated LibrarySet.empty) ml [] in
   let needed = List.fold_right (intern_library ~intern_mode:Root ~validated LibrarySet.empty) nrl needed in
+  (* An admitted root need not occur in the closure of a checked root. Read
+     its dependency graph too, as an admitted dependency, before computing
+     the admission closure. Checked roots were interned first and keep their
+     existing validation and explicit-check precedence. *)
+  let needed = List.fold_right (intern_library ~intern_mode:Dep ~validated LibrarySet.empty) al needed in
   let needed = List.rev needed in
   (* first compute the closure of norec, remove closure of check,
      add closure of admit, and finally remove norec and check *)
