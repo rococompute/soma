@@ -355,7 +355,11 @@ static int host_replace(const char *root, const char *rel, const char *text,
             temp[13 + 2*i] = hex[random[i] & 15];
         }
         temp[44] = 0;
-        fd = openat(dir, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+        /* Never create a replacement broader than its intended final mode:
+         * another directory observer could retain a descriptor before a
+         * later fchmod narrows it. New files keep ordinary umask semantics. */
+        fd = openat(dir, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                    exists ? (st.st_mode & 0777) : 0666);
         if (fd >= 0) break;
         if (errno != EEXIST) goto fail;
     }

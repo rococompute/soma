@@ -10,7 +10,24 @@ text=source.read_text()
 with tempfile.TemporaryDirectory(prefix='soma-host-io-') as tmp:
     root=pathlib.Path(tmp)
     (root/'soma_host.ml').write_text(text.split('let ml = {soma|',1)[1].split('|soma}',1)[0])
-    (root/'soma_host_io.c').write_text(text.split('let io_c = {soma|',1)[1].split('|soma}',1)[0])
+    c_source=text.split('let io_c = {soma|',1)[1].split('|soma}',1)[0]
+    # Test-only syscall interposition observes the actual requested creation
+    # mode before fchmod; inspecting only the final mode misses a leak window.
+    hook=r'''#include <stdarg.h>
+static int audit_openat(int dir, const char *name, int flags, ...)
+{
+    if (flags & O_CREAT) {
+        va_list args; va_start(args, flags); mode_t mode = va_arg(args, int); va_end(args);
+        const char *want = getenv("SOMA_AUDIT_CREATE_MODE");
+        if (want && mode != (mode_t)strtol(want, NULL, 8)) { errno = EPERM; return -1; }
+        return openat(dir, name, flags, mode);
+    }
+    return openat(dir, name, flags);
+}
+#define openat audit_openat
+'''
+    c_source=c_source.replace('static int host_parent(',hook+'\nstatic int host_parent(',1)
+    (root/'soma_host_io.c').write_text(c_source)
     (root/'probe.ml').write_text('''
 let () =
   let args = Sys.argv in
@@ -29,15 +46,15 @@ let () =
     compiler=os.environ.get('OCAMLC','ocamlc')
     subprocess.run([compiler,'-I','+unix','-custom','-ccopt','-Wall','-ccopt','-Wextra','-ccopt','-Werror',
                     'unix.cma','soma_host_io.c','soma_host.ml','probe.ml','-o','probe'],cwd=root,check=True)
-    def run(*args,ok=True):
-        p=subprocess.run([str(root/'probe'),*map(str,args)],capture_output=True,text=True)
+    def run(*args,ok=True,env=None):
+        p=subprocess.run([str(root/'probe'),*map(str,args)],capture_output=True,text=True,env=env)
         assert (p.returncode==0)==ok,(args,p.returncode,p.stdout,p.stderr)
     outside=root/'outside';outside.mkdir();victim=outside/'file';victim.write_text('outside')
     checkout=root/'checkout';checkout.mkdir()
     dest=checkout/'state';dest.write_text('old');dest.chmod(0o600)
     # Predictable old save temp cannot clobber a separate file.
     (checkout/'state.pantheon-tmp').symlink_to(victim)
-    run('file',dest,'new')
+    run('file',dest,'new',env=dict(os.environ,SOMA_AUDIT_CREATE_MODE='600'))
     assert dest.read_text()=='new' and victim.read_text()=='outside'
     assert dest.stat().st_mode&0o777==0o600
     run('file',checkout/'state.pantheon-tmp','bad',ok=False)
