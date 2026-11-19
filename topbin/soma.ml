@@ -1399,13 +1399,24 @@ let () =
       Digest.to_hex (Digest.string (String.concat "\n"
           ((!cache_toolchain) () :: string_of_bool no_image :: env))) in
     let build_test ~source ~trace ~no_image =
+      initialize ();
       let prog = Sys.executable_name in
       let args = prog :: "build" :: source :: (if no_image then ["--no-image"] else []) in
+      (* A self-exec can resolve an installation symlink differently from the
+         parent (notably _build/install/bin -> _build/default/topbin). Carry
+         the paths init resolved, rather than guessing from the child argv0. *)
+      let locations = match Boot.Env.initialized () with
+        | Some (Boot.Env.Env env) ->
+          ["ROCQLIB=" ^ Boot.Env.Path.to_string (Boot.Env.coqlib env);
+           "ROCQRUNTIMELIB=" ^ Boot.Env.Path.to_string (Boot.Env.runtimelib env)]
+        | Some Boot.Env.Boot | None -> [] in
       let env = Array.to_list (Unix.environment ()) |> List.filter (fun entry ->
           not (starts_with ~prefix:"SOMA_TEST_SOURCE=" entry ||
-               starts_with ~prefix:"SOMA_TEST_DEPENDENCIES=" entry)) in
+               starts_with ~prefix:"SOMA_TEST_DEPENDENCIES=" entry ||
+               (locations <> [] && (starts_with ~prefix:"ROCQLIB=" entry ||
+                                    starts_with ~prefix:"ROCQRUNTIMELIB=" entry)))) in
       let env = Array.of_list (("SOMA_TEST_SOURCE=" ^ source) ::
-          ("SOMA_TEST_DEPENDENCIES=" ^ trace) :: env) in
+          ("SOMA_TEST_DEPENDENCIES=" ^ trace) :: locations @ env) in
       pass_signals ();
       let pid = Unix.create_process_env prog (Array.of_list args) env Unix.stdin Unix.stdout Unix.stderr in
       child := Some pid;
