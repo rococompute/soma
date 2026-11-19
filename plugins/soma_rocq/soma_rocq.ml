@@ -324,21 +324,6 @@ let with_lock file f =
         f ())
   end
 
-(* [root/e], a directory of the cache compiled before, removed while
-   holding its lock: one that another compilation is building now is left to
-   it, and is removed by a later build, when no one holds it *)
-let remove_stale root e =
-  let d = Filename.concat root e in
-  match Unix.openfile (lock_file root e) [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o644 with
-  | exception Unix.Unix_error _ -> ()
-  | fd ->
-    Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
-        match Unix.lockf fd Unix.F_TLOCK 0 with
-        | () ->
-          (* it may have been compiled and published meanwhile *)
-          if Sys.is_directory d then ignore (Sys.command (Filename.quote_command "rm" ["-rf"; d]))
-        | exception Unix.Unix_error _ -> ())
-
 (* What a compiled library's [theories] says: its theories, in the order it
    compiled them. None when the compilation did not finish: the file is
    written last, and renamed into place, so a partial one is no [theories]. *)
@@ -412,14 +397,10 @@ let ensure ~package source =
         Out_channel.with_open_bin tmp (fun oc ->
             List.iter (fun t -> Printf.fprintf oc "%s %s\n" t.logical t.dir) ts);
         Sys.rename tmp done_file;
-        (* the package compiled before, by another Soma or from other sources,
-           is of no use any more; one that another compilation is building
-           now is left to it *)
-        let prefix = match source with Local _ -> package ^ "-local-" | Opam _ -> package ^ "." in
-        Array.iter (fun e ->
-            let d = Filename.concat root e in
-            if String.starts_with ~prefix e && d <> dir && Sys.is_directory d then remove_stale root e)
-          (Sys.readdir root);
+        (* Completed entries stay immutable and are kept until the project
+           cache is explicitly removed. A build or REPL can still be loading
+           a different key after its compilation lock has been released, so
+           even taking that key's lock would not make its deletion safe. *)
         List.map (fun t -> (t.logical, t.dir)) ts)
 
 (* [Rocq Library "package".]: in the load path, compiled if need be *)
