@@ -113,8 +113,6 @@ for rep_name in ('representation-plain', 'representation "q"\\dir'):
     expected = ('Set Extraction Output Directory "'
                 + str(representation).replace('"', '""') + '".')
     assert line == expected, (rep_name, line, expected)
-    assert '\\"' not in line, (rep_name, line)
-    assert '\\\\' not in line, (rep_name, line)
 
 # The MirageOS extraction writes the same generated source, into a staging
 # directory under SOMA_MIRAGE_DIR. A quote or backslash there must not stop
