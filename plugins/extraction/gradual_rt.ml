@@ -40,6 +40,10 @@ let exc_tag = 245
    guarding every match stays cheap. *)
 let marker = Obj.repr (ref ())
 
+(* Modular consumers use this capability to reject stale runtime-free or
+   separately embedded dependencies before passing unknown/error values. *)
+let shared_runtime_token = ref ()
+
 let make_exc (unknown : bool) (msg : string) : Obj.t =
   Obj.with_tag exc_tag (Obj.repr (marker, (unknown, msg)))
 
