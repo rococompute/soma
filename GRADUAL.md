@@ -1493,6 +1493,15 @@ Extraction succ_dyn.
 
 Extraction differs from the kernel in these ways:
 
+- **A program needing the gradual runtime must be extracted to one file.**
+  `Separate Extraction`, `Extraction Library` and `Recursive Extraction
+  Library` refuse such output before writing any files; use
+  `Extraction "file" ...` instead. This also covers an ordinary-looking
+  `match` whose generated code propagates `?` or `err` supplied by a caller,
+  and consumers whose only gradual code is in a dependency. Runtime-free
+  modular extraction remains supported. The embedded runtime has a
+  module-local marker and cast state; modular gradual extraction needs a
+  shared runtime and guards at every consumer boundary before it is safe.
 - **Only the type parameters of constants are passed.** A cast at a type
   variable bound elsewhere (a local `fun (A : Type) => …`, a type stored in
   a constructor) is rejected at extraction time. So is a function that

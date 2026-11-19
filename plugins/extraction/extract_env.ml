@@ -548,13 +548,14 @@ let mono_filename f =
 
 (* Builds a suitable filename from a module id *)
 
-let module_filename table mp =
+let module_filename ?directory table mp =
+  let directory = match directory with Some dir -> dir | None -> output_directory () in
   let f = file_of_modfile (State.get_table table) mp in
   let id = Id.of_string f in
-  let f = Filename.concat (output_directory ()) f in
+  let f = Filename.concat directory f in
   let d = descr () in
   let fimpl_base = d.file_naming table mp ^ d.file_suffix in
-  let fimpl = Filename.concat (output_directory ()) fimpl_base in
+  let fimpl = Filename.concat directory fimpl_base in
   Some fimpl, Option.map ((^) f) d.sig_suffix, id
 
 (*s Extraction of one decl to stdout. *)
@@ -743,7 +744,7 @@ let full_extr opaque_access f (refs,mps) =
 (* Explicit output names in Soma builds are relative to the source project's
    root, independently of Cd and Extraction Output Directory. Resolve existing
    ancestors (and output symlinks) even when the output does not exist yet. *)
-let project_extraction_target target =
+let extraction_project_root () =
   let env name = match Sys.getenv_opt name with
     | Some s when s <> "" -> Some s
     | _ -> None in
@@ -759,13 +760,16 @@ let project_extraction_target target =
        | Some root -> Some root
        | None when SomaImport.applies ?loc () -> Some dir
        | None -> None) in
-  match root with
-  | _ when !SomaImport.generated_output -> target
+  if !SomaImport.generated_output then None else root
+
+let project_extraction_path ~relative ~outputs target =
+  match extraction_project_root () with
   | None -> target
   | Some root ->
     let refuse () = user_err Pp.(str "Extraction target " ++ quote (str target) ++
-      str " must be relative and stay inside the project being built.") in
-    if not (Filename.is_relative target) then refuse ();
+      str (if relative then " must be relative and stay inside the project being built."
+           else " must stay inside the project being built.")) in
+    if relative && not (Filename.is_relative target) then refuse ();
     let rec canonical path =
       try Unix.realpath path with
       | Unix.Unix_error (Unix.ENOENT, _, _) ->
@@ -786,28 +790,74 @@ let project_extraction_target target =
       let prefix = Filename.concat root "" in
       if not (CString.is_sub prefix path 0) then refuse ();
       path in
-    let path = inside (Filename.concat root target) in
-    (* mono_filename adds language suffixes; check the actual files too before
-       opening either one, including an existing signature symlink. *)
-    let impl, intf, _ = mono_filename (Some path) in
-    List.iter (fun f -> ignore (inside f)) (List.filter_map (fun x -> x) [impl; intf]);
+    let path = inside (if Filename.is_relative target then Filename.concat root target else target) in
+    List.iter (fun f -> ignore (inside f)) (outputs path);
     path
+
+let project_extraction_target target =
+  project_extraction_path ~relative:true ~outputs:(fun path ->
+      (* mono_filename adds language suffixes; check the actual files too
+         before opening either one, including a signature symlink. *)
+      let impl, intf, _ = mono_filename (Some path) in
+      List.filter_map (fun x -> x) [impl; intf]) target
+
+(* Modular commands have no explicit target. Their default is the source
+   project, not the invoker's cwd. An output-directory setting is rooted in
+   the same project and checked before it can create a directory or open a
+   file. Check both names before writing either, including existing symlinks. *)
+let project_module_filename table mp =
+  match extraction_project_root () with
+  | None -> module_filename table mp
+  | Some root ->
+    let directory = match output_directory_setting () with
+      | None -> root
+      | Some dir -> if Filename.is_relative dir then Filename.concat root dir else dir in
+    let impl, intf, id = module_filename ~directory table mp in
+    let confine = project_extraction_path ~relative:false ~outputs:(fun path -> [path]) in
+    let impl, intf = Option.map confine impl, Option.map confine intf in
+    List.iter (fun file -> System.mkdir (Filename.dirname file))
+      (List.filter_map (fun x -> x) [impl; intf]);
+    impl, intf, id
 
 (* Soma: a dependency is checked, not run: what writes a file is refused in
    its compilation (vernac/somaImport.ml). Printing is not. *)
+let refuse_in_check_only command =
+  if Sys.getenv_opt "SOMA_CHECK_ONLY" = Some "1" then
+    user_err (str command ++
+      str " writes extracted files and is not available in soma check; " ++
+      str "use soma build or soma extract.")
+
 let full_extraction ~opaque_access f lr =
+  if Option.has_some f then refuse_in_check_only "Extraction";
   if Option.has_some f then SomaImport.refuse_in_dependency "Extraction";
   let f = Option.map project_extraction_target f in
   full_extr opaque_access f (locate_refs lr)
+
+(* The runtime embedded in one extracted file is not shared with another
+   file's runtime. In particular, its unknown/error marker and cast tables
+   are local to that module, and a consumer with no casts need not have any
+   runtime guards at all. Until modular extraction has one shared runtime
+   and guards at every consumer boundary, reject such an output as a whole,
+   before printing even its ordinary dependency files. Monolithic extraction
+   retains its runtime and all of its guards. *)
+let refuse_modular_gradual struc =
+  if struct_ast_search (function
+      | MLraw s -> String.starts_with ~prefix:"Gradual_rt." s
+      | _ -> false) struc then
+    user_err (str "Modular extraction of gradual code is not supported: " ++
+      str "use Extraction " ++ quote (str "file") ++
+      str " to keep the program and its gradual runtime in one file.")
 
 (*s Separate extraction is similar to recursive extraction, with the output
    decomposed in many files, one per Rocq .v file *)
 
 let separate_extraction ~opaque_access lr =
+  refuse_in_check_only "Separate Extraction";
   SomaImport.refuse_in_dependency "Separate Extraction";
   let table = init ~modular:true ~library:false () in
   let refs,mps = locate_refs lr in
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
+  let () = refuse_modular_gradual struc in
   let () = List.iter (function
     | MPfile _, _ -> ()
     | (MPdot _ | MPbound _), _ ->
@@ -817,7 +867,7 @@ let separate_extraction ~opaque_access lr =
   let () = warns table in
   let print = function
     | (MPfile dir, sel) as e ->
-        print_structure_to_file table (module_filename table dir) false [e]
+        print_structure_to_file table (project_module_filename table dir) false [e]
     | (MPdot _ | MPbound _), _ -> assert false
   in
   let () = List.iter print struc in
@@ -849,7 +899,9 @@ let simple_extraction ~opaque_access r =
   \verb!(Recursive) Extraction Library! [M]. *)
 
 let extraction_library ~opaque_access is_rec CAst.{loc;v=m} =
-  SomaImport.refuse_in_dependency (if is_rec then "Recursive Extraction Library" else "Extraction Library");
+  let command = if is_rec then "Recursive Extraction Library" else "Extraction Library" in
+  refuse_in_check_only command;
+  SomaImport.refuse_in_dependency command;
   let table = init ~modular:true ~library:true () in
   let dir_m =
     (* XXX WTF is going on here? *)
@@ -868,11 +920,12 @@ let extraction_library ~opaque_access is_rec CAst.{loc;v=m} =
   in
   let struc = List.fold_left select [] l in
   let struc = optimize_struct table ([],[]) struc in
+  let () = refuse_modular_gradual struc in
   let () = warns table in
   let print = function
     | (MPfile dir, sel) as e ->
         let dry = not is_rec && not (DirPath.equal dir dir_m) in
-        print_structure_to_file table (module_filename table dir) dry [e]
+        print_structure_to_file table (project_module_filename table dir) dry [e]
     | _ -> assert false
   in
   let () = List.iter print struc in
@@ -905,6 +958,7 @@ let remove f =
   if Sys.file_exists f then Sys.remove f
 
 let extract_and_compile ~opaque_access l =
+  refuse_in_check_only "Extraction TestCompile";
   SomaImport.refuse_in_dependency "Extraction TestCompile";
   if lang () != Ocaml then
     CErrors.user_err (Pp.str "This command only works with OCaml extraction");
