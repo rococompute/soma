@@ -1,12 +1,12 @@
-(* Failing acceptance fixture for complete modular gradual type identity.
+(* Acceptance fixture for complete modular gradual type identity.
    Both goals are proved by the kernel. Baseline monolithic extraction then
    fails the first roundtrip at run time because Make.box and N.box have
    different strings. A shared marker/registry cannot repair that identity.
    Run: rocq c -q functor_identity.v
         ocamlc Functor.mli Functor.ml functor_identity.ml -o check.exe
         ./check.exe
-   This is intentionally not a passing-suite assertion until identity IDs
-   are exported through module/functor signatures and applications. *)
+   Exported physical brands now make the executable agree with the kernel
+   across module/functor signatures, applications and aliases. *)
 From Corelib.Gradual Require Import Gradual.
 From Corelib Require Extraction.
 Module Type ARG. Parameter A : Type. End ARG.

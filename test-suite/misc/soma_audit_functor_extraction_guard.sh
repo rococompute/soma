@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Until application-aware brand code passes full execution acceptance, every
-# default gradual functor extraction mode must fail before unsafe code output.
+# Default gradual functor extraction preserves application identity in both
+# file output and interactive/recursive inspection commands.
 set -euo pipefail
 export PATH="$BIN:$PATH"
 export SOMA_AUDIT_SOURCE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -22,8 +22,15 @@ with tempfile.TemporaryDirectory(prefix='soma-functor-guard-') as tmp:
         source.write_text(body + command + '\n')
         result = subprocess.run(['rocq', 'c', '-q', source.name], cwd=root,
                                 env=env, text=True, capture_output=True, timeout=60)
-        assert result.returncode != 0, (command, result.stdout, result.stderr)
-        assert 'application-aware runtime type identities' in ' '.join(result.stderr.split()), result.stderr
-        assert not list(root.glob('*.ml*')), list(root.iterdir())
-print('default unsafe gradual functor extraction is explicitly refused in all modes: ok')
+        assert result.returncode == 0, (command, result.stdout, result.stderr)
+        if index == 0:
+            (root / 'check.ml').write_text(
+                'let () = assert (Output.Gradual_rt.is_error (Output.wrong_inside ()));\n'
+                ' match Output.Gradual_rt.force (Output.roundtrip ()) with\n'
+                ' | Output.N.B1 _ -> () | _ -> failwith "wrong constructor"\n')
+            for args in [['ocamlc', '-w', '-a', 'output.mli', 'output.ml', 'check.ml', '-o', 'check.exe'],
+                         ['./check.exe']]:
+                compiled = subprocess.run(args, cwd=root, env=env, text=True, capture_output=True, timeout=60)
+                assert compiled.returncode == 0, (args, compiled.stdout, compiled.stderr)
+print('default gradual functor file and inspection extraction preserve application identity: ok')
 PY

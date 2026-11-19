@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Experimental E1 acceptance: one shared runtime must protect a cast-free
+# E1 acceptance: one shared runtime must protect a cast-free
 # consumer and dynamic casts, not just recognize another module's marker.
 set -euo pipefail
 export PATH="$BIN:$PATH"
-export SOMA_EXPERIMENTAL_SHARED_EXTRACTION=1
+unset SOMA_EXPERIMENTAL_SHARED_EXTRACTION
 export SOMA_OCAML_BUILD=0 SOMA_MIRAGE_BUILD=0
 export SOMA_AUDIT_SOURCE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 python3 - <<'PY'
@@ -171,7 +171,7 @@ try:
             assert target.read_text() == "unrelated source\n"
         assert not (protected / "main.ml").exists()
     # Ordinary runtime-free modular extraction does not acquire a runtime ABI
-    # dependency merely because the experimental backend is available.
+    # dependency merely because the shared backend is available.
     plain = root / "plain"
     plain.mkdir()
     (plain / "Plain.v").write_text('From Corelib Require Extraction.\n'
