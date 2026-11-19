@@ -189,12 +189,14 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = if not interface then Stm.join ~doc:state.doc in
       let wall_clock2 = Unix.gettimeofday () in
       (* In .vo production, dump a complete .vo file. *)
-      let () = if interface then
+      let () = if interface then begin
           (* without its proofs: FILE.vos, which the compilation that asked
              for it puts in place *)
           Library.save_library_to ~output_native_objects
-            (Library.ProofsTodoSomeEmpty (Opaques.pending ())) ldir (long_f_dot_out ^ "s")
-        else if mode = BuildVo then begin
+            (Library.ProofsTodoSomeEmpty (Opaques.pending ())) ldir
+            (SomaImport.checked_output (long_f_dot_out ^ "s"));
+          SomaImport.install_checked ~vo:(long_f_dot_out ^ "s")
+        end else if mode = BuildVo then begin
           (* a proof check writes its .vo beside the one without proofs,
              then puts it in place (vernac/somaImport.ml) *)
           Library.save_library_to ~output_native_objects Library.ProofsTodoNone ldir
