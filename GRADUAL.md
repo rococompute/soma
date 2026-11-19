@@ -604,8 +604,8 @@ the program, escape hatches included.
 in the place of hosts (git's `url.insteadOf`).
 `test-suite/misc/soma_deps_ssh.sh` exercises both SSH spellings, `soma get`,
 locked refetches and the shared package identity. `owl_tictactoe` under
-`examples/example_projects` consumes the private `yevbar/soma-owl` package
-over SSH and trains a small neural network using Owl.
+`examples/example_projects` consumes the optional `rococompute/soma-owl` package
+over HTTPS (authenticate Git if repository access is restricted) and trains a small neural network using Owl.
 
 ### What a definition is: `soma hash`
 

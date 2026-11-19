@@ -1,14 +1,14 @@
 #!/bin/sh
 # Installs Soma: builds it from source and puts `soma` on your PATH.
 #
-#   curl -fsSL https://raw.githubusercontent.com/yevbar/soma/gradual/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/rococompute/soma/gradual/install.sh | sh
 #   ./install.sh                      (from a checkout: builds that checkout)
 #
 # Run it again to update: it fetches SOMA_REF and rebuilds what changed. The
 # first run takes about 30 minutes (an OCaml compiler, then Soma and its
 # standard library) and about 3 GB.
 #
-# SOMA_REPO    where to fetch Soma from (default: https://github.com/yevbar/soma.git)
+# SOMA_REPO    where to fetch Soma from (default: https://github.com/rococompute/soma.git)
 # SOMA_REF     the branch, tag or commit to build (default: gradual)
 # SOMA_DIR     where Soma's source is kept and built (default: ~/.soma; ignored
 #              when run from a checkout, which is built in place and never fetched)
@@ -20,7 +20,7 @@
 # system libraries the build needs (gmp, ...) through your package manager.
 set -eu
 
-SOMA_REPO=${SOMA_REPO:-https://github.com/yevbar/soma.git}
+SOMA_REPO=${SOMA_REPO:-https://github.com/rococompute/soma.git}
 SOMA_REF=${SOMA_REF:-gradual}
 SOMA_BIN=${SOMA_BIN:-$HOME/.local/bin}
 say() { printf 'soma-install: %s\n' "$*"; }
@@ -74,7 +74,7 @@ else
   git -C "$SOMA_DIR" remote add origin "$SOMA_REPO"
   say "fetching $SOMA_REF from $SOMA_REPO into $SOMA_DIR"
   git -C "$SOMA_DIR" fetch -q --depth 1 origin "$SOMA_REF" \
-    || die "fetching $SOMA_REF from $SOMA_REPO failed. While yevbar/soma is private, use SSH: SOMA_REPO=git@github.com:yevbar/soma.git"
+    || die "fetching $SOMA_REF from $SOMA_REPO failed. If authentication is required, configure Git credentials or use SSH: SOMA_REPO=git@github.com:rococompute/soma.git"
   git -C "$SOMA_DIR" checkout -q --force --detach FETCH_HEAD
 fi
 cd "$SOMA_DIR"

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A small Soma neural network learns tic-tac-toe moves using Owl"
 
 [dependencies]
-"git@github.com:yevbar/soma-owl.git" = "0.1.0"
+"https://github.com/rococompute/soma-owl.git" = "0.1.0"
 
 [opam]
 owl = "1.2"

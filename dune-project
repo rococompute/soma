@@ -16,8 +16,8 @@
 (maintainers "Yev Barkalov <yevbar1729@gmail.com>")
 (authors "The Rocq development team, INRIA, CNRS, and contributors")
 ; This generates bug-reports and dev-repo
-(source (github yevbar/soma))
-(homepage https://github.com/yevbar/soma)
+(source (github rococompute/soma))
+(homepage https://github.com/rococompute/soma)
 (documentation "https://rocq-prover.org/docs/")
 (version dev)
 (maintenance_intent "(any)")

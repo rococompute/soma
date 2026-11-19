@@ -1,5 +1,5 @@
 #!/bin/sh
-# Requires access to git@github.com:yevbar/soma-owl.git and Owl's native dependencies.
+# Requires access to https://github.com/rococompute/soma-owl.git and Owl's native dependencies.
 set -eu
 cd "$(dirname "$0")"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
