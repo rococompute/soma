@@ -40,11 +40,12 @@ let () =
   write "root/a.soma" "value : nat := 1.\n";
   write "root/b.soma" "value : nat := 1.\n";
   let source = SomaModuleStore.source_hash "root/a.soma" in
+  let checked = SomaMerkle.string ("checked-rules-and-kind:" ^ source) in
   write "cache/a.vo" "producer object A bytes";
-  write "cache/a.stamp" ("soma-stamp 4\nsource " ^ source ^ "\n");
+  write "cache/a.stamp" ("soma-stamp 4\nsource " ^ checked ^ "\n");
   SomaCache.record "cache/a.vo"; SomaCache.record "cache/a.stamp";
   SomaModuleStore.record ~root:"root" ~cache:"cache" ~prefix:"" ~source:"root/a.soma"
-    ~vo:"cache/a.vo" ~stamp:"cache/a.stamp" ~expected:source;
+    ~vo:"cache/a.vo" ~stamp:"cache/a.stamp" ~expected:checked ~candidate:source;
   assert (SomaCache.trusted "cache/a.donor");
   (* A legitimate pair moved to another unit cannot acquire that unit's
      producer descriptor, even when both source files have identical bytes. *)
@@ -52,7 +53,7 @@ let () =
   assert (SomaCache.trusted "cache/b.vo");
   write "cache/b.donor" (read "cache/a.donor");
   SomaModuleStore.record ~root:"root" ~cache:"cache" ~prefix:"" ~source:"root/a.soma"
-    ~vo:"cache/b.vo" ~stamp:"cache/b.stamp" ~expected:source;
+    ~vo:"cache/b.vo" ~stamp:"cache/b.stamp" ~expected:checked ~candidate:source;
   SomaModuleStore.publish ~store:"store" ~context ~root:"root" ~cache:"cache";
   mkdir "fresh"; write "fresh/a.soma" (read "root/a.soma"); write "fresh/b.soma" (read "root/b.soma");
   SomaModuleStore.restore ~store:"store" ~context ~root:"fresh" ~cache:"fresh/.soma-cache";

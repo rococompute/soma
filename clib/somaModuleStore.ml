@@ -54,37 +54,38 @@ let relative root file =
     if clean_relative p then Some p else None
   else None
 
-type descriptor = { unit_name : string; source : string; object_hash : string; stamp_hash : string }
-let encode d = Printf.sprintf "soma-module-donor 1\nunit %S\nprefix %S\nsource %s\nobject %s\nstamp %s\n"
-    d.unit_name "" d.source d.object_hash d.stamp_hash
+type descriptor = { unit_name : string; source : string; checked_source : string; object_hash : string; stamp_hash : string }
+let encode d = Printf.sprintf "soma-module-donor 2\nunit %S\nprefix %S\nsource %s\nchecked-source %s\nobject %s\nstamp %s\n"
+    d.unit_name "" d.source d.checked_source d.object_hash d.stamp_hash
 let decode text =
   try
-    let unit_name, prefix, source, object_hash, stamp_hash =
-      Scanf.sscanf text "soma-module-donor 1\nunit %S\nprefix %S\nsource %s\nobject %s\nstamp %s\n%!"
-        (fun u p s o t -> u, p, s, o, t) in
-    let d = { unit_name; source; object_hash; stamp_hash } in
+    let unit_name, prefix, source, checked_source, object_hash, stamp_hash =
+      Scanf.sscanf text "soma-module-donor 2\nunit %S\nprefix %S\nsource %s\nchecked-source %s\nobject %s\nstamp %s\n%!"
+        (fun u p s c o t -> u, p, s, c, o, t) in
+    let d = { unit_name; source; checked_source; object_hash; stamp_hash } in
     if prefix = "" && clean_relative unit_name &&
-       List.for_all SomaMerkle.valid_hash [source; object_hash; stamp_hash] && encode d = text
+       List.for_all SomaMerkle.valid_hash [source; checked_source; object_hash; stamp_hash] && encode d = text
     then Some d else None
   with Scanf.Scan_failure _ | Failure _ | End_of_file -> None
 let read_descriptor file = safe (fun () ->
     if not (regular file) || (Unix.lstat file).Unix.st_size > 16384 then None else
     let text = In_channel.with_open_bin file In_channel.input_all in
     if SomaCache.trusted_metadata file ~contents:text then decode text else None) None
+let complete stamp expected =
+  let text = In_channel.with_open_bin stamp In_channel.input_all in
+  String.starts_with ~prefix:("soma-stamp 4\nsource " ^ expected ^ "\n") text
 let matches d vo stamp =
-  regular vo && regular stamp && SomaCache.trusted vo && SomaCache.trusted stamp &&
+  regular vo && regular stamp && complete stamp d.checked_source && SomaCache.trusted vo && SomaCache.trusted stamp &&
   SomaMerkle.file_hash vo = d.object_hash && SomaMerkle.file_hash stamp = d.stamp_hash
 let source_matches d root =
   let source = d.unit_name ^ ".soma" in
   plain_path root source && source_hash (Filename.concat root source) = d.source
 let donor_file vo = Filename.chop_suffix vo ".vo" ^ ".donor"
-let complete stamp expected =
-  let text = In_channel.with_open_bin stamp In_channel.input_all in
-  String.starts_with ~prefix:("soma-stamp 4\nsource " ^ expected ^ "\n") text
+
 let native_side_files cache =
   (* Native proof side files are not covered by a .vo/.stamp-only descriptor. *)
   exists (Filename.concat cache ".coq-native")
-let record ~root ~cache ~prefix ~source ~vo ~stamp ~expected =
+let record ~root ~cache ~prefix ~source ~vo ~stamp ~expected ~candidate =
   safe (fun () ->
       match relative root source, relative cache vo with
       | Some source_rel, Some vo_rel when prefix = "" &&
@@ -93,20 +94,20 @@ let record ~root ~cache ~prefix ~source ~vo ~stamp ~expected =
           plain_path root source_rel && plain_path cache vo_rel &&
           plain_path cache (Filename.remove_extension source_rel ^ ".stamp") &&
           stamp = Filename.chop_suffix vo ".vo" ^ ".stamp" &&
-          not (native_side_files cache || native_side_files (Filename.dirname vo)) && source_hash source = expected &&
+          not (native_side_files cache || native_side_files (Filename.dirname vo)) && source_hash source = candidate &&
           complete stamp expected && SomaCache.trusted vo && SomaCache.trusted stamp ->
-        let d = { unit_name = Filename.remove_extension source_rel; source = expected;
+        let d = { unit_name = Filename.remove_extension source_rel; source = candidate; checked_source = expected;
                   object_hash = SomaMerkle.file_hash vo; stamp_hash = SomaMerkle.file_hash stamp } in
         let file = donor_file vo in
         let tmp = Filename.temp_file ~temp_dir:(Filename.dirname file) ".donor-" ".tmp" in
         Fun.protect ~finally:(fun () -> if exists tmp then Sys.remove tmp) (fun () ->
             Out_channel.with_open_bin tmp (fun oc -> output_string oc (encode d));
-            if matches d vo stamp && source_hash source = expected then begin
+            if matches d vo stamp && source_hash source = candidate then begin
               Sys.rename tmp file;
               SomaCache.record file;
               (* Changed objects invalidate the descriptor; no receiver trusts
                  this file without checking the exact pair again. *)
-              if not (matches d vo stamp && source_hash source = expected) then Sys.remove file
+              if not (matches d vo stamp && source_hash source = candidate) then Sys.remove file
             end)
       | _ -> ()) ()
 let copy source target =
@@ -115,8 +116,8 @@ let copy source target =
           let buf = Bytes.create 65536 in
           let rec loop () = let n = input ic buf 0 (Bytes.length buf) in
             if n > 0 then (output oc buf 0 n; loop ()) in loop ()))
-let entry_key d = SomaMerkle.string ("soma-module-source 1\000" ^ SomaCache.identity () ^ "\000" ^ d.unit_name ^ "\000" ^ d.source)
-let store_root store context = Filename.concat (Filename.concat store "modules-v1") context
+let entry_key d = SomaMerkle.string ("soma-module-source 2\000" ^ SomaCache.identity () ^ "\000" ^ d.unit_name ^ "\000" ^ d.source)
+let store_root store context = Filename.concat (Filename.concat store "modules-v2") context
 let valid_context context = SomaMerkle.valid_hash context
 let artifacts entry = Filename.concat entry "object.vo", Filename.concat entry "object.stamp", Filename.concat entry "descriptor"
 let verified_entry entry =
@@ -162,7 +163,7 @@ let restore ~store ~context ~root ~cache =
                 if directory file && not (List.mem name [".soma-cache"; ".git"; "_build"]) then sources r file
                 else if Filename.check_suffix name ".soma" && plain_path root r then begin
                   let d = { unit_name = Filename.remove_extension r; source = source_hash file;
-                            object_hash = ""; stamp_hash = "" } in
+                            checked_source = ""; object_hash = ""; stamp_hash = "" } in
                   let candidates = Filename.concat (store_root store context) (entry_key d) in
                   if directory candidates then begin
                     (* Newer candidates are hints only. A different dependency

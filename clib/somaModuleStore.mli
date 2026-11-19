@@ -3,9 +3,12 @@
 val source_hash : string -> string
 
 (** Called only after the compiler has certified its own object/stamp pair.
-    Only root-project .soma units are currently eligible. No .vos donor. *)
+    [expected] is the checked full stamp identity; [candidate] is the raw
+    source/companion hint captured before compilation. The latter never proves
+    current rule/dependency freshness. Only root-project .soma units are
+    currently eligible. No .vos donor. *)
 val record : root:string -> cache:string -> prefix:string -> source:string ->
-  vo:string -> stamp:string -> expected:string -> unit
+  vo:string -> stamp:string -> expected:string -> candidate:string -> unit
 
 (** Publish producer-certified candidates after a successful build. *)
 val publish : store:string -> context:string -> root:string -> cache:string -> unit

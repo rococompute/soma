@@ -1153,6 +1153,7 @@ let write_stamp () =
          SomaModuleStore.record ~root ~cache
            ~prefix:(match env_value prefix_var with Some p -> p | None -> "") ~source:_src
            ~vo ~stamp ~expected
+           ~candidate:(match env_value "SOMA_IMPORT_EXPECTED_CANDIDATE" with Some h -> h | None -> expected)
        | _ -> ());
       ignore (expected_import_source ());
       require_published_import_output vo;
