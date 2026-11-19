@@ -59,6 +59,29 @@ let shown = function
   | Tag (written, _, version) -> written ^ " " ^ version_to_string version
   | Folder dir -> Filename.basename dir
 
+(* A path, as a TOML basic string: a folder's name may have a quote, a
+   backslash, a space or a newline in it, which a literal string '...' would
+   end at or not hold, and the path written is the path meant. Bytes that are
+   not ASCII are left as they are, as a path is bytes, and a basic string may
+   hold them. *)
+let toml_string s =
+  let buf = Buffer.create (String.length s + 2) in
+  Buffer.add_char buf '"';
+  String.iter (fun c -> match c with
+      | '"' -> Buffer.add_string buf "\\\""
+      | '\\' -> Buffer.add_string buf "\\\\"
+      | '\b' -> Buffer.add_string buf "\\b"
+      | '\t' -> Buffer.add_char buf '\t'
+      | '\n' -> Buffer.add_string buf "\\n"
+      | '\012' -> Buffer.add_string buf "\\f"
+      | '\r' -> Buffer.add_string buf "\\r"
+      | c when c < ' ' || c = '\127' ->
+        Buffer.add_string buf (Printf.sprintf "\\u%04X" (Char.code c))
+      | c -> Buffer.add_char buf c)
+    s;
+  Buffer.add_char buf '"';
+  Buffer.contents buf
+
 (* * What a version has *)
 
 let is_ident s =
@@ -139,8 +162,8 @@ let definitions side =
       p.root, p.name, Printf.sprintf "%S = %S" written (version_to_string version)
     | Folder dir ->
       let p = load dir in
-      p.root, p.name, (* a literal string, as a folder's name may have anything in it *)
-      Printf.sprintf "\"local/%s\" = { path = '%s' }" p.name dir in
+      p.root, p.name, (* a string in quotes, as a folder's name may have anything in it *)
+      Printf.sprintf "\"local/%s\" = { path = %s }" p.name (toml_string dir) in
   let tmp = Filename.temp_file "soma-diff" "" in
   Sys.remove tmp;
   Unix.mkdir tmp 0o755;
