@@ -67,7 +67,12 @@ expect unrelated 'Admitting library: AdmitLeaf'
 # Explicit checked/norec roots always override admission for the root itself.
 check_log explicit AdmitLeaf -admit AdmitLeaf
 expect explicit 'Checking library: AdmitLeaf'
+expect explicit 'Admitting library: AdmitBase'
 reject explicit 'Admitting library: AdmitLeaf'
+check_log overlap AdmitBase -admit AdmitLeaf
+expect overlap 'Checking library: AdmitBase'
+expect overlap 'Admitting library: AdmitLeaf'
+reject overlap 'Admitting library: AdmitBase'
 check_log norec -norec AdmitLeaf -admit AdmitLeaf
 expect norec 'Checking library: AdmitLeaf'
 expect norec 'Admitting library: AdmitBase'
