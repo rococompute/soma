@@ -5,6 +5,7 @@ set -euo pipefail
 export PATH="$BIN:$PATH"
 export SOMA_EXPERIMENTAL_SHARED_EXTRACTION=1
 export SOMA_OCAML_BUILD=0 SOMA_MIRAGE_BUILD=0
+export SOMA_AUDIT_SOURCE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 python3 - <<'PY'
 import os, pathlib, shutil, subprocess, tempfile
 
@@ -174,6 +175,20 @@ try:
     run(["rocq", "c", "-q", "Plain.v"], plain)
     assert not (plain / "soma_gradual_rt.ml").exists()
     assert "Gradual_rt" not in (plain / "Plain.ml").read_text()
+    # Shared marker/state does not fix functor application identity. Keep
+    # this boundary explicit rather than accepting a false native cast.
+    fixture = pathlib.Path(os.environ["SOMA_AUDIT_SOURCE_ROOT"]) / \
+        "test-suite/misc/soma_audit_shared_gradual/functor_identity.v"
+    functor = root / "functor_guard"
+    functor.mkdir()
+    source = fixture.read_text().replace('Extraction "Functor" roundtrip wrong wrong_inside.',
+        'Separate Extraction roundtrip wrong wrong_inside.')
+    (functor / "FunctorGuard.v").write_text(source)
+    result = subprocess.run(["rocq", "c", "-q", "FunctorGuard.v"], cwd=functor,
+                            env=env, text=True, capture_output=True, timeout=60)
+    assert result.returncode != 0, (result.stdout, result.stderr)
+    assert "application-aware runtime type identities" in " ".join(result.stderr.split()), result.stderr
+    assert not list(functor.glob("*.ml*")), list(functor.iterdir())
     print("shared gradual execution parity for Separate/Library/Recursive/monolithic and project confinement: ok")
 except BaseException:
     print("Preserved failing shared-runtime fixtures at", root, flush=True)
