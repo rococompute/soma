@@ -66,14 +66,34 @@ end
 module SomaOpam = struct
 '''+opam[lines_start:lines_end]+r'''
 end
+module CString = struct let is_prefix prefix s = String.starts_with ~prefix s end
+module DirPath = struct let to_string x = x end
+module Loadpath = struct
+let paths = ref []
+let get_load_paths () = !paths
+let physical (x,_) = x
+let logical (_,x) = x
+let remove_load_path physical = paths := List.filter (fun (p,_) -> p <> physical) !paths
+end
 let project_cache () = Filename.concat root "cache"
 let mkdir_p = Receipt_cache.mkdir
+let remove_if_present file = try Sys.remove file with Sys_error _ -> ()
 '''+transaction+'\nlet read_paths_for_test () = '+read_operation+r'''
 let () =
   match role with
   | "a" -> record_load_path "Alpha" "/alpha"; touch (marker "a-done")
   | "b" -> record_load_path "Beta" "/beta"; touch (marker "b-done")
   | "c" -> record_load_path "Gamma" "/gamma"
+  | "selection" ->
+    Loadpath.paths := ["/old", "Root"; "/old/Sub", "Root.Sub";
+                       "/old/Independent", "Root.Nested"; "/else", "Else"];
+    record_load_path "Root" "/old";
+    record_load_path "Root.Nested" "/old/Independent";
+    record_load_path "Root" "/new";
+    assert (!(Loadpath.paths) = ["/old/Independent", "Root.Nested"; "/else", "Else"]);
+    let lines = read_load_paths () in
+    assert (List.mem "Root /new" lines && not (List.mem "Root /old" lines));
+    assert (List.mem "Root.Nested /old/Independent" lines)
   | "read" ->
     let lines = read_paths_for_test () in
     Out_channel.with_open_bin (marker "read-result") (fun oc ->
@@ -139,5 +159,6 @@ let () =
             if child is not None and child.poll() is None:
                 child.kill()
                 child.wait()
-print("soma audit: load-path trust/append/receipt transaction: passed")
+    subprocess.run([str(root / "transaction"), "selection", str(root)], env=env, check=True)
+print("soma audit: load-path trust/selection/receipt transaction: passed")
 PY

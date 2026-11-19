@@ -501,21 +501,62 @@ let with_load_paths_lock file f =
       lock ();
       f ())
 
+let parse_load_path line =
+  match String.index_opt line ' ' with
+  | Some i when i > 0 && i + 1 < String.length line ->
+    Some (String.sub line 0 i, String.sub line (i + 1) (String.length line - i - 1))
+  | _ -> None
+
+(* Older ledgers could contain several versions of the same exact prefix.
+   Keep the most recent choice; independent nested theories keep their rows. *)
+let current_load_paths lines =
+  List.fold_left (fun paths line -> match parse_load_path line with
+      | None -> paths
+      | Some (logical, _) ->
+        List.filter (fun row -> match parse_load_path row with
+            | Some (other, _) -> logical <> other | None -> false) paths @ [line]) [] lines
+
+let retire_load_paths ~logical ~dir ~other_choices old =
+  let within root path = path = root || CString.is_prefix (root ^ "/") path in
+  let logical_within prefix name = name = prefix || CString.is_prefix (prefix ^ ".") name in
+  let paths = Loadpath.get_load_paths () in
+  let old = List.fold_left (fun old path ->
+      if DirPath.to_string (Loadpath.logical path) = logical && Loadpath.physical path <> dir
+      then Loadpath.physical path :: old else old) old paths |> List.sort_uniq compare in
+  List.iter (fun path ->
+      let physical = Loadpath.physical path in
+      let name = DirPath.to_string (Loadpath.logical path) in
+      if logical_within logical name && List.exists (fun root -> within root physical) old &&
+         not (List.exists (fun (prefix, root) ->
+             logical_within prefix name && within root physical) other_choices)
+      then Loadpath.remove_load_path physical) paths
+
 let record_load_path logical dir =
   let file = load_paths_file () in
   with_load_paths_lock file (fun () ->
+      let previous = if SomaCache.trusted file then SomaOpam.read_lines file else [] in
+      let old = List.filter_map (fun row -> match parse_load_path row with
+          | Some (name, physical) when name = logical && physical <> dir -> Some physical
+          | _ -> None) previous in
       let line = logical ^ " " ^ dir in
-      if not (SomaCache.trusted file) then (try Sys.remove file with Sys_error _ -> ());
-      if not (List.mem line (SomaOpam.read_lines file)) then begin
-        Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o644 file (fun oc ->
-            output_string oc (line ^ "\n"));
+      let lines = current_load_paths (previous @ [line]) in
+      let other_choices = List.filter_map (fun row -> match parse_load_path row with
+          | Some (name, physical) when name <> logical -> Some (name, physical)
+          | _ -> None) lines in
+      retire_load_paths ~logical ~dir ~other_choices old;
+      if previous <> lines then begin
+        let tmp = Filename.temp_file ~temp_dir:(Filename.dirname file) ".soma-load-paths-" ".tmp" in
+        Fun.protect ~finally:(fun () -> remove_if_present tmp) (fun () ->
+            Out_channel.with_open_bin tmp (fun oc ->
+                List.iter (fun line -> output_string oc (line ^ "\n")) lines);
+            Sys.rename tmp file);
         SomaCache.record file
       end)
 
 let read_load_paths () =
   let file = load_paths_file () in
   with_load_paths_lock file (fun () ->
-      if SomaCache.trusted file then SomaOpam.read_lines file else [])
+      if SomaCache.trusted file then current_load_paths (SomaOpam.read_lines file) else [])
 
 (* A Rocq library records the exact source/configuration inputs it compiled.
    Paths inside this project are relative so copied project caches retain
