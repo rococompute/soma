@@ -195,6 +195,7 @@ let external_input root path =
       | resolved -> not (under root resolved)
       | exception Unix.Unix_error _ -> true)
   | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> false
+  | exception Unix.Unix_error _ -> true
 
 let source_extensions = [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".mli"; ".lean"]
 let companions file =
