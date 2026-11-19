@@ -167,27 +167,41 @@ let snapshot root repo =
     attempt 2 in
   List.filter_map one paths |> List.sort_uniq compare
 
+(* Keep the entry point's name: [tests/alias.soma] has its own
+   [tests/alias.exp], even when its source bytes come from another file.
+   Resolve only for confinement and directory-cycle checks. *)
+let lexical_path path =
+  String.split_on_char '/' path |> List.fold_left (fun dir -> function
+      | "" | "." -> dir
+      | ".." -> Filename.dirname (Unix.realpath dir)
+      | name -> Filename.concat dir name) "/"
+
 let discover root path =
-  let rec walk ancestors path =
-    let resolved = Unix.realpath path in
-    if not (under root resolved) then error "test path %s is outside the project" path;
-    let stat = Unix.stat resolved in
+  let rec walk ancestors ~explicit path =
+    let stat = Unix.stat path in
     match stat.Unix.st_kind with
+    | Unix.S_REG when not (Filename.check_suffix path ".soma") -> []
+    | Unix.S_REG ->
+      if not (under root path && under root (Unix.realpath path)) then
+        error "test path %s is outside the project" path;
+      [relative root path]
     | Unix.S_DIR ->
+      if not (under root path && under root (Unix.realpath path)) then
+        (* External fixture directories are opaque. An explicitly requested
+           test directory must still be confined rather than silently omitted. *)
+        if explicit then error "test path %s is outside the project" path else []
+      else
       let inode = stat.Unix.st_dev, stat.Unix.st_ino in
       if List.mem inode ancestors then [] else
-      Sys.readdir resolved |> Array.to_list |> List.sort String.compare
+      Sys.readdir path |> Array.to_list |> List.sort String.compare
       |> List.filter (fun n -> not (List.mem n [".git"; ".soma-cache"; "_build"; "node_modules"]))
       |> List.concat_map (fun name ->
-          let child = Filename.concat resolved name in
-          match Unix.realpath child with
-          | _ -> walk (inode :: ancestors) child
-          | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR | Unix.ELOOP), _, _) ->
+          let child = Filename.concat path name in
+          try walk (inode :: ancestors) ~explicit:false child with
+          | Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR | Unix.ELOOP), _, _) ->
             if Filename.check_suffix child ".soma" then error "cannot resolve test path %s" child else [])
-    | Unix.S_REG when Filename.check_suffix resolved ".soma" -> [relative root resolved]
-    | Unix.S_REG -> []
     | _ -> error "cannot discover tests in %s" path in
-  walk [] path
+  walk [] ~explicit:true (lexical_path path)
 
 let external_input root path =
   match Unix.lstat path with
@@ -370,11 +384,21 @@ let run ~identity ~build args =
                 | "soma-test-dependencies 1" :: paths -> List.map quoted paths
                 | _ -> error "compiler could not record complete dependencies" in
               let dependencies = List.concat_map (fun p -> companions (relative root p)) sources |> S.of_list in
+              (* Git reports edits under a symlink target's name. Retain both
+                 that name and the lexical companion the compiler actually
+                 reads; do not substitute the target's own .exp/.ext files. *)
+              let dependencies = S.fold (fun p dependencies ->
+                  match Unix.realpath (Filename.concat root p) with
+                  | target when under root target -> S.add (relative root target) dependencies
+                  | _ -> dependencies
+                  | exception Unix.Unix_error _ -> dependencies) dependencies dependencies in
               if not (S.mem test dependencies) then error "entry point missing from dependencies";
               if S.exists (fun p -> external_input root (Filename.concat root p)) dependencies then
                 error "a dependency resolves outside the project or through an unresolved link";
               if List.exists (fun p -> not (List.mem_assoc p before))
-                   (List.map (relative root) sources) then error "dependency is not tracked by Git discovery";
+                   (List.map (relative root) sources) ||
+                 S.exists (fun p -> Sys.file_exists (Filename.concat root p) && not (List.mem_assoc p before)) dependencies
+              then error "dependency is not tracked by Git discovery";
               if snapshot root repo <> before then error "project changed while the test was building";
               store receipt_file { identity; inputs = before; dependencies }
             with Error reason -> Printf.eprintf "soma test: %s: next run will include this test (%s)\n%!" test reason)) selected
