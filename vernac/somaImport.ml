@@ -404,16 +404,36 @@ let resolve_project_file file =
    what imports them: logical name, folder, one a line *)
 let load_paths_file () = Filename.concat (project_cache ()) "load-paths"
 
+(* The receipt covers the whole file. A writer must not mistake another
+   writer's append, before its receipt is recorded, for untrusted contents
+   and remove it. Readers take the same stable sibling lock so the trust
+   check and the bytes read belong to one completed transaction. *)
+let with_load_paths_lock file f =
+  mkdir_p (Filename.dirname file);
+  let fd = Unix.openfile (file ^ ".lock") [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o600 in
+  Fun.protect ~finally:(fun () -> Unix.close fd) (fun () ->
+      let rec lock () =
+        match Unix.lockf fd Unix.F_LOCK 0 with
+        | () -> ()
+        | exception Unix.Unix_error (Unix.EINTR, _, _) -> lock () in
+      lock ();
+      f ())
+
 let record_load_path logical dir =
   let file = load_paths_file () in
-  let line = logical ^ " " ^ dir in
-  if not (SomaCache.trusted file) then (try Sys.remove file with Sys_error _ -> ());
-  if not (List.mem line (SomaOpam.read_lines file)) then begin
-    mkdir_p (Filename.dirname file);
-    Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o644 file (fun oc ->
-        output_string oc (line ^ "\n"));
-    SomaCache.record file
-  end
+  with_load_paths_lock file (fun () ->
+      let line = logical ^ " " ^ dir in
+      if not (SomaCache.trusted file) then (try Sys.remove file with Sys_error _ -> ());
+      if not (List.mem line (SomaOpam.read_lines file)) then begin
+        Out_channel.with_open_gen [Open_append; Open_creat; Open_binary] 0o644 file (fun oc ->
+            output_string oc (line ^ "\n"));
+        SomaCache.record file
+      end)
+
+let read_load_paths () =
+  let file = load_paths_file () in
+  with_load_paths_lock file (fun () ->
+      if SomaCache.trusted file then SomaOpam.read_lines file else [])
 
 let add_load_path unix_path coq_path =
   Loadpath.add_vo_path { Loadpath.unix_path; coq_path; implicit = false; recursive = true; installed = false }
@@ -432,7 +452,7 @@ let add_cache_to_loadpath ?loc p =
         let dir = String.sub l (i + 1) (String.length l - i - 1) in
         if Sys.file_exists dir then
           add_load_path dir (Libnames.dirpath_of_string (String.sub l 0 i))
-      | None -> ()) (if SomaCache.trusted (load_paths_file ()) then SomaOpam.read_lines (load_paths_file ()) else [])
+      | None -> ()) (read_load_paths ())
 
 let is_folder_rules f =
   Filename.check_suffix f ".ext" &&
