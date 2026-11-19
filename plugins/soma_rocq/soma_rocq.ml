@@ -250,7 +250,7 @@ let dependency_order files text =
   parse 0 []
 
 (* [ts] compiled by Soma, in dependency order *)
-let compile ~prerequisites ~name ~log ts =
+let compile ~prerequisites ~prerequisite_sources ~name ~log ts =
   let loads = List.concat_map (fun (logical, dir) -> ["-Q"; dir; logical]) prerequisites @ load_args ts in
   let files = List.concat_map sources ts in
   if files = [] then error (str name ++ str " has no Rocq file in its theories.");
@@ -259,7 +259,11 @@ let compile ~prerequisites ~name ~log ts =
   if not (run_to ~dir ~out:order ([rocq_binary (); "dep"; "-sort"] @ loads @ files)) then
     error (str "rocq dep failed on " ++ str name ++ str "; the end of " ++ str order ++ str ":" ++ fnl () ++
            str (SomaOpam.tail_of_file order));
-  let order = dependency_order files (read_file order) in
+  (* rocq dep -sort includes sources reached through selected -Q roots.
+     Accept only their already-bound inventory, and compile our own files;
+     prerequisite entries are immutable and were compiled by their selection. *)
+  let order = dependency_order (files @ prerequisite_sources) (read_file order)
+      |> List.filter (fun file -> List.mem file files) in
   let total = List.length order in
   List.iteri (fun i f ->
       let rel = match List.find_opt (fun t -> String.starts_with ~prefix:(t.dir ^ "/") f) ts with
@@ -398,6 +402,13 @@ let prerequisite_paths selections =
           List.filter (fun (name, _) -> name <> logical) paths @ [logical, dir])
         paths selection.entry.SomaRocqCache.theories) [] selections
 
+let prerequisite_sources selections =
+  List.concat_map (fun (_, selection) ->
+      List.filter_map (fun (relative, _) ->
+          if Filename.check_suffix relative ".v" then Some (Filename.concat selection.directory relative)
+          else None) selection.entry.SomaRocqCache.artifacts) selections
+  |> List.sort_uniq compare
+
 let prerequisite_key toolchain selections =
   match selections with
   | [] -> toolchain
@@ -478,7 +489,8 @@ let ensure ~package source =
           error (str package ++ str " declares no theory: no dune file has a (rocq.theory ...) of the package," ++
                  spc () ++ str "and there is no _RocqProject or _CoqProject.");
         let snapshot = SomaRocqCache.source_snapshot ~directory:dir in
-        compile ~prerequisites:(prerequisite_paths prerequisites) ~name ~log:(Filename.concat dir "compile.log") ts;
+        compile ~prerequisites:(prerequisite_paths prerequisites)
+          ~prerequisite_sources:(prerequisite_sources prerequisites) ~name ~log:(Filename.concat dir "compile.log") ts;
         check_prerequisites prerequisites;
         (match source, local_key with
          | Local path, Some expected when source_key src <> expected || source_key path <> expected ->

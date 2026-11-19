@@ -55,7 +55,7 @@ let latest ~switch:_ ~log:_ _ = "1.0"
 let lock_file root name = Filename.concat root (name ^ ".lock")
 let with_lock _ f = f ()
 let theories ~package:_ _ : theory list = failwith "unexpected compile"
-let compile ~prerequisites:_ ~name:_ ~log:_ _ : unit = failwith "unexpected compile"
+let compile ~prerequisites:_ ~prerequisite_sources:_ ~name:_ ~log:_ _ : unit = failwith "unexpected compile"
 '''
     (root/'harness.ml').write_text(prelude+ensure+r'''
 let write p s = Out_channel.with_open_bin p (fun oc -> output_string oc s)
