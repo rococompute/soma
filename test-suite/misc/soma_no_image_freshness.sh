@@ -23,7 +23,7 @@ cat > "$WORK/compiler/ocamlc" <<'WRAPPER'
 #!/bin/sh
 case " $* " in
   *' -open Standins '*)
-    [ "${INJECT_BROKEN:-0}" = 0 ] || printf '\nlet broken : string = 42\n' >> prog.ml ;;
+    [ "${INJECT_BROKEN:-0}" = 0 ] || printf '\nlet broken : string = 42\n' >> soma_rt.ml ;;
 esac
 exec "$REAL_OCAMLC" "$@"
 WRAPPER
@@ -38,10 +38,10 @@ grep -q '(no image)' "$WORK/explicit-native.log"
 grep -q '^flags .*no_image=true$' .soma-cache/.freshness/*
 export PATH="$WORK/compiler:$PATH"
 if INJECT_BROKEN=1 soma build --no-image mirage_minimal.soma > "$WORK/broken.log" 2>&1; then
-    echo '--no-image reused another build configuration or accepted ill-typed prog.ml' >&2
+    echo '--no-image reused another build configuration or accepted ill-typed soma_rt.ml' >&2
     exit 1
 fi
-grep -q 'prog.ml' "$WORK/broken.log"
+grep -q 'soma_rt.ml' "$WORK/broken.log"
 grep -q 'Error:' "$WORK/broken.log"
 soma build --no-image mirage_minimal.soma > "$WORK/explicit.log" 2>&1
 grep -q '(no image)' "$WORK/explicit.log"
