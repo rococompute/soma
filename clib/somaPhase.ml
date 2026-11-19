@@ -79,7 +79,7 @@ let publish ~source ~directory ~switch ~output ~generated ~imports =
             failwith "uncertified phase import";
           path, SomaBuildInfo.signature path) imports in
       let plan = {key=getenv "SOMA_PHASE_KEY"; source; root; directory=canonical directory;
-                  switch; output; generated; imports} in
+                  switch; output=canonical output; generated; imports} in
       let text = contents plan in
       atomic_write (getenv "SOMA_BUILD_PHASE") text;
       (* The compiler producer certifies these exact bytes. The driver may
