@@ -16,25 +16,32 @@ let ( / ) s1 s2 = Filename.concat s1 s2
 
 let rcdefaultname = "coqrc"
 
+(* Keep selection and conservative freshness checks on the same candidates,
+   including currently absent higher-priority files. *)
+let default_candidates ~warn = [
+  Envars.xdg_config_home warn / rcdefaultname^"."^Coq_config.version;
+  Envars.xdg_config_home warn / rcdefaultname;
+  Envars.home ~warn / "."^rcdefaultname^"."^Coq_config.version;
+  Envars.home ~warn / "."^rcdefaultname
+]
+
 let load_rcfile ~rcfile ~state =
+  let load file =
+    SomaImport.note_loaded_source file;
+    Vernac.load_vernac ~check:true ~state file in
   try
     match rcfile with
     | Some rcfile ->
       if CUnix.file_readable_p rcfile then
-        Vernac.load_vernac ~check:true ~state rcfile
+        load rcfile
       else raise (Sys_error ("Cannot read rcfile: "^ rcfile))
     | None ->
       let warn x = Feedback.msg_warning (Pp.str x) in
-      let inferedrc = List.find_opt CUnix.file_readable_p [
-          Envars.xdg_config_home warn / rcdefaultname^"."^Coq_config.version;
-          Envars.xdg_config_home warn / rcdefaultname;
-          Envars.home ~warn / "."^rcdefaultname^"."^Coq_config.version;
-          Envars.home ~warn / "."^rcdefaultname
-        ] in
+      let inferedrc = List.find_opt CUnix.file_readable_p (default_candidates ~warn) in
       match inferedrc with
       | None -> state
       | Some inferedrc ->
-        Vernac.load_vernac ~check:true ~state inferedrc
+        load inferedrc
   with reraise ->
     let reraise = Exninfo.capture reraise in
     let () = Feedback.msg_info (Pp.str"Load of rcfile failed.") in
