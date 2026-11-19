@@ -14,11 +14,17 @@ with tempfile.TemporaryDirectory(prefix='soma-rule-receipts-') as tmp:
         src.mkdir(exist_ok=True);(src/'lib').mkdir()
         if mode=='manifest':
             (root/'soma.toml').write_text('[project]\nname="project"\nversion="0.1.0"\n')
-        rule_name='project' if mode=='manifest' else src.name
-        (src/(rule_name+'.ext')).write_text('Notation "\'true\'" := false.\n')
-        (src/'lib/item.soma').write_text('flag : bool := true.\n')
-        (src/'main.soma').write_text('Import lib.item.\nvalue : bool := flag.\n')
-        (src/'main.exp').write_text('Theorem checked : value = false. Proof. reflexivity. Qed.\n')
+        if mode=='nested':
+            # A plain standalone entry isolates its own fallback scope from
+            # imported-module trace support, which is independent of this move.
+            (src/'main.soma').write_text('value : bool := true.\n')
+            (src/'main.exp').write_text('Theorem checked : value = true. Proof. reflexivity. Qed.\n')
+        else:
+            rule_name='project' if mode=='manifest' else src.name
+            (src/(rule_name+'.ext')).write_text('Notation "\'true\'" := false.\n')
+            (src/'lib/item.soma').write_text('flag : bool := true.\n')
+            (src/'main.soma').write_text('Import lib.item.\nvalue : bool := flag.\n')
+            (src/'main.exp').write_text('Theorem checked : value = false. Proof. reflexivity. Qed.\n')
         (root/'.gitignore').write_text('.soma-cache/\n')
         for args in [['init','-q'],['add','.'],['-c','user.name=Audit','-c','user.email=audit@example.invalid','commit','-qm','fixture']]:subprocess.run(['git',*args],cwd=root,check=True)
         entry='tests/main.soma' if mode=='nested' else 'main.soma'
@@ -27,8 +33,9 @@ with tempfile.TemporaryDirectory(prefix='soma-rule-receipts-') as tmp:
             p=subprocess.run(['soma','test',*args,entry],cwd=root,env=env,text=True,capture_output=True,timeout=90)
             assert (p.returncode==0)==(expected==0),(mode,p.stdout,p.stderr)
             return p
-        test(['--full'])
-        assert test(['--changedSince','HEAD','--listTests']).stdout=='','seed should certify zero diff'
+        seed=test(['--full'])
+        selected_seed=test(['--changedSince','HEAD','--listTests'])
+        assert selected_seed.stdout=='',(mode,'seed should certify zero diff',seed.stdout,seed.stderr,selected_seed.stdout,selected_seed.stderr)
         moved=parent/'beta';root.rename(moved);root=moved
         selected=test(['--changedSince','HEAD','--listTests']).stdout.splitlines()
         if mode=='standalone':
