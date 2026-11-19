@@ -67,6 +67,20 @@ let write_file f s =
   let oc = open_out_bin f in
   Fun.protect ~finally:(fun () -> close_out oc) (fun () -> output_string oc s)
 
+(* [s] as a Soma (Rocq) string literal: a double quote is written twice,
+   and every other byte, a backslash included, stands for itself. OCaml's
+   [%S] escapes quotes and backslashes as OCaml reads them, which Rocq
+   does not: a directory with a quote would end the literal early, and a
+   backslash would name another directory. *)
+let quote_soma_string s =
+  let b = Buffer.create (String.length s + 2) in
+  Buffer.add_char b '"';
+  String.iter (fun c ->
+      if c = '"' then Buffer.add_string b "\"\""
+      else Buffer.add_char b c) s;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
 (* Writes [f] only when its contents change, so that dune does not rebuild
    for nothing. Returns whether it changed. *)
 let update_file f s =
@@ -1503,7 +1517,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
         (String.concat "; " (List.map (fun a -> "Obj.repr " ^ a) args)) in
     Printf.sprintf "Extract Constant %s => %s.\n" name (rocq_string code) in
   write_file cmds (Printf.sprintf
-    "Set Extraction Output Directory %S.\n\
+    "Set Extraction Output Directory %s.\n\
      From Corelib Require PrimFloat FloatClass PrimInt63 CarryType.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
      %s%s%s\
@@ -1516,7 +1530,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
        end.\n\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" dir float_extraction nat_string_extraction
+     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction
        (String.concat "" (SomaOcamlBindings.extraction_lines ocaml_modules @ List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)

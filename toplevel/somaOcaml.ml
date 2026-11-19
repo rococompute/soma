@@ -31,6 +31,7 @@
 
 let getenv_default = SomaMirage.getenv_default
 let mkdir_p = SomaMirage.mkdir_p
+let quote_soma_string = SomaMirage.quote_soma_string
 let read_file = SomaMirage.read_file
 let update_file = SomaMirage.update_file
 let tail_of_file = SomaOpam.tail_of_file
@@ -177,12 +178,12 @@ let extract ~state ~modules dir =
   let lines = SomaOcamlBindings.extraction_lines modules in
   SomaMirage.write_file cmds (Printf.sprintf
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
-     Set Extraction Output Directory %S.\n\
+     Set Extraction Output Directory %s.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
      %s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main.\n" dir SomaMirage.float_extraction
+     Extraction \"prog\" soma_main.\n" (quote_soma_string dir) SomaMirage.float_extraction
        SomaMirage.nat_string_extraction (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
