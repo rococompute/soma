@@ -1550,6 +1550,8 @@ let resume_phase c before = match before with
     | _ -> false
 
 let complete_phase c before metadata =
+  SomaPhase.debug (Printf.sprintf "driver phase boundary=%b checked-imports=%b draft=%b"
+      (before<>None) (metadata.checked_imports<>None) (metadata.phase_draft<>None));
   Option.iter (fun draft ->
       Fun.protect ~finally:(fun () -> try Sys.remove draft with Sys_error _ -> ()) (fun () ->
           match before,metadata.checked_imports,SomaPhase.read draft with

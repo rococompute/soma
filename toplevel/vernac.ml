@@ -96,7 +96,13 @@ let phase_command com =
         VernacContext _ | VernacGeneralizable _ | VernacComments _ |
         VernacPrimitive _ | VernacRegister _) -> true
     | _ -> false in
-  if not safe then SomaPhase.refuse ()
+  if not safe then begin
+    (match com.CAst.v.expr with
+     | VernacSynterp (VernacExtend (name,_)) ->
+       SomaPhase.debug ("unsupported extension: " ^ name.ext_plugin ^ "/" ^ name.ext_entry)
+     | _ -> ());
+    SomaPhase.refuse ()
+  end
 
 let interp_vernac ~check ~state ({CAst.loc;_} as com) =
   phase_command com;

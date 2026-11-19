@@ -555,6 +555,9 @@ let build ~state ~source ~vo_file =
       SomaMirage.copy_file ~src:built ~dst:(out ^ ".exe");
       SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".exe"];
+      SomaPhase.debug (Printf.sprintf "native eligibility requested=%b eligible=%b generated=%b libraries=%d js=%b closure=%b"
+        (SomaPhase.requested ()) (SomaPhase.eligible ()) (phase_generated <> None)
+        (List.length libraries) js (SomaImport.loaded_dependencies_certified ~source));
       (match phase_generated with
        | Some generated when SomaPhase.eligible () && libraries = [] && not js &&
            SomaImport.loaded_dependencies_certified ~source &&

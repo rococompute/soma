@@ -6,10 +6,11 @@ type plan = {
 }
 
 let getenv name = Stdlib.Option.value ~default:"" (Sys.getenv_opt name)
+let debug message = if getenv "SOMA_PHASE_DEBUG" = "1" then Printf.eprintf "soma phase: %s\n%!" message
 let requested () = getenv "SOMA_BUILD_PHASE" <> "" && getenv "SOMA_PHASE_KEY" <> ""
 let checking = ref true
 let safe = ref true
-let refuse () = if !checking && requested () then safe := false
+let refuse () = if !checking && requested () then begin debug "checking command is outside the supported subset";safe := false end
 let checked_imports = ref []
 let finish_checking ~imports = checked_imports := imports; checking := false
 let eligible () = requested () && !safe && not !checking
@@ -50,7 +51,7 @@ let plugin ~package ~files =
   if requested () &&
      (not (String.starts_with ~prefix:"soma-runtime.plugins." package) ||
       files = [] || not (List.for_all (fun file -> try installed (canonical file) with _ -> false) files))
-  then safe := false
+  then begin debug ("uncertified plugin: " ^ package);safe := false end
 
 let rec mkdir dir =
   if not (Sys.file_exists dir) then begin
@@ -101,8 +102,8 @@ let publish ~source ~directory ~switch ~output ~generated =
       atomic_write (getenv "SOMA_BUILD_PHASE") text;
       (* The compiler producer certifies these exact bytes. The driver may
          relocate them, but must never create a receipt for observed plans. *)
-      SomaCache.record (getenv "SOMA_BUILD_PHASE")
-    with Sys_error _ | Unix.Unix_error _ | Failure _ | Not_found -> ()
+      SomaCache.record (getenv "SOMA_BUILD_PHASE");debug "producer wrote certified draft"
+    with (Sys_error _ | Unix.Unix_error _ | Failure _ | Not_found) as e -> debug ("producer refused plan: " ^ Printexc.to_string e)
 
 let read path =
   try
