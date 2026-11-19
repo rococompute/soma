@@ -255,7 +255,24 @@ let write_lock root selected =
       (match s.commit with Some c -> Printf.sprintf "commit = %S\n" c | None -> "") in
   let contents = lock_marker ^ "\n" ^ String.concat "" (List.map entry selected) in
   let file = Filename.concat root lock_name in
-  if not (Sys.file_exists file && read_file file = contents) then write_file file contents
+  if not (Sys.file_exists file && read_file file = contents) then begin
+    (* A reader must see a complete old or new lock, including one that has
+       already opened it. Write beside it, then replace it with one rename.
+       A unique, exclusively-created temporary also keeps concurrent writers
+       from sharing a work file. This does not change dependency sources. *)
+    let mode = match Unix.lstat file with
+      | { Unix.st_kind = Unix.S_REG; st_perm; _ } -> Some st_perm
+      | _ -> None
+      | exception Unix.Unix_error (Unix.ENOENT, _, _) -> None in
+    let tmp, oc = Filename.open_temp_file ~temp_dir:root ~perms:0o666 ".soma-lock-" ".tmp" in
+    Fun.protect ~finally:(fun () ->
+        close_out_noerr oc;
+        try Sys.remove tmp with Sys_error _ -> ()) (fun () ->
+        output_string oc contents;
+        Option.iter (Unix.fchmod (Unix.descr_of_out_channel oc)) mode;
+        close_out oc;
+        Unix.rename tmp file)
+  end
 
 (* * The projects a build uses *)
 

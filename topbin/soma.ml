@@ -15,6 +15,9 @@
    requires Sandbox is also built into an image; one that uses OCaml
    modules, with them, into an executable or a page and its script).
 
+   [soma check FILE [OPTIONS]] checks its types and proofs, including its
+   .exp, without automatically extracting or linking an executable or image.
+
    [soma compile FILE [OPTIONS]] does both [soma build] and [soma explore]:
    it builds FILE as [soma build] does, in the same check reviewing it as
    [soma explore] does, and fails when the review finds an issue.
@@ -50,6 +53,8 @@ let usage = {|Usage:
   soma <command> FILE [options]
 
 Commands:
+  check                       Check a program's types and proofs, including its .exp,
+                              without extracting or linking its OCaml/Mirage products.
   build                       Check a program and keep what it is built into, if anything:
                               its MirageOS image, or, with OCaml modules, its executable
                               or its page.
@@ -102,7 +107,25 @@ Options:
 
 soma build --help lists the other options. Next to FILE.soma, FILE.ext has
 its extensions (macros, readers), read before it, and FILE.exp its
-expectations (lemmas and theorems), which build and run also check.
+expectations (lemmas and theorems), which check, build and run also check.
+|}
+
+let check_help = {|Usage: soma check FILE [options]
+
+Check the program and its .exp expectations with the kernel. Reuse checked
+imports, but always check the entry point; do not automatically extract or link
+OCaml executables, browser pages or Mirage images, or record them as built.
+OCaml implementations and generated Mirage code are checked by soma build.
+Explicit extraction commands that write files are refused in this mode.
+
+  -v, --verbose    Print the values and proof-search results of the check.
+  -w WARNINGS      Configure compiler warnings.
+  -time            Print the time taken by each checked sentence.
+  -h, --help       Show this help.
+
+Other Rocq checking options may follow FILE. Output redirection and proof-skipping
+options are refused. This mode is not a source sandbox: installed plugins and
+ordinary source commands retain their existing behavior.
 |}
 
 let usage_error fmt =
@@ -856,6 +879,30 @@ let memory_of command =
         (match int_of_string_opt (String.sub a 6 (String.length a - 6)) with Some n -> n | None -> m)
       else m) 256 command
 
+(* A full kernel/proof check, with only its disposable .vo in a temporary
+   directory. In particular this does not read or write build-freshness
+   receipts: checking a foreign declaration did not build its implementation. *)
+let check ~verbose file args =
+  let dir = temp_dir () in
+  pass_signals ();
+  Unix.putenv "SOMA_CHECK_ONLY" "1";
+  Unix.putenv "SOMA_MIRAGE_BUILD" "0";
+  Unix.putenv "SOMA_OCAML_BUILD" "0";
+  (* An inherited explicit export request takes precedence over build flags. *)
+  Unix.putenv "SOMA_OCAML_EXTRACT" "";
+  Unix.putenv "SOMA_REVIEW" "0";
+  Unix.putenv "SOMA_INTERFACE" "";
+  let vo = Filename.concat dir (Filename.remove_extension (Filename.basename file) ^ ".vo") in
+  let code = Fun.protect
+      ~finally:(fun () -> try remove_tree dir with Sys_error _ -> ())
+      (fun () ->
+         let code, output = compile (file :: "-o" :: vo :: args) in
+         if verbose then print_string output
+         else if List.mem "-time" args then
+           List.iter (fun l -> if starts_with ~prefix:"Chars " l then print_endline l) (lines output);
+         code) in
+  exit code
+
 (* [soma explore FILE]: FILE checked in a temporary directory, as by
    [soma run], without an image, and then reviewed (SOMA_REVIEW, which
    toplevel/ccompile.ml reads; plugins/soma_explore): its models explored,
@@ -1318,6 +1365,23 @@ let run_command ~events ~supervise = function
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
+  | "check" :: rest when List.exists is_help rest -> print_string check_help
+  | "check" :: rest ->
+    let is_verbose a = a = "-v" || a = "--verbose" in
+    let verbose = List.exists is_verbose rest in
+    let rest = List.filter (fun a -> not (is_verbose a)) rest in
+    List.iter (fun arg ->
+        if List.mem arg ["-vos"; "-vok"; "-o"; "-dump-glob"; "-native-output-dir";
+                         "-beautify"; "-output-context"] then
+          usage_error "soma check: %s is unavailable: checks do not skip proofs or keep compiler outputs" arg)
+      rest;
+    begin match rest with
+      | [] -> usage_error "soma check: no file given"
+      | file :: args ->
+        let opts, args = parse_opts args in
+        let () = init opts (file :: args) in
+        check ~verbose (program_of file) args
+    end
   | "test" :: [arg] when is_help arg -> print_string SomaTest.help
   | "test" :: args ->
     if List.exists (fun a -> a = "--listTests" || a = "--list-tests") args then

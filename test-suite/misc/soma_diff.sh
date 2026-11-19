@@ -30,6 +30,12 @@ under() {
     || { echo "expected, under $1: $2"; cat out.log; exit 1; }
 }
 diff_() { soma diff old new > out.log 2>&1 || { cat out.log; exit 1; }; }
+diff_fails() {
+  if soma diff old new > out.log 2>&1; then
+    echo 'an incomplete comparison reported success'; cat out.log; exit 1
+  fi
+  says 'The comparison is incomplete'
+}
 
 MORE='The same, and resting on more'
 EDITED='Edited:'
@@ -117,7 +123,7 @@ for v in old new; do echo 'fine : nat := 1.' > $v/fine.soma; done
 echo 'broken : nat := 1.' > old/broken.soma
 echo 'broken : nat := true.' > new/broken.soma
 echo 'same_edit : nat := 1.' > old/e.soma; echo 'same_edit : nat := 2.' > new/e.soma
-diff_
+diff_fails
 says 'Not compared, as it does not compile in new:'
 says 'broken'
 under "$EDITED" e.same_edit
@@ -128,7 +134,7 @@ fresh
 OUT="$TMP/written"; mkdir -p "$OUT"
 echo 'x : nat := 1.' > old/w.soma
 printf 'x : nat := 1.\nRedirect "%s/r" Check x.\n' "$OUT" > new/w.soma
-diff_
+diff_fails
 says 'Not compared, as it does not compile in new:'
 says 'Redirect writes a file'
 not_says 'Removed:'
