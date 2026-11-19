@@ -642,7 +642,6 @@ let pp_ind_brands ~signature table ind =
       if p.ip_logical then mt () else
       let r = p.ip_typename_ref in
       let name = brand_name (Common.pp_global_name table Type r) in
-      State.add_global_ids table (Id.of_string name);
       fnl () ++
       if signature then str ("val " ^ name ^ " : < >")
       else
