@@ -20,10 +20,10 @@ export HOME="$TMP/home"
 export XDG_CACHE_HOME="$TMP/xdg"
 mkdir -p "$HOME" "$XDG_CACHE_HOME"
 
-# the store's entries: folders named by a key, 32 hexadecimal digits
+# the store's entries: folders named by a SHA256 key, 64 hexadecimal digits
 entries() {
   if [ -d "$XDG_CACHE_HOME/soma" ]; then
-    ls "$XDG_CACHE_HOME/soma" | grep -c '^[0-9a-f]\{32\}$' || true
+    ls "$XDG_CACHE_HOME/soma" | grep -c '^[0-9a-f]\{64\}$' || true
   else
     echo 0
   fi
