@@ -79,7 +79,7 @@ let module_name file =
   let base = Filename.remove_extension (Filename.basename file) in
   if not (is_module_name base) then
     CErrors.user_err (str (Filename.basename file) ++ str " is not the name of an OCaml module:" ++ spc () ++
-                      str "it starts with a letter, followed by letters, digits and _.");
+                      str "it starts with a letter, followed by letters, digits, _ and '.");
   String.capitalize_ascii base
 
 let keywords = [

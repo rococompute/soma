@@ -109,13 +109,19 @@ let extraction_lines modules =
 let checked_modules ?(reserved = []) () =
   let modules = used_modules () in
   ignore (main_reference ());
-  (* two modules of the project of one name would be one module *)
+  (* Generated filenames must stay distinct on case-insensitive filesystems,
+     and an own module must not shadow a library top used by another binding.
+     Apostrophes are legal OCaml identifiers and remain supported. *)
+  let same_name a b = String.equal (String.lowercase_ascii a) (String.lowercase_ascii b) in
   let names = List.filter_map (fun (m : SomaForeign.ocaml_module) ->
       Option.map (fun _ -> m.top) m.ml_file) modules in
   List.iter (fun n ->
-      if List.length (List.filter (String.equal n) names) > 1 then
+      if List.length (List.filter (same_name n) names) > 1 then
         CErrors.user_err Pp.(str "the program uses two OCaml modules named " ++ str n ++ str ".");
-      if List.mem n (["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Soma_host"; "Float64"; "Uint63"] @ reserved) then
+      if List.exists (fun (m : SomaForeign.ocaml_module) -> m.ml_file = None && same_name n m.top) modules then
+        CErrors.user_err Pp.(str "the OCaml module " ++ str n ++
+          str " shadows a library module used by the program.");
+      if List.exists (same_name n) (["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Soma_host"; "Float64"; "Uint63"] @ reserved) then
         CErrors.user_err Pp.(str "an OCaml module cannot be named " ++ str n ++ str ", the name of one Soma makes."))
     names;
   modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
