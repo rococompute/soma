@@ -1493,22 +1493,27 @@ Extraction succ_dyn.
 
 Extraction differs from the kernel in these ways:
 
-- **A program needing the gradual runtime must be extracted to one file.**
+- **Modular gradual output uses one shared OCaml runtime.**
   `Separate Extraction`, `Extraction Library` and `Recursive Extraction
-  Library` refuse such output before writing any files; use
-  `Extraction "file" ...` instead. This also covers an ordinary-looking
-  `match` whose generated code propagates `?` or `err` supplied by a caller,
-  and consumers whose only gradual code is in a dependency. Runtime-free
-  modular extraction remains supported. The embedded runtime has a
-  module-local marker and cast state; modular gradual extraction needs a
-  shared runtime and guards at every consumer boundary before it is safe.
-- **Gradual functor output is refused by default, including monolithic
-  output.** A functor's result needs a runtime type identity shared by
-  references inside and outside one application, preserved by aliases and
-  distinct for separate applications. Comparing the functor declaration's
-  name alone can both reject a valid roundtrip and accept a cast between
-  distinct applications. Extraction refuses this output before writing
-  code; the kernel continues to check the program and its proofs.
+  Library` write `soma_gradual_rt.ml` beside their output. Compile and link
+  that unit before the extracted modules. Unknown/error markers, exceptions
+  and constructor-cast registrations are shared, and cast-free consumers
+  guard their eliminations too. Monolithic `Extraction "file" ...` remains
+  self-contained. Runtime-free modular output needs no runtime unit.
+- **Gradual modules must use the same runtime ABI.** Previously extracted
+  runtime-free modules or modules with a private embedded runtime cannot be
+  mixed into shared gradual output. The generated dependency check rejects
+  a missing ABI at OCaml compilation, or a different runtime at module
+  initialization. Re-extract the complete dependency closure with
+  `Separate Extraction` or `Recursive Extraction Library` to recover.
+  An unrelated `soma_gradual_rt.ml` is never overwritten.
+- **Functor result types have application-aware runtime identities.**
+  Exported physical brands agree inside and outside one application,
+  propagate through aliases and module arguments, and distinguish separate
+  applications, even when their arguments are the same. Constructor casts
+  also check the extracted representation fingerprint; incompatible custom
+  representations fail closed. These identities are process-local runtime
+  metadata, not a serialization format. The kernel checks are unchanged.
 - **Only the type parameters of constants are passed.** A cast at a type
   variable bound elsewhere (a local `fun (A : Type) => …`, a type stored in
   a constructor) is rejected at extraction time. So is a function that

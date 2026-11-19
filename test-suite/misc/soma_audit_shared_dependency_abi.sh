@@ -3,7 +3,7 @@
 # runtime-free helper into a gradual program. Re-extraction is the recovery.
 set -euo pipefail
 export PATH="$BIN:$PATH"
-export SOMA_EXPERIMENTAL_SHARED_EXTRACTION=1
+unset SOMA_EXPERIMENTAL_SHARED_EXTRACTION
 python3 - <<'PY'
 import os, pathlib, subprocess, tempfile
 with tempfile.TemporaryDirectory(prefix='soma-shared-dependency-') as tmp:

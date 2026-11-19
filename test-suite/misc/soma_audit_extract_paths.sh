@@ -30,7 +30,8 @@ import pathlib
 import subprocess
 import sys
 
-root = pathlib.Path(os.environ['SOMA_TEST_FIXTURE'])
+# Native project locks canonically resolve the destination before extraction.
+root = pathlib.Path(os.environ['SOMA_TEST_FIXTURE']).resolve()
 
 def run(args, **kwargs):
     result = subprocess.run(args, text=True, capture_output=True, **kwargs)
@@ -81,7 +82,11 @@ for name in names:
         assert (dest / made).is_file(), (name, made, sorted(os.listdir(parent)))
     assert 'soma_main' in (dest / 'prog.ml').read_text(), name
     after = set(os.listdir(parent))
-    assert after == before | {name}, (name, sorted(after - before - {name}))
+    # The stable sibling lock intentionally survives regeneration so waiters
+    # never lock a replaced inode. It must follow the exact quoted path too.
+    lock = "." + name + ".soma-ocaml.lock"
+    assert (parent / lock).is_file() and not (parent / lock).is_symlink(), lock
+    assert after == before | {name, lock}, (name, sorted(after - before - {name, lock}))
 
 # Without -o, the project goes next to the source, in a directory whose
 # name is made from a source directory that also needs quoting.

@@ -740,32 +740,15 @@ let locate_refs l =
     extracting to a file with the command:
     \verb!Extraction "file"! [qualid1] ... [qualidn]. *)
 
-let structure_has_functor struc =
-  let rec expr = function
-    | MEfunctor _ -> true
-    | MEstruct (_, fields) -> fields_have_functor fields
-    | MEapply (f, arg) -> expr f || expr arg
-    | MEident _ -> false
-  and fields_have_functor fields =
-    List.exists (function _, SEmodule m -> expr m.ml_mod_expr | _ -> false) fields in
-  List.exists (fun (_, fields) -> fields_have_functor fields) struc
-
 let structure_has_gradual_runtime struc =
   struct_ast_search (function
       | MLraw s -> String.starts_with ~prefix:"Gradual_rt." s
       | _ -> false) struc
 
-let refuse_unsafe_gradual_functors struc =
-  if structure_has_functor struc && structure_has_gradual_runtime struc &&
-     Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" <> Some "1" then
-    user_err (str "Gradual extraction of functors requires application-aware runtime type identities; " ++
-      str "this output is not supported yet.")
-
 let full_extr opaque_access f (refs,mps) =
   let table = init ~modular:false ~library:false () in
   List.iter (fun mp -> if is_modfile mp then error_MPfile_as_mod mp true) mps;
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
-  refuse_unsafe_gradual_functors struc;
   let () = warns table in
   print_structure_to_file table (mono_filename f) false struc
 
@@ -897,28 +880,20 @@ let full_extraction ~opaque_access f lr =
   let f = Option.map project_extraction_target f in
   full_extr opaque_access f (locate_refs lr)
 
-(* The runtime embedded in one extracted file is not shared with another
-   file's runtime. In particular, its unknown/error marker and cast tables
-   are local to that module, and a consumer with no casts need not have any
-   runtime guards at all. Until modular extraction has one shared runtime
-   and guards at every consumer boundary, reject such an output as a whole,
-   before printing even its ordinary dependency files. Monolithic extraction
-   retains its runtime and all of its guards. *)
+(* Modular output shares its marker, exceptions, descriptor ABI and cast
+   registry through one compilation unit. Every consumer in the selected
+   structure is printed with guards, including ordinary matches without
+   casts. Printed dependencies must advertise the same shared ABI; stale
+   runtime-free/embedded dependencies fail closed until re-extracted. *)
 let modular_gradual_runtime struc =
   let has_runtime = structure_has_gradual_runtime struc in
+  if lang () != Ocaml then begin
+    if has_runtime then user_err (str "Modular gradual extraction requires OCaml output.");
+    false
+  end else
   let has_cases = struct_ast_search (function MLcase _ -> true | _ -> false) struc in
   let gradual = Option.has_some (Gradual.get (Global.env ()) Gradual.GCast) in
-  if lang () == Ocaml && Sys.getenv_opt "SOMA_EXPERIMENTAL_SHARED_EXTRACTION" = Some "1" then begin
-    let shared = has_runtime || (gradual && has_cases) in
-    shared
-  end
-  else begin
-  if has_runtime then
-    user_err (str "Modular extraction of gradual code is not supported: " ++
-      str "use Extraction " ++ quote (str "file") ++
-      str " to keep the program and its gradual runtime in one file.");
-  false
-  end
+  has_runtime || (gradual && has_cases)
 
 (*s Separate extraction is similar to recursive extraction, with the output
    decomposed in many files, one per Rocq .v file *)
@@ -959,7 +934,6 @@ let simple_extraction ~opaque_access r =
        (currently just the Type one) *)
     let table = init ~modular:false ~library:false () in
     let struc = optimize_struct table ([r],[]) (mono_environment table ~opaque_access [r] []) in
-    refuse_unsafe_gradual_functors struc;
     let d = get_decl_in_structure r struc in
     let () = warns table in
     let flag =
