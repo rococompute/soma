@@ -1078,7 +1078,7 @@ let uncertain fmt = Printf.ksprintf (fun s -> raise (Uncertain s)) fmt
 (* the environment soma was started with, before [init] adds to it *)
 let initial_env = Array.to_list (Unix.environment ())
 
-let freshness_format = "soma-freshness 2"
+let freshness_format = "soma-freshness 3"
 let fingerprint_writes = ref true
 
 let fresh_error path e = uncertain "cannot read %s: %s" path (Unix.error_message e)
@@ -1204,9 +1204,11 @@ let freshness_record cache canonical =
   Filename.concat (Filename.concat cache ".freshness") (Digest.to_hex (Digest.string canonical))
 
 let fresh_outputs cache =
-  if not (is_directory_opt cache) then uncertain "%s does not exist" cache;
+  if not (Sys.file_exists cache) then [] else begin
+  if not (is_directory_opt cache) then uncertain "%s is no directory" cache;
   List.map (fun (r, d) -> Printf.sprintf "output %s %s" (String.escaped r) d)
     (fresh_tree ~skip:[".freshness"; ".interfaces"; ".tests"] ~prefix:"." cache)
+  end
 
 (* Before a build: its record is no longer that of the last successful
    build. What the project is, to compare with after it. *)
@@ -1272,7 +1274,9 @@ let freshness_verdict c =
           uncertain "%s %s changed" (kind l) (name l)
         | _ -> uncertain "the build configuration changed"
       end;
-      if recorded_outputs = [] then uncertain "no compiled output recorded";
+      (* A pure entry point can have no persistent outputs: its disposable
+         .vo was deliberately removed after all proofs were checked. The
+         trusted success record still binds its complete inputs/toolchain. *)
       List.iter (fun l ->
           match String.split_on_char ' ' l with
           | ["output"; r; d] ->
