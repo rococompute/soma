@@ -175,20 +175,66 @@ try:
     run(["rocq", "c", "-q", "Plain.v"], plain)
     assert not (plain / "soma_gradual_rt.ml").exists()
     assert "Gradual_rt" not in (plain / "Plain.ml").read_text()
-    # Shared marker/state does not fix functor application identity. Keep
-    # this boundary explicit rather than accepting a false native cast.
+    # Module result brands must agree inside/outside one application,
+    # propagate through aliases, and differ across separate applications.
     fixture = pathlib.Path(os.environ["SOMA_AUDIT_SOURCE_ROOT"]) / \
         "test-suite/misc/soma_audit_shared_gradual/functor_identity.v"
-    functor = root / "functor_guard"
+    functor = root / "functor"
     functor.mkdir()
-    source = fixture.read_text().replace('Extraction "Functor" roundtrip wrong wrong_inside.',
-        'Separate Extraction roundtrip wrong wrong_inside.')
-    (functor / "FunctorGuard.v").write_text(source)
-    result = subprocess.run(["rocq", "c", "-q", "FunctorGuard.v"], cwd=functor,
-                            env=env, text=True, capture_output=True, timeout=60)
-    assert result.returncode != 0, (result.stdout, result.stderr)
-    assert "application-aware runtime type identities" in " ".join(result.stderr.split()), result.stderr
-    assert not list(functor.glob("*.ml*")), list(functor.iterdir())
+    body = fixture.read_text()
+    body = body[:body.rindex('Extraction "Functor"')]
+    (functor / "BrandFunctor.v").write_text(body)
+    run(["rocq", "c", "-q", "BrandFunctor.v"], functor)
+    names = ["roundtrip", "wrong", "wrong_inside", "aliased", "second_wrong",
+             "wrapped_roundtrip", "wrapped_roundtrip2"]
+    refs = " ".join("BrandFunctor." + name for name in names)
+    functor_harness = r'''
+let rec nat = function D.O -> 0 | D.S n -> 1 + nat n
+let err value = assert (R.is_error value)
+let () =
+  if Sys.argv.(1) = "first" then begin
+    (match F.wrapped_roundtrip () with F.N.W1 n -> assert (nat n = 2) | _ -> assert false);
+    (match F.wrapped_roundtrip2 () with F.N2.W1 n -> assert (nat n = 2) | _ -> assert false)
+  end else begin
+    (match F.wrapped_roundtrip2 () with F.N2.W1 n -> assert (nat n = 2) | _ -> assert false);
+    (match F.wrapped_roundtrip () with F.N.W1 n -> assert (nat n = 2) | _ -> assert false)
+  end;
+  (match R.force (F.roundtrip ()) with F.N.B1 n -> assert (nat n = 2) | _ -> assert false);
+  (match R.force (F.aliased ()) with F.Alias.B1 n -> assert (nat n = 2) | _ -> assert false);
+  err (F.wrong ()); err (F.wrong_inside ()); err (F.second_wrong ());
+  print_endline "functor applications, aliases, constructor brands and kernel cast parity: ok"
+'''
+    for mode in ["monolithic", "separate", "library", "recursive"]:
+        output = functor / mode
+        output.mkdir()
+        if mode == "monolithic":
+            command = 'Extraction "Functor" ' + refs + '.\n'
+        elif mode == "separate":
+            command = 'Separate Extraction ' + refs + '.\n'
+        elif mode == "library":
+            command = 'Separate Extraction ' + refs + '.\nExtraction Library BrandFunctor.\n'
+        else:
+            command = 'Recursive Extraction Library BrandFunctor.\n'
+        request = functor / ("Request_" + mode + ".v")
+        request.write_text('Require Import BrandFunctor.\nFrom Corelib Require Extraction.\n'
+            'Extract Inductive unit => "unit" [ "()" ].\n'
+            'Set Extraction Output Directory "%s".\n' % output + command)
+        run(["rocq", "c", "-q", request.name], functor)
+        unit = "Functor" if mode == "monolithic" else "BrandFunctor"
+        datatype = "Functor" if mode == "monolithic" else "Datatypes"
+        aliases = "module F = %s\nmodule R = %s.Gradual_rt\nmodule D = %s\n" % (unit, unit, datatype)
+        sources = sorted(path.name for path in output.glob("*.ml"))
+        order = run(["ocamldep", "-sort"] + sources, output).stdout.split()
+        for source in order:
+            interface = pathlib.Path(source).with_suffix(".mli")
+            if (output / interface).exists():
+                run(["ocamlc", "-w", "-a", "-c", str(interface)], output)
+            run(["ocamlc", "-w", "-a", "-c", source], output)
+        (output / "main.ml").write_text(aliases + functor_harness)
+        run(["ocamlc", "-w", "-a"] + [str(pathlib.Path(s).with_suffix(".cmo")) for s in order] +
+            ["main.ml", "-o", "main.exe"], output)
+        for registration in ["first", "second"]:
+            run(["./main.exe", registration], output)
     print("shared gradual execution parity for Separate/Library/Recursive/monolithic and project confinement: ok")
 except BaseException:
     print("Preserved failing shared-runtime fixtures at", root, flush=True)

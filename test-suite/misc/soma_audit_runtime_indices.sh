@@ -10,7 +10,7 @@ cp "$SOURCE_ROOT/plugins/extraction/gradual_rt.ml" "$TMP/gradual_rt.ml"
 cat > "$TMP/check.ml" <<'ML'
 open Gradual_rt
 let value = Obj.repr 7
-let target data args = { name = "IndexTest"; data; args = Array.of_list args }
+let target data args = { name = "IndexTest"; brand = None; representation = "legacy"; data; args = Array.of_list args }
 let checked_error thunk =
   try ignore (check (thunk ())); failwith "a bad index arity was accepted"
   with Cast_error _ -> ()

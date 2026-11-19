@@ -121,6 +121,7 @@ let ast_iter_references do_term do_cons do_type a =
     ast_iter iter a;
     match a with
       | MLglob r -> do_term r
+      | MLbrand r -> do_type r
       | MLcons (_,r,_) -> do_cons r
       | MLcase (ty,_,v) ->
         type_iter_references do_type ty;

@@ -80,6 +80,8 @@ type ty =
 
 and ind = {
   name : string;
+  brand : < > option;
+  representation : string;
   data : bool;  (* its values can be [?] and [err] (see [exc_tag]) *)
   args : arg array;  (* parameters, then indices *)
 }
@@ -92,10 +94,22 @@ and arg =
 
 type dyn = { dty : ty; dv : Obj.t }
 
-(* For each inductive type, by name, the function [f] such that [f src tgt v]
+(* For each inductive type, by its application-aware exported brand, the
+   function [f] such that [f src tgt v]
    rebuilds [v : src] at [tgt], two instances of the type. Extraction
    generates them and passes them to [cast_with]. *)
-let casts : (string, ind -> ind -> Obj.t -> Obj.t) Hashtbl.t = Hashtbl.create 17
+type identity = Legacy of string | Branded of < > * string
+let same_identity a b = match a, b with
+  | Legacy a, Legacy b -> String.equal a b
+  | Branded (a, ar), Branded (b, br) -> a == b && String.equal ar br
+  | _ -> false
+module Identities = Hashtbl.Make(struct
+  type t = identity
+  let equal = same_identity
+  let hash = function Legacy name -> Hashtbl.hash name | Branded (b, r) -> Hashtbl.hash (Oo.id b, r)
+end)
+let identity i = match i.brand with None -> Legacy i.name | Some b -> Branded (b, i.representation)
+let casts : (ind -> ind -> Obj.t -> Obj.t) Identities.t = Identities.create 17
 
 (* Same representation as the [__] of extracted code. *)
 let dummy = let rec f _ = Obj.repr f in Obj.repr f
@@ -172,7 +186,7 @@ let rec equal a b =
   | Unknown, Unknown | Err, Err | Erased, Erased -> true
   | Sort s1, Sort s2 -> s1 = s2
   | Ind i1, Ind i2 ->
-    String.equal i1.name i2.name
+    same_identity (identity i1) (identity i2)
     && Array.length i1.args = Array.length i2.args
     && Array.for_all2 equal_arg i1.args i2.args
   | Prim (p1, a1), Prim (p2, a2) ->
@@ -233,8 +247,8 @@ let rec cast a b (v : Obj.t) : Obj.t =
       (* arrays of different element types: elements are not cast, as in
          the kernel, where such a cast is stuck *)
       raise (Cast_error ("cast between " ^ to_string a ^ " and " ^ to_string b ^ " is not supported"))
-    | Ind i1, Ind i2 when String.equal i1.name i2.name ->
-      begin match Hashtbl.find_opt casts i1.name with
+    | Ind i1, Ind i2 when same_identity (identity i1) (identity i2) ->
+      begin match Identities.find_opt casts (identity i1) with
         | Some f -> f i1 i2 v
         | None -> raise (Cast_error ("no cast function for " ^ i1.name))
       end
@@ -259,7 +273,7 @@ let propagate (ty : ty) (v : 'a) : Obj.t =
 
 let cast_with fs a b v =
   List.iter (fun (name, f) ->
-      if not (Hashtbl.mem casts name) then Hashtbl.add casts name f) fs;
+      if not (Identities.mem casts name) then Identities.add casts name f) fs;
   cast a b v
 
 (* The indices computed for a rebuilt constructor must be compatible with
@@ -285,11 +299,14 @@ let err_ty = Err
 let erased = Erased
 let sort n = Sort n
 let pi a b = Pi (a, b)
-let ind name data args = Ind { name; data; args = Array.of_list args }
+let ind name data args = Ind { name; brand = None; representation = "legacy"; data; args = Array.of_list args }
+let branded_ind name brand representation data args =
+  Ind { name; brand = Some brand; representation; data; args = Array.of_list args }
 let prim name = Prim (name, [])
 let prim_array t = Prim ("array", [t])
-let rnil : (string * (ind -> ind -> Obj.t -> Obj.t)) list = []
-let rcons name f l = (name, f) :: l
+let rnil : (identity * (ind -> ind -> Obj.t -> Obj.t)) list = []
+let rcons name f l = (Legacy name, f) :: l
+let branded_rcons _name brand representation f l = (Branded (brand, representation), f) :: l
 let anil : arg list = []
 let acons (a : arg) l = a :: l
 let ty_arg t = Ty t

@@ -138,6 +138,18 @@ let pp_global_name table k r = str (Common.pp_global table k r)
 
 let pp_modname table mp = str (Common.pp_module table mp)
 
+(* Brands use ordinary OCaml object identity, exported alongside each
+   informative inductive. The backend prefix is reserved by Common's name
+   mangler. Qualifying through the type's own renamed path also handles
+   functor parameters/results and module aliases without static string IDs. *)
+let brand_name name =
+  match String.rindex_opt name '.' with
+  | None -> "__soma_brand_" ^ name
+  | Some i -> String.sub name 0 (i + 1) ^ "__soma_brand_" ^
+      String.sub name (i + 1) (String.length name - i - 1)
+
+let pp_brand table r = str (brand_name (Common.pp_global table Type r))
+
 (* grammar from OCaml 4.06 manual, "Prefix and infix symbols" *)
 
 let infix_symbols =
@@ -272,6 +284,7 @@ let rec pp_expr table par env args =
         and pp_a2 = pp_expr table (not par && expr_needs_par a2) env' [] a2 in
         hv 0 (apply2 (pp_letin pp_id pp_a1 pp_a2))
     | MLglob r -> apply (pp_global table Term r)
+    | MLbrand r -> apply (pp_brand table r)
     | MLfix (i,ids,defs) ->
         let ids',env' = push_vars (List.rev (Array.to_list ids)) env in
         pp_fix table par env' i (Array.of_list (List.rev ids'),defs) args
@@ -623,10 +636,27 @@ let pp_mind table i =
     | Record fields -> pp_record table fields (i.ind_equiv,0) i.ind_packets.(0)
     | Standard -> pp_ind table false i
 
+let pp_ind_brands ~signature table ind =
+  if Option.is_empty (Gradual.get (Global.env ()) Gradual.GCast) then mt () else
+  Array.mapi (fun i p ->
+      if p.ip_logical then mt () else
+      let r = p.ip_typename_ref in
+      let name = brand_name (Common.pp_global_name table Type r) in
+      State.add_global_ids table (Id.of_string name);
+      fnl () ++
+      if signature then str ("val " ^ name ^ " : < >")
+      else
+        let value = match ind.ind_equiv with
+          | NoEquiv -> str "object end"
+          | Equiv kn -> pp_brand table { glob = GlobRef.IndRef (MutInd.make1 kn, i); inst = r.inst } in
+        str ("let " ^ name ^ " = ") ++ value)
+    ind.ind_packets
+  |> Array.to_list |> prlist identity
+
 let pp_decl table = function
     | Dtype (r,_,_) when is_inline_custom r -> mt ()
     | Dterm (r,_,_) when is_inline_custom r -> mt ()
-    | Dind i -> pp_mind table i
+    | Dind i -> pp_mind table i ++ pp_ind_brands ~signature:false table i
     | Dtype (r, l, t) ->
         let name = pp_global_name table Type r in
         let l = rename_tvars keywords l in
@@ -672,7 +702,7 @@ let pp_decl table = function
 let pp_spec table = function
   | Sval (r,_) when is_inline_custom r -> mt ()
   | Stype (r,_,_) when is_inline_custom r -> mt ()
-  | Sind i -> pp_mind table i
+  | Sind i -> pp_mind table i ++ pp_ind_brands ~signature:true table i
   | Sval (r,t) ->
       let def = pp_type table false [] t in
       let name = pp_global_name table Term r in
