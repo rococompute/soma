@@ -126,7 +126,9 @@ Parameter spawn : string -> string -> string -> list string -> list string -> bo
 (** a process's end, waited for: [[how, value]], how "exit", "signal" or
     "stop", and its number *)
 Parameter wait_pid : string -> bool * (float * list string).
-(** a process killed *)
+(** A positive process id sent SIGKILL. An already absent process is
+    idempotent success; invalid ids or permission/OS errors return failure.
+    The caller must not mark a job stopped after a failed request. *)
 Parameter kill_pid : string -> bool * (float * list string).
 (** from now on, a broken pipe doesn't end the program *)
 Parameter no_sigpipe : unit -> bool * (float * list string).

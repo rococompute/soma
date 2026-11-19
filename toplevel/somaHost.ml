@@ -180,7 +180,12 @@ let wait_pid pid =
     | exception e -> ans_exn e in
   wait (int_of_string pid)
 
-let kill_pid pid = (try Unix.kill (int_of_string pid) Sys.sigkill with _ -> ()); ans_ok
+let kill_pid pid =
+  tried (fun () ->
+      let process = int_of_string pid in
+      if process <= 0 then invalid_arg "kill_pid expects one positive process id";
+      try Unix.kill process Sys.sigkill with
+      | Unix.Unix_error (Unix.ESRCH, _, _) -> ())
 let no_sigpipe () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore; ans_ok
 
 (* PROG started with its output and errors appended to LOG, its input the
