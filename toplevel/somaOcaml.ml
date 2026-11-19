@@ -311,6 +311,7 @@ let with_project_lock dir f =
       f dir)
 
 let prepare_build_inputs ~switch modules =
+  try
   match Sys.getenv_opt "SOMA_BUILD_INPUTS" with
   | Some file when file <> "" ->
     let out = Filename.temp_file "soma-native-switch-" ".prefix" in
@@ -335,6 +336,7 @@ let prepare_build_inputs ~switch modules =
             SomaBuildInfo.prepare_inputs paths
         else None)
   | _ -> None
+  with Sys_error _ | Unix.Unix_error _ | Not_found -> None
 
 (* * soma extract *)
 
