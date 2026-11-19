@@ -1349,7 +1349,10 @@ and gradual_reify table sg ctx t =
           ctx.rt_needed := (ind, u) :: !(ctx.rt_needed);
         let args = Array.map_to_list (gradual_reify_arg table sg ctx) args in
         let data = if gradual_ind_holds_exc table env ind u then "true" else "false" in
-        rt_app "ind" [gradual_ind_name_ml env ind; MLraw data; rt_list args]
+        rt_app "branded_ind" [gradual_ind_name_ml env ind;
+          MLbrand { glob = GlobRef.IndRef ind; inst = InfvInst.ground (EConstr.EInstance.kind sg u) };
+          gradual_ind_representation table env ind u;
+          MLraw data; rt_list args]
       | _ -> gradual_error env sg (Pp.str "no runtime description for type") t
 
 (* Can the values of this inductive type be [?] and [err], as data (see
@@ -1408,10 +1411,39 @@ and gradual_ind_casts table sg ctx =
     | None -> acc
     | Some (ind, u) ->
       let fn = gradual_ind_cast table sg ctx (ind, u) in
-      let acc = rt_app "rcons" [gradual_ind_name_ml ctx.rt_outer ind; fn; acc] in
+      let acc = rt_app "branded_rcons" [gradual_ind_name_ml ctx.rt_outer ind;
+          MLbrand { glob = GlobRef.IndRef ind; inst = InfvInst.ground (EConstr.EInstance.kind sg u) };
+          gradual_ind_representation table ctx.rt_outer ind u; fn; acc] in
       loop (ind :: is_done) acc
   in
   loop [] (rt "rnil")
+
+(* Equal kernel inductives compiled with incompatible extraction directives
+   must not be mistaken for the same OCaml representation through Any. Keep
+   this layout ABI independent of the functor's display/qualified names. *)
+and gradual_ind_representation table env ind u =
+  let inst = InfvInst.ground (EConstr.EInstance.kind (Evd.from_env env) u) in
+  let mi = extract_ind table env (fst ind) inst in
+  let p = mi.ind_packets.(snd ind) in
+  let r = p.ip_typename_ref in
+  let custom = if is_custom r then begin
+      let args, typ = find_type_custom r in
+      let constructors = Array.to_list (Array.map (fun r ->
+          try find_custom r with Not_found -> "") p.ip_consnames_ref) in
+      let branches = Array.map (fun r -> [], Pusual r, MLdummy Ktype) p.ip_consnames_ref in
+      let matching = try find_custom_match branches with Not_found -> "" in
+      Some (args, typ, constructors, matching)
+    end else None in
+  let kind = match mi.ind_kind with
+    | Standard -> "variant" | Singleton -> "singleton"
+    | Record _ -> "record" | Coinductive -> "coinductive" in
+  let retained = Array.to_list (Array.mapi (fun j types ->
+      let implicits = implicits_of_global p.ip_consnames_ref.(j) in
+      List.mapi (fun k typ ->
+          not (isTdummy (expand table env typ)) &&
+          not (Int.Set.mem (mi.ind_nparams + k + 1) implicits)) types) p.ip_types) in
+  let abi = Marshal.to_string (kind, custom, retained) [Marshal.No_sharing] in
+  MLraw (Printf.sprintf "%S" (SomaMerkle.string abi))
 
 (* The function [fun src tgt v -> ...] that rebuilds [v], an inhabitant of
    the instance [src] of the inductive type [ind], at the instance [tgt]:

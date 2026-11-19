@@ -479,6 +479,8 @@ let ref_renaming_fun table (k,r) =
   let l = if lang () != Ocaml && not (State.get_modular table) then [""] else l in
   let s =
     let idg = safe_basename_of_global (State.get_table table) r in
+    let idg = if String.starts_with ~prefix:"__soma_brand_" (Id.to_string idg)
+      then Id.of_string ("coq_" ^ Id.to_string idg) else idg in
     let app_suf s = match InfvInst.encode r.inst with
     | None -> s
     | Some suf -> s ^ "__" ^ suf

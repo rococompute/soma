@@ -26,6 +26,8 @@ open Miniml
 
 let blacklist_table = Summary.ref Id.Set.empty ~name:"ExtrBlacklist"
 
+let shared_gradual_runtime_module = "Soma_gradual_rt"
+
 (** Sets and maps for [global_reference] that use the "user" [kernel_name]
     instead of the canonical one *)
 
@@ -159,7 +161,8 @@ let empty_table = {
   modfile_mps = DirPath.Map.empty;
 }
 
-let make_table () = ref { empty_table with modfile_ids = !blacklist_table }
+let make_table () = ref { empty_table with
+  modfile_ids = Id.Set.add (Id.of_string shared_gradual_runtime_module) !blacklist_table }
 
 let add_typedef table kn inst cb t =
   let upd = function

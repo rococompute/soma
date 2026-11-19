@@ -150,6 +150,7 @@ and ml_ast =
   | MLlam    of ml_ident * ml_ast
   | MLletin  of ml_ident * ml_ast * ml_ast
   | MLglob   of global
+  | MLbrand  of global (** Application-aware runtime identity of an inductive *)
   | MLcons   of ml_type * global * ml_ast list
   | MLtuple  of ml_ast list
   | MLcase   of ml_type * ml_ast * ml_branch array

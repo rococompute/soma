@@ -53,7 +53,8 @@ let keywords =
     "module"; "mutable"; "new"; "nonrec"; "object"; "of"; "open"; "or";
     "parser"; "private"; "rec"; "sig"; "struct"; "then"; "to"; "true";
     "try"; "type"; "val"; "virtual"; "when"; "while"; "with"; "mod";
-    "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr" ; "unit" ; "_" ; "__" ]
+    "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr" ; "unit" ; "_" ; "__";
+    "Gradual_rt"; shared_gradual_runtime_module ]
   Id.Set.empty
 
 (* Note: do not shorten [str "foo" ++ fnl ()] into [str "foo\n"],
@@ -79,8 +80,11 @@ let pp_mldummy usf =
 
 (* The runtime of gradual casts (gradual_rt.ml), printed line by line since
    '\n' interacts badly with Format boxes. *)
-let pp_gradual_rt usf =
+let pp_gradual_rt table usf =
   if usf.gradual_rt then
+    if State.get_modular table then
+      str ("module Gradual_rt = " ^ shared_gradual_runtime_module) ++ fnl ()
+    else
     let lines = String.split_on_char '\n' Gradual_rt_source.source in
     str "module Gradual_rt = struct" ++ fnl () ++
     prlist (fun l -> str l ++ fnl ()) lines ++
@@ -91,10 +95,13 @@ let preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf ++ pp_mldummy usf) ++
-  then_nl (pp_gradual_rt usf)
+  then_nl (pp_gradual_rt table usf)
 
-let pp_gradual_rt_sig usf =
+let pp_gradual_rt_sig table usf =
   if usf.gradual_rt then
+    if State.get_modular table then
+      str ("module Gradual_rt = " ^ shared_gradual_runtime_module) ++ fnl ()
+    else
     str "module Gradual_rt : sig" ++ fnl () ++
     str "  exception Cast_error of string" ++ fnl () ++
     str "  exception Unknown_term of string" ++ fnl () ++
@@ -109,7 +116,7 @@ let sig_preamble table _ comment used_modules usf =
   pp_header_comment comment ++
   then_nl (prlist (fun o -> pp_open table o) (DirPath.Set.elements used_modules)) ++
   then_nl (pp_tdummy usf) ++
-  then_nl (pp_gradual_rt_sig usf)
+  then_nl (pp_gradual_rt_sig table usf)
 
 (*s The pretty-printer for Ocaml syntax*)
 
@@ -130,6 +137,18 @@ let pp_global table k r = str (str_global table k r)
 let pp_global_name table k r = str (Common.pp_global table k r)
 
 let pp_modname table mp = str (Common.pp_module table mp)
+
+(* Brands use ordinary OCaml object identity, exported alongside each
+   informative inductive. The backend prefix is reserved by Common's name
+   mangler. Qualifying through the type's own renamed path also handles
+   functor parameters/results and module aliases without static string IDs. *)
+let brand_name name =
+  match String.rindex_opt name '.' with
+  | None -> "__soma_brand_" ^ name
+  | Some i -> String.sub name 0 (i + 1) ^ "__soma_brand_" ^
+      String.sub name (i + 1) (String.length name - i - 1)
+
+let pp_brand table r = str (brand_name (Common.pp_global table Type r))
 
 (* grammar from OCaml 4.06 manual, "Prefix and infix symbols" *)
 
@@ -265,6 +284,7 @@ let rec pp_expr table par env args =
         and pp_a2 = pp_expr table (not par && expr_needs_par a2) env' [] a2 in
         hv 0 (apply2 (pp_letin pp_id pp_a1 pp_a2))
     | MLglob r -> apply (pp_global table Term r)
+    | MLbrand r -> apply (pp_brand table r)
     | MLfix (i,ids,defs) ->
         let ids',env' = push_vars (List.rev (Array.to_list ids)) env in
         pp_fix table par env' i (Array.of_list (List.rev ids'),defs) args
@@ -616,10 +636,27 @@ let pp_mind table i =
     | Record fields -> pp_record table fields (i.ind_equiv,0) i.ind_packets.(0)
     | Standard -> pp_ind table false i
 
+let pp_ind_brands ~signature table ind =
+  if Option.is_empty (Gradual.get (Global.env ()) Gradual.GCast) then mt () else
+  Array.mapi (fun i p ->
+      if p.ip_logical then mt () else
+      let r = p.ip_typename_ref in
+      let name = brand_name (Common.pp_global_name table Type r) in
+      State.add_global_ids table (Id.of_string name);
+      fnl () ++
+      if signature then str ("val " ^ name ^ " : < >")
+      else
+        let value = match ind.ind_equiv with
+          | NoEquiv -> str "object end"
+          | Equiv kn -> pp_brand table { glob = GlobRef.IndRef (MutInd.make1 kn, i); inst = r.inst } in
+        str ("let " ^ name ^ " = ") ++ value)
+    ind.ind_packets
+  |> Array.to_list |> prlist identity
+
 let pp_decl table = function
     | Dtype (r,_,_) when is_inline_custom r -> mt ()
     | Dterm (r,_,_) when is_inline_custom r -> mt ()
-    | Dind i -> pp_mind table i
+    | Dind i -> pp_mind table i ++ pp_ind_brands ~signature:false table i
     | Dtype (r, l, t) ->
         let name = pp_global_name table Type r in
         let l = rename_tvars keywords l in
@@ -665,7 +702,7 @@ let pp_decl table = function
 let pp_spec table = function
   | Sval (r,_) when is_inline_custom r -> mt ()
   | Stype (r,_,_) when is_inline_custom r -> mt ()
-  | Sind i -> pp_mind table i
+  | Sind i -> pp_mind table i ++ pp_ind_brands ~signature:true table i
   | Sval (r,t) ->
       let def = pp_type table false [] t in
       let name = pp_global_name table Term r in
