@@ -242,7 +242,7 @@ let checked_modules = SomaOcamlBindings.checked_modules
 (* A directory can outlive a build and contain files the user added or edited.
    Only remove an obsolete generated file whose receipt still matches; dune's
    explicit module list keeps all other files out of this executable. *)
-let record_generated_files dir made =
+let record_generated_files dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h"] in
@@ -258,7 +258,9 @@ let record_generated_files dir made =
           (try Sys.remove (Filename.concat dir f) with Sys_error _ -> ())
       | _ -> ()) (read_lines manifest);
   let contents = String.concat "" (List.filter_map (fun f ->
-      Option.map (fun digest -> f ^ " " ^ digest ^ "\n") (hash f)) made) in
+      match Hashtbl.find_opt expected f, hash f with
+      | Some expected, Some digest when String.equal expected digest -> Some (f ^ " " ^ digest ^ "\n")
+      | _ -> None) made) in
   let tmp, oc = Filename.open_temp_file ~temp_dir:dir ".soma-ocaml-files-" ".tmp" in
   Fun.protect ~finally:(fun () ->
       close_out_noerr oc;
@@ -271,10 +273,26 @@ let record_generated_files dir made =
    bindings, the project's modules (with line directives to them when
    [~directives], so that OCaml's errors are about the files themselves),
    what runs [main], and dune's files *)
-let write_project ~state ~modules ~libraries ~js ~directives dir =
+let write_project ?(read_source=read_file) ?(private_extract=false)
+    ?(capture_generated=(fun _ _ -> ())) ~state ~modules ~libraries ~js ~directives dir =
   mkdir_p dir;
-  extract ~state ~modules dir;
-  let file f contents = ignore (update_file (Filename.concat dir f) contents) in
+  let expected = Hashtbl.create 17 in
+  let file f contents =
+    Hashtbl.replace expected f (SomaMerkle.string contents);
+    capture_generated f contents;
+    ignore (update_file (Filename.concat dir f) contents) in
+  if private_extract then begin
+    (* A persistent cached prog.ml is never evidence of what this invocation
+       extracted. Generate into a new private directory, then bind the copied
+       bytes to the same producer hashes as the wrappers and own modules. *)
+    let staging = CUnix.mktemp_dir ~temp_dir:dir ".soma-extraction-" "" in
+    Fun.protect ~finally:(fun () ->
+        Array.iter (fun f -> try Sys.remove (Filename.concat staging f) with Sys_error _ -> ())
+          (Sys.readdir staging);
+        try Unix.rmdir staging with Unix.Unix_error _ -> ()) (fun () ->
+        extract ~state ~modules staging;
+        List.iter (fun f -> file f (read_file (Filename.concat staging f))) ["prog.ml"; "prog.mli"])
+  end else extract ~state ~modules dir;
   file "soma_main.ml" (entry_ml ());
   file "float64.ml" SomaMirage.float64_ml;
   file "uint63.ml" SomaMirage.uint63_ml;
@@ -284,14 +302,14 @@ let write_project ~state ~modules ~libraries ~js ~directives dir =
     file "soma_host.ml" SomaHost.ml;
     file "soma_host_io.c" SomaHost.io_c
   end;
-  let own = SomaOcamlBindings.write_files ~file ~read_file ~directives modules in
+  let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
       (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_nat.ml"; "soma_bindings.ml"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else []) @ own) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
   file "dune" (dune_file ~js ~host ~modules:names libraries);
-  record_generated_files dir made
+  record_generated_files dir made expected
 
 (* The lock is beside the generated directory, and remains held through dune
    and the final product copy. Canonical names serialize aliases of one target
@@ -480,8 +498,40 @@ let build ~state ~source ~vo_file =
         ["build"; name ^ "-" ^ SomaMerkle.string source] in
     with_project_lock dir (fun dir ->
     let inputs = prepare_build_inputs ~switch modules in
-    write_project ~state ~modules ~libraries ~js ~directives:true dir;
-    ignore (update_file (Filename.concat dir "dune-project") "(lang dune 3.0)\n");
+    let copied_inputs_valid = ref true in
+    let generated = Hashtbl.create 17 in
+    let capture_generated name contents = Hashtbl.replace generated name (SomaMerkle.string contents) in
+    let read_source file =
+      let contents = read_file file in
+      (match inputs with
+       | None -> ()
+       | Some inputs ->
+         let path = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
+         match List.assoc_opt path inputs with
+         | Some signature ->
+           (match String.split_on_char ':' signature with
+            | ["file"; _mode; digest] when String.equal digest (SomaMerkle.string contents) -> ()
+            | _ -> copied_inputs_valid := false)
+         | None -> copied_inputs_valid := false);
+      contents in
+    write_project ~read_source ~private_extract:true ~capture_generated ~state ~modules ~libraries ~js ~directives:true dir;
+    let project = "(lang dune 3.0)\n" in
+    capture_generated "dune-project" project;
+    ignore (update_file (Filename.concat dir "dune-project") project);
+    let inputs = match inputs with
+      | None -> None
+      | Some inputs when not !copied_inputs_valid -> None
+      | Some inputs ->
+        (try Some (Hashtbl.fold (fun name expected acc ->
+             let path = Filename.concat dir name in
+             let signature = SomaBuildInfo.signature path in
+             (match String.split_on_char ':' signature with
+              | ["file"; _mode; digest] when String.equal digest expected -> ()
+              | _ -> failwith "generated input differs from its producer");
+             (path, signature) :: acc) generated inputs @
+             List.map (fun name -> let path = Filename.concat dir name in
+                 path, SomaBuildInfo.signature path) ["dune-workspace"; ".soma-ocaml-files"])
+         with Sys_error _ | Unix.Unix_error _ | Failure _ -> None) in
     let target = if js then "./soma_main.bc.js" else "./soma_main.exe" in
     let log = Filename.concat dir "build.log" in
     let script = Printf.sprintf "cd %s && dune build --profile release --root . %s"
@@ -498,13 +548,13 @@ let build ~state ~source ~vo_file =
     if js then begin
       SomaMirage.write_file (out ^ ".js") (read_file built);
       SomaMirage.write_file (out ^ ".html") (page_html (Filename.basename out));
-      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".js"; out ^ ".html"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".html") ++ str ", with " ++
                               str (Filename.basename out ^ ".js") ++ str "; open it in a browser")
     end else begin
       SomaMirage.copy_file ~src:built ~dst:(out ^ ".exe");
-      SomaBuildInfo.publish_inputs inputs;
+      SomaBuildInfo.publish_inputs (if !copied_inputs_valid then inputs else None);
       SomaBuildInfo.publish_products [out ^ ".exe"];
       Feedback.msg_notice Pp.(str "OCaml: built " ++ str (out ^ ".exe") ++ str "; run it with: " ++
                               str (out ^ ".exe"))
