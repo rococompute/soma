@@ -99,6 +99,7 @@ new_project(root, ["mylib", "mylib"])
 for i in range(3):
     shutil.rmtree(root / ".soma-cache", ignore_errors=True)
     result = build(root, outer / ("store-%d" % i))
+    assert result.returncode == 0, ("run %d" % i, result.stdout, result.stderr)
     assert starts(result.stderr) == 1, ("run %d: two compilations" % i, result.stderr)
     check(result, root, 2 * N, N, "run %d" % i)
     # once: a second build compiles neither the library nor the imports
@@ -140,7 +141,7 @@ with open(first_err, "w") as err, open(first_out, "w") as out:
             "the second build did not wait for the first one's lock"
         # kill the compilation the second one waits for
         os.killpg(first.pid, signal.SIGKILL)
-        first.wait()
+        first.wait(timeout=60)
         assert first.returncode != 0, first.returncode
         # killed before it wrote [theories]: no later build may take it for done
         assert markers(root) == [], markers(root)
