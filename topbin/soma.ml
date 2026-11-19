@@ -1188,6 +1188,7 @@ let fresh_project file =
 
 (* soma, its worker, and the libraries and plugins they load *)
 let fingerprinted_library_files : (string, unit) Hashtbl.t = Hashtbl.create 4096
+let initial_toolchain_snapshot : string list option ref = ref None
 
 let fresh_toolchain () =
   Hashtbl.clear fingerprinted_library_files;
@@ -1202,12 +1203,20 @@ let fresh_toolchain () =
   let soma_env = Filename.concat (Filename.dirname Sys.executable_name) "coq_environment.txt" in
   let tool name path = Printf.sprintf "tool %s %s %s" name (String.escaped path) (fresh_digest path) in
   let tree label dir =
+    let started = Unix.gettimeofday () in
     let snapshot = try SomaMerkle.scan ~write:!fingerprint_writes dir with
       | Failure reason -> uncertain "%s" reason in
     let root = Unix.realpath dir in
     List.iter (fun (relative, _) ->
         Hashtbl.replace fingerprinted_library_files (Unix.realpath (Filename.concat root relative)) ())
       snapshot.SomaMerkle.files;
+    (match Sys.getenv_opt "SOMA_TEST_FINGERPRINT_LOG" with
+     | Some file when file <> "" ->
+       Out_channel.with_open_gen [Open_wronly; Open_creat; Open_append; Open_binary] 0o600 file (fun oc ->
+           Printf.fprintf oc "%s\t%.6f\t%d\t%d\t%Ld\n" label
+             (Unix.gettimeofday () -. started) snapshot.SomaMerkle.hashed_files
+             snapshot.SomaMerkle.reused_files snapshot.SomaMerkle.hashed_bytes)
+     | _ -> ());
     [Printf.sprintf "library %s sha256:%s" label snapshot.SomaMerkle.digest] in
   [ tool "soma" Sys.executable_name; tool "worker" worker ] @
   (if Sys.file_exists soma_env then [ tool "environment" soma_env ] else []) @
@@ -1217,7 +1226,10 @@ let fresh_toolchain () =
   tree "runtimelib" (Boot.Env.Path.to_string (Boot.Env.runtimelib env))
 
 let () =
-  let identity = lazy (SomaMerkle.string (String.concat "\n" (fresh_toolchain ()))) in
+  let identity = lazy (
+    let snapshot = fresh_toolchain () in
+    initial_toolchain_snapshot := Some snapshot;
+    SomaMerkle.string (String.concat "\n" snapshot)) in
   cache_toolchain := (fun () ->
     let id = Lazy.force identity in
     Unix.putenv "SOMA_CACHE_ID" id;
@@ -1230,7 +1242,7 @@ type fresh_config = { verbose : bool; fill : bool; no_image : bool; file : strin
 
 (* What a build of [c] reads of its project, and how it was asked for; with
    [~toolchain], of soma's installation too *)
-let fresh_inputs ?(products=[]) ~toolchain c =
+let fresh_inputs ?(products=[]) ?(reuse_initial_toolchain=false) ~toolchain c =
   let canonical, root = fresh_project c.file in
   let cache = Filename.concat root ".soma-cache" in
   if c.fill then uncertain "--fill writes into the program's .exp";
@@ -1261,7 +1273,12 @@ let fresh_inputs ?(products=[]) ~toolchain c =
     List.map (fun e -> "env " ^ String.escaped e) (List.sort compare (List.filter env_matters initial_env)) in
   let sources = List.map (fun (r, d) -> Printf.sprintf "source %S %s" r d)
       (fresh_tree ~skip:[".soma-cache"; ".git"] ~omit:products ~prefix:"." root) in
-  root, cache, config @ (if toolchain then fresh_toolchain () else []) @ sources
+  let installation = if not toolchain then [] else
+      if reuse_initial_toolchain then
+        (ignore (!cache_toolchain ());
+         match !initial_toolchain_snapshot with Some rows -> rows | None -> fresh_toolchain ())
+      else fresh_toolchain () in
+  root, cache, config @ installation @ sources
 
 let freshness_record cache canonical =
   Filename.concat (Filename.concat cache ".freshness") (SomaMerkle.string canonical)
@@ -1280,7 +1297,12 @@ let forget_freshness c =
     let canonical, root = fresh_project c.file in
     let record = freshness_record (Filename.concat root ".soma-cache") canonical in
     (try Sys.remove record with Sys_error _ -> ());
-    if Sys.file_exists record then None else Some (fresh_inputs ~toolchain:true c)
+    (* The driver already froze its initial installation fingerprint for
+       cache identity. Reuse only that immutable toolchain component here;
+       source/config rows are always read again at this pre-build boundary.
+       record_freshness still independently rescans both after compilation. *)
+    if Sys.file_exists record then None else
+      Some (fresh_inputs ~reuse_initial_toolchain:true ~toolchain:true c)
   with Uncertain _ | Sys_error _ | Unix.Unix_error _ -> None
 
 let certified_product root path =
@@ -1410,7 +1432,7 @@ let freshness_verdict c =
       List.iter (fun row -> Scanf.sscanf row "external %S %S%!" (fun path signature ->
           if build_input_signature path <> signature then uncertain "external build input %s changed" path))
         (List.filter is_external recorded);
-      let _, cache, inputs = fresh_inputs ~products ~toolchain:true c in
+      let _, cache, inputs = fresh_inputs ~products ~reuse_initial_toolchain:true ~toolchain:true c in
       if inputs <> recorded_inputs then begin
         let kind l = match String.index_opt l ' ' with Some i -> String.sub l 0 i | None -> l in
         let name l =
@@ -1436,6 +1458,12 @@ let freshness_verdict c =
             if List.exists (Filename.check_suffix path) [".vo"; ".stamp"] &&
                not (SomaCache.trusted path) then uncertain "compiled output %s has no provenance" r
           )) recorded_outputs;
+      (* A successful metadata-only skip still independently validates the
+         installation at the end. Failed/stale verdicts do not need this
+         second scan: the ensuing build performs its own post-build check. *)
+      (match !initial_toolchain_snapshot with
+       | Some before when fresh_toolchain () = before -> ()
+       | _ -> uncertain "the toolchain changed during freshness validation");
       Ok ()
     with
     | Uncertain reason -> Error reason
