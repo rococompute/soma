@@ -33,11 +33,13 @@ tests except those with missing or uncertain dependency records.
 
 Selection uses dependencies recorded by successful soma test builds. Missing
 records, configuration/toolchain changes and uncertain dependencies select all
-relevant tests. --changed-since and --list-tests are accepted spellings too.
+relevant tests. Symbolic-link fixtures are supported within the project; links
+outside it and sources inside Git submodules are not certified for skipping.
+--full also works outside a Git checkout. --changed-since and --list-tests are
+accepted spellings too.
 |}
 
 let read file = In_channel.with_open_bin file In_channel.input_all
-let hash file = Digest.to_hex (Digest.file file)
 let nul s = String.split_on_char '\000' s |> List.filter ((<>) "")
 let lines s = String.split_on_char '\n' s |> List.filter ((<>) "")
 let absolute p = if Filename.is_relative p then Filename.concat (Sys.getcwd ()) p else p
@@ -47,13 +49,24 @@ let relative root p =
   if not (under root p) || p = root then error "%s is outside %s" p root;
   String.sub p (String.length root + 1) (String.length p - String.length root - 1)
 
-let capture_opt args =
+let capture_opt ?(quiet=false) args =
+  try
   let argv = Array.of_list ("git" :: args) in
-  let ic = Unix.open_process_args_in "git" argv in
-  let out = In_channel.input_all ic in
-  match Unix.close_process_in ic with
+  let input, output = Unix.pipe ~cloexec:true () in
+  let stderr = if quiet then Unix.openfile "/dev/null" [Unix.O_WRONLY; Unix.O_CLOEXEC] 0 else Unix.stderr in
+  let pid = try Unix.create_process "git" argv Unix.stdin output stderr with exn ->
+    Unix.close input; Unix.close output;
+    if quiet then Unix.close stderr;
+    raise exn in
+  Unix.close output;
+  if quiet then Unix.close stderr;
+  let ic = Unix.in_channel_of_descr input in
+  let out = Fun.protect ~finally:(fun () -> close_in_noerr ic) (fun () -> In_channel.input_all ic) in
+  let rec wait () = try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR, _, _) -> wait () in
+  match wait () with
   | Unix.WEXITED 0 -> Some out
   | _ -> None
+  with Unix.Unix_error (Unix.ENOENT, _, _) -> None
 
 let capture args = match capture_opt args with
   | Some out -> out
@@ -78,31 +91,110 @@ let files root =
            "--others"; "--exclude-standard"; "--"; "."] |> nul
   |> List.filter (fun p -> not (generated p))
 
-let snapshot root repo =
-  files root |> List.filter_map (fun p ->
-      let full = Filename.concat repo p in
-      if not (under root full) then None else
-      match Unix.lstat full with
-      | stat when stat.Unix.st_kind = Unix.S_REG -> Some (relative root full, hash full)
-      | _ -> error "cannot track non-regular input %s" full
-      | exception Unix.Unix_error (Unix.ENOENT, _, _) -> None)
-  |> List.sort_uniq compare
+(* Hash the descriptor we opened, and check that neither it nor the path
+   changed during the read. An editor's rename/unlink is retried, never exposed
+   as a raw Digest.file failure or certified as the former input. *)
+let same_file a b =
+  a.Unix.st_dev = b.Unix.st_dev && a.Unix.st_ino = b.Unix.st_ino &&
+  a.Unix.st_kind = b.Unix.st_kind && a.Unix.st_size = b.Unix.st_size &&
+  a.Unix.st_mtime = b.Unix.st_mtime && a.Unix.st_ctime = b.Unix.st_ctime
 
-let rec discover root path =
-  let path = Unix.realpath path in
-  if not (under root path) then error "test path %s is outside the project" path;
-  match (Unix.lstat path).Unix.st_kind with
-  | Unix.S_DIR ->
-    Sys.readdir path |> Array.to_list |> List.sort String.compare
-    |> List.filter (fun n -> n <> ".git" && n <> ".soma-cache" && n <> "_build" && n <> "node_modules")
-    |> List.concat_map (fun n ->
-        let child = Filename.concat path n in
-        if (Unix.lstat child).Unix.st_kind = Unix.S_LNK then
-          error "cannot discover tests through symbolic link %s" child;
-        discover root child)
-  | Unix.S_REG when Filename.check_suffix path ".soma" -> [relative root path]
-  | Unix.S_REG -> []
-  | _ -> error "cannot discover tests in %s" path
+exception Changed_input
+let regular_hash file expected =
+  (* A path replaced by a FIFO must not block before its kind is checked. *)
+  let fd = Unix.openfile file [Unix.O_RDONLY; Unix.O_NONBLOCK; Unix.O_CLOEXEC] 0 in
+  let ic = Unix.in_channel_of_descr fd in
+  Fun.protect ~finally:(fun () -> close_in_noerr ic) (fun () ->
+      let before = Unix.fstat fd in
+      if not (same_file expected before) then raise Changed_input;
+      let digest = Digest.to_hex (Digest.channel ic (-1)) in
+      if not (same_file before (Unix.fstat fd)) ||
+         not (same_file before (Unix.lstat file)) then raise Changed_input;
+      digest)
+
+let rec disk_files dir =
+  Sys.readdir dir |> Array.to_list |> List.sort String.compare
+  |> List.filter (fun name -> not (List.mem name [".git"; ".soma-cache"; "_build"; "node_modules"]))
+  |> List.concat_map (fun name ->
+      let file = Filename.concat dir name in
+      match Unix.lstat file with
+      | stat when stat.Unix.st_kind = Unix.S_DIR -> disk_files file
+      | _ -> [file]
+      | exception Unix.Unix_error (Unix.ENOENT, _, _) -> [])
+
+let snapshot root repo =
+  let paths = match repo with
+    | Some repo -> files root |> List.map (Filename.concat repo) |> List.filter (under root)
+    | None -> disk_files root in
+  let one full =
+    let rec attempt remaining =
+      try
+        let stat = Unix.lstat full in
+        let digest = match stat.Unix.st_kind with
+          | Unix.S_REG -> regular_hash full stat
+          | Unix.S_LNK ->
+            let target = Unix.readlink full in
+            let contents = match Unix.realpath full with
+              | path when under root path ->
+                let target_stat = Unix.lstat path in
+                if target_stat.Unix.st_kind = Unix.S_REG then regular_hash path target_stat else "directory"
+              | _ -> "external"
+              | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR | Unix.ELOOP), _, _) -> "unresolved" in
+            if not (same_file stat (Unix.lstat full)) || Unix.readlink full <> target then raise Changed_input;
+            Digest.to_hex (Digest.string ("symlink\000" ^ target ^ "\000" ^ contents))
+          | Unix.S_DIR ->
+            (* Git lists a gitlink as one directory, not as its sources. Keep
+               its checkout state as an opaque input. A dependency inside it
+               will fail the per-source coverage check below and always rerun. *)
+            let initialized = Sys.file_exists (Filename.concat full ".git") in
+            let state = match (if initialized then capture_opt ~quiet:true ["-C"; full; "rev-parse"; "HEAD"] else None) with
+              | Some head -> head | None -> "uninitialized" in
+            let dirty = match (if initialized then capture_opt ~quiet:true ["-C"; full; "status"; "--porcelain=v1"; "-z"; "--untracked-files=all"] else None) with
+              | Some dirty -> dirty | None -> "unknown" in
+            Digest.to_hex (Digest.string ("gitlink\000" ^ state ^ "\000" ^ dirty))
+          | _ -> error "cannot track special input %s" full in
+        Some (relative root full, digest)
+      with
+      | Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> None
+      | Changed_input ->
+        if remaining > 0 then attempt (remaining - 1)
+        else error "input %s changed while taking the test snapshot; retry soma test" full
+      | Sys_error reason ->
+        if remaining > 0 then attempt (remaining - 1)
+        else error "cannot snapshot input %s: %s" full reason
+      | Unix.Unix_error (reason, _, _) ->
+        error "cannot snapshot input %s: %s" full (Unix.error_message reason) in
+    attempt 2 in
+  List.filter_map one paths |> List.sort_uniq compare
+
+let discover root path =
+  let rec walk ancestors path =
+    let resolved = Unix.realpath path in
+    if not (under root resolved) then error "test path %s is outside the project" path;
+    let stat = Unix.stat resolved in
+    match stat.Unix.st_kind with
+    | Unix.S_DIR ->
+      let inode = stat.Unix.st_dev, stat.Unix.st_ino in
+      if List.mem inode ancestors then [] else
+      Sys.readdir resolved |> Array.to_list |> List.sort String.compare
+      |> List.filter (fun n -> not (List.mem n [".git"; ".soma-cache"; "_build"; "node_modules"]))
+      |> List.concat_map (fun name ->
+          let child = Filename.concat resolved name in
+          match Unix.realpath child with
+          | _ -> walk (inode :: ancestors) child
+          | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR | Unix.ELOOP), _, _) ->
+            if Filename.check_suffix child ".soma" then error "cannot resolve test path %s" child else [])
+    | Unix.S_REG when Filename.check_suffix resolved ".soma" -> [relative root resolved]
+    | Unix.S_REG -> []
+    | _ -> error "cannot discover tests in %s" path in
+  walk [] path
+
+let external_input root path =
+  match Unix.lstat path with
+  | _ -> (match Unix.realpath path with
+      | resolved -> not (under root resolved)
+      | exception Unix.Unix_error _ -> true)
+  | exception Unix.Unix_error ((Unix.ENOENT | Unix.ENOTDIR), _, _) -> false
 
 let source_extensions = [".soma"; ".exp"; ".ext"; ".definition"; ".wasm"; ".ml"; ".mli"; ".lean"]
 let companions file =
@@ -234,15 +326,18 @@ let run ~identity ~build args =
   let paths = options [] args in
   if !full && !since <> None then error "--full and --changedSince cannot be used together";
   let cwd = Unix.realpath (Sys.getcwd ()) in
-  let repo = String.trim (capture ["rev-parse"; "--show-toplevel"]) |> Unix.realpath in
+  let repo = match capture_opt ~quiet:true ["rev-parse"; "--show-toplevel"] with
+    | Some path -> Some (Unix.realpath (String.trim path))
+    | None when !full -> None
+    | None -> error "automatic and --changedSince selection require Git; use --full outside a checkout" in
   let root = match project cwd with Some root -> root | None -> cwd in
-  if not (under repo root) then error "project root must be inside the Git repository";
+  Option.iter (fun repo -> if not (under repo root) then error "project root must be inside the Git repository") repo;
   let selection = match !full, !since with
     | true, _ -> Full "--full"
-    | false, None -> automatic root repo
+    | false, None -> automatic root (Option.get repo)
     | false, Some ref_ ->
       let base = match commit root ref_ with Some c -> c | None -> error "invalid Git commit %s" ref_ in
-      Diff (changed_paths root repo (diff root [base] ^ untracked root), "since " ^ ref_, true) in
+      Diff (changed_paths root (Option.get repo) (diff root [base] ^ untracked root), "since " ^ ref_, true) in
   let paths = if paths <> [] then paths else
       List.filter (fun p -> Sys.file_exists (Filename.concat root p)) ["test"; "tests"]
       |> List.map (Filename.concat root) in
@@ -275,6 +370,8 @@ let run ~identity ~build args =
                 | _ -> error "compiler could not record complete dependencies" in
               let dependencies = List.concat_map (fun p -> companions (relative root p)) sources |> S.of_list in
               if not (S.mem test dependencies) then error "entry point missing from dependencies";
+              if S.exists (fun p -> external_input root (Filename.concat root p)) dependencies then
+                error "a dependency resolves outside the project or through an unresolved link";
               if List.exists (fun p -> not (List.mem_assoc p before))
                    (List.map (relative root) sources) then error "dependency is not tracked by Git discovery";
               if snapshot root repo <> before then error "project changed while the test was building";
