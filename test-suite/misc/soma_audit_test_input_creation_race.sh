@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='soma-real-input-race-') as tmp:
     env=dict(os.environ,SOMA_CACHE=str(outer/'store'),XDG_CACHE_HOME=str(outer/'xdg'))
     seed=subprocess.run(['soma','test','--full'],cwd=root,env=env,text=True,capture_output=True,timeout=90)
     assert seed.returncode==0,(seed.stdout,seed.stderr)
-    main.write_text('Import lib.item.\nRedirect "ready" Check nat.\nGoal True. Proof. do 500000 idtac. exact I. Qed.\nvalue : bool := flag.\n')
+    main.write_text('Import lib.item.\nRedirect "ready" Check nat.\nGoal True. Proof. do 50000000 idtac. exact I. Qed.\nvalue : bool := flag.\n')
     git('add','tests/main.soma');git('-c','user.name=Audit','-c','user.email=audit@example.invalid','commit','-qm','bounded proof fixture')
     stdout=outer/'race.stdout';stderr=outer/'race.stderr'
     with stdout.open('w') as out,stderr.open('w') as err:
