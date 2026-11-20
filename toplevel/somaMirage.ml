@@ -361,6 +361,9 @@ type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarg
    the representation of link_event *)
 type mail = Mail_opened of int * string | Mail_bytes of int * string | Mail_closed of int
 type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * string | LinkClosed of Obj.t
+(* What [receive] gets, and the representation of Sandbox.chunk *)
+type raw = Got_bytes of string | Raw_closed | Raw_timed_out
+type chunk_value = Chunk of string | ChunkClosed | ChunkTimedOut
 
 (* Framing, as Soma.Wire's take_line and take_frame (Sandbox exports it): the first message of
    what a connection has received, and the rest, which is kept for the
@@ -389,6 +392,10 @@ type net = {
   receive_line : int -> string option Lwt.t;
   (* the connection, and the seconds to wait at most (0: no limit) *)
   receive_frame : int -> int -> frame Lwt.t;
+  (* the connection, and when to give up: [None], never *)
+  receive : int -> (unit -> unit Lwt.t) option -> raw Lwt.t;
+  (* the unikernel's IPv4 address, if it has one *)
+  local_address : unit -> string option;
   close : int -> unit Lwt.t;
   (* accept on a port into the mailbox; what came in, waiting at most
      until the promise the function gives resolves *)
@@ -408,6 +415,7 @@ let no_network =
     listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ()); connect_within = (fun _ _ _ -> fail ());
     send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
     receive_frame = (fun _ _ -> fail ());
+    receive = (fun _ _ -> fail ()); local_address = (fun _ -> fail ());
     close = (fun _ -> fail ());
     listen_mailbox = (fun _ -> fail ()); mailbox = (fun _ -> fail ());
     resolve = (fun _ -> fail ()); https = (fun _ _ _ _ _ _ -> fail ()) }
@@ -605,6 +613,17 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Frame_closed -> FrameClosed
           | Frame_timed_out -> FrameTimedOut
           | Frame_too_large -> FrameTooLarge)
+  | Prog.Receive (c, ms) ->
+      let give_up = match check ms with
+        | Prog.N0 -> None
+        | Prog.Npos _ -> Some (fun () -> sleep_milliseconds ms) in
+      net.receive (link_id c) give_up
+      >|= fun r -> Obj.magic (match r with
+          | Got_bytes data -> Chunk (chars_of_string data)
+          | Raw_closed -> ChunkClosed
+          | Raw_timed_out -> ChunkTimedOut)
+  | Prog.Local_address ->
+      Lwt.return (Obj.magic (Option.map chars_of_string (net.local_address ())))
   | Prog.Close c -> net.close (link_id c) >|= Obj.magic
   | Prog.Listen_mailbox port ->
       net.listen_mailbox (int_of_nat (check port));
@@ -848,6 +867,35 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           in
           take ()
     in
+    (* what has arrived, all of it, or the next bytes to, waiting until
+       [give_up] at most; a read that the time cut short stays under way,
+       for the next receive *)
+    let receive id give_up =
+      match Hashtbl.find_opt links id with
+      | None -> Lwt.return Soma_rt.Raw_closed
+      | Some l ->
+          let take () =
+            let data = Buffer.contents l.pending in
+            Buffer.clear l.pending;
+            Lwt.return (Soma_rt.Got_bytes data) in
+          if Buffer.length l.pending > 0 then take ()
+          else
+            let chunk = next_chunk l >|= fun alive -> `Chunk alive in
+            (match give_up with
+             | None -> chunk
+             | Some g -> Lwt.choose [ chunk; (g () >|= fun () -> `Time_up) ])
+            >>= function
+            | `Chunk true -> take ()
+            | `Chunk false -> close id >|= fun () -> Soma_rt.Raw_closed
+            | `Time_up -> Lwt.return Soma_rt.Raw_timed_out
+    in
+    let local_address () =
+      List.find_map (fun prefix ->
+          match Ipaddr.Prefix.address prefix with
+          | Ipaddr.V4 a -> Some (Ipaddr.V4.to_string a)
+          | Ipaddr.V6 _ -> None)
+        (S.IP.configured_ips (S.ip s))
+    in
     (* the mailbox: what listen_mailbox's connections did, oldest first,
        and a condition to wait on for more *)
     let mail = Queue.create () and mail_came = Lwt_condition.create () in
@@ -891,7 +939,8 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     let resolve _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
     let https _ _ _ _ _ _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
-      { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame; close;
+      { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame;
+        receive; local_address; close;
         listen_mailbox; mailbox; resolve; https }
 end
 |soma}
@@ -1474,8 +1523,8 @@ let contains s sub =
   let rec at i = i + n <= String.length s && (String.sub s i n = sub || at (i + 1)) in
   at 0
 
-(* Whether the extracted program uses [serve], [fetch], [listen] or
-   [connect]: a constructor applied, as opposed to its declaration in
+(* Whether the extracted program uses [serve], [fetch], [listen],
+   [connect] or [local_address]: a constructor applied, as opposed to its declaration in
    [type 'x io]. ([send], [receive_line] and [close] need a connection,
    which only [listen] and [connect] give.) *)
 let is_ident_char ch =
@@ -1495,8 +1544,23 @@ let applied prog c =
     else from (i + 1) in
   from 0
 
+(* A constructor without arguments used: its name as a word, but not its
+   declaration in [type 'x io] ([| Local_address]) *)
+let used_constant prog c =
+  let n = String.length prog and k = String.length c in
+  let rec from i =
+    if i + k > n then false
+    else if String.sub prog i k = c && (i = 0 || not (is_ident_char prog.[i - 1]))
+            && (i + k = n || not (is_ident_char prog.[i + k])) then
+      let rec back j = if j >= 0 && (prog.[j] = ' ' || prog.[j] = '\n') then back (j - 1) else j in
+      let j = back (i - 1) in
+      (j < 0 || prog.[j] <> '|') || from (i + 1)
+    else from (i + 1) in
+  from 0
+
 let uses_network prog =
   List.exists (applied prog) ["Serve"; "Fetch"; "Listen"; "Connect"; "Connect_within"; "Listen_mailbox"; "Mailbox"]
+  || used_constant prog "Local_address"
 
 (* [resolve] and [https] need DNS and TLS: a web image, with a network.
    The constructor as a word, applied to anything (extraction writes
@@ -1615,10 +1679,11 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
    - Cmdliner: cmdliner 1.3, src/cmdliner.mli (Arg.info, Arg.opt_all, ...)
    - Mirage_runtime: mirage-runtime 4.5, lib/mirage_runtime.mli
    - Cstruct: cstruct 6, lib/cstruct.mli
-   - Ipaddr: ipaddr 5, lib/ipaddr.mli
+   - Ipaddr: ipaddr 5, lib/ipaddr.mli (v4v6, Prefix.address)
    - Lwt_condition: lwt 5, src/core/lwt_condition.mli
    - Tcpip.Stack.V4V6 and its TCP: tcpip 8, src/core/stack.ml and
-     src/core/tcp.ml (Tcp.S), whose flow functions are Mirage_flow.S's
+     src/core/tcp.ml (Tcp.S), and its IP, src/core/ip.ml (configured_ips),
+     whose TCP flow functions are Mirage_flow.S's
      (mirage-flow 4, src/mirage_flow.mli)
    - for a web image (resolve, https):
      Domain_name: domain-name 0.4, src/domain_name.mli (of_string, host);
@@ -1707,12 +1772,19 @@ module Mirage_block : sig
   end
 end
 module Ipaddr : sig
-  type t
-  val of_string : string -> (t, [> `Msg of string ]) result
-  val to_string : t -> string
   module V4 : sig
     type t
     val to_string : t -> string
+  end
+  module V6 : sig type t end
+  type ('v4, 'v6) v4v6 = V4 of 'v4 | V6 of 'v6
+  type t = (V4.t, V6.t) v4v6
+  val of_string : string -> (t, [> `Msg of string ]) result
+  val to_string : t -> string
+  module Prefix : sig
+    type addr = t
+    type t
+    val address : t -> addr
   end
 end
 module Domain_name : sig
@@ -1784,6 +1856,11 @@ module Tcpip : sig
         val dst : flow -> Ipaddr.t * int
       end
       val tcp : t -> TCP.t
+      module IP : sig
+        type t
+        val configured_ips : t -> Ipaddr.Prefix.t list
+      end
+      val ip : t -> IP.t
     end
   end
 end

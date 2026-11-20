@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# write, random_bytes, monotonic_ns and wall_clock: extraction, the OCaml
+# write, random_bytes, monotonic_ns, wall_clock, receive and local_address:
+# extraction, which images get a network, the OCaml
 # check against the libraries' signatures, and the runtime's conversions
 # on fixed inputs. No image, no clock reads.
 set -euo pipefail
@@ -17,6 +18,20 @@ grep -q '(no image)' raw.log
 PLAIN="$SOMA_MIRAGE_DIR/plain"
 for c in Write Random_bytes Monotonic_ns Wall_clock; do grep -q "$c" "$PLAIN/prog.ml"; done
 [ ! -e mirage_raw_clock.hvt ]
+
+# receive and local_address: a network image; local_address, a constructor
+# without arguments, is told from its declaration, which every program has
+cp "$ROOT/examples/example_files/mirage_raw_link/mirage_raw_link.soma" .
+soma build --no-image mirage_raw_link.soma > link.log 2>&1
+grep -q 'mirage/net (no image)' link.log
+for c in Receive Local_address; do grep -q "$c" "$SOMA_MIRAGE_DIR/net/prog.ml"; done
+grep -q 'mirage/plain (no image)' raw.log
+cat > address_only.soma <<'SOMA'
+Require Import Sandbox.
+main : io unit := a <- local_address ;; print (match a with Some s => s | None => "none" end).
+SOMA
+soma build --no-image address_only.soma > address.log 2>&1
+grep -q 'mirage/net (no image)' address.log
 
 # a nanosecond reading is a primitive int, not a nat
 cat > misused.soma <<'SOMA'

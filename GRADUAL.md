@@ -1598,10 +1598,17 @@ a 1000 ms sleep; `dev/mirage-check.sh` builds and boots it alongside the
 existing images. `test-suite/misc/soma_milliseconds.sh` checks extraction
 and rejects a reading used as a `nat`, without sleeping.
 
+`examples/example_files/mirage_raw_link/mirage_raw_link.soma` is a server
+that prints its `local_address` and echoes raw chunks, and, given an
+address, its own client, which sends `"abc"` without a line break and
+expects the echo, then the server's `"idle"` after its `receive` times out;
+`dev/mirage-check.sh` boots both (from the Mac, a terminal without macOS's
+Local Network permission cannot reach the image: `No route to host`).
+
 `examples/example_files/mirage_raw_clock/mirage_raw_clock.soma` writes
 part of a line with `write`, and checks `random_bytes`, `monotonic_ns`
 across a 10 ms sleep and `wall_clock`; `dev/mirage-check.sh` boots it, and
-`test-suite/misc/soma_raw_clock.sh` checks its extraction, refuses a
+`test-suite/misc/soma_raw_actions.sh` checks its extraction, refuses a
 nanosecond reading used as a `nat`, and runs the runtime's conversions on
 fixed inputs.
 
@@ -1639,6 +1646,8 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
 | `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
+| `receive c ms` | `io chunk` | what the connection has received, as TCP delivered it, cut nowhere: what was left past the last line or frame taken, or else the next bytes to arrive, waiting `ms : N` milliseconds at most (`0`: no limit): `Chunk data` (never empty), `ChunkClosed` when the connection ends first (it is closed), or `ChunkTimedOut`. For connections accepted or opened; lines, frames and `receive` read the same bytes, in order |
+| `local_address` | `io (option string)` | the image's own IPv4 address, as the network configured it; a program that uses it gets a network stack |
 | `close c` | `io unit` | closes the connection; again does nothing |
 | `connect_within address port ms` | `io connected` | `connect`, giving up after `ms : N` milliseconds (`ConnectTimedOut`) rather than 10 seconds: for a program that dials from its loop |
 | `listen_mailbox port` | `io unit` | accepts TCP connections on `port` into the mailbox: each one's opening, the bytes it receives and its end are `mailbox`'s. The program may `send` on one and `close` it (which posts no end). Returns at once; the image keeps listening after `main` ends. |

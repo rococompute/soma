@@ -1,0 +1,60 @@
+(** Bytes as TCP delivered them, cut nowhere: [receive c ms] gives what a
+    connection has received, waiting [ms] milliseconds at most, on a
+    connection accepted or opened. Without arguments this image is the
+    server: it prints its own address ([local_address]) and answers each
+    connection on port 7003, echoing what arrives as "got " and the bytes,
+    and saying "idle" after a second without anything. With [--arg=ADDRESS]
+    it is the client: it sends "abc", no line break, to that server, and
+    expects "got abc", then "idle". It exits 0 when all went as expected
+    and 1 otherwise. It runs under solo5-vmnet; dev/mirage-check.sh boots
+    a server and a client:
+
+        soma run examples/example_files/mirage_raw_link/mirage_raw_link.soma
+        soma run examples/example_files/mirage_raw_link/mirage_raw_link.soma -- --arg=192.168.105.46 *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+
+Fixpoint answer (fuel : nat) (c : connection) : io unit :=
+  match fuel with
+  | O => print "too many chunks on one connection"
+  | S more =>
+    r <- receive c 1000%N ;;
+    match r with
+    | Chunk data => print ("chunk: " ++ data) ;; send c ("got " ++ data ++ newline)%str ;; answer more c
+    | ChunkTimedOut => print "nothing for a second" ;; send c ("idle" ++ newline)%str ;; answer more c
+    | ChunkClosed => print "closed"
+    end
+  end.
+
+(** the next chunk is [expected] *)
+expect (c : connection) (expected : string) : io bool :=
+  r <- receive c 3000%N ;;
+  match r with
+  | Chunk data => print ("server: " ++ data) ;; ret (String.eqb data (expected ++ newline)%str)
+  | ChunkTimedOut => print "the server said nothing for 3 seconds" ;; ret false
+  | ChunkClosed => print "the server closed the connection" ;; ret false
+  end.
+
+client (address : string) : io unit :=
+  link <- connect address 7003 ;;
+  match link with
+  | Connected c =>
+    _ <- send c "abc" ;;
+    got <- expect c "got abc" ;;
+    idle <- expect c "idle" ;;
+    close c ;;
+    if andb got idle then print "the raw link went as expected"
+    else print "the raw link did not go as expected" ;; exit 1
+  | _ => print "could not connect" ;; exit 1
+  end.
+
+main : io unit :=
+  a <- args ;;
+  match a with
+  | [address] => client address
+  | _ =>
+    me <- local_address ;;
+    print ("address: " ++ match me with Some a => a | None => "none" end) ;;
+    print "raw link on port 7003" ;;
+    listen 7003 (answer 100)
+  end.

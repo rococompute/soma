@@ -22,7 +22,7 @@
     [receive_frame], [close]: lines or length-prefixed frames over one TCP
     connection), in order, ending with a result of type
     [A]. Building an [io] does nothing; the image runs [main]. A program
-    that uses [serve], [fetch], [listen] or [connect] gets a network stack
+    that uses [serve], [fetch], [listen], [connect] or [local_address] gets a network stack
     and runs under [solo5-vmnet]; one that uses [resolve] or [https] gets
     DNS and TLS as well (MirageOS's dns-client, tls-mirage and the NSS
     certificate authorities). *)
@@ -90,6 +90,13 @@ Inductive framed : Type :=
 | FrameTimedOut          (* no whole frame within the seconds given; what has
                             arrived of one is kept for the next [receive_frame] *)
 | FrameTooLarge.         (* its length is over [max_frame]: the connection is closed *)
+
+(** What [receive] gets: the bytes the connection has received, as TCP
+    delivered them, or why there are none *)
+Inductive chunk : Type :=
+| Chunk (data : string)  (* what had arrived, all of it: never empty *)
+| ChunkClosed            (* the connection ended first; it is closed *)
+| ChunkTimedOut.         (* nothing arrived within the milliseconds given *)
 
 (** What came in on the connections [listen_mailbox] accepted, in the
     order it came: a select over them. A connection's bytes are as TCP
@@ -186,6 +193,15 @@ Inductive io : Type -> Type :=
     [FrameTooLarge], and the connection is closed. Lines and frames read
     the same bytes, in order: what one leaves, the other gets. *)
 | receive_frame (c : connection) (seconds : nat) : io framed
+(** what the connection has received, as TCP delivered it, cut nowhere:
+    what was left past the last line or frame taken, or else the next
+    bytes to arrive, waiting [milliseconds] at most ([0]: as long as it
+    takes). For any connection, accepted or opened; lines, frames and
+    [receive] read the same bytes, in order. *)
+| receive (c : connection) (milliseconds : N) : io chunk
+(** the unikernel's own IPv4 address, as the network configured it
+    (["10.0.0.2"]); [None] when it has none *)
+| local_address : io (option string)
 (** close the connection; closing it again does nothing *)
 | close (c : connection) : io unit
 (** accept TCP connections on [port] into the mailbox: each one's

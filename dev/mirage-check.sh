@@ -43,6 +43,7 @@ stop_server() {
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_projects/counter_server/main.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_raw_link/mirage_raw_link.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -112,7 +113,7 @@ no_image_one() {
 
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_crypto mirage_fetch mirage_http_server \
-        mirage_minimal_web_server mirage_link_client mirage_link_server \
+        mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
@@ -331,6 +332,36 @@ if [ "${NETWORK}" = 1 ]; then
         fi
         pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
         wait "${frame_server}" 2>/dev/null
+    fi
+    # raw bytes: mirage_raw_link as a server, and again as its client,
+    # which sends "abc" with no line break and expects "got abc", then
+    # "idle" when the server's receive times out
+    if build mirage_raw_link; then
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
+            "${HERE}/examples/example_files/mirage_raw_link/mirage_raw_link.hvt" >"${WORK}/raw.log" 2>&1 &
+        raw_server=$!
+        ip7=""
+        for _ in $(seq 1 60); do
+            ip7="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/raw.log" | head -1 | awk '{print $4}')"
+            grep -q "raw link on port 7003" "${WORK}/raw.log" && [ -n "${ip7}" ] && break
+            sleep 0.25
+        done
+        if [ -z "${ip7}" ]; then
+            cp "${WORK}/raw.log" "${WORK}/raw-server.log"
+            fail raw-server
+        else
+            run mirage_raw_link raw-client 0 "^the raw link went as expected$" net "--arg=${ip7}"
+            if grep -q "^address: ${ip7}$" "${WORK}/raw.log" && grep -q "^chunk: abc$" "${WORK}/raw.log" &&
+               grep -q "^nothing for a second$" "${WORK}/raw.log"; then
+                pass raw-server
+            else
+                cp "${WORK}/raw.log" "${WORK}/raw-server.log"
+                fail raw-server
+            fi
+        fi
+        kill "${raw_server}" 2>/dev/null
+        pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_raw_link/mirage_raw_link.hvt"
+        wait "${raw_server}" 2>/dev/null
     fi
     # a select over connections: the mailbox image prints what two
     # connections from the Mac did, in order, and exits after their ends
