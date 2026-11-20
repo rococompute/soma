@@ -1680,6 +1680,11 @@ geometry and first sector, copies it to the next, and checks that a read
 past the end and a partial-sector write are refused; `dev/mirage-check.sh`
 boots it on a 64-sector disk and checks the copy reached the file.
 
+`examples/example_files/mirage_tasks/mirage_tasks.soma` spawns three tasks
+that add to one cell and count themselves done in another, and one that
+fails; `dev/mirage-check.sh` boots it, and checks the total and that the
+failure was reported while the others went on.
+
 `examples/example_files/mirage_events/mirage_events.soma` is a server
 that answers UDP pings and greets TCP connections, and, given its address,
 a client whose one loop of `select` sees a timer of `after`, the UDP pong,
@@ -1716,6 +1721,10 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `write s` | `io unit` | `s` on the console as it is, flushed: no line break added (`print` adds one) |
 | `monotonic_ns` | `io int` | monotonic nanoseconds since an arbitrary origin (`Mirage_mtime`), as Rocq's primitive 63-bit integer (`PrimInt63.int`, OCaml's `int` in the image): cheap to read in a loop |
 | `wall_clock` | `io (int * int)` | the UTC wall clock (`Mirage_ptime`): seconds since 1970-01-01 and the nanoseconds past them, as primitive integers |
+| `spawn body` | `io unit` | runs `body : io unit` alongside the rest and returns at once. Actions take turns: one runs until it waits (for time, a connection, an event), then another does. A failure in `body` is reported (a `failure` event `during` `task`) and the image goes on; its `exit` stops the image, which keeps running until its tasks have ended |
+| `new_cell a` | `io (cell A)` | a cell holding `a`, shared by whatever has it: handlers, spawned tasks, the main loop |
+| `read_cell c`, `write_cell c a` | `io A`, `io unit` | what the cell holds; the cell holds `a` from now on |
+| `modify_cell c f` | `io A` | the cell holds `f` of what it held, returned: in one step, which no other task's comes between |
 | `call f` | `io A` | `f tt`, called in order with the other actions: for a function of a C or OCaml module that does something (`call (fun _ => buffer_get b 3)`) |
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
 | `exit n` | `io A` | stops with exit code `n` |
@@ -1882,7 +1891,7 @@ line after `soma-event ` on its console, for whoever runs it to read:
 | `start` | `memory_kb`, `network` |
 | `serving` | `port` |
 | `listening` | `port` (of `listen`, `listen_mailbox` with `mailbox`, or `udp_listen` with `udp`) |
-| `failure` | `during` (`main`, or `request`: the server goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
+| `failure` | `during` (`main`, or `request` or `task`: the image goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
 | `memory_pressure` | `live_kb`, `memory_kb`: live memory passed 80% |
 | `alive` | `requests`, `live_kb`, every 10 seconds |
 | `exit` | `code`, `reason` (`finished`, `program`: its `exit n`, `failure`) |
@@ -1960,10 +1969,7 @@ Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
 
 Not yet: DNS names for `fetch` and `connect` (they take an IP address;
 `resolve` gives one), IPv6 addresses from `resolve`, TLS for `listen` and
-`serve` (an HTTPS server), client certificates, UDP, block devices
-other than the one `storage` device behind `read_file`, `write_file` and
-`append_file` (see "Persistent files in Sandbox" below), and state shared between `serve`
-handlers.
+`serve` (an HTTPS server), and client certificates.
 
 ## JSX: components and apps
 

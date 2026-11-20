@@ -113,7 +113,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_crypto mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https; do
@@ -190,6 +190,12 @@ if build mirage_disk; then
         fail disk
     fi
 fi
+
+# spawned tasks sharing cells; one that fails is reported, and the image
+# waits for the others
+build mirage_tasks &&
+    run mirage_tasks tasks 0 "^the tasks shared the cell as expected$" plain &&
+    grep -q '"during":"task"' "${WORK}/tasks.log"
 
 # write without line breaks, random bytes, nanoseconds, the wall clock
 build mirage_raw_clock &&

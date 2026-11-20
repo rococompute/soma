@@ -1,0 +1,33 @@
+(** Tasks that share state: three [spawn]ed tasks each add 1 to a cell
+    five times, waiting a millisecond between, and count themselves done
+    in another; the last to finish prints the total. A fourth task reads
+    a cell that was never made, which fails: the failure is reported and
+    the others go on. [main] ends at once; the image runs until its tasks
+    have. dev/mirage-check.sh boots it. *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+
+Fixpoint add_five (n : nat) (total : cell nat) : io unit :=
+  match n with
+  | O => ret tt
+  | S m => _ <- modify_cell total S ;; sleep_ms 1%N ;; add_five m total
+  end.
+
+worker (total finished : cell nat) : io unit :=
+  add_five 5 total ;;
+  f <- modify_cell finished S ;;
+  if Nat.eqb f 3 then
+    t <- read_cell total ;;
+    print ("total " ++ to_string t) ;;
+    (if Nat.eqb t 15 then print "the tasks shared the cell as expected"
+     else print "the tasks lost updates" ;; exit 1)
+  else ret tt.
+
+main : io unit :=
+  total <- new_cell 0 ;;
+  finished <- new_cell 0 ;;
+  spawn (worker total finished) ;;
+  spawn (worker total finished) ;;
+  spawn (worker total finished) ;;
+  spawn (x <- read_cell (Cell 999 : cell nat) ;; print "a forged cell was read") ;;
+  print "spawned four tasks".

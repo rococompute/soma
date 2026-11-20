@@ -99,6 +99,11 @@ Inductive chunk : Type :=
 | ChunkClosed            (* the connection ended first; it is closed *)
 | ChunkTimedOut.         (* nothing arrived within the milliseconds given *)
 
+(** a cell holding an [A], shared by whatever has it: [serve] and [listen]
+    handlers, [spawn]ed tasks and the main loop; the image knows it by its
+    number *)
+Inductive cell (A : Type) : Type := Cell (id : nat).
+
 (** What came in on the connections [listen_mailbox] accepted, in the
     order it came: a select over them. A connection's bytes are as TCP
     delivered them (a message may be cut anywhere, or several come in one);
@@ -151,6 +156,21 @@ Inductive io : Type -> Type :=
 (** the wall clock, UTC: the seconds since 1970-01-01 00:00:00 and the
     nanoseconds past them, as [clock_gettime(CLOCK_REALTIME)] gives them *)
 | wall_clock : io (PrimInt63.int * PrimInt63.int)
+(** run [body] alongside the rest, from now on: [spawn] returns at once.
+    The image's actions take turns: one runs until it waits (for time, a
+    connection, an event), then another does. A failure in [body] is
+    reported and the image goes on; its [exit] stops the image. The image
+    keeps running until its tasks have ended. *)
+| spawn (body : io unit) : io unit
+(** a new cell, holding [a] *)
+| new_cell {A : Type} (a : A) : io (cell A)
+(** what the cell holds *)
+| read_cell {A : Type} (c : cell A) : io A
+(** the cell holds [a] from now on *)
+| write_cell {A : Type} (c : cell A) (a : A) : io unit
+(** the cell holds [f] of what it held, which [modify_cell] returns: in
+    one step, which no other task's comes between *)
+| modify_cell {A : Type} (c : cell A) (f : A -> A) : io A
 (** [f tt], called when the image comes to it, in order with the other
     actions: for a function of a C or OCaml module that does something
     ([call (fun _ => peek address 8)]). Such a function, called outside
@@ -288,6 +308,11 @@ Arguments forever {A} body.
 Arguments iterate {S A} step start.
 Arguments exit {A} code.
 Arguments call {A} f.
+Arguments new_cell {A} a.
+Arguments read_cell {A} c.
+Arguments write_cell {A} c a.
+Arguments modify_cell {A} c f.
+Arguments Cell {A} id.
 
 Declare Scope io_scope.
 Delimit Scope io_scope with io.

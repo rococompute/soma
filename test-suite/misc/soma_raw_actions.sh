@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # write, random_bytes, monotonic_ns, wall_clock, receive, local_address,
-# select, watch, after, UDP and disks:
+# select, watch, after, UDP, disks, spawn and cells:
 # extraction, which images get a network, the OCaml
 # check against the libraries' signatures, and the runtime's conversions
 # on fixed inputs. No image, no clock reads.
@@ -83,6 +83,20 @@ for bad in root-fs storage; do
     fi
     grep -q 'disk name' "bad$i.log"
 done
+
+# spawn and cells: no network; a cell keeps its type
+cp "$ROOT/examples/example_files/mirage_tasks/mirage_tasks.soma" .
+soma build --no-image mirage_tasks.soma > tasks.log 2>&1
+grep -q 'mirage/plain (no image)' tasks.log
+for c in Spawn New_cell Read_cell Modify_cell; do grep -q "$c" "$SOMA_MIRAGE_DIR/plain/prog.ml"; done
+cat > celltype.soma <<'SOMA'
+Require Import Sandbox.
+main : io unit := c <- new_cell 0 ;; write_cell c "zero".
+SOMA
+if soma build --no-image celltype.soma > celltype.log 2>&1; then
+    echo 'a string written to a cell of nat passed' >&2; exit 1
+fi
+grep -q 'Error' celltype.log
 
 # the runtime's quiet switch reaches every event
 grep -q 'if not (quiet ()) then' "$SOMA_MIRAGE_DIR/plain/soma_rt.ml"

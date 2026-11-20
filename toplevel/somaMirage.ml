@@ -562,6 +562,18 @@ let storage = ref { read=(fun _ -> failwith "Sandbox storage: no device");
                     append=(fun _ _ -> failwith "Sandbox storage: no device") }
 let install_storage s = storage := s
 
+(* Cells (new_cell, read_cell, ...): what each holds, by number *)
+let cells : (int, Obj.t) Hashtbl.t = Hashtbl.create 16
+let last_cell = ref 0
+let cell_value c =
+  match Hashtbl.find_opt cells c with
+  | Some v -> v
+  | None -> failwith (Printf.sprintf "no cell %d: a cell is made by new_cell" c)
+
+(* Spawned tasks still running, and a condition for when one ends *)
+let tasks = ref 0
+let task_ended : unit Lwt_condition.t = Lwt_condition.create ()
+
 (* Named disks (disk_info, disk_read, disk_write), installed by the
    unikernel for each block device the program names: sector size and
    count; sectors from one on; data written from a sector *)
@@ -619,6 +631,30 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Wall_clock ->
       Lwt.return (Obj.magic (seconds_and_ns (Ptime.Span.to_d_ps (Ptime.to_span (Mirage_ptime.now ())))))
   | Prog.Call f -> Lwt.return (Obj.magic ((check f) ()))
+  | Prog.Spawn body ->
+      incr tasks;
+      Lwt.async (fun () ->
+          Lwt.catch (fun () -> run net body)
+            (function
+              | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
+              | e -> report ~during:"task" e; Lwt.return_unit)
+          >|= fun () -> decr tasks; Lwt_condition.broadcast task_ended ());
+      Lwt.return (Obj.magic ())
+  | Prog.New_cell a ->
+      incr last_cell;
+      Hashtbl.replace cells !last_cell (Obj.repr a);
+      Lwt.return (Obj.magic (nat_of_int !last_cell))
+  | Prog.Read_cell c -> Lwt.return (Obj.obj (cell_value (int_of_nat (check c))))
+  | Prog.Write_cell (c, a) ->
+      let c = int_of_nat (check c) in
+      ignore (cell_value c);
+      Hashtbl.replace cells c (Obj.repr a);
+      Lwt.return (Obj.magic ())
+  | Prog.Modify_cell (c, f) ->
+      let c = int_of_nat (check c) in
+      let v = (check f) (Obj.obj (cell_value c)) in
+      Hashtbl.replace cells c (Obj.repr v);
+      Lwt.return (Obj.magic v)
   | Prog.Args -> Lwt.return (Obj.magic (List.map chars_of_string (args ())))
   | Prog.Exit code -> raise (Exit_with (int_of_nat (check code)))
   | Prog.Serve (port, handler) ->
@@ -784,7 +820,10 @@ let main ~network ~serving net =
   Lwt.catch
     (fun () ->
        run net (Prog.soma_main ()) >>= fun () ->
-       if serving () then fst (Lwt.wait ()) else Lwt.return_unit)
+       let rec tasks_end () =
+         if !tasks = 0 then Lwt.return_unit
+         else Lwt_condition.wait task_ended >>= tasks_end in
+       if serving () then fst (Lwt.wait ()) else tasks_end ())
     (function
       | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
       | e -> report e; event "exit" ["code", I 1; "reason", S "failure"]; exit 1)
