@@ -261,12 +261,17 @@ let failure_fields = function
 
 (* [during] is "main", or "request" for an error answering a request, which
    the server goes on after *)
+let describe = function
+  | Stuck what -> "the program reached " ^ what
+  | Gradual.Cast_error msg | Soma_wasm.Failed msg -> msg
+  | e -> Printexc.to_string e
+
 let report ?(during = "main") e =
-  (match e with
-   | Stuck what -> Printf.printf "Run-time error: the program reached %s.\n%!" what
-   | Gradual.Cast_error msg | Soma_wasm.Failed msg -> Printf.printf "Run-time error: %s.\n%!" msg
-   | e -> Printf.printf "Run-time error: %s.\n%!" (Printexc.to_string e));
+  Printf.printf "Run-time error: %s.\n%!" (describe e);
   event "failure" (("during", S during) :: failure_fields e)
+
+(* What [await] gets (Sandbox.awaited), as extracted *)
+type 'a awaited_value = Completed of 'a | TaskFailed of string
 
 (* What [fetch] gets (Sandbox.fetched): extracted, it has the
    representation of [fetched_value], with the image's string (OCaml's)
@@ -576,6 +581,10 @@ let cell_value c =
 let tasks = ref 0
 let task_ended : unit Lwt_condition.t = Lwt_condition.create ()
 
+(* The forked ones, by number: each its result, to come *)
+let forked : (int, (Obj.t, string) result Lwt.t) Hashtbl.t = Hashtbl.create 16
+let last_task = ref 0
+
 (* Named disks (disk_info, disk_read, disk_write), installed by the
    unikernel for each block device the program names: sector size and
    count; sectors from one on; data written from a sector *)
@@ -597,6 +606,15 @@ let event_of = function
   | In_datagram (port, host, source_port, data) ->
       Datagram (nat_of_int port, chars_of_string host, nat_of_int source_port, chars_of_string data)
   | In_timer tag -> Timer (nat_of_int tag)
+
+(* what [await] of task [id] gets, once it has ended *)
+let awaited id : Obj.t awaited_value Lwt.t =
+  match Hashtbl.find_opt forked id with
+  | None -> Lwt.return (TaskFailed (chars_of_string (Printf.sprintf "no task %d: a task is made by fork" id)))
+  | Some result ->
+      result >|= function
+      | Ok v -> Completed v
+      | Error why -> TaskFailed (chars_of_string why)
 
 let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   match check m with
@@ -633,15 +651,18 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Wall_clock ->
       Lwt.return (Obj.magic (seconds_and_ns (Ptime.Span.to_d_ps (Ptime.to_span (Mirage_ptime.now ())))))
   | Prog.Call f -> Lwt.return (Obj.magic ((check f) ()))
-  | Prog.Spawn body ->
-      incr tasks;
-      Lwt.async (fun () ->
-          Lwt.catch (fun () -> run net body)
-            (function
-              | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
-              | e -> report ~during:"task" e; Lwt.return_unit)
-          >|= fun () -> decr tasks; Lwt_condition.broadcast task_ended ());
-      Lwt.return (Obj.magic ())
+  | Prog.Spawn body -> ignore (start_task net body); Lwt.return (Obj.magic ())
+  | Prog.Fork body ->
+      let result = start_task net body in
+      incr last_task;
+      Hashtbl.replace forked !last_task result;
+      Lwt.return (Obj.magic (nat_of_int !last_task))
+  | Prog.Await t ->
+      awaited (int_of_nat (check t)) >|= fun r -> Obj.magic r
+  | Prog.Await_within (t, ms) ->
+      let r = awaited (int_of_nat (check t)) in
+      Lwt.choose [ (r >|= fun r -> Some r); (sleep_milliseconds ms >|= fun () -> None) ]
+      >|= fun r -> Obj.magic r
   | Prog.New_cell a ->
       incr last_cell;
       Hashtbl.replace cells !last_cell (Obj.repr a);
@@ -773,6 +794,19 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       (!storage).write (string_of_chars (check name)) (string_of_chars (check data)) >|= Obj.magic
   | Prog.Append_file (name, data) ->
       (!storage).append (string_of_chars (check name)) (string_of_chars (check data)) >|= Obj.magic
+
+(* [body] run alongside the rest (spawn, fork), counted among the tasks
+   the image waits for: its result, or why it failed, which is reported.
+   Its exit stops the image. *)
+and start_task : 'a. net -> 'a Prog.io -> (Obj.t, string) result Lwt.t = fun net body ->
+  incr tasks;
+  let result =
+    Lwt.catch (fun () -> run net body >|= fun v -> Ok (Obj.repr v))
+      (function
+        | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
+        | e -> report ~during:"task" e; Lwt.return (Error (describe e))) in
+  Lwt.async (fun () -> result >|= fun _ -> decr tasks; Lwt_condition.broadcast task_ended ());
+  result
 
 (* Runs [main]; [serving] is whether the unikernel goes on once [main] has
    ended. *)

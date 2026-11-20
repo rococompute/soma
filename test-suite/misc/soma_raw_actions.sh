@@ -98,6 +98,21 @@ if soma build --no-image celltype.soma > celltype.log 2>&1; then
 fi
 grep -q 'Error' celltype.log
 
+# fork and await: no network; a task's result keeps its type
+cp "$ROOT/examples/example_files/mirage_await/mirage_await.soma" .
+soma build --no-image mirage_await.soma > await.log 2>&1
+grep -q 'mirage/plain (no image)' await.log
+for c in Fork Await Await_within; do grep -q "$c" "$SOMA_MIRAGE_DIR/plain/prog.ml"; done
+cat > awaittype.soma <<'SOMA'
+Require Import Sandbox.
+main : io unit := t <- fork (ret 3) ;; r <- await t ;;
+  match r with Completed s => print s | TaskFailed why => print why end.
+SOMA
+if soma build --no-image awaittype.soma > awaittype.log 2>&1; then
+    echo 'a task of nat awaited as a string passed' >&2; exit 1
+fi
+grep -q 'Error' awaittype.log
+
 # the runtime's quiet switch reaches every event
 grep -q 'if not (quiet ()) then' "$SOMA_MIRAGE_DIR/plain/soma_rt.ml"
 

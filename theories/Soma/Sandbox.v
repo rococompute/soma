@@ -99,6 +99,15 @@ Inductive chunk : Type :=
 | ChunkClosed            (* the connection ended first; it is closed *)
 | ChunkTimedOut.         (* nothing arrived within the milliseconds given *)
 
+(** a task [fork] started, whose result [await] gives; the image knows it
+    by its number *)
+Inductive task (A : Type) : Type := Task (id : nat).
+
+(** What [await] gets: the task's result, or why it has none *)
+Inductive awaited (A : Type) : Type :=
+| Completed (a : A)       (* its body ended with [a] *)
+| TaskFailed (why : string).  (* its body failed (a cast, [raise], an exception), or there is no such task *)
+
 (** a cell holding an [A], shared by whatever has it: [serve] and [listen]
     handlers, [spawn]ed tasks and the main loop; the image knows it by its
     number *)
@@ -162,6 +171,16 @@ Inductive io : Type -> Type :=
     reported and the image goes on; its [exit] stops the image. The image
     keeps running until its tasks have ended. *)
 | spawn (body : io unit) : io unit
+(** run [body] alongside the rest, as [spawn] does, and give a handle to
+    its result: [fork] returns at once *)
+| fork {A : Type} (body : io A) : io (task A)
+(** wait for the task to end: [Completed] with its result, or
+    [TaskFailed] with why. A task can be awaited any number of times,
+    by any task; each gets the same answer *)
+| await {A : Type} (t : task A) : io (awaited A)
+(** [await], waiting [milliseconds] at most: [None] when the task is still
+    running then (it goes on) *)
+| await_within {A : Type} (t : task A) (milliseconds : N) : io (option (awaited A))
 (** a new cell, holding [a] *)
 | new_cell {A : Type} (a : A) : io (cell A)
 (** what the cell holds *)
@@ -317,6 +336,12 @@ Arguments read_cell {A} c.
 Arguments write_cell {A} c a.
 Arguments modify_cell {A} c f.
 Arguments Cell {A} id.
+Arguments fork {A} body.
+Arguments await {A} t.
+Arguments await_within {A} t milliseconds.
+Arguments Task {A} id.
+Arguments Completed {A} a.
+Arguments TaskFailed {A} why.
 
 Declare Scope io_scope.
 Delimit Scope io_scope with io.

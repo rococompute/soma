@@ -1,0 +1,36 @@
+(** Tasks with results: [fork] starts each and gives a handle, [await]
+    its result. Three tasks each sleep, then give a number, which main
+    adds up; one fails (it reads a cell never made), and [await] says
+    why; a slow one is awaited for 10 milliseconds ([None]: still
+    running), then to its end; a handle never given by [fork] is
+    [TaskFailed] too. dev/mirage-check.sh boots it. *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+
+worker (n : nat) : io nat := sleep_ms (N.of_nat n) ;; ret (n * 10).
+
+slow : io string := sleep_ms 300%N ;; ret "slow done".
+
+main : io unit :=
+  a <- fork (worker 1) ;;
+  b <- fork (worker 2) ;;
+  c <- fork (worker 3) ;;
+  broken <- fork (x <- read_cell (Cell 999 : cell nat) ;; ret x) ;;
+  s <- fork slow ;;
+  ra <- await a ;; rb <- await b ;; rc <- await c ;;
+  match ra, rb, rc with
+  | Completed x, Completed y, Completed z =>
+      print ("sum " ++ to_string (x + y + z)) ;;
+      rbroken <- await broken ;;
+      early <- await_within s 10%N ;;
+      late <- await s ;;
+      forged <- await (Task 999 : task nat) ;;
+      match rbroken, early, late, forged with
+      | TaskFailed why, None, Completed m, TaskFailed _ =>
+          print ("the broken task: " ++ why) ;;
+          print m ;;
+          print "the tasks gave their results as expected"
+      | _, _, _, _ => print "a task's result was not as expected" ;; exit 1
+      end
+  | _, _, _ => print "a worker failed" ;; exit 1
+  end.

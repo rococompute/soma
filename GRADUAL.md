@@ -1688,6 +1688,9 @@ geometry and first sector, copies it to the next, and checks that a read
 past the end and a partial-sector write are refused; `dev/mirage-check.sh`
 boots it on a 64-sector disk and checks the copy reached the file.
 
+`examples/example_files/mirage_await/mirage_await.soma` forks three tasks
+and adds up their results, awaits one that fails for its reason, and one
+that is slow, first for 10 milliseconds; `dev/mirage-check.sh` boots it.
 `examples/example_files/mirage_tasks/mirage_tasks.soma` spawns three tasks
 that add to one cell and count themselves done in another, and one that
 fails; `dev/mirage-check.sh` boots it, and checks the total and that the
@@ -1730,6 +1733,9 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `monotonic_ns` | `io int` | monotonic nanoseconds since an arbitrary origin (`Mirage_mtime`), as Rocq's primitive 63-bit integer (`PrimInt63.int`, OCaml's `int` in the image): cheap to read in a loop |
 | `wall_clock` | `io (int * int)` | the UTC wall clock (`Mirage_ptime`): seconds since 1970-01-01 and the nanoseconds past them, as primitive integers |
 | `spawn body` | `io unit` | runs `body : io unit` alongside the rest and returns at once. Actions take turns: one runs until it waits (for time, a connection, an event), then another does. A failure in `body` is reported (a `failure` event `during` `task`) and the image goes on; its `exit` stops the image, which keeps running until its tasks have ended |
+| `fork body` | `io (task A)` | runs `body : io A` alongside the rest, as `spawn` does, and returns at once with a handle to its result |
+| `await t` | `io (awaited A)` | waits for the task to end: `Completed a`, its result, or `TaskFailed why` (its body failed, or `t` is no task `fork` gave). Any task can await it, any number of times, each getting the same answer |
+| `await_within t ms` | `io (option (awaited A))` | `await`, waiting `ms : N` milliseconds at most: `None` when the task is still running then (it goes on) |
 | `new_cell a` | `io (cell A)` | a cell holding `a`, shared by whatever has it: handlers, spawned tasks, the main loop |
 | `read_cell c`, `write_cell c a` | `io A`, `io unit` | what the cell holds; the cell holds `a` from now on |
 | `modify_cell c f` | `io A` | the cell holds `f` of what it held, returned: in one step, which no other task's comes between |
