@@ -34,6 +34,7 @@ type atom =
   | Int                 (* int, nat *)
   | Nat
   | Word                (* Soma.Word64's word64 *)
+  | Buf                 (* Sandbox's buffer: OCaml's bytes, an argument *)
   | Bool
   | Float
   | Str
@@ -78,6 +79,7 @@ let atom ~top s =
   | "Uint63.t" -> Ok Int
   | "Soma_nat.nat" -> Ok Nat
   | "Soma_word64.t" -> Ok Word
+  | "Bytes.t" -> Ok Buf
   | "bool" -> Ok Bool
   | "float" -> Ok Float
   | "string" -> Ok Str
@@ -97,9 +99,10 @@ let result ~top s =
   if s = "unit" then Ok Unit
   else
     let n = String.length s and k = String.length suffix in
+    let no_buffer = function Ok Buf -> Error "buffer result" | r -> r in
     if n > k && String.sub s (n - k) k = suffix then
-      Result.map (fun a -> Optional a) (atom ~top (String.sub s 0 (n - k)))
-    else Result.map (fun a -> Value a) (atom ~top s)
+      Result.map (fun a -> Optional a) (no_buffer (atom ~top (String.sub s 0 (n - k))))
+    else Result.map (fun a -> Value a) (no_buffer (atom ~top s))
 
 (* the signature of a declaration, from its OCaml type, or what in it C
    cannot take *)
@@ -120,7 +123,7 @@ let signature ~top ty =
     match args, res with
     | Ok args, Ok result -> Ok { args; result }
     | Error s, _ | _, Error s ->
-      Error ("C has no " ^ s ^ ": a C module's arguments are int, nat, word64, bool, float, string or a type the definition declares (unit alone for none), its result one of these, unit, or an option of one")
+      Error ("C has no " ^ s ^ ": a C module's arguments are int, nat, word64, bool, float, string, buffer (Sandbox's, written in place) or a type the definition declares (unit alone for none), its result one of these but buffer, unit, or an option of one")
 
 (* the C name of a declaration *)
 let c_name ~file name = file ^ "_" ^ name
@@ -134,6 +137,7 @@ let c_type = function
   | Bool -> "bool"
   | Float -> "double"
   | Str -> "soma_str"
+  | Buf -> "soma_bytes"
   | Handle _ -> "soma_handle"
 
 let out_type = function
@@ -162,6 +166,9 @@ let header_h ~file ~definition sigs =
      typedef struct { const uint8_t *ptr; size_t len; } soma_str;\n\
      /* a string result: bytes from malloc, which Soma copies and frees */\n\
      typedef struct { uint8_t *ptr; size_t len; } soma_buf;\n\
+     /* a buffer argument (Sandbox's): its bytes, which C may read and\n\
+    \   write in place, valid only during the call */\n\
+     typedef struct { uint8_t *ptr; size_t len; } soma_bytes;\n\
      /* a value of a type the definition declares, opaque to Soma */\n\
      typedef uintptr_t soma_handle;\n\
      #endif\n\n%s\n#endif\n"
@@ -175,6 +182,7 @@ let of_value a v = match a with
   | Bool -> Printf.sprintf "(bool)Bool_val(%s)" v
   | Float -> Printf.sprintf "Double_val(%s)" v
   | Str -> Printf.sprintf "(soma_str){ (const uint8_t *)String_val(%s), caml_string_length(%s) }" v v
+  | Buf -> Printf.sprintf "(soma_bytes){ (uint8_t *)Bytes_val(%s), caml_string_length(%s) }" v v
   | Handle _ -> Printf.sprintf "(soma_handle)Long_val(%s)" v
 
 (* C -> OCaml value *)
@@ -185,6 +193,7 @@ let to_value a c = match a with
   | Bool -> Printf.sprintf "Val_bool(%s)" c
   | Float -> Printf.sprintf "caml_copy_double(%s)" c
   | Str -> Printf.sprintf "soma_c_string(&%s)" c
+  | Buf -> assert false (* refused by [result] *)
   | Handle _ -> Printf.sprintf "Val_long((intnat)%s)" c
 
 let stub_name ~file name = file ^ "_soma_" ^ name
@@ -232,6 +241,7 @@ let ocaml_atom = function
   | Bool -> "bool"
   | Float -> "float"
   | Str -> "string"
+  | Buf -> "bytes"
 
 (* FILE's OCaml module: its declared types, as the handles C gives (an
    OCaml int, which Soma never looks into), and its values, externals.

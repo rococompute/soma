@@ -592,7 +592,18 @@ type disk = {
   info : unit -> (int * int) Lwt.t;
   read : int -> int -> string option Lwt.t;
   write : int -> string -> bool Lwt.t;
+  (* sectors into a buffer from an offset; a buffer's bytes from an
+     offset, of a length, from a sector *)
+  read_into : int -> int -> Bytes.t -> int -> bool Lwt.t;
+  write_from : int -> Bytes.t -> int -> int -> bool Lwt.t;
 }
+
+(* whether [length] bytes from [offset] are in the buffer *)
+let in_buffer b offset length = offset >= 0 && length >= 0 && offset + length <= Bytes.length b
+
+(* a signal (Sandbox.signal, as extracted): its count, and the tasks
+   waiting for it *)
+type signal = int ref * unit Lwt_condition.t
 let disks : (string, disk) Hashtbl.t = Hashtbl.create 3
 let install_disk name d = Hashtbl.replace disks name d
 
@@ -794,6 +805,103 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       (!storage).write (string_of_chars (check name)) (string_of_chars (check data)) >|= Obj.magic
   | Prog.Append_file (name, data) ->
       (!storage).append (string_of_chars (check name)) (string_of_chars (check data)) >|= Obj.magic
+  | Prog.New_buffer size ->
+      Lwt.return (Obj.magic (Bytes.make (int_of_nat (check size)) '\000'))
+  | Prog.Buffer_size b -> Lwt.return (Obj.magic (nat_of_int (Bytes.length (check b))))
+  | Prog.Buffer_get (b, offset) ->
+      let b = check b and offset = int_of_nat (check offset) in
+      Lwt.return (Obj.magic (if in_buffer b offset 1
+                             then Some (nat_of_int (Char.code (Bytes.unsafe_get b offset))) else None))
+  | Prog.Buffer_set (b, offset, value) ->
+      let b = check b and offset = int_of_nat (check offset) in
+      let ok = in_buffer b offset 1 in
+      if ok then Bytes.unsafe_set b offset (Char.unsafe_chr (int_of_nat (check value) land 255));
+      Lwt.return (Obj.magic ok)
+  | Prog.Buffer_read (b, offset, length) ->
+      let b = check b and offset = int_of_nat (check offset) and length = int_of_nat (check length) in
+      Lwt.return (Obj.magic (if in_buffer b offset length
+                             then Some (chars_of_string (Bytes.sub_string b offset length)) else None))
+  | Prog.Buffer_write (b, offset, data) ->
+      let b = check b and offset = int_of_nat (check offset) and data = string_of_chars (check data) in
+      let ok = in_buffer b offset (String.length data) in
+      if ok then Bytes.blit_string data 0 b offset (String.length data);
+      Lwt.return (Obj.magic ok)
+  | Prog.Buffer_copy (src, src_offset, dst, dst_offset, length) ->
+      let src = check src and dst = check dst and length = int_of_nat (check length) in
+      let so = int_of_nat (check src_offset) and d_o = int_of_nat (check dst_offset) in
+      let ok = in_buffer src so length && in_buffer dst d_o length in
+      if ok then Bytes.blit src so dst d_o length;
+      Lwt.return (Obj.magic ok)
+  | Prog.Buffer_fill (b, offset, length, value) ->
+      let b = check b and offset = int_of_nat (check offset) and length = int_of_nat (check length) in
+      let ok = in_buffer b offset length in
+      if ok then Bytes.fill b offset length (Char.unsafe_chr (int_of_nat (check value) land 255));
+      Lwt.return (Obj.magic ok)
+  | Prog.Buffer_get_word (b, offset) ->
+      let b = check b and offset = int_of_nat (check offset) in
+      Lwt.return (Obj.magic (if in_buffer b offset 8 then Some (Bytes.get_int64_le b offset) else None))
+  | Prog.Buffer_set_word (b, offset, w) ->
+      let b = check b and offset = int_of_nat (check offset) in
+      let ok = in_buffer b offset 8 in
+      if ok then Bytes.set_int64_le b offset (check w);
+      Lwt.return (Obj.magic ok)
+  | Prog.Buffer_get_uint (b, offset, width) ->
+      let b = check b and offset = int_of_nat (check offset) and width = int_of_nat (check width) in
+      let v = if not (in_buffer b offset width) then None else match width with
+        | 1 -> Some (Bytes.get_uint8 b offset)
+        | 2 -> Some (Bytes.get_uint16_le b offset)
+        | 4 -> Some (Int32.to_int (Bytes.get_int32_le b offset) land 0xFFFF_FFFF)
+        | _ -> None in
+      Lwt.return (Obj.magic (Option.map nat_of_int v))
+  | Prog.Buffer_set_uint (b, offset, width, value) ->
+      let b = check b and offset = int_of_nat (check offset) and width = int_of_nat (check width) in
+      let v = int_of_nat (check value) in
+      let ok = in_buffer b offset width && (width = 1 || width = 2 || width = 4) in
+      if ok then (match width with
+          | 1 -> Bytes.set_uint8 b offset (v land 0xFF)
+          | 2 -> Bytes.set_uint16_le b offset (v land 0xFFFF)
+          | _ -> Bytes.set_int32_le b offset (Int32.of_int (v land 0xFFFF_FFFF)));
+      Lwt.return (Obj.magic ok)
+  | Prog.Disk_read_into (name, sector, count, b, offset) ->
+      (match Hashtbl.find_opt disks (string_of_chars (check name)) with
+       | None -> Lwt.return false
+       | Some d -> d.read_into (int_of_nat (check sector)) (int_of_nat (check count)) (check b)
+                     (int_of_nat (check offset)))
+      >|= Obj.magic
+  | Prog.Disk_write_from (name, sector, b, offset, length) ->
+      (match Hashtbl.find_opt disks (string_of_chars (check name)) with
+       | None -> Lwt.return false
+       | Some d -> d.write_from (int_of_nat (check sector)) (check b) (int_of_nat (check offset))
+                     (int_of_nat (check length)))
+      >|= Obj.magic
+  | Prog.Send_buffer (c, b, offset, length) ->
+      let b = check b and offset = int_of_nat (check offset) and length = int_of_nat (check length) in
+      if not (in_buffer b offset length) then
+        failwith (Printf.sprintf "send_buffer: %d bytes from %d are past the buffer's %d" length offset (Bytes.length b));
+      net.send (link_id c) (Bytes.sub_string b offset length)
+      >|= fun ok -> Obj.magic (if ok then Sent else SendClosed)
+  | Prog.New_signal -> Lwt.return (Obj.magic ((ref 0, Lwt_condition.create ()) : signal))
+  | Prog.Notify s ->
+      let (count, waiting) : signal = Obj.magic (check s) in
+      incr count;
+      Lwt_condition.broadcast waiting ();
+      Lwt.return (Obj.magic ())
+  | Prog.Signal_count s ->
+      let (count, _) : signal = Obj.magic (check s) in
+      Lwt.return (Obj.magic (nat_of_int !count))
+  | Prog.Wait_signal (s, seen, ms) ->
+      let (count, waiting) : signal = Obj.magic (check s) in
+      let seen = int_of_nat (check seen) in
+      let rec wait () =
+        if !count > seen then Lwt.return (Some (nat_of_int !count))
+        else Lwt_condition.wait waiting >>= wait in
+      (match check ms with
+       | Prog.N0 -> wait ()
+       | Prog.Npos _ -> Lwt.pick [ wait (); (sleep_milliseconds ms >|= fun () -> None) ])
+      >|= Obj.magic
+  | Prog.Free_cell c -> Hashtbl.remove cells (int_of_nat (check c)); Lwt.return (Obj.magic ())
+  | Prog.Forget t -> Hashtbl.remove forked (int_of_nat (check t)); Lwt.return (Obj.magic ())
+  | Prog.Await_promise p -> Obj.magic (check p)
 
 (* [body] run alongside the rest (spawn, fork), counted among the tasks
    the image waits for: its result, or why it failed, which is reported.
@@ -1302,9 +1410,32 @@ module Make (B : Mirage_block.S) = struct
       else if n = 0 then Lwt.return true
       else B.write b (Int64.of_int sector) [Cstruct.of_string data] >|= Result.is_ok
     in
+    let read_into sector count dst offset =
+      info >>= fun i ->
+      let n = count * i.Mirage_block.sector_size in
+      if not (fits i sector count) || not (Soma_rt.in_buffer dst offset n) then Lwt.return false
+      else if n = 0 then Lwt.return true
+      else
+        let buf = Cstruct.create n in
+        B.read b (Int64.of_int sector) [buf] >|= function
+        | Ok () -> Cstruct.blit_to_bytes buf 0 dst offset n; true
+        | Error _ -> false
+    in
+    let write_from sector src offset n =
+      info >>= fun i ->
+      let size = i.Mirage_block.sector_size in
+      if not i.Mirage_block.read_write || n mod size <> 0 || not (fits i sector (n / size))
+         || not (Soma_rt.in_buffer src offset n) then Lwt.return false
+      else if n = 0 then Lwt.return true
+      else begin
+        let buf = Cstruct.create n in
+        Cstruct.blit_from_bytes src offset buf 0 n;
+        B.write b (Int64.of_int sector) [buf] >|= Result.is_ok
+      end
+    in
     { Soma_rt.info = (fun () -> info >|= fun i ->
           (i.Mirage_block.sector_size, Int64.to_int i.Mirage_block.size_sectors));
-      read; write }
+      read; write; read_into; write_from }
 end
 |soma}
 
@@ -1858,6 +1989,31 @@ Extract Inlined Constant Soma.Word64.bits => "Soma_word64.bits".
 Extract Inlined Constant Soma.Word64.to_hex => "(Printf.sprintf ""%Lx"")".
 |soma}
 
+(* Sandbox's handles that are OCaml values in the image, rather than
+   numbers it looks up: a buffer is bytes (freed by the collector), a
+   signal its count and condition (Soma_rt.signal), a promise Lwt's.
+   None is made by its constructor, which only the kernel has. Signals
+   and promises are types of soma_handles.ml, so that prog.ml names no
+   Lwt module (checked without an image, it is compiled without Lwt
+   unless a definition declares it). *)
+let sandbox_extraction = {soma|Extract Inductive Soma.Handles.buffer => "Bytes.t"
+  [ "(fun _ -> failwith ""a buffer is made by new_buffer"")" ] "(fun _ _ -> failwith ""a buffer has no number"")".
+Extract Inductive Soma.Sandbox.signal => "Soma_handles.signal"
+  [ "(fun _ -> failwith ""a signal is made by new_signal"")" ] "(fun _ _ -> failwith ""a signal has no number"")".
+Extract Inductive Soma.Handles.promise => "Soma_handles.promise"
+  [ "(fun _ -> failwith ""a promise is made by OCaml"")" ] "(fun _ _ -> failwith ""a promise has no number"")".
+|soma}
+
+(* soma_handles.ml: a signal, which the program only passes to the
+   runtime (Soma_rt.signal, by Obj.magic), and a promise, Lwt's, which an
+   OCaml module gives ([promise A] in a definition is
+   [A Soma_handles.promise]). Without Lwt (an image's check, when no
+   definition declares lwt), it is abstract: nothing gives one. *)
+let handles_ml ~lwt =
+  header ^ "(* Sandbox's signal, opaque to the program, and promise. *)\n\
+            type signal\n" ^
+  (if lwt then "type 'a promise = 'a Lwt.t\n" else "type 'a promise\n")
+
 let float_extraction = {soma|Extract Inductive PrimFloat.float_comparison => "Float64.float_comparison" [ "FEq" "FLt" "FGt" "FNotComparable" ].
 Extract Inductive FloatClass.float_class => "Float64.float_class" [ "PNormal" "NNormal" "PSubn" "NSubn" "PZero" "NZero" "PInf" "NInf" "NaN" ].
 Extract Constant PrimFloat.float => "Float64.t".
@@ -2008,7 +2164,7 @@ let disk_names prog =
           end;
           from (i + 1)
         end in
-      from 0) ["Disk_info"; "Disk_read"; "Disk_write"];
+      from 0) ["Disk_info"; "Disk_read"; "Disk_write"; "Disk_read_into"; "Disk_write_from"];
   List.iter (fun name ->
       if name = "" || String.length name > 31 ||
          not (String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false) name) then
@@ -2046,7 +2202,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
      From Corelib Require PrimFloat FloatClass PrimInt63 CarryType.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
      From Soma Require Word64.\n\
-     %s%s%s%s\
+     %s%s%s%s%s\
      Definition soma_wire_take_line := Soma.Wire.take_line.\n\
      Definition soma_wire_take_frame (buffer : string) : option (option (string * string)) :=\n\
        match Soma.Wire.take_frame Soma.Wire.max_frame buffer with\n\
@@ -2056,7 +2212,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
        end.\n\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction word64_extraction
+     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction word64_extraction sandbox_extraction
        (String.concat "" (SomaOcamlBindings.extraction_lines ocaml_modules @ List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
@@ -2198,6 +2354,8 @@ module Cstruct : sig
   val create : int -> t
   val to_string : ?off:int -> ?len:int -> t -> string
   val of_string : ?allocator:(int -> t) -> ?off:int -> ?len:int -> string -> t
+  val blit_to_bytes : t -> int -> bytes -> int -> int -> unit
+  val blit_from_bytes : bytes -> int -> t -> int -> int -> unit
 end
 module Lwt_mutex : sig
   type t
@@ -2327,7 +2485,7 @@ let check_project ~wasm ~libraries ~native_files dir =
   mkdir_p checks;
   write_file (Filename.concat checks "standins.mli") standins_mli;
   write_file (Filename.concat checks "config.ml") (read_file (Filename.concat dir "config.ml"));
-  let base = ["uint63.ml"; "soma_word64.ml"; "float64.ml"; "soma_nat.ml"] in
+  let base = ["uint63.ml"; "soma_word64.ml"; "soma_handles.ml"; "float64.ml"; "soma_nat.ml"] in
   (* the C modules' OCaml, checked with the program's; their C, by the
      machine's C compiler, against the header and OCaml's (an image's
      C is compiled for Solo5 only when the image is built) *)
@@ -2351,6 +2509,8 @@ let check_project ~wasm ~libraries ~native_files dir =
                 (read_file (Filename.concat dir name)))
     (base @ List.filter (fun f -> not (List.mem f c_ml)) own @ program @ runtime);
   let packages = List.sort_uniq compare ((if wasm then ["wasm"] else []) @ libraries) in
+  write_file (Filename.concat checks "soma_handles.ml")
+    (handles_ml ~lwt:(List.exists (fun l -> SomaOcamlBindings.package_of l = "lwt") libraries));
   let compiler = if packages = [] then "ocamlc" else
       "ocamlfind ocamlc -package " ^ Filename.quote (String.concat "," packages) in
   (* Application modules and bindings use the real declared libraries.
@@ -2535,7 +2695,7 @@ let image_build_inputs ~switch ~dir sources =
           List.map (Filename.concat dir)
             ["duniverse"; "mirage"; "Makefile"; "dune"; "dune-project"; "config.ml";
              "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_disk.ml"; "soma_wasm.ml";
-             "float64.ml"; "uint63.ml"; "soma_word64.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
+             "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_handles.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
 
@@ -2598,6 +2758,7 @@ let build ~state ~source ~vo_file =
       "float64.ml", float64_ml;
       "uint63.ml", uint63_ml;
       "soma_word64.ml", word64_ml;
+      "soma_handles.ml", handles_ml ~lwt:true;
       "gradual.ml", gradual_ml ~has_casts:(contains prog "module Gradual_rt");
       "prog.ml", prog;
       "prog.mli", read_file (Filename.concat staging "prog.mli");

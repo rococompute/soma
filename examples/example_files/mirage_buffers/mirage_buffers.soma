@@ -1,0 +1,120 @@
+(** Buffers, signals, and letting go. A buffer is bytes the image reads
+    and writes in place: bytes, little-endian numbers and words, strings,
+    copies and fills, with what goes past its end refused; sectors of the
+    disk "data" are read into one and written from one without a string
+    between. A signal wakes a task waiting for it, and a wait for a count
+    it does not reach gives up. A freed cell and a forgotten task are gone.
+    It exits 0 when all went as expected, 1 otherwise. dev/mirage-check.sh
+    boots it on a disk whose sector 0 begins "hello disk":
+
+        soma run --disk=data=data.img mirage_buffers.soma *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+Require Import Soma.Word64.
+
+check (name : string) (ok : bool) : io bool :=
+  if ok then ret true else print ("not as expected: " ++ name) ;; ret false.
+
+is_some_nat (o : option nat) (n : nat) : bool :=
+  match o with Some m => Nat.eqb m n | None => false end.
+
+is_text (o : option string) (s : string) : bool :=
+  match o with Some t => String.eqb t s | None => false end.
+
+is_word (o : option word64) (w : word64) : bool :=
+  match o with Some v => Word64.eqb v w | None => false end.
+
+failed {A} (a : awaited A) : bool :=
+  match a with TaskFailed _ => true | Completed _ => false end.
+
+buffers : io bool :=
+  b <- new_buffer 16 ;;
+  size <- buffer_size b ;;
+  zero0 <- buffer_get b 15 ;;
+  set <- buffer_set b 0 321 ;;
+  byte <- buffer_get b 0 ;;
+  past <- buffer_get b 16 ;;
+  u16 <- buffer_set_uint b 1 2 48879 ;;
+  lo <- buffer_get b 1 ;;
+  u32 <- buffer_get_uint b 0 4 ;;
+  bad_width <- buffer_set_uint b 0 3 1 ;;
+  w <- buffer_set_word b 8 (Word64.of_N 0x0123456789abcdef) ;;
+  wback <- buffer_get_word b 8 ;;
+  top <- buffer_get b 15 ;;
+  wpast <- buffer_set_word b 9 Word64.ones ;;
+  wrote <- buffer_write b 13 "abc" ;;
+  text <- buffer_read b 13 3 ;;
+  too_long <- buffer_write b 13 "abcd" ;;
+  copied <- buffer_copy b 13 b 12 3 ;;
+  shifted <- buffer_read b 12 4 ;;
+  filled <- buffer_fill b 12 2 120 ;;
+  xs <- buffer_read b 12 4 ;;
+  a <- check "size" (Nat.eqb size 16) ;;
+  c <- check "fresh bytes are 0" (is_some_nat zero0 0) ;;
+  d <- check "a byte keeps its low 8 bits" (set && is_some_nat byte 65) ;;
+  e <- check "a byte past the end" (match past with None => true | _ => false end) ;;
+  f <- check "u16, little-endian" (u16 && is_some_nat lo 239) ;;
+  g <- check "u32" (is_some_nat u32 (65 + 239 * 256 + 190 * 65536)) ;;
+  h <- check "width 3" (negb bad_width) ;;
+  i <- check "a word" (w && is_word wback (Word64.of_N 0x0123456789abcdef) && is_some_nat top 1) ;;
+  j <- check "a word past the end" (negb wpast) ;;
+  k <- check "strings" (wrote && is_text text "abc" && negb too_long) ;;
+  l <- check "an overlapping copy" (copied && is_text shifted "abcc") ;;
+  m <- check "fill" (filled && is_text xs "xxcc") ;;
+  ret (a && c && d && e && f && g && h && i && j && k && l && m).
+
+disk : io bool :=
+  d <- new_buffer 1024 ;;
+  read <- disk_read_into "data" 0 2 d 0 ;;
+  begins <- buffer_read d 0 10 ;;
+  fits_not <- disk_read_into "data" 0 2 d 512 ;;
+  info <- disk_info "data" ;;
+  let count := match info with Some (_, n) => n | None => 0 end in
+  past <- disk_read_into "data" count 1 d 0 ;;
+  wrote <- disk_write_from "data" 2 d 0 512 ;;
+  partial <- disk_write_from "data" 2 d 0 100 ;;
+  back <- disk_read "data" 2 1 ;;
+  a <- check "a disk read into a buffer" (read && is_text begins "hello disk") ;;
+  b <- check "sectors that do not fit the buffer" (negb fits_not) ;;
+  c <- check "sectors past the disk's end" (negb past) ;;
+  e <- check "a disk written from a buffer"
+         (wrote && negb partial &&
+          match back with Some s => String.eqb (String.substring 0 10 s) "hello disk" | None => false end) ;;
+  ret (a && b && c && e).
+
+signals : io bool :=
+  s <- new_signal ;;
+  waiter <- fork (seen <- signal_count s ;; wait_signal s seen 0%N) ;;
+  sleep_ms 20%N ;;
+  notify s ;;
+  woken <- await waiter ;;
+  now <- wait_signal s 0 0%N ;;
+  late <- wait_signal s 1 20%N ;;
+  count <- signal_count s ;;
+  a <- check "a waiting task woken"
+         (match woken with Completed (Some 1) => true | _ => false end) ;;
+  b <- check "a count already past" (is_some_nat now 1) ;;
+  c <- check "a wait that times out" (match late with None => true | _ => false end) ;;
+  d <- check "the count" (Nat.eqb count 1) ;;
+  ret (a && b && c && d).
+
+letting_go : io bool :=
+  c <- new_cell 3 ;;
+  free_cell c ;;
+  reader <- fork (read_cell c) ;;
+  read <- await reader ;;
+  t <- fork (ret 7) ;;
+  sleep_ms 5%N ;;
+  forget t ;;
+  forgotten <- await t ;;
+  a <- check "a freed cell" (failed read) ;;
+  b <- check "a forgotten task" (failed forgotten) ;;
+  ret (a && b).
+
+main : io unit :=
+  a <- buffers ;;
+  b <- disk ;;
+  c <- signals ;;
+  d <- letting_go ;;
+  if a && b && c && d then print "buffers, signals and letting go as expected"
+  else exit 1.

@@ -113,7 +113,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_await mirage_word64 mirage_crypto mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_await mirage_word64 mirage_buffers mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https mirage_names; do
@@ -194,6 +194,44 @@ fi
 # forked tasks' results: a sum, a failure's reason, a wait that times out
 if build mirage_await; then
     run mirage_await await 0 "^the tasks gave their results as expected$" plain
+fi
+
+# buffers (and a disk read into and written from one), signals, a freed
+# cell and a forgotten task, on a disk whose sector 0 begins "hello
+# disk"; the image copies it to sector 2 from a buffer
+if build mirage_buffers; then
+    printf 'hello disk' > "${WORK}/buffers.img"
+    truncate -s 32768 "${WORK}/buffers.img"
+    timeout 60 opam exec --switch="${SWITCH}" -- solo5-hvt --mem=${MEM} --block:data="${WORK}/buffers.img" -- \
+        "${HERE}/examples/example_files/mirage_buffers/mirage_buffers.hvt" >"${WORK}/buffers.log" 2>&1
+    rc=$?
+    if [ ${rc} -eq 0 ] && grep -q "^buffers, signals and letting go as expected$" "${WORK}/buffers.log" &&
+       [ "$(dd if="${WORK}/buffers.img" bs=1 skip=1024 count=10 2>/dev/null)" = "hello disk" ]; then
+        pass buffers
+    else
+        echo "    (exit ${rc})" >>"${WORK}/buffers.log"
+        fail buffers
+    fi
+fi
+
+# a buffer C writes and OCaml reads, and OCaml's promises awaited
+# (examples/example_projects/native_handles), from a copy
+cp -R "${HERE}/examples/example_projects/native_handles" "${WORK}/handles"
+rm -rf "${WORK}/handles/.soma-cache"
+if "${SOMA}" build "${WORK}/handles/main.soma" >"${WORK}/build-handles.log" 2>&1; then
+    timeout 60 opam exec --switch="${SWITCH}" -- solo5-hvt --mem=${MEM} -- \
+        "${WORK}/handles/main.hvt" >"${WORK}/handles.log" 2>&1
+    rc=$?
+    if [ ${rc} -eq 0 ] && grep -q "^buffers and promises as expected$" "${WORK}/handles.log"; then
+        pass handles
+    else
+        echo "    (exit ${rc})" >>"${WORK}/handles.log"
+        fail handles
+    fi
+else
+    echo "FAIL build native_handles"
+    sed 's/^/    /' "${WORK}/build-handles.log" | tail -15
+    FAIL=$((FAIL + 1))
 fi
 
 # Soma.Word64: the image's int64 words agree with the kernel's (the

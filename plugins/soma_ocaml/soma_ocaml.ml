@@ -165,6 +165,11 @@ let rec ocaml_type env sigma vars t =
     (* Soma.Word64's unsigned 64-bit words: OCaml's int64, read unsigned
        (soma_word64.ml) *)
     else if is "soma.word64.type" then "Soma_word64.t"
+    (* Sandbox's buffer and promise, as an image has them: bytes, and
+       Lwt's promise, which soma_handles.ml names (toplevel/somaMirage.ml,
+       handles_ml): FILE.ml gives an ['a Lwt.t] *)
+    else if is "soma.buffer.type" then "Bytes.t"
+    else if is "soma.promise.type" then arg (List.hd args) ^ " Soma_handles.promise"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
     else if is "core.option.type" then arg (List.hd args) ^ " option"
     else if is "core.prod.type" then

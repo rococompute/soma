@@ -886,6 +886,8 @@ submodules: `Module Deferred. map : ... End Deferred.` declares
 of its types, and `name : type.` one of its values. The plugin turns each
 value's declared type into an OCaml type when the definition is compiled:
 `string`, `bool`, `unit`, `list`, `option`, products, `float`, `nat`,
+`word64` (Soma.Word64's, OCaml's `int64`), `buffer` (Sandbox's, OCaml's
+`bytes`), `promise A` (Sandbox's, an `'a Lwt.t`, in an image only),
 functions, the declared types, and type variables (`forall A`, erased by
 extraction). Anything else is refused there, `Any` among them. An OCaml
 value carries no type at run time that a cast could check, so it has one
@@ -1101,7 +1103,9 @@ FILE.c defines, which it includes. Each declaration is the C function
 | Declared | In C |
 | --- | --- |
 | `int`, `nat` | `int64_t` (a negative result given as a `nat` is `0`) |
+| `word64` (Soma.Word64's) | `uint64_t` |
 | `bool`, `float` | `bool`, `double` |
+| `buffer` (Sandbox's), as an argument | `soma_bytes { uint8_t *ptr; size_t len; }`, which C may read and write in place, valid during the call; C never gives one |
 | `string`, as an argument | `soma_str { const uint8_t *ptr; size_t len; }`, valid during the call |
 | `string`, as the result | the function returns `void` and fills its last argument, `soma_buf *out`, with bytes from `malloc`, which Soma copies and frees |
 | a type the definition declares (`ctx : Type.`) | `soma_handle`, an `uintptr_t` Soma keeps and gives back, never looks into |
@@ -1515,6 +1519,28 @@ proof of any program's range invariants. `soma_native_contracts.sh` checks
 the actual extracted operations and byte-string mappings at boundaries,
 including deliberate overflow counterexamples to unconditional equivalence.
 
+`theories/Soma/Word64.v` adds `word64`, unsigned 64-bit words: registers,
+addresses, page-table entries, exception syndromes, which a 63-bit `int`
+cannot hold. In the kernel a word is a binary `N` below 2^64 with that
+proof, and each operation is defined on `N` and reduced modulo 2^64, so
+the definitions are the specification: `add`, `sub`, `mul` and `neg`
+wrap; `divu a 0` is `0` and `remu a 0` is `a`; a shift count is taken
+modulo 64, as AArch64's are; `ltb` and `leb` compare unsigned, `slt` and
+`sle` two's complement; `bits w lo width` is a field (`bits esr 26 6`, an
+exception class); `to_hex`, and conversions to and from `N`, `nat` and
+`PrimInt63.int`. `to_N_inj` says words are equal when their numbers are,
+and `eqb_spec`, `add_comm`, `add_zero`, `sub_self` and `ltb_spec` are
+proved from it. Compiled (an image or an executable), a word is OCaml's
+`int64` and each operation the `Int64` function with the same meaning
+(`word64_extraction` in `toplevel/somaMirage.ml`), as `nat` is OCaml's
+`int`: what the compiled code is trusted to compute.
+`examples/example_files/mirage_word64` computes 26 cases (wrapping,
+division by zero, signed and unsigned comparison, shifts of 64 and 65,
+fields, conversions) in an image, which compares them with a list its
+`.exp` proves is what the kernel computes; `dev/mirage-check.sh` boots
+it, and `test-suite/misc/soma_word64.sh` checks the extraction, that a
+wrong expectation is refused, and a C module that rotates a word.
+
 `theories/Soma/CastSpec.v` checks conversion laws for the actual gradual
 primitives on naturals, booleans, strings, lists, options, pairs and
 functions. It also specifies projections whose dynamic tag changes at run
@@ -1696,6 +1722,23 @@ that add to one cell and count themselves done in another, and one that
 fails; `dev/mirage-check.sh` boots it, and checks the total and that the
 failure was reported while the others went on.
 
+Buffers, signals and promises are for a program that does what a C or
+OCaml one would: a page, a sector or a frame changed in place rather than
+a string made of each, tasks that wait for one another rather than
+polling a cell, OCaml's own promises awaited. A buffer, a signal and a
+promise are OCaml values in the image (`Bytes.t`, a count and an
+`Lwt_condition`, an `Lwt.t`), not numbers it looks up; a cell or a task
+is, so `free_cell` and `forget` let one go. A buffer changes, so a native
+function given one is called with `call`, in order with the other
+actions. `examples/example_files/mirage_buffers/mirage_buffers.soma`
+checks each buffer action, reads a disk's sectors into a buffer and
+writes them back from it, wakes a waiting task with a signal and times
+out another wait, and fails to read a freed cell and await a forgotten
+task; `examples/example_projects/native_handles` has C fill a buffer
+(`pattern.c`) and OCaml sum it and give promises (`later.ml`), one of
+which fails. `dev/mirage-check.sh` boots both, and
+`test-suite/misc/soma_buffers.sh` checks them without an image.
+
 `examples/example_files/mirage_events/mirage_events.soma` is a server
 that answers UDP pings and greets TCP connections, and, given its address,
 a client whose one loop of `select` sees a timer of `after`, the UDP pong,
@@ -1760,6 +1803,23 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `disk_info name` | `io (option (nat * nat))` | the sector size in bytes and the number of sectors of the block device `name` (`--block:name=FILE`); `None` when it is not attached |
 | `disk_read name sector count` | `io (option string)` | `count` sectors from `sector` on, as bytes; `None` past the end or on a failed read |
 | `disk_write name sector data` | `io bool` | `data`, whole sectors of it, written from `sector` on: `false` for a read-only disk, data that is not whole sectors or goes past the end, or a failed write |
+| `new_buffer n` | `io buffer` | a buffer of `n` bytes, each `0`: OCaml's `bytes`, read and written in place, freed by the collector once nothing has it |
+| `buffer_size b` | `io nat` | its length |
+| `buffer_get b i`, `buffer_set b i v` | `io (option nat)`, `io bool` | the byte at `i`; `v`'s low 8 bits written there. Past the end: `None`, `false`, nothing written (so for every buffer action) |
+| `buffer_read b i n`, `buffer_write b i s` | `io (option string)`, `io bool` | `n` bytes from `i`, as a string; the string's bytes from `i` on |
+| `buffer_copy src i dst j n`, `buffer_fill b i n v` | `io bool` | `n` bytes of `src` from `i` to `dst` from `j` (the same buffer included, as through a copy); `n` bytes from `i`, each `v` |
+| `buffer_get_uint b i w`, `buffer_set_uint b i w v` | `io (option nat)`, `io bool` | a little-endian number of `w` bytes (1, 2 or 4; another width is `None`, `false`), as AArch64's and x86's memory has them |
+| `buffer_get_word b i`, `buffer_set_word b i w` | `io (option word64)`, `io bool` | 8 bytes, little-endian, as a `Soma.Word64` word |
+| `disk_read_into name sector count b i` | `io bool` | `disk_read`, into the buffer from `i`, with no string between: `false` where `disk_read` is `None`, or when the sectors do not fit in the buffer |
+| `disk_write_from name sector b i n` | `io bool` | `disk_write` of the buffer's `n` bytes from `i` |
+| `send_buffer c b i n` | `io sent` | `send` of the buffer's `n` bytes from `i`; bytes past its end fail the task |
+| `new_signal` | `io signal` | a signal tasks wait on, counting from 0 |
+| `notify s` | `io unit` | counts one more, and wakes every task waiting for it |
+| `signal_count s` | `io nat` | how many times it was notified |
+| `wait_signal s seen ms` | `io (option nat)` | waits until the count is past `seen`: `Some` the count, at once if it already is, or `None` when `ms : N` milliseconds pass first (`0`: as long as it takes). A task reads the count, looks at what it waits for, then waits for a count past what it read, so a `notify` in between is not missed |
+| `free_cell c` | `io unit` | the cell is gone: what it held can be freed, and reading or writing it fails the task |
+| `forget t` | `io unit` | the image forgets the task's result (the task goes on if it is running): it can be freed, and `await t` is `TaskFailed` |
+| `await_promise p` | `io A` | waits for what an OCaml module promised (`promise A`, its `'a Lwt.t`): its value, or the task fails as the promise did |
 | `local_address` | `io (option string)` | the image's own IPv4 address, as the network configured it; a program that uses it gets a network stack |
 | `close c` | `io unit` | closes the connection; again does nothing |
 | `connect_within address port ms` | `io connected` | `connect`, giving up after `ms : N` milliseconds (`ConnectTimedOut`) rather than 10 seconds: for a program that dials from its loop |

@@ -48,7 +48,9 @@ grep -q '(no image)' build.log
 project="$SOMA_MIRAGE_DIR/plain-storage"
 grep -q 'block_of_file "storage"' "$project/config.ml"
 grep -Fq 'main "Unikernel.Main" (block @-> job)' "$project/config.ml"
-cp "$project"/{prog.ml,prog.mli,uint63.ml,float64.ml,soma_wasm.ml,soma_store.ml} .
+cp "$project"/{prog.ml,prog.mli,uint63.ml,soma_word64.ml,float64.ml,soma_wasm.ml,soma_store.ml} .
+# the program's signal and promise types, as checked (without Lwt)
+cp "$project/no-image/soma_handles.ml" .
 cat > standins.ml <<'OCAML'
 module Lwt = struct
   type 'a t = 'a
@@ -136,8 +138,8 @@ let () =
   Unix.close disk
 OCAML
 ocamlc -c standins.ml
-ocamlc -open Standins -c uint63.ml float64.ml soma_wasm.ml prog.mli prog.ml soma_store.ml driver.ml
-ocamlc -o storage-run unix.cma standins.cmo uint63.cmo float64.cmo soma_wasm.cmo prog.cmo soma_store.cmo driver.cmo
+ocamlc -open Standins -c uint63.ml soma_word64.ml soma_handles.ml float64.ml soma_wasm.ml prog.mli prog.ml soma_store.ml driver.ml
+ocamlc -o storage-run unix.cma standins.cmo uint63.cmo soma_word64.cmo soma_handles.cmo float64.cmo soma_wasm.cmo prog.cmo soma_store.cmo driver.cmo
 truncate -s 65536 disk.img
 ./storage-run disk.img first > first.log
 ./storage-run disk.img verify > verify.log

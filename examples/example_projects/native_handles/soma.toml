@@ -1,0 +1,4 @@
+[project]
+name = "native_handles"
+version = "0.1.0"
+description = "Buffers given to OCaml and C, and OCaml promises awaited, in a MirageOS unikernel"

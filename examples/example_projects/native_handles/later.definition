@@ -1,0 +1,4 @@
+OCaml Library "lwt".
+later : forall {A}, A -> promise A.
+broken : forall {A}, string -> promise A.
+checksum : buffer -> nat.

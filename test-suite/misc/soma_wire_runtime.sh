@@ -11,7 +11,9 @@ cd "$WORK"
 printf 'Require Import Sandbox.\nmain : io unit := print "wire".\n' > main.soma
 soma build --no-image main.soma > build.log 2>&1 || { cat build.log; exit 1; }
 project="$SOMA_MIRAGE_DIR/plain"
-cp "$project"/{prog.ml,prog.mli,uint63.ml,float64.ml} .
+cp "$project"/{prog.ml,prog.mli,uint63.ml,soma_word64.ml,float64.ml} .
+# the program's signal and promise types, as checked (without Lwt)
+cp "$project/no-image/soma_handles.ml" .
 # Use the generated adapter verbatim; exclude its networking interpreter.
 sed -n '/^let take_line = Prog.soma_wire_take_line/,/^(\* What the network provides/p' "$project/soma_rt.ml" | sed '$d' > adapter.ml
 cat > check.ml <<'OCAML'
@@ -40,6 +42,6 @@ let () =
   assert (Adapter.take_line "unfinished" = None);
   print_endline "PASS generated Mirage adapter uses proved Wire decoders at byte and frame boundaries"
 OCAML
-ocamlc -w -a -c uint63.ml float64.ml prog.mli prog.ml adapter.ml check.ml > compile.log 2>&1
-ocamlc -o check uint63.cmo float64.cmo prog.cmo adapter.cmo check.cmo
+ocamlc -w -a -c uint63.ml soma_word64.ml soma_handles.ml float64.ml prog.mli prog.ml adapter.ml check.ml > compile.log 2>&1
+ocamlc -o check uint63.cmo soma_word64.cmo soma_handles.cmo float64.cmo prog.cmo adapter.cmo check.cmo
 ./check

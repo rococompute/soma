@@ -38,6 +38,9 @@ From Stdlib Require Import NArith.BinNat.
 From Corelib Require PrimInt63.
 From Stdlib Require Import Lia.
 Require Import Soma.Strings Soma.Show.
+From Soma Require Word64.
+(** [buffer] and [promise], which OCaml modules name too *)
+Require Export Soma.Handles.
 
 (** What [fetch] gets: the reply, or why there is none *)
 Inductive fetched : Type :=
@@ -131,6 +134,12 @@ Inductive event : Type :=
        address, at [source_port] *)
 | Timer (tag : nat).
     (* the [after] of this tag came due *)
+
+(** a signal tasks wait on: [notify] wakes every task waiting, and counts.
+    A task reads the count, looks at what it waits for, and waits for a
+    count past the one it read ([wait_signal]), so that a [notify] between
+    its look and its wait is not missed. Made only by [new_signal]. *)
+Inductive signal : Type := Signal (id : nat).
 
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
@@ -323,7 +332,64 @@ Inductive io : Type -> Type :=
 | disk_write (name : string) (sector : nat) (data : string) : io bool
 | read_file (name : string) : io (option string)
 | write_file (name data : string) : io unit
-| append_file (name data : string) : io unit.
+| append_file (name data : string) : io unit
+(** Buffers, read and written in place. An offset and a length that go
+    past the buffer's end are refused: [None], or [false], and nothing
+    is written. A byte is a [nat] below 256 ([buffer_set] keeps the low
+    8 bits of what it is given); multi-byte numbers are little-endian,
+    as AArch64's and x86's memory has them. *)
+(** a buffer of [size] bytes, each [0] *)
+| new_buffer (size : nat) : io buffer
+| buffer_size (b : buffer) : io nat
+(** the byte at [offset] *)
+| buffer_get (b : buffer) (offset : nat) : io (option nat)
+| buffer_set (b : buffer) (offset value : nat) : io bool
+(** [length] bytes from [offset], as a string *)
+| buffer_read (b : buffer) (offset length : nat) : io (option string)
+(** [data]'s bytes, from [offset] on *)
+| buffer_write (b : buffer) (offset : nat) (data : string) : io bool
+(** [length] bytes of [src] from [src_offset] to [dst] from [dst_offset]
+    (the same buffer included: as if through a copy) *)
+| buffer_copy (src : buffer) (src_offset : nat) (dst : buffer) (dst_offset length : nat) : io bool
+(** [length] bytes from [offset], each [value] *)
+| buffer_fill (b : buffer) (offset length value : nat) : io bool
+(** the 8 bytes from [offset], as a word *)
+| buffer_get_word (b : buffer) (offset : nat) : io (option Word64.word64)
+| buffer_set_word (b : buffer) (offset : nat) (w : Word64.word64) : io bool
+(** the [width] bytes from [offset] (1, 2 or 4; another width is
+    [None]), as a number *)
+| buffer_get_uint (b : buffer) (offset width : nat) : io (option nat)
+(** [value]'s low [width] bytes (1, 2 or 4; another is [false]) *)
+| buffer_set_uint (b : buffer) (offset width value : nat) : io bool
+(** [disk_read] into a buffer: [count] sectors from [sector], to [b] from
+    [offset], without a string between. [false] as [disk_read] is [None],
+    or when they do not fit in [b]. *)
+| disk_read_into (name : string) (sector count : nat) (b : buffer) (offset : nat) : io bool
+(** [disk_write] from a buffer: its [length] bytes from [offset], whole
+    sectors, from [sector] on *)
+| disk_write_from (name : string) (sector : nat) (b : buffer) (offset length : nat) : io bool
+(** [send] of a buffer's [length] bytes from [offset]; bytes past its end
+    fail the task *)
+| send_buffer (c : connection) (b : buffer) (offset length : nat) : io sent
+(** Signals: tasks wait for one another. *)
+| new_signal : io signal
+(** count one more, and wake every task waiting for the signal *)
+| notify (s : signal) : io unit
+(** how many times it was notified *)
+| signal_count (s : signal) : io nat
+(** wait until the signal's count is past [seen]: [Some] the count, at
+    once if it already is; [None] when [milliseconds] pass first ([0]: as
+    long as it takes) *)
+| wait_signal (s : signal) (seen : nat) (milliseconds : N) : io (option nat)
+(** the cell is gone: what it held can be freed, and reading or writing it
+    again fails the task *)
+| free_cell {A : Type} (c : cell A) : io unit
+(** the image forgets the task's result (the task goes on if it has not
+    ended): it can be freed, and [await] of it is [TaskFailed] *)
+| forget {A : Type} (t : task A) : io unit
+(** wait for what OCaml promised: its value, or the task fails as OCaml's
+    did *)
+| await_promise {A : Type} (p : promise A) : io A.
 
 Arguments ret {A} a.
 Arguments bind {A B} m k.
@@ -342,6 +408,9 @@ Arguments await_within {A} t milliseconds.
 Arguments Task {A} id.
 Arguments Completed {A} a.
 Arguments TaskFailed {A} why.
+Arguments free_cell {A} c.
+Arguments forget {A} t.
+Arguments await_promise {A} p.
 
 Declare Scope io_scope.
 Delimit Scope io_scope with io.

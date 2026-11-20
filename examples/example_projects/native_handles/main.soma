@@ -1,0 +1,28 @@
+(** A buffer given to C, which writes it in place (pattern.c), and to
+    OCaml, which reads it (later.ml); and promises of OCaml's awaited:
+    one that gives a number, one that fails, which fails the task that
+    awaits it. A buffer changes, so a function given one is called with
+    [call], in order with the image's actions, rather than as a value. It
+    exits 0 when all went as expected:
+
+        soma run examples/example_projects/native_handles/main.soma *)
+Require Import Sandbox.
+Import later pattern.
+
+main : io unit :=
+  b <- new_buffer 8 ;;
+  filled <- call (fun _ => fill b 1) ;;
+  last <- buffer_get b 7 ;;
+  sum <- call (fun _ => checksum b) ;;
+  answer <- await_promise (later 41) ;;
+  t <- fork (await_promise (broken "no answer" : promise nat)) ;;
+  failed <- await t ;;
+  print ("sum " ++ to_string sum ++ ", answer " ++ to_string (answer + 1)) ;;
+  match failed with
+  | TaskFailed why =>
+    if filled && (match last with Some 8 => true | _ => false end) && Nat.eqb sum 36
+       && Nat.eqb answer 41
+    then print ("the failed promise: " ++ why) ;; print "buffers and promises as expected"
+    else print "buffers and promises did not go as expected" ;; exit 1
+  | Completed _ => print "a failed promise completed" ;; exit 1
+  end.
