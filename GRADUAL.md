@@ -83,6 +83,10 @@ the `wasm` library, so the build needs that library.
   directory, so that it leaves no files, and prints the value of its last
   bare term; a program that requires Sandbox is built into an image, which
   is run with ARGUMENTS (under `solo5-vmnet` when it uses the network).
+  `--mem=MB` runs the image in MB megabytes (256, or `$SOMA_MIRAGE_MEM`,
+  by default), and `--disk=NAME=FILE` attaches FILE as its disk NAME rather
+  than `NAME.img`; a disk file that does not exist, or a disk the program
+  does not name, is an error that says so.
 - `soma repl [FILE]` is an interactive session (`rocq repl`, prompt
   `Soma <`), with FILE's definitions loaded first (`-l FILE`).
 - `soma build --fill FILE` writes the proofs that `The rest follows.`
@@ -1672,8 +1676,9 @@ A disk is named by a string literal (`disk_read "rootfs" 0 8`): the image
 declares a block device for each name the program uses (MirageOS's
 `block_of_file`), so a name computed at run time is refused when the
 program is built, saying so. Names are 1 to 31 letters and digits, and not
-`storage`, the named files' device. `soma run` attaches `NAME.img`; run by
-hand, it is `solo5-hvt --block:NAME=FILE`. The project of an image with
+`storage`, the named files' device. `soma run` attaches `NAME.img`, or
+the file `--disk=NAME=FILE` gives; run by hand, it is `solo5-hvt
+--block:NAME=FILE`. The project of an image with
 disks is named after them (`plain-disk-data`), each set of disks its own.
 `examples/example_files/mirage_disk/mirage_disk.soma` reads a disk's
 geometry and first sector, copies it to the next, and checks that a read

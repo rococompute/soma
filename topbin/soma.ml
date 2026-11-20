@@ -104,6 +104,10 @@ Options:
                               to, as JSON lines (soma-event, soma-outcome).
   --supervise                 (run) Run the image again when its restart_policy
                               says so (Orchestrate; default_policy 3 1024).
+  --mem=MB                    (run) Run the image in MB megabytes of memory (256, or
+                              $SOMA_MIRAGE_MEM, by default).
+  --disk=NAME=FILE            (run) Attach FILE as the image's disk NAME (disk_read
+                              "NAME" ...), rather than NAME.img; again for each disk.
 
 soma build --help lists the other options. Next to FILE.soma, FILE.ext has
 its extensions (macros, readers), read before it, and FILE.exp its
@@ -1023,7 +1027,64 @@ let extract file args =
   List.iter (fun l -> if starts_with ~prefix:"OCaml: " l then print_endline l) (lines output);
   finish code
 
-let run ~events ~supervise file args image_args =
+(* what --mem and --disk ask of the image's command: its memory, and a
+   file for each disk the program names *)
+type run_options = { mem : int option; disks : (string * string) list }
+
+let no_run_options = { mem = None; disks = [] }
+
+let run_option o a =
+  let value prefix = String.sub a (String.length prefix) (String.length a - String.length prefix) in
+  if starts_with ~prefix:"--mem=" a then
+    match int_of_string_opt (value "--mem=") with
+    | Some m when m > 0 -> { o with mem = Some m }
+    | _ -> usage_error "soma run: --mem=MB takes a number of megabytes above 0, not %s" (value "--mem=")
+  else if starts_with ~prefix:"--disk=" a then
+    match String.index_opt (value "--disk=") '=' with
+    | Some i when i > 0 ->
+      let v = value "--disk=" in
+      { o with disks = o.disks @ [String.sub v 0 i, String.sub v (i + 1) (String.length v - i - 1)] }
+    | _ -> usage_error "soma run: --disk=NAME=FILE names a disk of the program and the file to attach, not %s" a
+  else o
+
+let is_run_option a = starts_with ~prefix:"--mem=" a || starts_with ~prefix:"--disk=" a
+
+(* the image's command with [o] applied: --mem=MB in place of the build's,
+   and each named disk's file; a disk without its file is an error that
+   says how to give one, and one the program does not name too *)
+exception Run_error of string
+
+let apply_run_options o command =
+  let fail fmt = Printf.ksprintf (fun m -> raise (Run_error m)) fmt in
+  let block = "--block:" in
+  let named = List.filter_map (fun a ->
+      if starts_with ~prefix:block a then
+        match String.index_opt a '=' with
+        | Some i -> Some (String.sub a (String.length block) (i - String.length block))
+        | None -> None
+      else None) command in
+  List.iter (fun (name, _) ->
+      if not (List.mem name named) then
+        fail "soma run: --disk=%s=...: the program names no disk %s (its disks: %s)" name name
+          (if named = [] then "none" else String.concat ", " named)) o.disks;
+  List.map (fun a ->
+      if starts_with ~prefix:"--mem=" a then
+        (match o.mem with Some m -> Printf.sprintf "--mem=%d" m | None -> a)
+      else if starts_with ~prefix:block a then
+        match String.index_opt a '=' with
+        | Some i ->
+          let name = String.sub a (String.length block) (i - String.length block) in
+          let file = match List.assoc_opt name o.disks with
+            | Some f -> f
+            | None -> String.sub a (i + 1) (String.length a - i - 1) in
+          if name <> "storage" && not (Sys.file_exists file) then
+            fail "soma run: the program's disk %s is %s, which does not exist: make it (a disk image, \
+                         whole sectors), or attach another file with --disk=%s=FILE" name file name;
+          block ^ name ^ "=" ^ file
+        | None -> a
+      else a) command
+
+let run ?(options = no_run_options) ~events ~supervise file args image_args =
   let dir = temp_dir () in
   (* the temporary directory holds the program's image: it is removed
      however the program ends *)
@@ -1070,6 +1131,8 @@ let run ~events ~supervise file args image_args =
             Printf.eprintf "soma run: created %s, an empty 8 MiB disk for the program's files.\n%!" disk
           end
         end) command;
+    let command = try apply_run_options options command
+      with Run_error msg -> prerr_endline msg; finish 2 in
     let argv = "opam" :: "exec" :: ("--switch=" ^ switch) :: "--" :: command @ image_args in
     (* Ctrl-C stops the image, which then exits; soma waits for it to
        remove the temporary directory. opam exec runs the image in its
@@ -1655,7 +1718,7 @@ let repl args =
   exec_or_create_process prog (Array.of_list (prog :: "--kind=repl" :: args))
 
 (* soma run FILE [OPTIONS] [-- ARGUMENTS], --events taken out *)
-let run_command ~events ~supervise = function
+let run_command ?(options = no_run_options) ~events ~supervise = function
   | [] -> usage_error "soma run: no file given"
   | file :: rest ->
     let rec split = function
@@ -1666,7 +1729,7 @@ let run_command ~events ~supervise = function
     let args, image_args = split rest in
     let opts, args = parse_opts args in
     let () = init opts (file :: args) in
-    run ~events ~supervise (program_of file) args image_args
+    run ~options ~events ~supervise (program_of file) args image_args
 
 let () =
   match List.tl (Array.to_list Sys.argv) with
@@ -1828,13 +1891,15 @@ let () =
         explore (program_of file) args
     end
   | "run" :: rest ->
-    (* --events and --supervise are soma's, anywhere before -- *)
-    let ours a = a = "--events" || a = "--supervise" in
+    (* --events, --supervise, --mem and --disk are soma's, anywhere
+       before -- *)
+    let ours a = a = "--events" || a = "--supervise" || is_run_option a in
     let rec drop = function
       | a :: l when ours a -> drop l
       | "--" :: _ as l -> l
       | a :: l -> a :: drop l
       | [] -> [] in
     let given = before_image_args rest in
-    run_command ~events:(List.mem "--events" given) ~supervise:(List.mem "--supervise" given) (drop rest)
+    let options = List.fold_left run_option no_run_options given in
+    run_command ~options ~events:(List.mem "--events" given) ~supervise:(List.mem "--supervise" given) (drop rest)
   | command :: _ -> usage_error "soma: unknown command %s" command

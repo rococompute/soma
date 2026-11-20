@@ -191,6 +191,18 @@ if build mirage_disk; then
     fi
 fi
 
+# soma run's --disk and --mem: the same image on another file, in 512 MB
+if [ -f "${WORK}/data.img" ]; then
+    if (cd "${WORK}" && "${SOMA}" run --mem=512 --disk=data="${WORK}/data.img" --events \
+            "${HERE}/examples/example_files/mirage_disk/mirage_disk.soma" >"${WORK}/run-disk.log" 2>&1) &&
+       grep -q "^the disk read and wrote as expected$" "${WORK}/run-disk.log" &&
+       grep -Eq '"memory_kb":5[0-9]{5}' "${WORK}/run-disk.log"; then
+        pass run-disk
+    else
+        fail run-disk
+    fi
+fi
+
 # spawned tasks sharing cells; one that fails is reported, and the image
 # waits for the others
 build mirage_tasks &&
