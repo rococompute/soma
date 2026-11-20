@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# write, random_bytes, monotonic_ns, wall_clock, receive and local_address:
+# write, random_bytes, monotonic_ns, wall_clock, receive, local_address,
+# select, watch, after and UDP:
 # extraction, which images get a network, the OCaml
 # check against the libraries' signatures, and the runtime's conversions
 # on fixed inputs. No image, no clock reads.
@@ -32,6 +33,22 @@ main : io unit := a <- local_address ;; print (match a with Some s => s | None =
 SOMA
 soma build --no-image address_only.soma > address.log 2>&1
 grep -q 'mirage/net (no image)' address.log
+
+# select, watch, after and UDP: timers alone need no network, the rest do
+cp "$ROOT/examples/example_files/mirage_events/mirage_events.soma" .
+soma build --no-image mirage_events.soma > events.log 2>&1
+grep -q 'mirage/net (no image)' events.log
+for c in Select Watch After Udp_listen Udp_send Datagram Timer Linked; do grep -q "$c" "$SOMA_MIRAGE_DIR/net/prog.ml"; done
+cat > timer_only.soma <<'SOMA'
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+main : io unit := after 10%N 7 ;; got <- select 1000%N ;;
+  match got with cons (Timer 7) nil => print "timer" | _ => exit 1 end.
+SOMA
+soma build --no-image timer_only.soma > timer.log 2>&1
+grep -q 'mirage/plain (no image)' timer.log
+# the runtime's quiet switch reaches every event
+grep -q 'if not (quiet ()) then' "$SOMA_MIRAGE_DIR/plain/soma_rt.ml"
 
 # a nanosecond reading is a primitive int, not a nat
 cat > misused.soma <<'SOMA'

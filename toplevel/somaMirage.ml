@@ -223,8 +223,15 @@ let json_string s =
   Buffer.add_char b '"';
   Buffer.contents b
 
+(* --soma-quiet: no event lines, for a program whose console is a stream
+   of its own (a terminal's bytes); the exit code still says how it ended *)
+let quiet =
+  let doc = Cmdliner.Arg.info ~doc:"Print no soma-event lines on the console." [ "soma-quiet" ] in
+  Mirage_runtime.register_arg Cmdliner.Arg.(value & flag doc)
+
 let event name fields =
   let value = function S s -> json_string s | I i -> string_of_int i | B b -> string_of_bool b in
+  if not (quiet ()) then
   Printf.printf "soma-event {\"event\":%s%s}\n%!" (json_string name)
     (String.concat "" (List.map (fun (k, v) -> "," ^ json_string k ^ ":" ^ value v) fields))
 
@@ -361,6 +368,10 @@ type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarg
    the representation of link_event *)
 type mail = Mail_opened of int * string | Mail_bytes of int * string | Mail_closed of int
 type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * string | LinkClosed of Obj.t
+(* What came in, for [select] and [mailbox] (Sandbox.event), and the
+   representation of event *)
+type incoming = In_mail of mail | In_datagram of int * string * int * string | In_timer of int
+type event_value = Linked of Obj.t | Datagram of int * string * int * string | Timer of int
 (* What [receive] gets, and the representation of Sandbox.chunk *)
 type raw = Got_bytes of string | Raw_closed | Raw_timed_out
 type chunk_value = Chunk of string | ChunkClosed | ChunkTimedOut
@@ -397,10 +408,14 @@ type net = {
   (* the unikernel's IPv4 address, if it has one *)
   local_address : unit -> string option;
   close : int -> unit Lwt.t;
-  (* accept on a port into the mailbox; what came in, waiting at most
-     until the promise the function gives resolves *)
+  (* accept on a port, what the connections do posted as incoming *)
   listen_mailbox : int -> unit;
-  mailbox : (unit -> unit Lwt.t) -> mail list Lwt.t;
+  (* a connection's bytes and end posted as incoming *)
+  watch : int -> unit;
+  (* datagrams to a port posted as incoming; one sent: address, port,
+     source port (0: any), data *)
+  udp_listen : int -> unit;
+  udp_send : string -> int -> int -> string -> bool Lwt.t;
   (* a host name's IPv4 address, or why there is none *)
   resolve : string -> (string, string) result Lwt.t;
   (* an HTTPS request: verb, host, port, path, headers, body; the status,
@@ -417,8 +432,36 @@ let no_network =
     receive_frame = (fun _ _ -> fail ());
     receive = (fun _ _ -> fail ()); local_address = (fun _ -> fail ());
     close = (fun _ -> fail ());
-    listen_mailbox = (fun _ -> fail ()); mailbox = (fun _ -> fail ());
+    listen_mailbox = (fun _ -> fail ()); watch = (fun _ -> fail ());
+    udp_listen = (fun _ -> fail ()); udp_send = (fun _ _ _ _ -> fail ());
     resolve = (fun _ -> fail ()); https = (fun _ _ _ _ _ _ -> fail ()) }
+
+(* What came in, oldest first, for [select] (all of it) and [mailbox]
+   (connections' only), and a condition to wait on for more *)
+let incoming : incoming Queue.t = Queue.create ()
+let came : unit Lwt_condition.t = Lwt_condition.create ()
+let post_incoming x = Queue.push x incoming; Lwt_condition.broadcast came ()
+
+(* what [keep] takes, oldest first; the rest stays, in order *)
+let take_incoming keep =
+  let taken, left = List.partition keep (List.of_seq (Queue.to_seq incoming)) in
+  Queue.clear incoming;
+  List.iter (fun x -> Queue.push x incoming) left;
+  taken
+
+(* what [keep] takes, waiting for some until [give_up] resolves at most:
+   its time runs from the call, whatever else comes in meanwhile *)
+let wait_incoming keep give_up =
+  let has () = Queue.fold (fun found x -> found || keep x) false incoming in
+  if has () then Lwt.return (take_incoming keep)
+  else begin
+    let deadline = give_up () >|= fun () -> `Up in
+    let rec loop () =
+      Lwt.choose [ (Lwt_condition.wait came >|= fun () -> `Came); deadline ] >>= function
+      | `Came -> if has () then Lwt.return_unit else loop ()
+      | `Up -> Lwt.return_unit in
+    loop () >|= fun () -> Lwt.cancel deadline; take_incoming keep
+  end
 
 (* a connection's number, and the connection of a number *)
 let link_id (c : Prog.connection) = int_of_nat (check c)
@@ -516,6 +559,17 @@ let storage = ref { read=(fun _ -> failwith "Sandbox storage: no device");
                     write=(fun _ _ -> failwith "Sandbox storage: no device");
                     append=(fun _ _ -> failwith "Sandbox storage: no device") }
 let install_storage s = storage := s
+
+let link_event_of = function
+  | Mail_opened (id, host) -> LinkOpened (Obj.repr (connection_of id), chars_of_string host)
+  | Mail_bytes (id, data) -> LinkBytes (Obj.repr (connection_of id), chars_of_string data)
+  | Mail_closed id -> LinkClosed (Obj.repr (connection_of id))
+
+let event_of = function
+  | In_mail m -> Linked (Obj.repr (link_event_of m))
+  | In_datagram (port, host, source_port, data) ->
+      Datagram (nat_of_int port, chars_of_string host, nat_of_int source_port, chars_of_string data)
+  | In_timer tag -> Timer (nat_of_int tag)
 
 let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   match check m with
@@ -629,11 +683,21 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       net.listen_mailbox (int_of_nat (check port));
       Lwt.return (Obj.magic ())
   | Prog.Mailbox ms ->
-      net.mailbox (fun () -> sleep_milliseconds ms) >|= fun mail ->
-      Obj.magic (List.map (function
-          | Mail_opened (id, host) -> LinkOpened (Obj.repr (connection_of id), chars_of_string host)
-          | Mail_bytes (id, data) -> LinkBytes (Obj.repr (connection_of id), chars_of_string data)
-          | Mail_closed id -> LinkClosed (Obj.repr (connection_of id))) mail)
+      wait_incoming (function In_mail _ -> true | _ -> false) (fun () -> sleep_milliseconds ms)
+      >|= fun got -> Obj.magic (List.filter_map (function
+          | In_mail m -> Some (link_event_of m) | _ -> None) got)
+  | Prog.Select ms ->
+      wait_incoming (fun _ -> true) (fun () -> sleep_milliseconds ms)
+      >|= fun got -> Obj.magic (List.map event_of got)
+  | Prog.Watch c -> net.watch (link_id c); Lwt.return (Obj.magic ())
+  | Prog.After (ms, tag) ->
+      let tag = int_of_nat (check tag) in
+      Lwt.async (fun () -> sleep_milliseconds ms >|= fun () -> post_incoming (In_timer tag));
+      Lwt.return (Obj.magic ())
+  | Prog.Udp_listen port -> net.udp_listen (int_of_nat (check port)); Lwt.return (Obj.magic ())
+  | Prog.Udp_send (address, port, source_port, data) ->
+      net.udp_send (string_of_chars (check address)) (int_of_nat (check port))
+        (int_of_nat (check source_port)) (string_of_chars (check data)) >|= Obj.magic
   | Prog.Read_file name ->
       (!storage).read (string_of_chars (check name)) >|= fun value ->
       Obj.magic (Option.map chars_of_string value)
@@ -708,6 +772,8 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     flow : S.TCP.flow;
     pending : Buffer.t;
     mutable reading : bool Lwt.t option;
+    (* its bytes are posted as incoming (listen_mailbox, watch) *)
+    mutable watched : bool;
   }
 
   let start s =
@@ -768,7 +834,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     let register flow =
       incr last_link;
       Hashtbl.replace links !last_link
-        { flow; pending = Buffer.create 256; reading = None };
+        { flow; pending = Buffer.create 256; reading = None; watched = false };
       !last_link
     in
     let close id =
@@ -896,10 +962,27 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           | Ipaddr.V6 _ -> None)
         (S.IP.configured_ips (S.ip s))
     in
-    (* the mailbox: what listen_mailbox's connections did, oldest first,
-       and a condition to wait on for more *)
-    let mail = Queue.create () and mail_came = Lwt_condition.create () in
-    let post m = Queue.push m mail; Lwt_condition.broadcast mail_came () in
+    (* a connection's bytes, posted as they come, then its end; a
+       connection the program closed posts no end *)
+    let pump id =
+      let rec read () =
+        match Hashtbl.find_opt links id with
+        | None -> Lwt.return_unit
+        | Some l ->
+            next_chunk l >>= fun alive ->
+            if alive then begin
+              let data = Buffer.contents l.pending in
+              Buffer.clear l.pending;
+              Soma_rt.post_incoming (Soma_rt.In_mail (Soma_rt.Mail_bytes (id, data)));
+              read ()
+            end
+            else if Hashtbl.mem links id then
+              (close id >|= fun () -> Soma_rt.post_incoming (Soma_rt.In_mail (Soma_rt.Mail_closed id)))
+            else Lwt.return_unit
+      in
+      (match Hashtbl.find_opt links id with Some l -> l.watched <- true | None -> ());
+      Lwt.catch read (fun e -> Soma_rt.report ~during:"request" e; close id)
+    in
     let listen_mailbox port =
       incr servers;
       Soma_rt.event "listening" ["port", Soma_rt.I port; "mailbox", Soma_rt.B true];
@@ -907,33 +990,31 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           incr Soma_rt.open_connections;
           incr Soma_rt.served;
           let id = register flow in
-          post (Soma_rt.Mail_opened (id, Ipaddr.to_string (fst (S.TCP.dst flow))));
-          (* read until the end, each chunk posted as it came; a
-             connection the program closed posts no end *)
-          let rec read () =
-            match Hashtbl.find_opt links id with
-            | None -> Lwt.return_unit
-            | Some l ->
-                next_chunk l >>= fun alive ->
-                if alive then begin
-                  let data = Buffer.contents l.pending in
-                  Buffer.clear l.pending;
-                  post (Soma_rt.Mail_bytes (id, data));
-                  read ()
-                end
-                else if Hashtbl.mem links id then
-                  (close id >|= fun () -> post (Soma_rt.Mail_closed id))
-                else Lwt.return_unit
-          in
-          Lwt.catch read (fun e -> Soma_rt.report ~during:"request" e; close id)
-          >|= fun () -> decr Soma_rt.open_connections)
+          Soma_rt.post_incoming
+            (Soma_rt.In_mail (Soma_rt.Mail_opened (id, Ipaddr.to_string (fst (S.TCP.dst flow)))));
+          pump id >|= fun () -> decr Soma_rt.open_connections)
     in
-    let mailbox wait =
-      (if Queue.is_empty mail then Lwt.pick [Lwt_condition.wait mail_came; wait ()]
-       else Lwt.return_unit) >|= fun () ->
-      let got = List.of_seq (Queue.to_seq mail) in
-      Queue.clear mail;
-      got
+    let watch id =
+      match Hashtbl.find_opt links id with
+      | Some l when not l.watched -> Lwt.async (fun () -> pump id)
+      | _ -> ()
+    in
+    let udp_listen port =
+      incr servers;
+      Soma_rt.event "listening" ["port", Soma_rt.I port; "udp", Soma_rt.B true];
+      S.UDP.listen (S.udp s) ~port (fun ~src ~dst:_ ~src_port buf ->
+          Soma_rt.post_incoming
+            (Soma_rt.In_datagram (port, Ipaddr.to_string src, src_port, Cstruct.to_string buf));
+          Lwt.return_unit)
+    in
+    let udp_send address port source_port data =
+      match Ipaddr.of_string address with
+      | Error _ -> Lwt.return false
+      | Ok dst ->
+          let buf = Cstruct.of_string data in
+          (if source_port > 0 then S.UDP.write ~src_port:source_port ~dst ~dst_port:port (S.udp s) buf
+           else S.UDP.write ~dst ~dst_port:port (S.udp s) buf)
+          >|= Result.is_ok
     in
     (* resolve and https: a web image's (unikernel_ml ~web) *)
     let resolve _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
@@ -941,7 +1022,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
       { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame;
         receive; local_address; close;
-        listen_mailbox; mailbox; resolve; https }
+        listen_mailbox; watch; udp_listen; udp_send; resolve; https }
 end
 |soma}
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
@@ -1559,7 +1640,8 @@ let used_constant prog c =
   from 0
 
 let uses_network prog =
-  List.exists (applied prog) ["Serve"; "Fetch"; "Listen"; "Connect"; "Connect_within"; "Listen_mailbox"; "Mailbox"]
+  List.exists (applied prog) ["Serve"; "Fetch"; "Listen"; "Connect"; "Connect_within"; "Listen_mailbox"; "Mailbox";
+                              "Watch"; "Udp_listen"; "Udp_send"]
   || used_constant prog "Local_address"
 
 (* [resolve] and [https] need DNS and TLS: a web image, with a network.
@@ -1703,6 +1785,7 @@ module Lwt : sig
   val wait : unit -> 'a t * 'a u
   val pick : 'a t list -> 'a t
   val choose : 'a t list -> 'a t
+  val cancel : 'a t -> unit
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
     val ( >|= ) : 'a t -> ('a -> 'b) -> 'b t
@@ -1856,6 +1939,15 @@ module Tcpip : sig
         val dst : flow -> Ipaddr.t * int
       end
       val tcp : t -> TCP.t
+      (* tcpip's Udp.S (src/core/udp.ml): callback, listen, write *)
+      module UDP : sig
+        type t
+        type error
+        val listen : t -> port:int -> (src:Ipaddr.t -> dst:Ipaddr.t -> src_port:int -> Cstruct.t -> unit Lwt.t) -> unit
+        val write : ?src:Ipaddr.t -> ?src_port:int -> ?ttl:int -> dst:Ipaddr.t -> dst_port:int -> t ->
+          Cstruct.t -> (unit, error) result Lwt.t
+      end
+      val udp : t -> UDP.t
       module IP : sig
         type t
         val configured_ips : t -> Ipaddr.Prefix.t list

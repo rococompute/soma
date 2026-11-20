@@ -44,6 +44,7 @@ stop_server() {
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_link_server/mirage_link_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_frame_server/mirage_frame_server.hvt"
     pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_raw_link/mirage_raw_link.hvt"
+    pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_events/mirage_events.hvt"
 }
 trap 'stop_server 2>/dev/null; rm -rf "${WORK}"' EXIT
 PASS=0
@@ -113,7 +114,7 @@ no_image_one() {
 
 if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_crypto mirage_fetch mirage_http_server \
-        mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link \
+        mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
@@ -362,6 +363,39 @@ if [ "${NETWORK}" = 1 ]; then
         kill "${raw_server}" 2>/dev/null
         pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_raw_link/mirage_raw_link.hvt"
         wait "${raw_server}" 2>/dev/null
+    fi
+    # a select over everything: mirage_events as a server (UDP pongs, TCP
+    # greetings), and as its client, quiet, whose one loop sees a timer,
+    # the pong, and a watched connection's bytes and end
+    if build mirage_events; then
+        hvf solo5-vmnet -- solo5-hvt --mem=${MEM} -- \
+            "${HERE}/examples/example_files/mirage_events/mirage_events.hvt" >"${WORK}/events.log" 2>&1 &
+        events_server=$!
+        ip8=""
+        for _ in $(seq 1 60); do
+            ip8="$(grep -o 'Lease obtained! IP: [0-9.]*' "${WORK}/events.log" | head -1 | awk '{print $4}')"
+            grep -q "events server on ports 7004 and 7005" "${WORK}/events.log" && [ -n "${ip8}" ] && break
+            sleep 0.25
+        done
+        if [ -z "${ip8}" ]; then
+            cp "${WORK}/events.log" "${WORK}/events-server.log"
+            fail events-server
+        else
+            run mirage_events events-client 0 "^all four came$" net "--arg=${ip8}" --soma-quiet
+            if grep -q "^select 0: nothing yet$" "${WORK}/events-client.log" &&
+               grep -q "^datagram: pong ping$" "${WORK}/events-client.log" &&
+               grep -q "^bytes: hello$" "${WORK}/events-client.log" &&
+               grep -q "^timer$" "${WORK}/events-client.log" &&
+               ! grep -q "soma-event" "${WORK}/events-client.log"; then
+                pass events-quiet
+            else
+                cp "${WORK}/events-client.log" "${WORK}/events-quiet.log"
+                fail events-quiet
+            fi
+        fi
+        kill "${events_server}" 2>/dev/null
+        pkill -f "solo5-hvt --mem=${MEM} -- ${HERE}/examples/example_files/mirage_events/mirage_events.hvt"
+        wait "${events_server}" 2>/dev/null
     fi
     # a select over connections: the mailbox image prints what two
     # connections from the Mac did, in order, and exits after their ends

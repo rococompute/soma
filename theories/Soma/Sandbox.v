@@ -22,7 +22,8 @@
     [receive_frame], [close]: lines or length-prefixed frames over one TCP
     connection), in order, ending with a result of type
     [A]. Building an [io] does nothing; the image runs [main]. A program
-    that uses [serve], [fetch], [listen], [connect] or [local_address] gets a network stack
+    that uses [serve], [fetch], [listen], [connect], [watch], UDP or
+    [local_address] gets a network stack
     and runs under [solo5-vmnet]; one that uses [resolve] or [https] gets
     DNS and TLS as well (MirageOS's dns-client, tls-mirage and the NSS
     certificate authorities). *)
@@ -106,6 +107,16 @@ Inductive link_event : Type :=
 | LinkOpened (c : connection) (host : string)  (* accepted, from [host], an IP address *)
 | LinkBytes (c : connection) (data : string)   (* bytes it received *)
 | LinkClosed (c : connection).                 (* the other side ended it; it is closed *)
+
+(** What [select] gets: what came in, of every kind, in the order it came *)
+Inductive event : Type :=
+| Linked (e : link_event)
+    (* what a connection of [listen_mailbox], or one [watch]ed, did *)
+| Datagram (port : nat) (host : string) (source_port : nat) (data : string)
+    (* a UDP datagram to [port] (one of [udp_listen]), from [host], an IP
+       address, at [source_port] *)
+| Timer (tag : nat).
+    (* the [after] of this tag came due *)
 
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
@@ -215,6 +226,31 @@ Inductive io : Type -> Type :=
     [mailbox], oldest first; when nothing has, it waits for something,
     [milliseconds] at most, and is [nil] when the time is up *)
 | mailbox (milliseconds : N) : io (list link_event)
+(** the connection's bytes as [Linked] events of [select] (and
+    [mailbox]): [LinkBytes] as they arrive, then [LinkClosed] when the
+    other side ends it. For a connection the program opened, as
+    [listen_mailbox] does for those it accepts; [receive] on it would take
+    bytes the events are given. Watching it again does nothing. *)
+| watch (c : connection) : io unit
+(** a [Timer tag] event for [select] once [milliseconds] have passed;
+    returns at once *)
+| after (milliseconds : N) (tag : nat) : io unit
+(** what came in since the last [select], oldest first: what connections
+    of [listen_mailbox] and [watch] did, UDP datagrams, timers that came
+    due. When nothing has, it waits for something, [milliseconds] at most,
+    and is [nil] when the time is up ([0]: it does not wait). A select over
+    everything, for a program with one loop. [mailbox] takes only the
+    [Linked] events, and leaves the others to [select]. *)
+| select (milliseconds : N) : io (list event)
+(** receive the UDP datagrams sent to [port] as [Datagram] events of
+    [select]; returns at once, and the unikernel keeps receiving after
+    [main] ends *)
+| udp_listen (port : nat) : io unit
+(** send [data] as one UDP datagram to [address] (an IP address) at
+    [port], from [source_port] ([0]: one the stack picks): [true] when it
+    went out, [false] for an address that is not an IP address or a
+    datagram the stack could not send *)
+| udp_send (address : string) (port source_port : nat) (data : string) : io bool
 (** Named files on the attached [storage] block device. Names are opaque
     keys, not host paths. [None] means missing; [Some ""] means present
     and empty. I/O errors stop the image rather than masquerading as missing.

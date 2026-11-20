@@ -1,0 +1,80 @@
+(** One loop over everything that comes in: [select] gives timers
+    ([after]), UDP datagrams ([udp_listen]) and what watched connections
+    do ([watch]), in the order they came. Without arguments this image is
+    the server: it answers each datagram to port 7004 with "pong " and the
+    datagram, and greets each connection to port 7005 with "hello" before
+    closing it. With [--arg=ADDRESS] it is the client: it sets a timer,
+    pings that server over UDP, opens a connection and watches it, and
+    waits for all four: the timer, the pong, the greeting and the close.
+    It exits 0 when all came, 1 otherwise. It runs under solo5-vmnet;
+    dev/mirage-check.sh boots a server and a client:
+
+        soma run examples/example_files/mirage_events/mirage_events.soma
+        soma run examples/example_files/mirage_events/mirage_events.soma -- --arg=192.168.105.46 *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+
+(** the server: a pong for each datagram *)
+Fixpoint pong (l : list event) : io unit :=
+  match l with
+  | nil => ret tt
+  | cons (Datagram _ host port data) rest =>
+    print ("ping from " ++ host ++ ": " ++ data) ;;
+    _ <- udp_send host port 7004 ("pong " ++ data) ;;
+    pong rest
+  | cons _ rest => pong rest
+  end.
+
+server : io unit :=
+  udp_listen 7004 ;;
+  listen 7005 (fun c => _ <- send c "hello" ;; print "greeted a connection") ;;
+  print "events server on ports 7004 and 7005" ;;
+  forever (got <- select 1000%N ;; pong got).
+
+(** the client's state: what came of the four *)
+Record seen := { timer : bool; pong_came : bool; greeting : bool; ended : bool }.
+
+Definition all_came (s : seen) : bool := timer s && pong_came s && greeting s && ended s.
+
+Fixpoint note (s : seen) (l : list event) : io seen :=
+  match l with
+  | nil => ret s
+  | cons e rest =>
+    s' <- match e with
+          | Timer 1 => print "timer" ;; ret {| s with timer := true |}
+          | Datagram _ _ _ data => print ("datagram: " ++ data) ;;
+                                  ret {| s with pong_came := String.eqb data "pong ping" |}
+          | Linked (LinkBytes _ data) => print ("bytes: " ++ data) ;;
+                                        ret {| s with greeting := String.eqb data "hello" |}
+          | Linked (LinkClosed _) => print "closed" ;; ret {| s with ended := true |}
+          | _ => print "something else" ;; ret s
+          end ;;
+    note s' rest
+  end.
+
+(** at most [fuel] selects of a second each *)
+Fixpoint wait_all (fuel : nat) (s : seen) : io unit :=
+  if all_came s then print "all four came" else
+  match fuel with
+  | O => print "not all came within 10 seconds" ;; exit 1
+  | S more => got <- select 1000%N ;; s' <- note s got ;; wait_all more s'
+  end.
+
+client (address : string) : io unit :=
+  early <- select 0%N ;;
+  (match early with nil => print "select 0: nothing yet" | _ => print "select 0: something" end) ;;
+  after 100%N 1 ;;
+  udp_listen 7006 ;;
+  sent <- udp_send address 7004 7006 "ping" ;;
+  link <- connect address 7005 ;;
+  match link with
+  | Connected c => watch c ;; wait_all 10 {| timer := false; pong_came := false; greeting := false; ended := false |} ;; exit 0
+  | _ => print "could not connect" ;; exit 1
+  end.
+
+main : io unit :=
+  a <- args ;;
+  match a with
+  | [address] => client address
+  | _ => server
+  end.

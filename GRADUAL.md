@@ -1605,6 +1605,12 @@ expects the echo, then the server's `"idle"` after its `receive` times out;
 `dev/mirage-check.sh` boots both (from the Mac, a terminal without macOS's
 Local Network permission cannot reach the image: `No route to host`).
 
+`examples/example_files/mirage_events/mirage_events.soma` is a server
+that answers UDP pings and greets TCP connections, and, given its address,
+a client whose one loop of `select` sees a timer of `after`, the UDP pong,
+and the greeting and end of a `watch`ed connection, with `--soma-quiet`;
+`dev/mirage-check.sh` boots both.
+
 `examples/example_files/mirage_raw_clock/mirage_raw_clock.soma` writes
 part of a line with `write`, and checks `random_bytes`, `monotonic_ns`
 across a 10 ms sleep and `wall_clock`; `dev/mirage-check.sh` boots it, and
@@ -1647,6 +1653,11 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
 | `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
 | `receive c ms` | `io chunk` | what the connection has received, as TCP delivered it, cut nowhere: what was left past the last line or frame taken, or else the next bytes to arrive, waiting `ms : N` milliseconds at most (`0`: no limit): `Chunk data` (never empty), `ChunkClosed` when the connection ends first (it is closed), or `ChunkTimedOut`. For connections accepted or opened; lines, frames and `receive` read the same bytes, in order |
+| `watch c` | `io unit` | the connection's bytes as `Linked` events of `select` (and `mailbox`): `LinkBytes` as they arrive, then `LinkClosed`; for a connection the program opened, as `listen_mailbox` does for those it accepts. Again does nothing |
+| `after ms tag` | `io unit` | a `Timer tag` event for `select` once `ms : N` milliseconds have passed; returns at once |
+| `select ms` | `io (list event)` | what came in since the last `select`, oldest first: `Linked e` (a `link_event` of `listen_mailbox`'s or `watch`ed connections), `Datagram port host source_port data` (UDP), `Timer tag`. When nothing has, it waits, `ms : N` milliseconds at most (`0`: not at all), and is `nil` when the time is up: a select over everything, for a program with one loop. `mailbox` takes only the `Linked` events and leaves the rest to `select` |
+| `udp_listen port` | `io unit` | the UDP datagrams to `port` as `Datagram` events of `select`; returns at once, and the image keeps receiving after `main` ends |
+| `udp_send address port source_port data` | `io bool` | one UDP datagram to the IP address and port, from `source_port` (`0`: one the stack picks): `true` when it went out, `false` for an address that is not an IP address or a datagram the stack could not send |
 | `local_address` | `io (option string)` | the image's own IPv4 address, as the network configured it; a program that uses it gets a network stack |
 | `close c` | `io unit` | closes the connection; again does nothing |
 | `connect_within address port ms` | `io connected` | `connect`, giving up after `ms : N` milliseconds (`ConnectTimedOut`) rather than 10 seconds: for a program that dials from its loop |
@@ -1791,11 +1802,16 @@ line after `soma-event ` on its console, for whoever runs it to read:
 | --- | --- |
 | `start` | `memory_kb`, `network` |
 | `serving` | `port` |
-| `listening` | `port` (of `listen`) |
+| `listening` | `port` (of `listen`, `listen_mailbox` with `mailbox`, or `udp_listen` with `udp`) |
 | `failure` | `during` (`main`, or `request`: the server goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
 | `memory_pressure` | `live_kb`, `memory_kb`: live memory passed 80% |
 | `alive` | `requests`, `live_kb`, every 10 seconds |
 | `exit` | `code`, `reason` (`finished`, `program`: its `exit n`, `failure`) |
+
+An image given `--soma-quiet` prints no events: for a program whose
+console is a stream of its own, such as a terminal's bytes through
+`write`. Its exit code still says how it ended, and run-time errors are
+still printed.
 
 `main` is computed by the runtime (it is extracted as a function), so that
 a failure while building it is an event like any other, and so are the
