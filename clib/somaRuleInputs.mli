@@ -9,6 +9,7 @@ val fallback_root_name : string -> string
 
 (** Read the root-rule name using the same pure TOML grammar as the compiler. *)
 val configured_root_name : string -> string
+
 (** Known source-family and exact folder-rule candidates, including absent
     companions and suppressors. Does not enumerate arbitrary resources. *)
 val candidate_paths : root:string -> root_name:string -> source:string -> string list
