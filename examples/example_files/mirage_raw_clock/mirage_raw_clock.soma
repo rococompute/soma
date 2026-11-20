@@ -1,0 +1,24 @@
+(** The console without added line breaks, random bytes, nanoseconds and
+    the wall clock: [write] puts "raw: " and "ok" on one line (Soma's strings have no
+    escapes: [newline] is the line break), then the
+    image checks that 16 random bytes are 16 long, that a 10 ms sleep
+    takes at least 10,000,000 monotonic nanoseconds, and that the wall
+    clock is past 2023-11-14 (1,700,000,000 seconds after 1970), with
+    fewer than a billion nanoseconds. dev/mirage-check.sh boots it. *)
+Require Import Sandbox.
+From Corelib Require Import PrimInt63.
+
+main : io unit :=
+  write "raw: " ;;
+  write ("ok" ++ newline)%str ;;
+  bytes <- random_bytes 16 ;;
+  start <- monotonic_ns ;;
+  sleep_ms 10%N ;;
+  finish <- monotonic_ns ;;
+  clock <- wall_clock ;;
+  let (seconds, ns) := clock in
+  if negb (Nat.eqb (String.length bytes) 16) then print "random_bytes: wrong length" ;; exit 1
+  else if negb (leb 10000000%uint63 (sub finish start)) then print "monotonic_ns: the sleep took no time" ;; exit 1
+  else if negb (ltb 1700000000%uint63 seconds) then print "wall_clock: before 2023" ;; exit 1
+  else if negb (ltb ns 1000000000%uint63) then print "wall_clock: a second of nanoseconds" ;; exit 1
+  else print "random bytes, nanoseconds and the wall clock as expected".

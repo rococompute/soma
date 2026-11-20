@@ -1598,6 +1598,13 @@ a 1000 ms sleep; `dev/mirage-check.sh` builds and boots it alongside the
 existing images. `test-suite/misc/soma_milliseconds.sh` checks extraction
 and rejects a reading used as a `nat`, without sleeping.
 
+`examples/example_files/mirage_raw_clock/mirage_raw_clock.soma` writes
+part of a line with `write`, and checks `random_bytes`, `monotonic_ns`
+across a 10 ms sleep and `wall_clock`; `dev/mirage-check.sh` boots it, and
+`test-suite/misc/soma_raw_clock.sh` checks its extraction, refuses a
+nanosecond reading used as a `nat`, and runs the runtime's conversions on
+fixed inputs.
+
 The contracts check types, not runtime behavior; image testing still needs
 `SOMA_MIRAGE_SWITCH` set to a switch with Mirage and solo5 installed.
 
@@ -1617,6 +1624,10 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `iterate step start` | `io A` | `step start`, then `step` of its result, and so on: a loop that carries a state (`step : S -> io S`) |
 | `now` | `io (nat * nat * nat)` | the UTC time of day, `(hour, minute, second)` |
 | `random n` | `io nat` | a random number below `n` (`Mirage_crypto_rng`) |
+| `random_bytes n` | `io string` | `n` random bytes, from the same generator |
+| `write s` | `io unit` | `s` on the console as it is, flushed: no line break added (`print` adds one) |
+| `monotonic_ns` | `io int` | monotonic nanoseconds since an arbitrary origin (`Mirage_mtime`), as Rocq's primitive 63-bit integer (`PrimInt63.int`, OCaml's `int` in the image): cheap to read in a loop |
+| `wall_clock` | `io (int * int)` | the UTC wall clock (`Mirage_ptime`): seconds since 1970-01-01 and the nanoseconds past them, as primitive integers |
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |

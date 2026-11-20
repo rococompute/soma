@@ -447,6 +447,16 @@ let random bound =
     let bytes = Mirage_crypto_rng.generate 8 in
     (Int64.to_int (String.get_int64_le bytes 0) land max_int) mod bound
 
+(* [wall_clock]: Ptime's span since the epoch, days and picoseconds into
+   the day, as seconds and the nanoseconds past them *)
+let seconds_and_ns (days, ps) =
+  (days * 86_400 + Int64.to_int (Int64.div ps 1_000_000_000_000L),
+   Int64.to_int (Int64.div (Int64.rem ps 1_000_000_000_000L) 1_000L))
+
+(* [monotonic_ns]: Mirage_mtime's unsigned nanoseconds, in OCaml's int
+   (which Rocq's primitive int is in the image), the top bit dropped *)
+let ns_of_elapsed (ns : int64) = Int64.to_int ns land max_int
+
 (* Binary numbers crossing the runtime boundary, without unary nats. *)
 let rec positive_of_int64 n =
   if n = 1L then Prog.XH
@@ -523,6 +533,16 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       Lwt.return (Obj.magic ((nat_of_int h, nat_of_int m), nat_of_int s))
   | Prog.Random bound ->
       Lwt.return (Obj.magic (nat_of_int (random (int_of_nat (check bound)))))
+  | Prog.Random_bytes n ->
+      Lwt.return (Obj.magic (chars_of_string (Mirage_crypto_rng.generate (int_of_nat (check n)))))
+  | Prog.Write s ->
+      print_string (string_of_chars (check s));
+      flush stdout;
+      Lwt.return (Obj.magic ())
+  | Prog.Monotonic_ns ->
+      Lwt.return (Obj.magic (ns_of_elapsed (Mirage_mtime.elapsed_ns ())))
+  | Prog.Wall_clock ->
+      Lwt.return (Obj.magic (seconds_and_ns (Ptime.Span.to_d_ps (Ptime.to_span (Mirage_ptime.now ())))))
   | Prog.Args -> Lwt.return (Obj.magic (List.map chars_of_string (args ())))
   | Prog.Exit code -> raise (Exit_with (int_of_nat (check code)))
   | Prog.Serve (port, handler) ->
@@ -1586,7 +1606,8 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
    - Mirage_sleep: mirage-sleep 4.0, src/mirage_sleep.mli
    - Mirage_mtime: mirage-mtime 5, src/mirage_mtime.mli (elapsed_ns)
      https://mirage.github.io/mirage-mtime/mirage-mtime/Mirage_mtime/index.html
-   - Ptime: ptime 1.1, src/ptime.mli (date, time, tz_offset_s, to_date_time)
+   - Ptime: ptime 1.1, src/ptime.mli (date, time, tz_offset_s, to_date_time,
+     span, to_span, Span.to_d_ps)
    - Mirage_ptime: mirage-ptime 5.0, src/mirage_ptime.mli
    - Mirage_crypto_rng: mirage-crypto-rng 1.0, rng/mirage_crypto_rng.mli
      (generate : ?g:g -> int -> string)
@@ -1631,6 +1652,9 @@ module Ptime : sig
   type date = int * int * int
   type time = (int * int * int) * tz_offset_s
   val to_date_time : ?tz_offset_s:tz_offset_s -> t -> date * time
+  type span
+  val to_span : t -> span
+  module Span : sig val to_d_ps : span -> int * int64 end
 end
 module Mirage_ptime : sig val now : unit -> Ptime.t end
 module Mirage_crypto_rng : sig

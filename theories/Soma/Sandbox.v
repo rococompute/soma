@@ -34,6 +34,7 @@ From Corelib Require Extraction.
    ExtrOcamlNativeString, ExtrOcamlNatInt, ExtrOcamlBasic), as in a
    program built for the machine. *)
 From Stdlib Require Import NArith.BinNat.
+From Corelib Require PrimInt63.
 From Stdlib Require Import Lia.
 Require Import Soma.Strings Soma.Show.
 
@@ -120,6 +121,18 @@ Inductive io : Type -> Type :=
 | now : io (nat * nat * nat)
 (** a random number below [bound] ([0] when [bound] is [0]) *)
 | random (bound : nat) : io nat
+(** [n] random bytes, from the same generator as [random] *)
+| random_bytes (n : nat) : io string
+(** [s] on the console as it is, flushed: [print] adds a line break,
+    [write] adds nothing (a terminal's bytes, a prompt, a partial line) *)
+| write (s : string) : io unit
+(** monotonic nanoseconds since an arbitrary origin, unaffected by UTC
+    adjustments, as a primitive 63-bit integer (OCaml's [int] in the
+    image): cheap to read in a loop, and enough for 146 years *)
+| monotonic_ns : io PrimInt63.int
+(** the wall clock, UTC: the seconds since 1970-01-01 00:00:00 and the
+    nanoseconds past them, as [clock_gettime(CLOCK_REALTIME)] gives them *)
+| wall_clock : io (PrimInt63.int * PrimInt63.int)
 (** the arguments given to the image: [solo5-hvt -- prog.hvt --arg=a --arg=b]
     gives [["a", "b"]] *)
 | args : io (list string)

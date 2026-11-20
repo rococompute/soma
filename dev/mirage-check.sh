@@ -111,7 +111,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_crypto mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https; do
@@ -168,6 +168,11 @@ build mirage_hello &&
 
 build mirage_milliseconds &&
     run mirage_milliseconds milliseconds 0 "^elapsed at least 1000 ms$" plain
+
+# write without line breaks, random bytes, nanoseconds, the wall clock
+build mirage_raw_clock &&
+    run mirage_raw_clock raw-clock 0 "^random bytes, nanoseconds and the wall clock as expected$" plain &&
+    grep -q "^raw: ok$" "${WORK}/raw-clock.log"
 # Soma.Crypto in an image: SHA-256, and a 2048-bit RSA signature that
 # Pantheon's shell.ml made of a transaction, verified; a changed one refused
 build mirage_crypto &&
