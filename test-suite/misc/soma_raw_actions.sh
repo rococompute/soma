@@ -24,8 +24,8 @@ for c in Write Random_bytes Monotonic_ns Wall_clock; do grep -q "$c" "$PLAIN/pro
 # without arguments, is told from its declaration, which every program has
 cp "$ROOT/examples/example_files/mirage_raw_link/mirage_raw_link.soma" .
 soma build --no-image mirage_raw_link.soma > link.log 2>&1
-grep -q 'mirage/net (no image)' link.log
-for c in Receive Local_address; do grep -q "$c" "$SOMA_MIRAGE_DIR/net/prog.ml"; done
+grep -q 'mirage/net-web (no image)' link.log   # it connects: a name is looked up
+for c in Receive Local_address; do grep -q "$c" "$SOMA_MIRAGE_DIR/net-web/prog.ml"; done
 grep -q 'mirage/plain (no image)' raw.log
 cat > address_only.soma <<'SOMA'
 Require Import Sandbox.
@@ -37,8 +37,8 @@ grep -q 'mirage/net (no image)' address.log
 # select, watch, after and UDP: timers alone need no network, the rest do
 cp "$ROOT/examples/example_files/mirage_events/mirage_events.soma" .
 soma build --no-image mirage_events.soma > events.log 2>&1
-grep -q 'mirage/net (no image)' events.log
-for c in Select Watch After Udp_listen Udp_send Datagram Timer Linked; do grep -q "$c" "$SOMA_MIRAGE_DIR/net/prog.ml"; done
+grep -q 'mirage/net-web (no image)' events.log   # it connects
+for c in Select Watch After Udp_listen Udp_send Datagram Timer Linked; do grep -q "$c" "$SOMA_MIRAGE_DIR/net-web/prog.ml"; done
 cat > timer_only.soma <<'SOMA'
 Require Import Sandbox.
 From Stdlib Require Import NArith.

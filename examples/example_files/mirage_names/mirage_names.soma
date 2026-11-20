@@ -1,0 +1,30 @@
+(** [fetch] and [connect] given host names: the image looks each up
+    through DNS (the resolvers the network gives it), as [resolve] does,
+    then dials the address. A name that does not resolve is [BadAddress]
+    or [ConnectBadAddress], and an [unresolved] event says why. The host
+    is the first [--arg] (example.org by default). dev/mirage-check.sh
+    boots it when the Mac is online. *)
+Require Import Sandbox.
+
+main : io unit :=
+  given <- args ;;
+  let host := match given with h :: _ => h | [] => "example.org" end in
+  r <- fetch host 80 (http_get "/") ;;
+  match r with
+  | Reply body =>
+      print ("fetched " ++ host ++ ": " ++ to_string (String.length body) ++ " bytes") ;;
+      c <- connect host 80 ;;
+      match c with
+      | Connected c =>
+          close c ;;
+          missing <- connect "no-such-host.invalid" 80 ;;
+          match missing with
+          | ConnectBadAddress => print "names fetched and connected as expected"
+          | _ => print "a name that does not exist connected" ;; exit 1
+          end
+      | _ => print ("could not connect to " ++ host) ;; exit 1
+      end
+  | Refused => print (host ++ " refused") ;; exit 1
+  | TimedOut => print (host ++ " timed out") ;; exit 1
+  | BadAddress => print (host ++ " did not resolve") ;; exit 1
+  end.

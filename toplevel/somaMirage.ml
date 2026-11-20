@@ -162,9 +162,11 @@ let replace_text text old replacement =
     else (Buffer.add_char out text.[i]; loop (i+1)) in
   loop 0
 
-(* a web image: [resolve] and [https] need MirageOS's dns-client device on
-   the stack (with happy-eyeballs, which it asks for), and TLS with the NSS
-   certificate authorities *)
+(* a web image: [resolve], [https] and the names [fetch] and [connect]
+   take need MirageOS's dns-client device on the stack (with
+   happy-eyeballs, which it asks for), and [https] TLS with the NSS
+   certificate authorities, which dns-client links anyway (for DNS over
+   TLS): one kind of image for all four *)
 let web_config text =
   let text = replace_text text "(stackv4v6 @-> " "(stackv4v6 @-> dns_client @-> " in
   let text = replace_text text "package \"duration\"" "package \"domain-name\"; package \"tls-mirage\"; package \"ca-certs-nss\"; package \"x509\"; package \"duration\"" in
@@ -878,9 +880,17 @@ module Main (S : Tcpip.Stack.V4V6) = struct
       ]
     in
     let dial ip port = dial_within ip port (fun () -> Mirage_sleep.ns (Duration.of_sec 10)) in
+    (* the address to dial: an IP address, or a host name looked up (a DNS
+       image's ip_of, unikernel_ml ~dns); one that is neither is said in an
+       [unresolved] event *)
+    let ip_of address = Lwt.return (match Ipaddr.of_string address with
+        | Ok ip -> Ok ip
+        | Error (`Msg m) -> Error ("not an IP address (this image has no resolver): " ^ m)) in
+    let unresolved address why =
+      Soma_rt.event "unresolved" ["address", Soma_rt.S address; "why", Soma_rt.S why] in
     let fetch address port request =
-      match Ipaddr.of_string address with
-      | Error _ -> Lwt.return Soma_rt.Net_bad_address
+      ip_of address >>= function
+      | Error why -> unresolved address why; Lwt.return Soma_rt.Net_bad_address
       | Ok ip ->
           dial ip port >>= function
           | `Refused -> Lwt.return Soma_rt.Net_refused
@@ -937,19 +947,22 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           >>= fun () -> close id >|= fun () -> decr Soma_rt.open_connections)
     in
     let connect address port =
-      match Ipaddr.of_string address with
-      | Error _ -> Lwt.return Soma_rt.Link_bad_address
+      ip_of address >>= function
+      | Error why -> unresolved address why; Lwt.return Soma_rt.Link_bad_address
       | Ok ip ->
           dial ip port >|= function
           | `Refused -> Soma_rt.Link_refused
           | `Timeout -> Soma_rt.Link_timed_out
           | `Flow flow -> Soma_rt.Link (register flow)
     in
+    (* the time given covers looking the name up too *)
     let connect_within address port give_up =
-      match Ipaddr.of_string address with
-      | Error _ -> Lwt.return Soma_rt.Link_bad_address
-      | Ok ip ->
-          dial_within ip port give_up >|= function
+      let given_up = give_up () in
+      Lwt.choose [ (ip_of address >|= fun r -> `Ip r); (given_up >|= fun () -> `Gave_up) ] >>= function
+      | `Gave_up -> Lwt.return Soma_rt.Link_timed_out
+      | `Ip (Error why) -> unresolved address why; Lwt.return Soma_rt.Link_bad_address
+      | `Ip (Ok ip) ->
+          dial_within ip port (fun () -> given_up) >|= function
           | `Refused -> Soma_rt.Link_refused
           | `Timeout -> Soma_rt.Link_timed_out
           | `Flow flow -> Soma_rt.Link (register flow)
@@ -1086,8 +1099,8 @@ module Main (S : Tcpip.Stack.V4V6) = struct
           >|= Result.is_ok
     in
     (* resolve and https: a web image's (unikernel_ml ~web) *)
-    let resolve _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
-    let https _ _ _ _ _ _ = Lwt.return (Error "this image has no resolver: it was built without resolve or https") in
+    let resolve _ = Lwt.return (Error "this image has no resolver: it was built without resolve, https, fetch or connect") in
+    let https _ _ _ _ _ _ = Lwt.return (Error "this image has no resolver: it was built without resolve, https, fetch or connect") in
     Soma_rt.main ~network:true ~serving:(fun () -> !servers > 0)
       { serve; fetch; listen; connect; connect_within; send; receive_line; receive_frame;
         receive; local_address; close;
@@ -1097,26 +1110,48 @@ end
   else {soma|let start () = Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network
 |soma}
 
-(* A web image's resolve and https: DNS through MirageOS's dns-client (the
-   resolvers DHCP gives), and HTTPS as HTTP/1.1 (Soma_rt.http_request,
-   http_answer) over tls-mirage on the stack's TCP, the server's
-   certificate checked against the NSS certificate authorities for the
-   host name *)
-let web_ml = {soma|    let module TLS = Tls_mirage.Make (S.TCP) in
-    let host_name host = Result.bind (Domain_name.of_string host) Domain_name.host in
+(* A web image's resolve, and the names fetch and connect take: DNS
+   through MirageOS's dns-client (the resolvers DHCP gives) *)
+let dns_ml = {soma|    let host_name host = Result.bind (Domain_name.of_string host) Domain_name.host in
     let within seconds what p =
       Lwt.pick [ p; (Mirage_sleep.ns (Duration.of_sec seconds) >|= fun () ->
                      Error (what ^ ": no answer within " ^ string_of_int seconds ^ " seconds")) ] in
+    (* dns-client's errors say what the cache holds ("no domain", "no
+       data"): said as what they mean *)
+    let has m part =
+      let n = String.length part in
+      let rec at i = i + n <= String.length m && (String.sub m i n = part || at (i + 1)) in
+      at 0 in
     let address_of name =
       D.gethostbyname dns name >|= function
       | Ok ip -> Ok (Ipaddr.V4.to_string ip)
-      | Error (`Msg m) -> Error m
+      | Error (`Msg m) ->
+        let host = Domain_name.to_string name in
+        Error (if has m "no domain" then "no such name: " ^ host
+               else if has m "no data" then host ^ " has no IPv4 address"
+               else m)
     in
     let resolve host =
       match host_name host with
       | Error (`Msg m) -> Lwt.return (Error ("not a host name, " ^ host ^ ": " ^ m))
       | Ok name -> within 10 ("resolving " ^ host) (address_of name)
     in
+    let ip_of address =
+      match Ipaddr.of_string address with
+      | Ok ip -> Lwt.return (Ok ip)
+      | Error _ ->
+        match host_name address with
+        | Error (`Msg m) -> Lwt.return (Error ("neither an IP address nor a host name: " ^ m))
+        | Ok _ ->
+          resolve address >|= fun r -> Result.bind r (fun a ->
+              Result.map_error (fun (`Msg m) -> m) (Ipaddr.of_string a))
+    in
+|soma}
+
+(* A web image's https: HTTP/1.1 (Soma_rt.http_request, http_answer) over
+   tls-mirage on the stack's TCP, the server's certificate checked against
+   the NSS certificate authorities for the host name; with DNS (dns_ml) *)
+let https_ml = {soma|    let module TLS = Tls_mirage.Make (S.TCP) in
     let authenticator = lazy (Ca_certs_nss.authenticator ()) in
     let limit = 16 * 1024 * 1024 in
     let https verb host port path headers body =
@@ -1172,15 +1207,23 @@ let web_ml = {soma|    let module TLS = Tls_mirage.Make (S.TCP) in
     in
 |soma}
 
+let base_ip_of = "    let ip_of address = Lwt.return (match Ipaddr.of_string address with\n\
+                 \        | Ok ip -> Ok ip\n\
+                 \        | Error (`Msg m) -> Error (\"not an IP address (this image has no resolver): \" ^ m)) in\n"
+
+let no_resolver = "Lwt.return (Error \"this image has no resolver: it was built without resolve, https, fetch or connect\") in\n"
+
 let unikernel_ml ~network ~storage ~web =
   let text = unikernel_ml_base ~network in
-  (* a web image: the dns-client device after the stack, and the real
-     resolve and https *)
+  (* a web image: the dns-client device after the stack, the real resolve
+     and https, and names for fetch and connect *)
   let text = if not web then text else
       replace_text
         (replace_text
-           (replace_text text "    let resolve _ = Lwt.return (Error \"this image has no resolver: it was built without resolve or https\") in\n" "")
-           "    let https _ _ _ _ _ _ = Lwt.return (Error \"this image has no resolver: it was built without resolve or https\") in\n" web_ml)
+           (replace_text
+              (replace_text text ("    let resolve _ = " ^ no_resolver) "")
+              ("    let https _ _ _ _ _ _ = " ^ no_resolver) https_ml)
+           base_ip_of dns_ml)
         "module Main (S : Tcpip.Stack.V4V6) = struct" "module Main (S : Tcpip.Stack.V4V6) (D : Dns_client_mirage.S) = struct" in
   let text = if not web then text else replace_text text "let start s =" "let start s dns =" in
   if not storage then text else
@@ -1821,7 +1864,11 @@ let mentions prog c =
     else from (i + 1) in
   from 0
 
-let uses_web prog = List.exists (mentions prog) ["Resolve"; "Https"]
+(* a web image (DNS, and TLS) for resolve and https, and for the host
+   names fetch and connect take *)
+let uses_web prog =
+  List.exists (mentions prog) ["Resolve"; "Https"]
+  || List.exists (applied prog) ["Fetch"; "Connect"; "Connect_within"]
 
 (* the disks the program names: the string literal each disk action is
    applied to, sorted, so that the project's name does not depend on the
@@ -1969,8 +2016,9 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
      src/core/tcp.ml (Tcp.S), and its IP, src/core/ip.ml (configured_ips),
      whose TCP flow functions are Mirage_flow.S's
      (mirage-flow 4, src/mirage_flow.mli)
-   - for a web image (resolve, https):
-     Domain_name: domain-name 0.4, src/domain_name.mli (of_string, host);
+   - for a web image (resolve, https, fetch, connect):
+     Domain_name: domain-name 0.4, src/domain_name.mli (of_string, host,
+     to_string);
      Dns_client_mirage.S: dns-client-mirage 10, mirage/dns_client_mirage.mli
      (gethostbyname); X509.Authenticator.t: x509 1.0;
      Ca_certs_nss.authenticator: ca-certs-nss 3, lib/ca_certs_nss.mli;
@@ -2076,6 +2124,7 @@ module Domain_name : sig
   type 'a t
   val of_string : string -> ([ `raw ] t, [> `Msg of string ]) result
   val host : 'a t -> ([ `host ] t, [> `Msg of string ]) result
+  val to_string : ?trailing:bool -> 'a t -> string
 end
 module Dns_client_mirage : sig
   module type S = sig

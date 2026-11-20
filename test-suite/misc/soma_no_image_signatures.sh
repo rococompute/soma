@@ -13,7 +13,7 @@ cd "$WORK"
 cp "$ROOT/examples/example_files/mirage_link_client/mirage_link_client.soma" .
 soma build --no-image mirage_link_client.soma > build.log 2>&1
 grep -q '(no image)' build.log
-CHECKS="$SOMA_MIRAGE_DIR/net/no-image"
+CHECKS="$SOMA_MIRAGE_DIR/net-web/no-image"   # the client connects: a web image
 test -f "$CHECKS/standins.cmi"
 test -f "$CHECKS/prog.cmo"
 test -f "$CHECKS/soma_rt.cmo"

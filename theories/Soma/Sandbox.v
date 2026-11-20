@@ -24,8 +24,8 @@
     [A]. Building an [io] does nothing; the image runs [main]. A program
     that uses [serve], [fetch], [listen], [connect], [watch], UDP or
     [local_address] gets a network stack
-    and runs under [solo5-vmnet]; one that uses [resolve] or [https] gets
-    DNS and TLS as well (MirageOS's dns-client, tls-mirage and the NSS
+    and runs under [solo5-vmnet]; one that uses [resolve], [https],
+    [fetch] or [connect] gets DNS and TLS as well (MirageOS's dns-client, tls-mirage and the NSS
     certificate authorities). *)
 
 From Stdlib Require Strings.String Strings.Ascii.
@@ -44,7 +44,7 @@ Inductive fetched : Type :=
 | Reply (body : string)   (* what the other side sent back before it closed *)
 | Refused                 (* nothing listens at that address and port *)
 | TimedOut                (* nothing answered within 10 seconds *)
-| BadAddress.             (* the address is not an IP address *)
+| BadAddress.             (* neither an IP address nor a name that resolves *)
 
 (** What [resolve] gets: an IPv4 address of the name, or why there is none *)
 Inductive resolved : Type :=
@@ -69,7 +69,7 @@ Inductive connected : Type :=
 | Connected (c : connection)  (* the other side accepted *)
 | ConnectRefused              (* nothing listens at that address and port *)
 | ConnectTimedOut             (* nothing answered within 10 seconds *)
-| ConnectBadAddress.          (* the address is not an IP address *)
+| ConnectBadAddress.          (* neither an IP address nor a name that resolves *)
 
 (** What [receive_line] gets: the next line, without its line break, or
     [Closed] when the connection ended first (a line the other side did
@@ -186,11 +186,13 @@ Inductive io : Type -> Type :=
     connection is closed. [serve] returns at once; the unikernel keeps
     serving after [main] ends. *)
 | serve (port : nat) (handler : string -> io string) : io unit
-(** connect to [address] (an IP address, as ["192.168.64.1"]) on [port],
+(** connect to [address] (an IP address, as ["192.168.64.1"], or a host
+    name, as ["example.org"], looked up as [resolve] does) on [port],
     send [request], and return everything the other side sends back before
     it closes ([Reply]), or why there is nothing: the connection was
     [Refused], nothing answered within 10 seconds ([TimedOut]), or the
-    address is not an IP address ([BadAddress]) *)
+    address is neither an IP address nor a name that resolves
+    ([BadAddress]; the image's [unresolved] event says why) *)
 | fetch (address : string) (port : nat) (request : string) : io fetched
 (** the IPv4 address of the host name [host] (as ["mirageos.org"]), asked
     of the DNS resolvers the network gives the unikernel; no answer within
@@ -210,11 +212,13 @@ Inductive io : Type -> Type :=
     ends. [listen] returns at once; the unikernel keeps listening after
     [main] ends. *)
 | listen (port : nat) (handler : connection -> io unit) : io unit
-(** open a connection to [address] (an IP address) on [port]; it stays
-    open until [close], or until the other side closes it *)
+(** open a connection to [address] (an IP address, or a host name, as for
+    [fetch]) on [port]; it stays open until [close], or until the other
+    side closes it *)
 | connect (address : string) (port : nat) : io connected
 (** [connect], giving up after [milliseconds] ([ConnectTimedOut]) rather
-    than 10 seconds: for a program that dials from its loop *)
+    than 10 seconds, looking a name up included: for a program that dials
+    from its loop *)
 | connect_within (address : string) (port : nat) (milliseconds : N) : io connected
 (** write [data] on the connection, as it is ([send_line] adds the line
     break) *)

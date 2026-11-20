@@ -116,7 +116,7 @@ if [ "${NO_IMAGE}" = 1 ]; then
     for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
-        mirage_https; do
+        mirage_https mirage_names; do
         no_image_one "no-image-${example}" "${HERE}/examples/example_files/${example}/${example}.soma"
     done
     no_image_one "no-image-counter" "${HERE}/examples/example_projects/counter_server/main.soma"
@@ -205,9 +205,10 @@ fi
 
 # spawned tasks sharing cells; one that fails is reported, and the image
 # waits for the others
-build mirage_tasks &&
-    run mirage_tasks tasks 0 "^the tasks shared the cell as expected$" plain &&
-    grep -q '"during":"task"' "${WORK}/tasks.log"
+if build mirage_tasks; then
+    run mirage_tasks tasks 0 "^the tasks shared the cell as expected$" plain
+    if grep -q '"during":"task"' "${WORK}/tasks.log"; then pass tasks-failure; else fail tasks-failure; fi
+fi
 
 # write without line breaks, random bytes, nanoseconds, the wall clock
 build mirage_raw_clock &&
@@ -230,6 +231,16 @@ if [ "${NETWORK}" = 1 ]; then
         run mirage_https https 0 "^https://mirageos.org/: status 200, [1-9][0-9]* bytes" net
         run mirage_https https-untrusted 1 \
             "^no answer: TLS with self-signed.badssl.com: authentication failure" net "--arg=self-signed.badssl.com"
+    fi
+    # fetch and connect given names: looked up through DNS; one that does
+    # not exist is ConnectBadAddress, with an unresolved event
+    if build mirage_names; then
+        run mirage_names names 0 "^names fetched and connected as expected$" net
+        if grep -q '"event":"unresolved","address":"no-such-host.invalid","why":"no such name' "${WORK}/names.log"; then
+            pass names-unresolved
+        else
+            fail names-unresolved
+        fi
     fi
     if build mirage_http_server && build mirage_fetch; then
         # without an address, the fetcher says how to use it and exits 2

@@ -1737,11 +1737,11 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |
-| `fetch address port request` | `io fetched` | connects to the IP address, sends `request`, returns what comes back before the other side closes (`Reply body`), or why there is nothing: `Refused` (nothing listens there), `TimedOut` (nothing answered within 10 seconds), `BadAddress` (not an IP address) |
+| `fetch address port request` | `io fetched` | connects to the address (an IP address, or a host name, looked up as `resolve` does), sends `request`, returns what comes back before the other side closes (`Reply body`), or why there is nothing: `Refused` (nothing listens there), `TimedOut` (nothing answered within 10 seconds), `BadAddress` (neither an IP address nor a name that resolves: an `unresolved` event says why) |
 | `resolve host` | `io resolved` | the IPv4 address of the host name, asked of the DNS resolvers the network gives the image (`Resolved address`), or why there is none (`Unresolved why`): not a host name, no such name, no IPv4 address, or no answer within 10 seconds |
 | `https verb host port path headers body` | `io answered` | an HTTPS request (HTTP/1.1 over TLS): the name resolved, the server's certificate checked against the NSS certificate authorities for that name, the answer read to its end: `Answer status headers body` (header names in lower case, a chunked body joined), or why there is none (`Unanswered why`: no address, no connection, a certificate not trusted, no HTTP answer), within 30 seconds and up to 16 MB. `Host`, `Connection` and `Content-Length` are set by the request; a header with a line break is refused. `https_get host path` and `https_post host path content_type body` are the usual ones, on port 443; `header name headers` finds a header. |
 | `listen port handler` | `io unit` | accepts TCP connections on `port`, each given to `handler : connection -> io unit`, which talks over it as long as it likes; the connection is closed when the handler ends. Returns at once; the image keeps listening after `main` ends. |
-| `connect address port` | `io connected` | opens a connection that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` |
+| `connect address port` | `io connected` | opens a connection to the address (an IP address, or a host name, as `fetch`) that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` (with an `unresolved` event). `connect_within address port ms` gives up after `ms : N` milliseconds, looking the name up included |
 | `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
 | `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
@@ -1842,10 +1842,14 @@ program is built so, a `.soma` file; a Rocq `.v` file that requires
 3. A program that uses `serve`, `fetch`, `listen` or `connect` gets a network stack
    (`generic_stackv4v6`, DHCP); the image runs under `solo5-vmnet`, which
    gives it an address on the Mac's vmnet network (macOS 26 or later, no
-   root). The others have no network device. One that uses `resolve` or
-   `https` is a web image (`net-web/`): MirageOS's `dns_client` device on
+   root). The others have no network device. One that uses `resolve`,
+   `https`, `fetch`, `connect` or `connect_within` (which take host names)
+   is a web image (`net-web/`): MirageOS's `dns_client` device on
    the stack (`generic_dns_client`, with `generic_happy_eyeballs`), and the
-   packages `tls-mirage`, `ca-certs-nss`, `x509` and `domain-name`. The
+   packages `tls-mirage`, `ca-certs-nss`, `x509` and `domain-name`.
+   dns-client links TLS itself (for DNS over TLS), so a web image is about
+   13 MB to a network image's 7, `https` or not; a program that only
+   serves or listens has no DNS. The
    HTTP/1.1 of `https` (the request, and reading the answer) is in
    `soma_rt.ml`, with no library; DNS and TLS are in `unikernel.ml`.
 4. The project is built for solo5's `hvt` target in the opam switch
@@ -1902,6 +1906,7 @@ line after `soma-event ` on its console, for whoever runs it to read:
 | `failure` | `during` (`main`, or `request` or `task`: the image goes on), `kind` (`cast`, with `expected` and `actual`; `raise`; `unknown`; `stack_overflow`; `out_of_memory`; `exception`, with `message`) |
 | `memory_pressure` | `live_kb`, `memory_kb`: live memory passed 80% |
 | `alive` | `requests`, `live_kb`, every 10 seconds |
+| `unresolved` | `address`, `why`: an address `fetch` or `connect` was given that is neither an IP address nor a name that resolves |
 | `exit` | `code`, `reason` (`finished`, `program`: its `exit n`, `failure`) |
 
 An image given `--soma-quiet` prints no events: for a program whose
@@ -1975,9 +1980,9 @@ Soma's installed libraries can be required by their short name, as
 Corelib's are (`sysinit/coqloadpath.ml`), so `Require Import Sandbox.` finds
 `Soma.Sandbox`.
 
-Not yet: DNS names for `fetch` and `connect` (they take an IP address;
-`resolve` gives one), IPv6 addresses from `resolve`, TLS for `listen` and
-`serve` (an HTTPS server), and client certificates.
+Not yet: IPv6 addresses from `resolve` (and so for names given to `fetch`
+and `connect`), names for `udp_send`, TLS for `listen` and `serve` (an
+HTTPS server), and client certificates.
 
 ## JSX: components and apps
 

@@ -20,6 +20,7 @@ cd "$WORK"
 applied() { tr '\n' ' ' < "$2" | grep -Eq "(^|[^A-Za-z0-9_'])$1 +\\("; }
 
 check_built() {
+    local NET=${1:-$NET}
     test -f "$NET/config.ml"
     grep -q stackv4v6 "$NET/config.ml"
     test -f "$NET/no-image/prog.cmo"
@@ -40,14 +41,15 @@ applied Listen "$NET/prog.ml"
 grep -q 'Receive_line' "$NET/prog.ml"
 applied Send "$NET/prog.ml"
 
-# the client: connect, send, receive_line, close
+# the client: connect, send, receive_line, close; it connects, so it is a
+# web image (connect takes a host name too)
 cp "$ROOT/examples/example_files/mirage_link_client/mirage_link_client.soma" .
 soma build --no-image mirage_link_client.soma > client.log 2>&1
-grep -q '(no image)' client.log
+grep -q 'net-web (no image)' client.log
 [ ! -f mirage_link_client.hvt ]
-check_built
-applied Connect "$NET/prog.ml"
-grep -q 'Receive_line' "$NET/prog.ml"
+check_built "$SOMA_MIRAGE_DIR/net-web"
+applied Connect "$SOMA_MIRAGE_DIR/net-web/prog.ml"
+grep -q 'Receive_line' "$SOMA_MIRAGE_DIR/net-web/prog.ml"
 
 # a connection operation misused in the program: a string is no connection
 cat > misused.soma <<'SOMA'

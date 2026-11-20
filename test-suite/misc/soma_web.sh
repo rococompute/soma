@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Sandbox's resolve and https through soma build --no-image: a program that
-# uses them gets a web project (net-web: MirageOS's dns-client device,
-# tls-mirage and the NSS certificate authorities), which type-checks against
-# the stand-ins; a program that only fetches keeps the plain network project;
-# a misused https fails; and the runtime's HTTP/1.1 framing (requests, and
+# Sandbox's resolve, https, and names for fetch and connect, through soma
+# build --no-image: a program that uses any of them gets a web project
+# (net-web: MirageOS's dns-client device, tls-mirage and the NSS
+# certificate authorities), which type-checks against the stand-ins; one
+# that only serves has no DNS; a misused https fails; and the runtime's HTTP/1.1 framing (requests, and
 # answers with a Content-Length, chunked or read to the end) does what it
 # should. No solo5 or MirageOS switch, nothing booted, nothing fetched.
 set -euo pipefail
@@ -38,15 +38,34 @@ test -f "$WEB/no-image/unikernel.cmo"
 grep -Eq "(^|[^A-Za-z0-9_'])Resolve [^o]" "$WEB/prog.ml"
 applied Https "$WEB/prog.ml"
 
-# a program that only fetches keeps the network project, without DNS or TLS
-cat > plain_fetch.soma <<'SOMA'
+# a program that fetches and connects, by name or address, is a web
+# image: fetch, connect and connect_within look a name up
+rm -rf "$WEB"
+DNS="$WEB"
+cat > dns_fetch.soma <<'SOMA'
 Require Import Sandbox.
-main : io unit := r <- fetch "192.168.64.1" 8080 (http_get "/") ;; print "fetched".
+From Stdlib Require Import NArith.
+main : io unit :=
+  r <- fetch "example.org" 80 (http_get "/") ;;
+  c <- connect "192.168.64.1" 7 ;;
+  d <- connect_within "example.org" 7 500%N ;;
+  print "fetched".
 SOMA
-soma build --no-image plain_fetch.soma > plain.log 2>&1
-grep -q '/net (no image)' plain.log
+soma build --no-image dns_fetch.soma > dns.log 2>&1
+grep -q '/net-web (no image)' dns.log
+grep -q 'stackv4v6 @-> dns_client @-> job' "$DNS/config.ml"
+! grep -q 'this image has no resolver' "$DNS/unikernel.ml"
+grep -q 'neither an IP address nor a host name' "$DNS/unikernel.ml"
+test -f "$DNS/no-image/unikernel.cmo"
+
+# a program that only serves has no DNS
+cat > serve_only.soma <<'SOMA'
+Require Import Sandbox.
+main : io unit := serve 8080 (fun _ => ret "hi").
+SOMA
+soma build --no-image serve_only.soma > serve.log 2>&1
+grep -q '/net (no image)' serve.log
 ! grep -q dns_client "$SOMA_MIRAGE_DIR/net/config.ml"
-! grep -q 'Tls_mirage' "$SOMA_MIRAGE_DIR/net/unikernel.ml"
 grep -q 'this image has no resolver' "$SOMA_MIRAGE_DIR/net/unikernel.ml"
 
 # with storage too: the stack, then DNS, then the disk
