@@ -275,6 +275,14 @@ type dependency = {
 
 (* * soma.toml *)
 
+(* [image]: how a MirageOS image of the project is built and run *)
+type image = {
+  memory : int option;      (* MB, which soma run gives the image *)
+  text_start : int option;  (* where the image's code is linked, past the guest's *)
+}
+
+let no_image = { memory = None; text_start = None }
+
 type t = {
   root : string;
   name : string;
@@ -282,6 +290,7 @@ type t = {
   version : version;
   dependencies : dependency list;
   opam : (string * string) list;
+  image : image;
 }
 
 let rec find_root dir =
@@ -311,6 +320,18 @@ let example root =
 
 let opam_example = "cryptokit = \"1.20\""
 
+let image_example = "memory = 4096 and text_start = \"0xC0000000\""
+
+(* solo5's hvt links an image at 1 MB: the lowest it may be *)
+let lowest_text_start = 0x100000
+
+(* [0x] then hexadecimal digits, as a linker script writes an address *)
+let hex_address s =
+  let n = String.length s in
+  if n > 2 && n <= 18 && (String.sub s 0 2 = "0x" || String.sub s 0 2 = "0X") &&
+     String.for_all (function '0'..'9' | 'a'..'f' | 'A'..'F' -> true | _ -> false) (String.sub s 2 (n - 2))
+  then int_of_string_opt s else None
+
 (* opam's names of packages, and of versions (opam's manual, "Package
    names and versions") *)
 let opam_name n =
@@ -334,12 +355,13 @@ let load_uncached ?display root =
     | Sys_error m -> CErrors.user_err Pp.(str m) in
   let known = "soma.toml has [project]: " ^
               String.concat ", " (List.map (fun (k, what) -> k ^ " (" ^ what ^ ")") keys) ^
-              ", [dependencies] (" ^ example_line ^ "), and [opam] (" ^ opam_example ^ ")" in
+              ", [dependencies] (" ^ example_line ^ "), [opam] (" ^ opam_example ^ ")" ^
+              ", and [image] (" ^ image_example ^ ")" in
   List.iter (fun (k, { SomaToml.line; _ }) ->
       if List.mem_assoc k keys then
         error line "%s is a key of [project]: it goes under the line [project], which begins soma.toml:\n\n%s"
           k (example root)
-      else if not (List.mem k ["project"; "dependencies"; "opam"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+      else if not (List.mem k ["project"; "dependencies"; "opam"; "image"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
   let project, pline = match List.assoc_opt "project" toml with
     | Some { SomaToml.value = Table t; line } -> t, line
     | Some { SomaToml.line; value } -> error line "project is %s; it is a table:\n\n%s" (SomaToml.describe value) (example root)
@@ -427,7 +449,44 @@ let load_uncached ?display root =
                    package (SomaToml.describe v) package) t
     | Some { SomaToml.line; value } ->
       error line "opam is %s; it is a table: [opam], then lines as %s" (SomaToml.describe value) opam_example in
-  { root; name; description; version; dependencies; opam }
+  let image = match List.assoc_opt "image" toml with
+    | None -> no_image
+    | Some { SomaToml.value = Table t; line = iline } ->
+      List.iter (fun (k, { SomaToml.line; _ }) ->
+          if k <> "memory" && k <> "text_start" then
+            error line "%s is not a key of [image] (yet). [image] has memory, the megabytes soma run gives \
+                        the image, and text_start, the address its code is linked at: %s" k image_example) t;
+      let memory = match List.assoc_opt "memory" t with
+        | None -> None
+        | Some { SomaToml.value = Int m; _ } when m > 0 && m <= 1048576 -> Some m
+        | Some { SomaToml.line; value } ->
+          error line "memory is %s; it is the image's megabytes, a number from 1 to 1048576, without quotes: \
+                      memory = 4096" (SomaToml.describe value) in
+      let text_start = match List.assoc_opt "text_start" t with
+        | None -> None
+        | Some { SomaToml.value = String a; line } ->
+          (match hex_address a with
+           | Some x when x >= lowest_text_start && x land 0xFFFF = 0 -> Some x
+           | Some _ -> error line "text_start %s: an image is linked at 0x100000 (1 MB) or above, \
+                                    at a multiple of 0x10000 (64 KB): text_start = \"0xC0000000\"" a
+           | None -> error line "%S is no address: 0x and hexadecimal digits, in quotes: \
+                                 text_start = \"0xC0000000\"" a)
+        | Some { SomaToml.line; value } ->
+          error line "text_start is %s; it is an address, a string: text_start = \"0xC0000000\""
+            (SomaToml.describe value) in
+      (* the image's code is in its memory: linked at 3 GB, it needs
+         more than 3 GB *)
+      (match text_start, memory with
+       | Some x, Some m when m * 1048576 <= x ->
+         error iline "text_start 0x%x is past the image's %d MB of memory; memory = %d at least, \
+                      for the image above it" x m (x / 1048576 + 64)
+       | Some x, None ->
+         error iline "text_start 0x%x needs memory above it: memory = %d, megabytes, at least" x (x / 1048576 + 64)
+       | _ -> ());
+      { memory; text_start }
+    | Some { SomaToml.line; value } ->
+      error line "image is %s; it is a table: [image], then %s" (SomaToml.describe value) image_example in
+  { root; name; description; version; dependencies; opam; image }
 
 let loaded = Hashtbl.create 1
 

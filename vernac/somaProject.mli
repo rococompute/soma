@@ -63,6 +63,15 @@ type dependency = {
   line : int;
 }
 
+(** its [image] table: how a MirageOS image of the project is built *)
+type image = {
+  memory : int option;      (** megabytes, which soma run gives the image (256 by default) *)
+  text_start : int option;  (** the address the image's code is linked at (solo5's 0x100000
+                                by default), a multiple of 0x10000 below [memory] *)
+}
+
+val no_image : image
+
 type t = {
   root : string;                 (** the folder of soma.toml, canonical *)
   name : string;                 (** lowercase letters, digits and _, beginning with a letter *)
@@ -70,6 +79,7 @@ type t = {
   version : version;
   dependencies : dependency list; (** its [dependencies] table *)
   opam : (string * string) list;  (** its [opam] table: opam packages, each at its version *)
+  image : image;
 }
 
 (** The folder of the nearest soma.toml, from [dir] up *)

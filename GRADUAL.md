@@ -504,6 +504,28 @@ A key is the package's name, as opam has it, and its value the version, as
 `opam show PACKAGE` lists them. A package that `[opam]` does not name is
 whichever version opam installs, the newest that fits.
 
+`[image]` says how a MirageOS image of the project (a program that
+requires Sandbox) is built and run:
+
+```toml
+[image]
+memory = 4096             # megabytes, which soma run gives the image
+text_start = "0xC0000000" # where its code is linked: 3 GB
+```
+
+- `memory`: the image's megabytes (256 by default), which the command to
+  run it states and `soma run` gives it; `$SOMA_MIRAGE_MEM` and `soma run
+  --mem=MB` come first.
+- `text_start`: the address the image's code is linked at, rather than
+  solo5's 1 MB (`0x100000`): an image that loads code of its own below it
+  (kykeon's guest Linux executables, linked at 4 or 16 MB) moves out of its
+  way. It is a multiple of `0x10000`, `0x100000` or above, below `memory`'s
+  end, as solo5-hvt loads the image in its memory. Soma makes solo5's hvt
+  linker script with that address (`ldscripts/solo5_hvthigh.lds` in the
+  image's project) and has `dune.build` link with it (`-z
+  solo5-abi=hvthigh`), as kykeon's Makefile does; such an image has a
+  project of its own (`plain-text-c0000000`).
+
 `soma extract` names the opam package after the project, and gives it its
 version and description, and `[opam]`'s versions (`"cryptokit" {= "1.20"}`). The TOML is TOML 1.0 (`vernac/somaToml.ml`, as
 Soma depends on no TOML library), without dates and times. Every project
@@ -1940,8 +1962,8 @@ whose dependencies were never fetched (a Makefile, no `duniverse`) is set
 up again. Each one's `build.log` has its last build's output.
 `SOMA_MIRAGE_BUILD=0` skips the image.
 
-The image runs in `$SOMA_MIRAGE_MEM` MB of memory, 256 by default, which
-the command to run it states (`solo5-hvt --mem=256 -- prog.hvt`). Memory
+The image runs in `$SOMA_MIRAGE_MEM` MB of memory, or `soma.toml`'s
+`[image] memory`, 256 by default, which the command to run it states (`solo5-hvt --mem=256 -- prog.hvt`). Memory
 is small and bursty for a server: each closed connection leaves state that
 TCP keeps for some seconds (about 6 KB; 2500 fast connections hold 15 MB
 for under 20 s), and strings, lists of characters, make garbage. So the

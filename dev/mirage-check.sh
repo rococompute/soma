@@ -234,6 +234,29 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# soma.toml's [image]: an image linked at 3 GB (text_start) in 4096 MB
+# (memory), as kykeon's is, which solo5 loads there
+mkdir -p "${WORK}/high"
+printf '[project]\nname = "high"\nversion = "0.1.0"\n\n[image]\nmemory = 4096\ntext_start = "0xC0000000"\n' \
+    > "${WORK}/high/soma.toml"
+printf 'Require Import Sandbox.\nmain : io unit := print "linked high".\n' > "${WORK}/high/main.soma"
+if "${SOMA}" build "${WORK}/high/main.soma" >"${WORK}/build-high.log" 2>&1; then
+    (cd "${WORK}/high" && timeout 60 "${SOMA}" run main.soma >"${WORK}/high.log" 2>&1)
+    rc=$?
+    if [ ${rc} -eq 0 ] && grep -q "^linked high$" "${WORK}/high.log" &&
+       grep -q "text @ (0xc0000000" "${WORK}/high.log" &&
+       grep -q "4096 MB addressable" "${WORK}/high.log"; then
+        pass high
+    else
+        echo "    (exit ${rc})" >>"${WORK}/high.log"
+        fail high
+    fi
+else
+    echo "FAIL build high"
+    sed 's/^/    /' "${WORK}/build-high.log" | tail -15
+    FAIL=$((FAIL + 1))
+fi
+
 # Soma.Word64: the image's int64 words agree with the kernel's (the
 # example's .exp proves the expected list)
 if build mirage_word64; then

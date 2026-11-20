@@ -2699,6 +2699,27 @@ let image_build_inputs ~switch ~dir sources =
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
 
+(* soma.toml's [image] text_start: the image is linked there rather than
+   at solo5's 1 MB, so that what it loads below (a guest's executables,
+   linked at 4 MB) fits. Commands, before make build, that make solo5's
+   hvt linker script with that address (ldscripts/solo5_hvthigh.lds, by
+   the hvt bindings) and have dune.build, which mirage configure wrote,
+   link with it: each time, as configure may have written dune.build
+   again. *)
+let high_link = function
+  | None -> ""
+  | Some x ->
+    let start = Printf.sprintf "0x%X" x in
+    Printf.sprintf
+      "lib=$(ls -d \"$(opam var prefix)\"/lib/*-solo5-none-static | head -n 1) && \
+       mkdir -p ldscripts && \
+       sed 's/^TEXT_START = 0x100000;/TEXT_START = %s;/' \"$lib/solo5_hvt.lds\" > ldscripts/solo5_hvthigh.lds && \
+       grep -q '^TEXT_START = %s;' ldscripts/solo5_hvthigh.lds && \
+       ln -sf \"$lib/solo5_hvt.o\" ldscripts/solo5_hvthigh.o && \
+       sed -i.orig 's|-cclib \"-z solo5-abi=hvt\"|-cclib \"-z solo5-abi=hvthigh\" -cclib \"-L'\"$(pwd)\"'/ldscripts\"|' dune.build && \
+       grep -q 'solo5-abi=hvthigh' dune.build && "
+      start start
+
 let build ~state ~source ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then with_build_lock (fun () ->
     SomaBuildInfo.mark_external ();
@@ -2731,7 +2752,9 @@ let build ~state ~source ~vo_file =
     let native = ocaml_modules <> [] in
     let c = List.exists SomaOcamlBindings.is_c ocaml_modules in
     let disks = disk_names prog in
-    let versions = match SomaProject.of_file source with Some p -> p.SomaProject.opam | None -> [] in
+    let soma_project = SomaProject.of_file source in
+    let versions = match soma_project with Some p -> p.SomaProject.opam | None -> [] in
+    let image = match soma_project with Some p -> p.SomaProject.image | None -> SomaProject.no_image in
     let dependencies = ocaml_dependencies libraries versions in
     (* Temporary CI checkouts with the same dependencies reuse the same
        monorepo. Source changes only rebuild the application, not every
@@ -2741,7 +2764,8 @@ let build ~state ~source ~vo_file =
     let dir = Filename.concat (cache_dir ())
         ((if network then "net" else "plain") ^ (if web then "-web" else "") ^
          (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "") ^
-         String.concat "" (List.map (fun d -> "-disk-" ^ d) disks) ^ (if c then "-c" else "") ^ project) in
+         String.concat "" (List.map (fun d -> "-disk-" ^ d) disks) ^ (if c then "-c" else "") ^ project ^
+         (match image.text_start with Some x -> Printf.sprintf "-text-%x" x | None -> "")) in
     mkdir_p dir;
     let file name contents = update_file (Filename.concat dir name) contents in
     let config_changed = file "config.ml" (disks_config disks (config_ml ~c ~network ~wasm ~storage ~web ~libraries ())) in
@@ -2791,13 +2815,14 @@ let build ~state ~source ~vo_file =
                               str " (once; fetches the dependencies)");
     if setup <> "" then execute (setup ^ "true");
     let inputs = image_build_inputs ~switch ~dir [] in
-    execute "make build";
+    execute (high_link image.SomaProject.text_start ^ "make build");
     let hvt = Filename.remove_extension vo_file ^ ".hvt" in
     copy_file ~src:(List.fold_left Filename.concat dir ["dist"; "soma.hvt"]) ~dst:hvt;
-    (* the memory the image runs in, in MB: $SOMA_MIRAGE_MEM, or 256 *)
+    (* the memory the image runs in, in MB: $SOMA_MIRAGE_MEM, or soma.toml's
+       [image] memory, or 256 *)
     let mem = match int_of_string_opt (getenv_default "SOMA_MIRAGE_MEM" "") with
       | Some m when m > 0 -> m
-      | _ -> 256 in
+      | _ -> Option.default 256 image.memory in
     let hvt_args = ["solo5-hvt"; Printf.sprintf "--mem=%d" mem] @
         (if storage then ["--block:storage=storage.img"] else []) @
         List.map (fun d -> Printf.sprintf "--block:%s=%s.img" d d) disks @ ["--"; hvt] in
