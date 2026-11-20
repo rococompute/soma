@@ -560,6 +560,17 @@ let storage = ref { read=(fun _ -> failwith "Sandbox storage: no device");
                     append=(fun _ _ -> failwith "Sandbox storage: no device") }
 let install_storage s = storage := s
 
+(* Named disks (disk_info, disk_read, disk_write), installed by the
+   unikernel for each block device the program names: sector size and
+   count; sectors from one on; data written from a sector *)
+type disk = {
+  info : unit -> (int * int) Lwt.t;
+  read : int -> int -> string option Lwt.t;
+  write : int -> string -> bool Lwt.t;
+}
+let disks : (string, disk) Hashtbl.t = Hashtbl.create 3
+let install_disk name d = Hashtbl.replace disks name d
+
 let link_event_of = function
   | Mail_opened (id, host) -> LinkOpened (Obj.repr (connection_of id), chars_of_string host)
   | Mail_bytes (id, data) -> LinkBytes (Obj.repr (connection_of id), chars_of_string data)
@@ -698,6 +709,22 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Udp_send (address, port, source_port, data) ->
       net.udp_send (string_of_chars (check address)) (int_of_nat (check port))
         (int_of_nat (check source_port)) (string_of_chars (check data)) >|= Obj.magic
+  | Prog.Disk_info name ->
+      (match Hashtbl.find_opt disks (string_of_chars (check name)) with
+       | None -> Lwt.return None
+       | Some d -> d.info () >|= fun (size, count) -> Some (nat_of_int size, nat_of_int count))
+      >|= Obj.magic
+  | Prog.Disk_read (name, sector, count) ->
+      (match Hashtbl.find_opt disks (string_of_chars (check name)) with
+       | None -> Lwt.return None
+       | Some d ->
+           d.read (int_of_nat (check sector)) (int_of_nat (check count)) >|= Option.map chars_of_string)
+      >|= Obj.magic
+  | Prog.Disk_write (name, sector, data) ->
+      (match Hashtbl.find_opt disks (string_of_chars (check name)) with
+       | None -> Lwt.return false
+       | Some d -> d.write (int_of_nat (check sector)) (string_of_chars (check data)))
+      >|= Obj.magic
   | Prog.Read_file name ->
       (!storage).read (string_of_chars (check name)) >|= fun value ->
       Obj.magic (Option.map chars_of_string value)
@@ -1127,6 +1154,100 @@ let unikernel_ml ~network ~storage ~web =
       ((if web then "let start s dns disk =\n    " else "let start s disk =\n    ") ^ setup)
   else header ^ "open Lwt.Infix\nmodule Main (B : Mirage_block.S) = struct\n  module Store = Soma_store.Make(B)\n  let start disk =\n    " ^ setup ^
        "Soma_rt.main ~network:false ~serving:(fun () -> false) Soma_rt.no_network\nend\n"
+
+(* soma_disk.ml: a block device as Soma_rt.disk, sectors checked against
+   its size before they reach the device *)
+let disk_ml = header ^ {soma|open Lwt.Infix
+
+module Make (B : Mirage_block.S) = struct
+  let make (b : B.t) : Soma_rt.disk =
+    let info = B.get_info b in
+    let fits i sector sectors =
+      sector >= 0 && sectors >= 0 &&
+      Int64.add (Int64.of_int sector) (Int64.of_int sectors) <= i.Mirage_block.size_sectors in
+    let read sector count =
+      info >>= fun i ->
+      if not (fits i sector count) then Lwt.return None
+      else if count = 0 then Lwt.return (Some "")
+      else
+        let buf = Cstruct.create (count * i.Mirage_block.sector_size) in
+        B.read b (Int64.of_int sector) [buf] >|= function
+        | Ok () -> Some (Cstruct.to_string buf)
+        | Error _ -> None
+    in
+    let write sector data =
+      info >>= fun i ->
+      let size = i.Mirage_block.sector_size and n = String.length data in
+      if not i.Mirage_block.read_write || n mod size <> 0 || not (fits i sector (n / size)) then
+        Lwt.return false
+      else if n = 0 then Lwt.return true
+      else B.write b (Int64.of_int sector) [Cstruct.of_string data] >|= Result.is_ok
+    in
+    { Soma_rt.info = (fun () -> info >|= fun i ->
+          (i.Mirage_block.sector_size, Int64.to_int i.Mirage_block.size_sectors));
+      read; write }
+end
+|soma}
+
+(* [text] with [old]'s first occurrence at or after [from] replaced *)
+let replace_first ?(from = 0) text old replacement =
+  let n = String.length old in
+  let rec find i =
+    if i + n > String.length text then None
+    else if String.sub text i n = old then Some i else find (i + 1) in
+  match find from with
+  | None -> failwith ("Soma: no " ^ old ^ " in a generated file")
+  | Some i -> String.sub text 0 i ^ replacement ^ String.sub text (i + n) (String.length text - i - n)
+
+let index_of text sub =
+  let n = String.length sub in
+  let rec find i =
+    if i + n > String.length text then None
+    else if String.sub text i n = sub then Some i else find (i + 1) in
+  find 0
+
+(* config.ml with a block device for each disk the program names, after
+   the other devices: block_of_file NAME, which solo5-hvt attaches as
+   --block:NAME=FILE *)
+let disks_config disks text =
+  if disks = [] then text else
+  let blocks = String.concat "" (List.map (fun _ -> "block @-> ") disks) in
+  let text =
+    if index_of text "main \"Unikernel\" job" <> None then
+      replace_text text "main \"Unikernel\" job" ("main \"Unikernel.Main\" (" ^ blocks ^ "job)")
+    else replace_first text "job)" (blocks ^ "job)") in
+  let text = if index_of text "package \"mirage-block\"" <> None then text else
+      replace_text text "package \"duration\""
+        "package \"mirage-block\"; package \"cstruct\"; package \"lwt\"; package \"duration\"" in
+  let devices = String.concat "" (List.mapi (fun i name ->
+      Printf.sprintf "let disk_%d = block_of_file %S\n" i name) disks) in
+  let text = replace_text text "let () = register" (devices ^ "let () = register") in
+  let applied = String.concat "" (List.mapi (fun i _ -> Printf.sprintf " $ disk_%d" i) disks) in
+  match index_of text "let () = register" with
+  | None -> failwith "Soma: no register in config.ml"
+  | Some at -> replace_first ~from:at text " ]" (applied ^ " ]")
+
+(* unikernel.ml with the disks as the functor's last arguments, each
+   installed under its name before the program runs *)
+let disks_unikernel disks text =
+  if disks = [] then text else
+  let params = String.concat "" (List.mapi (fun i _ -> Printf.sprintf " (K%d : Mirage_block.S)" i) disks) in
+  let modules = String.concat "" (List.mapi (fun i _ -> Printf.sprintf "\n  module Disk%d = Soma_disk.Make(K%d)" i i) disks) in
+  let args = String.concat "" (List.mapi (fun i _ -> Printf.sprintf " disk_%d" i) disks) in
+  let installs = String.concat "" (List.mapi (fun i name ->
+      Printf.sprintf "\n    Soma_rt.install_disk %S (Disk%d.make disk_%d);" name i i) disks) in
+  match index_of text "module Main (" with
+  | Some at ->
+      let text = replace_first ~from:at text " = struct" (params ^ " = struct" ^ modules) in
+      let start = match index_of text "  let start " with
+        | Some i -> i | None -> failwith "Soma: no start in unikernel.ml" in
+      replace_first ~from:start text " =" (args ^ " =" ^ installs)
+  | None ->
+      (* no network and no storage: a start without devices *)
+      let body = replace_first text "let start () = " "" in
+      let body = replace_first body header "" in
+      header ^ "open Lwt.Infix\nmodule Main" ^ params ^ " = struct" ^ modules ^
+      "\n  let start" ^ args ^ " =" ^ installs ^ "\n    " ^ body ^ "end\n"
 
 (* gradual.ml: the gradual runtime of prog.ml, which extraction only puts
    there when the program has casts, or a stand-in without errors *)
@@ -1660,6 +1781,45 @@ let mentions prog c =
 
 let uses_web prog = List.exists (mentions prog) ["Resolve"; "Https"]
 
+(* the disks the program names: the string literal each disk action is
+   applied to, sorted, so that the project's name does not depend on the
+   order the extracted program names them in *)
+let disk_names prog =
+  let n = String.length prog in
+  let names = ref [] in
+  List.iter (fun c ->
+      let k = String.length c in
+      let rec from i =
+        if i + k <= n then begin
+          if String.sub prog i k = c && (i = 0 || not (is_ident_char prog.[i - 1]))
+             && (i + k = n || not (is_ident_char prog.[i + k])) then begin
+            let rec skip j = if j < n && (prog.[j] = ' ' || prog.[j] = '\n' || prog.[j] = '(') then skip (j + 1) else j in
+            let j = skip (i + k) in
+            if i + k + 4 <= n && String.sub prog (i + k) 4 = " of " then ()
+            else if j < n && prog.[j] = '"' then begin
+              match String.index_from_opt prog (j + 1) '"' with
+              | Some e -> let name = String.sub prog (j + 1) (e - j - 1) in
+                if not (List.mem name !names) then names := !names @ [name]
+              | None -> ()
+            end
+            else
+              error Pp.(str c ++ str "'s disk is not a string literal in the extracted program: " ++
+                        str "name a disk with one, as in disk_read \"rootfs\" 0 8, " ++
+                        str "since the image declares each disk when it is built.")
+          end;
+          from (i + 1)
+        end in
+      from 0) ["Disk_info"; "Disk_read"; "Disk_write"];
+  List.iter (fun name ->
+      if name = "" || String.length name > 31 ||
+         not (String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false) name) then
+        error Pp.(str "disk name " ++ qstring name ++ str ": a disk is named with 1 to 31 letters and digits.");
+      if name = "storage" then
+        error Pp.(str "disk name \"storage\" is the named files' device (read_file, write_file); " ++
+                  str "give the disk another name.")) !names;
+  List.sort_uniq compare !names
+
+
 (* Extracts [main] into [dir]/prog.ml, by running the extraction commands
    at the end of the program, after its .vo has been saved. *)
 (* [main] is extracted as [soma_main ()], with [main] inlined in it: a
@@ -1968,7 +2128,7 @@ let check_project ~wasm ~libraries ~native_files dir =
   let base = ["uint63.ml"; "float64.ml"; "soma_nat.ml"] in
   let own = List.filter (fun f -> f <> "soma_nat.ml" && f <> "soma_bindings.ml") native_files in
   let program = ["soma_bindings.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml"] in
-  let runtime = ["gradual.ml"; "soma_store.ml"; "soma_rt.ml"; "unikernel.ml"] in
+  let runtime = ["gradual.ml"; "soma_store.ml"; "soma_rt.ml"; "soma_disk.ml"; "unikernel.ml"] in
   (* A prior check's interfaces must not make a removed module appear to
      exist, or allow a new module to depend on an obsolete interface. *)
   let kept = ["standins.mli"; "config.ml"] @ base @ own @ program @ runtime in
@@ -2061,7 +2221,7 @@ let monorepo_lock = {sh|R=$(opam var root)/repo && overlays=git+https://github.c
 let ocaml_modules () =
   let modules, libraries = SomaOcamlBindings.checked_modules
       ~reserved:["Unikernel"; "Config"; "Main"; "Key_gen"; "Runtime_args";
-                 "Soma_rt"; "Soma_store"; "Soma_wasm"; "Gradual"] () in
+                 "Soma_rt"; "Soma_store"; "Soma_disk"; "Soma_wasm"; "Gradual"] () in
   List.iter (fun (m : SomaForeign.ocaml_module) ->
       if m.ml_file = None && m.top = "Soma_host" then
         error Pp.(str "Soma.Host is a host interface, not a Mirage library; use Sandbox in an image.")) modules;
@@ -2126,7 +2286,7 @@ let image_build_inputs ~switch ~dir sources =
           [Filename.concat opam_root "config"] @
           List.map (Filename.concat dir)
             ["duniverse"; "mirage"; "Makefile"; "dune"; "dune-project"; "config.ml";
-             "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_wasm.ml";
+             "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_disk.ml"; "soma_wasm.ml";
              "float64.ml"; "uint63.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
@@ -2161,6 +2321,7 @@ let build ~state ~source ~vo_file =
        interpreter: the others need not fetch it *)
     let wasm = calls <> [] in
     let native = ocaml_modules <> [] in
+    let disks = disk_names prog in
     let versions = match SomaProject.of_file source with Some p -> p.SomaProject.opam | None -> [] in
     let dependencies = ocaml_dependencies libraries versions in
     (* Temporary CI checkouts with the same dependencies reuse the same
@@ -2170,17 +2331,19 @@ let build ~state ~source ~vo_file =
         (Digest.string (String.concat "\n" libraries ^ "\n" ^ dependencies)) else "" in
     let dir = Filename.concat (cache_dir ())
         ((if network then "net" else "plain") ^ (if web then "-web" else "") ^
-         (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "") ^ project) in
+         (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "") ^
+         String.concat "" (List.map (fun d -> "-disk-" ^ d) disks) ^ project) in
     mkdir_p dir;
     let file name contents = update_file (Filename.concat dir name) contents in
-    let config_changed = file "config.ml" (config_ml ~network ~wasm ~storage ~web ~libraries) in
+    let config_changed = file "config.ml" (disks_config disks (config_ml ~network ~wasm ~storage ~web ~libraries)) in
     let deps_changed = if native then file "soma-ocaml-deps.opam" dependencies else false in
     let native_files = write_ocaml_files dir ocaml_modules in
     let modules = List.sort_uniq compare
         (List.map (fun (_, (c : SomaForeign.image_call)) -> module_name c.module_file, read_file c.module_file) calls) in
     List.iter (fun (name, contents) -> ignore (file name contents)) [
-      "unikernel.ml", unikernel_ml ~network ~storage ~web;
+      "unikernel.ml", disks_unikernel disks (unikernel_ml ~network ~storage ~web);
       "soma_store.ml", header ^ SomaStorage.source;
+      "soma_disk.ml", disk_ml;
       "soma_rt.ml", runtime_ml;
       "soma_wasm.ml", wasm_ml modules;
       "float64.ml", float64_ml;
@@ -2225,7 +2388,8 @@ let build ~state ~source ~vo_file =
       | Some m when m > 0 -> m
       | _ -> 256 in
     let hvt_args = ["solo5-hvt"; Printf.sprintf "--mem=%d" mem] @
-        (if storage then ["--block:storage=storage.img"] else []) @ ["--"; hvt] in
+        (if storage then ["--block:storage=storage.img"] else []) @
+        List.map (fun d -> Printf.sprintf "--block:%s=%s.img" d d) disks @ ["--"; hvt] in
     let command = (if network then ["solo5-vmnet"; "--"] else []) @ hvt_args in
     SomaBuildInfo.publish_command command;
     SomaBuildInfo.publish_inputs inputs;

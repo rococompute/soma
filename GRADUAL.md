@@ -1605,6 +1605,18 @@ expects the echo, then the server's `"idle"` after its `receive` times out;
 `dev/mirage-check.sh` boots both (from the Mac, a terminal without macOS's
 Local Network permission cannot reach the image: `No route to host`).
 
+A disk is named by a string literal (`disk_read "rootfs" 0 8`): the image
+declares a block device for each name the program uses (MirageOS's
+`block_of_file`), so a name computed at run time is refused when the
+program is built, saying so. Names are 1 to 31 letters and digits, and not
+`storage`, the named files' device. `soma run` attaches `NAME.img`; run by
+hand, it is `solo5-hvt --block:NAME=FILE`. The project of an image with
+disks is named after them (`plain-disk-data`), each set of disks its own.
+`examples/example_files/mirage_disk/mirage_disk.soma` reads a disk's
+geometry and first sector, copies it to the next, and checks that a read
+past the end and a partial-sector write are refused; `dev/mirage-check.sh`
+boots it on a 64-sector disk and checks the copy reached the file.
+
 `examples/example_files/mirage_events/mirage_events.soma` is a server
 that answers UDP pings and greets TCP connections, and, given its address,
 a client whose one loop of `select` sees a timer of `after`, the UDP pong,
@@ -1658,6 +1670,9 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `select ms` | `io (list event)` | what came in since the last `select`, oldest first: `Linked e` (a `link_event` of `listen_mailbox`'s or `watch`ed connections), `Datagram port host source_port data` (UDP), `Timer tag`. When nothing has, it waits, `ms : N` milliseconds at most (`0`: not at all), and is `nil` when the time is up: a select over everything, for a program with one loop. `mailbox` takes only the `Linked` events and leaves the rest to `select` |
 | `udp_listen port` | `io unit` | the UDP datagrams to `port` as `Datagram` events of `select`; returns at once, and the image keeps receiving after `main` ends |
 | `udp_send address port source_port data` | `io bool` | one UDP datagram to the IP address and port, from `source_port` (`0`: one the stack picks): `true` when it went out, `false` for an address that is not an IP address or a datagram the stack could not send |
+| `disk_info name` | `io (option (nat * nat))` | the sector size in bytes and the number of sectors of the block device `name` (`--block:name=FILE`); `None` when it is not attached |
+| `disk_read name sector count` | `io (option string)` | `count` sectors from `sector` on, as bytes; `None` past the end or on a failed read |
+| `disk_write name sector data` | `io bool` | `data`, whole sectors of it, written from `sector` on: `false` for a read-only disk, data that is not whole sectors or goes past the end, or a failed write |
 | `local_address` | `io (option string)` | the image's own IPv4 address, as the network configured it; a program that uses it gets a network stack |
 | `close c` | `io unit` | closes the connection; again does nothing |
 | `connect_within address port ms` | `io connected` | `connect`, giving up after `ms : N` milliseconds (`ConnectTimedOut`) rather than 10 seconds: for a program that dials from its loop |

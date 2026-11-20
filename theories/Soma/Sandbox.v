@@ -257,6 +257,22 @@ Inductive io : Type -> Type :=
     Writes replace bytes; append creates missing names and preserves order.
     These operations are serialized, and return after the device write.
     Attach the same disk to retain files across image boots. *)
+(** Block devices by name: a disk the image is given, as [solo5-hvt
+    --block:rootfs=rootfs.img], read and written by sectors. [name] is a
+    string literal ([disk_read "rootfs" 0 8]): the image declares each
+    disk the program names when it is built, and [soma run] attaches
+    NAME.img. Names are letters and digits, and not [storage], which is
+    the named files' device. *)
+(** the disk's sector size in bytes and its number of sectors; [None]
+    when it was not attached *)
+| disk_info (name : string) : io (option (nat * nat))
+(** [count] sectors from [sector] on, as bytes; [None] when the disk was
+    not attached, the sectors are past its end, or the read failed *)
+| disk_read (name : string) (sector count : nat) : io (option string)
+(** write [data], whole sectors of it, from [sector] on: [true] when it was
+    written, [false] when the disk was not attached or is read-only, the
+    data is not whole sectors or goes past the end, or the write failed *)
+| disk_write (name : string) (sector : nat) (data : string) : io bool
 | read_file (name : string) : io (option string)
 | write_file (name data : string) : io unit
 | append_file (name data : string) : io unit.

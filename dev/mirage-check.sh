@@ -113,7 +113,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_crypto mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https; do
@@ -170,6 +170,26 @@ build mirage_hello &&
 
 build mirage_milliseconds &&
     run mirage_milliseconds milliseconds 0 "^elapsed at least 1000 ms$" plain
+
+# a disk by name: a 64-sector data.img whose sector 0 begins "hello
+# disk"; the image copies it to sector 1, which the file then has
+if build mirage_disk; then
+    printf 'hello disk' > "${WORK}/data.img"
+    dd if=/dev/zero bs=512 count=64 2>/dev/null | dd of="${WORK}/data.img" bs=1 seek=10 conv=notrunc 2>/dev/null
+    truncate -s 32768 "${WORK}/data.img"
+    timeout 60 opam exec --switch="${SWITCH}" -- solo5-hvt --mem=${MEM} --block:data="${WORK}/data.img" -- \
+        "${HERE}/examples/example_files/mirage_disk/mirage_disk.hvt" >"${WORK}/disk.log" 2>&1
+    rc=$?
+    if [ ${rc} -eq 0 ] && grep -q "^sector size 512, sectors 64$" "${WORK}/disk.log" &&
+       grep -q "^sector 0 begins hello disk$" "${WORK}/disk.log" &&
+       grep -q "^the disk read and wrote as expected$" "${WORK}/disk.log" &&
+       [ "$(dd if="${WORK}/data.img" bs=1 skip=512 count=10 2>/dev/null)" = "hello disk" ]; then
+        pass disk
+    else
+        echo "    (exit ${rc})" >>"${WORK}/disk.log"
+        fail disk
+    fi
+fi
 
 # write without line breaks, random bytes, nanoseconds, the wall clock
 build mirage_raw_clock &&

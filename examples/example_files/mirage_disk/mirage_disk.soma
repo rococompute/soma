@@ -1,0 +1,38 @@
+(** A block device by name: [disk_info], [disk_read] and [disk_write] on
+    the disk "data", which the image declares because the program names it
+    (a string literal), and which [soma run] attaches as data.img. This
+    image prints the disk's geometry and how sector 0 begins, copies
+    sector 0 to sector 1 and reads it back, and checks that a read past
+    the end and a write of part of a sector are refused. It exits 0 when
+    all went as expected, 1 otherwise. dev/mirage-check.sh boots it on a
+    disk whose sector 0 begins "hello disk":
+
+        solo5-hvt --block:data=data.img -- mirage_disk.hvt *)
+Require Import Sandbox.
+
+same (a : option string) (b : string) : bool :=
+  match a with Some s => String.eqb s b | None => false end.
+
+refused (a : option string) : bool :=
+  match a with None => true | Some _ => false end.
+
+main : io unit :=
+  info <- disk_info "data" ;;
+  match info with
+  | None => print "no disk named data" ;; exit 1
+  | Some (size, count) =>
+    print ("sector size " ++ to_string size ++ ", sectors " ++ to_string count) ;;
+    first <- disk_read "data" 0 1 ;;
+    match first with
+    | None => print "could not read sector 0" ;; exit 1
+    | Some s0 =>
+      print ("sector 0 begins " ++ String.substring 0 10 s0) ;;
+      copied <- disk_write "data" 1 s0 ;;
+      back <- disk_read "data" 1 1 ;;
+      past <- disk_read "data" count 1 ;;
+      partial <- disk_write "data" 0 "not a whole sector" ;;
+      if copied && same back s0 && refused past && negb partial
+      then print "the disk read and wrote as expected"
+      else print "the disk did not go as expected" ;; exit 1
+    end
+  end.

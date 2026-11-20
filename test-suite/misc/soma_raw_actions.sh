@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # write, random_bytes, monotonic_ns, wall_clock, receive, local_address,
-# select, watch, after and UDP:
+# select, watch, after, UDP and disks:
 # extraction, which images get a network, the OCaml
 # check against the libraries' signatures, and the runtime's conversions
 # on fixed inputs. No image, no clock reads.
@@ -47,6 +47,43 @@ main : io unit := after 10%N 7 ;; got <- select 1000%N ;;
 SOMA
 soma build --no-image timer_only.soma > timer.log 2>&1
 grep -q 'mirage/plain (no image)' timer.log
+# disks by name: each literal a block device of the image, the project
+# named after them, sorted; a computed name or a bad one is refused
+cp "$ROOT/examples/example_files/mirage_disk/mirage_disk.soma" .
+soma build --no-image mirage_disk.soma > disk.log 2>&1
+grep -q 'mirage/plain-disk-data (no image)' disk.log
+grep -q 'block_of_file "data"' "$SOMA_MIRAGE_DIR/plain-disk-data/config.ml"
+grep -q 'install_disk "data"' "$SOMA_MIRAGE_DIR/plain-disk-data/unikernel.ml"
+cat > disks.soma <<'SOMA'
+Require Import Sandbox.
+main : io unit :=
+  a <- local_address ;; f <- read_file "x" ;; r <- disk_read "rootfs" 0 1 ;; d <- disk_info "data" ;;
+  _ <- disk_write "rootfs" 1 "" ;; print "ok".
+SOMA
+soma build --no-image disks.soma > disks.log 2>&1
+D="$SOMA_MIRAGE_DIR/net-storage-disk-data-disk-rootfs"
+grep -q "$D (no image)" disks.log
+[ "$(grep -c 'package "mirage-block"' "$D/config.ml")" -eq 1 ]
+grep -q 'register "soma" \[ main \$ stack \$ storage \$ disk_0 \$ disk_1 \]' "$D/config.ml"
+cat > computed.soma <<'SOMA'
+Require Import Sandbox.
+disk := "rootfs".
+main : io unit := r <- disk_read disk 0 1 ;; print "ok".
+SOMA
+if soma build --no-image computed.soma > computed.log 2>&1; then
+    echo 'a computed disk name passed' >&2; exit 1
+fi
+grep -q 'not a string literal' computed.log
+i=0
+for bad in root-fs storage; do
+    i=$((i + 1))
+    printf 'Require Import Sandbox.\nmain : io unit := r <- disk_info "%s" ;; print "ok".\n' "$bad" > "bad$i.soma"
+    if soma build --no-image "bad$i.soma" > "bad$i.log" 2>&1; then
+        echo "the disk name $bad passed" >&2; exit 1
+    fi
+    grep -q 'disk name' "bad$i.log"
+done
+
 # the runtime's quiet switch reaches every event
 grep -q 'if not (quiet ()) then' "$SOMA_MIRAGE_DIR/plain/soma_rt.ml"
 
