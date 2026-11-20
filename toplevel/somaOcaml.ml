@@ -125,6 +125,35 @@ let ensure_packages ~switch ~managed ?(versions = []) libraries =
     end
   end
 
+(* Soma.Host's code (soma_host.ml, soma_host_io.c) uses OCaml 5.1's
+   library (Filename.temp_dir, caml_uerror): a program over Soma.Host in a
+   switch with an older OCaml is refused, saying so, rather than failing
+   to compile. The version is the switch's record of what it has, which
+   ensure_packages keeps; with no record of OCaml, nothing is refused. *)
+let host_ocaml = (5, 1)
+
+let check_host_ocaml ~switch ~managed =
+  let installed = Filename.concat (cache_dir ())
+      (if managed then "installed" else "installed-" ^ Digest.to_hex (Digest.string switch)) in
+  let version = List.find_map (fun l -> match String.split_on_char ' ' l with
+      | ["ocaml"; v] ->
+        (match String.split_on_char '.' v with
+         | major :: minor :: _ ->
+           (match int_of_string_opt major, int_of_string_opt minor with
+            | Some a, Some b -> Some (v, (a, b))
+            | _ -> None)
+         | _ -> None)
+      | _ -> None) (read_lines installed) in
+  match version with
+  | Some (found, n) when n < host_ocaml ->
+    error Pp.(str "a program over Soma.Host needs OCaml " ++ int (fst host_ocaml) ++ str "." ++
+              int (snd host_ocaml) ++ str " or later, and the opam switch " ++ str switch ++
+              str " has OCaml " ++ str found ++ str "." ++ fnl () ++
+              str (if managed then "Remove " ^ switch ^ " for Soma to make it again with the newest OCaml,"
+                   else "Point SOMA_OCAML_SWITCH at a switch with OCaml 5.1 or later (or unset it, for the switch Soma makes),") ++
+              spc () ++ str "and build again.")
+  | _ -> ()
+
 (* Whether [libraries] are made for the browser: their packages depend on
    js_of_ocaml. Recorded in [targets], once for each set. *)
 let for_browser ?switch libraries =
@@ -484,6 +513,8 @@ let build ~state ~source ~vo_file =
       | Some p -> p.SomaProject.opam
       | None -> [] in
     ensure_packages ~switch ~managed ~versions libraries;
+    if List.exists (fun (m : SomaForeign.ocaml_module) -> m.ml_file = None && m.top = host_module) modules then
+      check_host_ocaml ~switch ~managed;
     let js = for_browser ~switch libraries in
     (* one project for each program, kept between builds *)
     let source = CUnix.canonical_path_name source in

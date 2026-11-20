@@ -1349,7 +1349,10 @@ main : unit := Host.print_lines ("hello" :: Host.argv tt).
   runtime for them (`toplevel/somaHost.ml`, written as `soma_host.ml`
   next to the extracted program and checked against Host.v's
   declarations), which uses OCaml's Unix, a library that comes with the
-  compiler. The program has no OCaml of its own.
+  compiler. The program has no OCaml of its own. That runtime needs OCaml
+  5.1 or later: the switch Soma makes has the newest, and a program over
+  Host in a `$SOMA_OCAML_SWITCH` with an older OCaml is refused, saying so
+  (`test-suite/misc/soma_host_ocaml_version.sh`).
 - Most answer with `(carried out or the boolean read, (a number, data))`,
   the data strings; numbers given are decimal text. Descriptors (sockets,
   and the pipe a process writes its output on) are known by names the

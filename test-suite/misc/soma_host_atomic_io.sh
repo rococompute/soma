@@ -1,6 +1,9 @@
 #!/bin/sh
 # Exercise the generated production Host module and its actual C primitives,
-# without rebuilding the compiler. OCAMLC may select the prepared switch.
+# without rebuilding the compiler. Host's code needs OCaml 5.1 or later, as
+# the switch soma build compiles programs in has: $OCAMLC, or ocamlc on PATH
+# when it is new enough, or else that switch ($SOMA_OCAML_SWITCH, or the one
+# Soma makes under ~/.cache/soma/ocaml).
 set -eu
 here=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 python3 - "$here" <<'PY'
@@ -45,8 +48,23 @@ let () =
   print_endline (String.concat "\\n" detail);
   exit (if ok then 0 else 1)
 ''')
-    compiler=os.environ.get('OCAMLC','ocamlc')
-    subprocess.run([compiler,'-I','+unix','-custom','-ccopt','-Wall','-ccopt','-Wextra','-ccopt','-Werror',
+    def version(command):
+        try: v=subprocess.run(command+['-vnum'],capture_output=True,text=True).stdout.strip()
+        except OSError: return None
+        try: return tuple(int(x) for x in v.split('.')[:2])
+        except ValueError: return None
+    def pick():
+        if os.environ.get('OCAMLC'): return os.environ['OCAMLC'].split()
+        if (version(['ocamlc']) or (0,))>=(5,1): return ['ocamlc']
+        cache=os.environ.get('XDG_CACHE_HOME') or os.path.expanduser('~/.cache')
+        switch=os.environ.get('SOMA_OCAML_SWITCH') or os.path.join(cache,'soma','ocaml')
+        command=['opam','exec','--switch='+switch,'--','ocamlc']
+        if (version(command) or (0,))>=(5,1): return command
+        sys.exit('soma_host_atomic_io: no OCaml 5.1 or later to build Host with: ocamlc on PATH is '
+                 +'.'.join(map(str,version(['ocamlc']) or ('none',)))+', and the switch '+switch+' has none. '
+                 +'Set OCAMLC, or soma build any program with a .definition once (it makes that switch).')
+    compiler=pick()
+    subprocess.run(compiler+['-I','+unix','-custom','-ccopt','-Wall','-ccopt','-Wextra','-ccopt','-Werror',
                     'unix.cma','soma_host_io.c','soma_host.ml','probe.ml','-o','probe'],cwd=root,check=True)
     def run(*args,ok=True,env=None):
         p=subprocess.run([str(root/'probe'),*map(str,args)],capture_output=True,text=True,env=env)

@@ -9,10 +9,10 @@ trap 'rc=$?; if [ "$rc" -ne 0 ]; then cat "$WORK"/*.log >&2 || true; fi; rm -rf 
 export XDG_CACHE_HOME="$WORK/cache"
 cd "$WORK"
 printf 'OCaml Library "unix".\ncheck : (string -> nat -> option (string * string)) -> string.\n' > driver.definition
-printf 'module Host = struct\n' > driver.ml
-sed -n '/^let ml = {soma|/,$p' "$ROOT/toplevel/somaHost.ml" | sed '1s/^let ml = {soma|//; $d' >> driver.ml
-cat >> driver.ml <<'OCAML'
-end
+# the project's own Soma_host (soma_host.ml and its C), which main's use
+# of Host.print_lines puts in it
+cat > driver.ml <<'OCAML'
+module Host = Soma_host
 let check advance =
   let left, right = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   Unix.set_nonblock left; Unix.set_nonblock right;
@@ -47,8 +47,9 @@ let check advance =
 OCAML
 cat > main.soma <<'SOMA'
 Require Import Soma.HostSpec.
+Require Soma.Host.
 Import driver.
-main := check SocketWrites.advance.
+main : unit := Host.print_lines [check SocketWrites.advance].
 SOMA
 soma run main.soma > run.log 2>&1 || { cat run.log; exit 1; }
 cat run.log
