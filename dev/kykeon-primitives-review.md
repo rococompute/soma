@@ -18,7 +18,10 @@ Two blocking defects were corrected before integration:
 
 Validation on Apple Silicon / Solo5 HVF:
 
-- Compiler and libraries: `dune build -p soma-runtime,soma-core @install`.
+- Compiler and libraries: `make dunestrap`, then
+  `dune build -p soma-runtime,soma-core @install`. Existing checkouts need
+  the bootstrap step to regenerate the ignored theory rules for Word64
+  and Handles after pulling these changes.
 - `soma_buffers.sh`, including the emitted runtime bounds and block adapter
   against a fake huge disk, overlapping buffers, and native executable use.
 - `soma_word64.sh`, including kernel expectations and a native C rotator.
