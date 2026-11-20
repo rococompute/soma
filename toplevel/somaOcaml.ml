@@ -209,12 +209,13 @@ let extract ~state ~modules dir =
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %s.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
-     From Soma Require Word64.\n\
-     %s%s%s%s\
+     From Soma Require Word64 Handles.\n\
+     %s%s%s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
      Extraction \"prog\" soma_main.\n" (quote_soma_string dir) SomaMirage.float_extraction
-       SomaMirage.nat_string_extraction SomaMirage.word64_extraction (String.concat "" lines));
+       SomaMirage.nat_string_extraction SomaMirage.word64_extraction
+       SomaMirage.buffer_extraction (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;

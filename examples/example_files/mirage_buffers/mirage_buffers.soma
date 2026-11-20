@@ -49,6 +49,9 @@ buffers : io bool :=
   shifted <- buffer_read b 12 4 ;;
   filled <- buffer_fill b 12 2 120 ;;
   xs <- buffer_read b 12 4 ;;
+  let largest := Nat.pred (Nat.pow 2 62) in
+  overflow <- buffer_read b largest 1 ;;
+  overflow_length <- buffer_read b 1 largest ;;
   a <- check "size" (Nat.eqb size 16) ;;
   c <- check "fresh bytes are 0" (is_some_nat zero0 0) ;;
   d <- check "a byte keeps its low 8 bits" (set && is_some_nat byte 65) ;;
@@ -61,7 +64,9 @@ buffers : io bool :=
   k <- check "strings" (wrote && is_text text "abc" && negb too_long) ;;
   l <- check "an overlapping copy" (copied && is_text shifted "abcc") ;;
   m <- check "fill" (filled && is_text xs "xxcc") ;;
-  ret (a && c && d && e && f && g && h && i && j && k && l && m).
+  n <- check "buffer bounds do not wrap"
+    (match overflow, overflow_length with None, None => true | _, _ => false end) ;;
+  ret (a && c && d && e && f && g && h && i && j && k && l && m && n).
 
 disk : io bool :=
   d <- new_buffer 1024 ;;

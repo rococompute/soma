@@ -599,7 +599,9 @@ type disk = {
 }
 
 (* whether [length] bytes from [offset] are in the buffer *)
-let in_buffer b offset length = offset >= 0 && length >= 0 && offset + length <= Bytes.length b
+let in_buffer b offset length =
+  offset >= 0 && length >= 0 && offset <= Bytes.length b &&
+  length <= Bytes.length b - offset
 
 (* a signal (Sandbox.signal, as extracted): its count, and the tasks
    waiting for it *)
@@ -1412,8 +1414,12 @@ module Make (B : Mirage_block.S) = struct
     in
     let read_into sector count dst offset =
       info >>= fun i ->
-      let n = count * i.Mirage_block.sector_size in
-      if not (fits i sector count) || not (Soma_rt.in_buffer dst offset n) then Lwt.return false
+      let size = i.Mirage_block.sector_size in
+      if not (fits i sector count) || size <= 0 ||
+         not (Soma_rt.in_buffer dst offset 0) ||
+         count > (Bytes.length dst - offset) / size then Lwt.return false
+      else let n = count * size in
+      if not (Soma_rt.in_buffer dst offset n) then Lwt.return false
       else if n = 0 then Lwt.return true
       else
         let buf = Cstruct.create n in
@@ -1996,9 +2002,11 @@ Extract Inlined Constant Soma.Word64.to_hex => "(Printf.sprintf ""%Lx"")".
    and promises are types of soma_handles.ml, so that prog.ml names no
    Lwt module (checked without an image, it is compiled without Lwt
    unless a definition declares it). *)
-let sandbox_extraction = {soma|Extract Inductive Soma.Handles.buffer => "Bytes.t"
+let buffer_extraction = {soma|Extract Inductive Soma.Handles.buffer => "Bytes.t"
   [ "(fun _ -> failwith ""a buffer is made by new_buffer"")" ] "(fun _ _ -> failwith ""a buffer has no number"")".
-Extract Inductive Soma.Sandbox.signal => "Soma_handles.signal"
+|soma}
+
+let sandbox_extraction = buffer_extraction ^ {soma|Extract Inductive Soma.Sandbox.signal => "Soma_handles.signal"
   [ "(fun _ -> failwith ""a signal is made by new_signal"")" ] "(fun _ _ -> failwith ""a signal has no number"")".
 Extract Inductive Soma.Handles.promise => "Soma_handles.promise"
   [ "(fun _ -> failwith ""a promise is made by OCaml"")" ] "(fun _ _ -> failwith ""a promise has no number"")".
