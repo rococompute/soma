@@ -113,7 +113,7 @@ no_image_one() {
 }
 
 if [ "${NO_IMAGE}" = 1 ]; then
-    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_await mirage_crypto mirage_fetch mirage_http_server \
+    for example in mirage_minimal mirage_hello mirage_clock mirage_milliseconds mirage_raw_clock mirage_disk mirage_tasks mirage_await mirage_word64 mirage_crypto mirage_fetch mirage_http_server \
         mirage_minimal_web_server mirage_link_client mirage_link_server mirage_raw_link mirage_events \
         mirage_frame_client mirage_frame_server mirage_mailbox mirage_supervised mirage_storage_model mirage_storage \
         mirage_https mirage_names; do
@@ -194,6 +194,12 @@ fi
 # forked tasks' results: a sum, a failure's reason, a wait that times out
 if build mirage_await; then
     run mirage_await await 0 "^the tasks gave their results as expected$" plain
+fi
+
+# Soma.Word64: the image's int64 words agree with the kernel's (the
+# example's .exp proves the expected list)
+if build mirage_word64; then
+    run mirage_word64 word64 0 "^the words computed as expected$" plain
 fi
 
 # soma run's --disk and --mem: the same image on another file, in 512 MB

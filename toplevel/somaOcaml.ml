@@ -209,11 +209,12 @@ let extract ~state ~modules dir =
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %s.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
-     %s%s%s\
+     From Soma Require Word64.\n\
+     %s%s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
      Extraction \"prog\" soma_main.\n" (quote_soma_string dir) SomaMirage.float_extraction
-       SomaMirage.nat_string_extraction (String.concat "" lines));
+       SomaMirage.nat_string_extraction SomaMirage.word64_extraction (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;
@@ -327,6 +328,7 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   file "soma_main.ml" (entry_ml ());
   file "float64.ml" SomaMirage.float64_ml;
   file "uint63.ml" SomaMirage.uint63_ml;
+  file "soma_word64.ml" SomaMirage.word64_ml;
   (* Soma.Host's primitives are Soma's own module *)
   let host = List.exists (fun (m : SomaForeign.ocaml_module) -> m.ml_file = None && m.top = host_module) modules in
   if host then begin
@@ -335,7 +337,7 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   end;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
-      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_nat.ml"; "soma_bindings.ml"]
+      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; "soma_bindings.ml"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else []) @ own) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
@@ -401,6 +403,7 @@ soma_bindings.ml     each value that a .definition declares, at its declared typ
 soma_main.ml         runs main, and prints it if it is a string
 float64.ml           Soma's floats, as OCaml's
 uint63.ml            Soma's 63-bit integers, as OCaml's ints
+soma_word64.ml       Soma's 64-bit words, as OCaml's int64
 soma_nat.ml          Soma's nat, as extracted (OCaml's int)
 dune, dune-project   how dune builds it
 %s.opam%s   the opam packages it needs

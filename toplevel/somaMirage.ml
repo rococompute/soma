@@ -1782,6 +1782,82 @@ Extract Inlined Constant Stdlib.Strings.String.compare =>
   "(fun a b -> let c = Stdlib.compare (a : string) b in if c < 0 then Lt else if c = 0 then Eq else Gt)".
 |soma}
 
+(* soma_word64.ml: Soma.Word64's words as OCaml's int64, read unsigned.
+   A word's number is Rocq's binary [N] (positive: XI, XO, XH; N: N0,
+   Npos), built and read here by its representation, since this module
+   comes before prog.ml, which declares those types. *)
+let word64_ml = header ^ {soma|type t = int64
+
+let rec of_pos (p : Obj.t) : int64 =
+  if Obj.is_int p then 1L
+  else
+    let q = of_pos (Obj.field p 0) in
+    if Obj.tag p = 0 then Int64.logor (Int64.shift_left q 1) 1L else Int64.shift_left q 1
+
+(* an [N] below 2^64 (Word64 keeps its numbers there) *)
+let of_n (n : Obj.t) : int64 = if Obj.is_int n then 0L else of_pos (Obj.field n 0)
+
+let rec to_pos (w : int64) : Obj.t =
+  if Int64.equal w 1L then Obj.repr 0
+  else begin
+    let b = Obj.new_block (if Int64.equal (Int64.logand w 1L) 1L then 0 else 1) 1 in
+    Obj.set_field b 0 (to_pos (Int64.shift_right_logical w 1));
+    b
+  end
+
+let to_n (w : int64) : Obj.t =
+  if Int64.equal w 0L then Obj.repr 0
+  else begin
+    let b = Obj.new_block 0 1 in
+    Obj.set_field b 0 (to_pos w);
+    b
+  end
+
+let of_int63 (x : int) : int64 = Int64.logand (Int64.of_int x) 0x7FFF_FFFF_FFFF_FFFFL
+let divu a b = if Int64.equal b 0L then 0L else Int64.unsigned_div a b
+let remu a b = if Int64.equal b 0L then a else Int64.unsigned_rem a b
+let bits w lo width =
+  if lo >= 64 then 0L
+  else
+    let s = Int64.shift_right_logical w lo in
+    if width >= 64 then s else Int64.logand s (Int64.pred (Int64.shift_left 1L width))
+|soma}
+
+(* Soma.Word64 as OCaml's int64 (soma_word64.ml): each operation the
+   Int64 function with the meaning Word64.v gives it, unsigned, a shift
+   count modulo 64, division by zero as [N.div] has it *)
+let word64_extraction = {soma|Extract Inductive Soma.Word64.word64 => "Soma_word64.t"
+  [ "(fun n -> Soma_word64.of_n (Obj.repr n))" ] "(fun f w -> f (Obj.obj (Soma_word64.to_n w)))".
+Extract Inlined Constant Soma.Word64.to_N => "(fun w -> Obj.obj (Soma_word64.to_n w))".
+Extract Inlined Constant Soma.Word64.of_N => "(fun n -> Soma_word64.of_n (Obj.repr n))".
+Extract Inlined Constant Soma.Word64.zero => "0L".
+Extract Inlined Constant Soma.Word64.one => "1L".
+Extract Inlined Constant Soma.Word64.ones => "(-1L)".
+Extract Inlined Constant Soma.Word64.of_nat => "Int64.of_int".
+Extract Inlined Constant Soma.Word64.of_int63 => "Soma_word64.of_int63".
+Extract Inlined Constant Soma.Word64.to_int63 => "Int64.to_int".
+Extract Inlined Constant Soma.Word64.add => "Int64.add".
+Extract Inlined Constant Soma.Word64.sub => "Int64.sub".
+Extract Inlined Constant Soma.Word64.mul => "Int64.mul".
+Extract Inlined Constant Soma.Word64.neg => "Int64.neg".
+Extract Inlined Constant Soma.Word64.divu => "Soma_word64.divu".
+Extract Inlined Constant Soma.Word64.remu => "Soma_word64.remu".
+Extract Inlined Constant Soma.Word64.land => "Int64.logand".
+Extract Inlined Constant Soma.Word64.lor => "Int64.logor".
+Extract Inlined Constant Soma.Word64.lxor => "Int64.logxor".
+Extract Inlined Constant Soma.Word64.lnot => "Int64.lognot".
+Extract Inlined Constant Soma.Word64.shl => "(fun a k -> Int64.shift_left a (k land 63))".
+Extract Inlined Constant Soma.Word64.shr => "(fun a k -> Int64.shift_right_logical a (k land 63))".
+Extract Inlined Constant Soma.Word64.sar => "(fun a k -> Int64.shift_right a (k land 63))".
+Extract Inlined Constant Soma.Word64.eqb => "Int64.equal".
+Extract Inlined Constant Soma.Word64.ltb => "(fun a b -> Int64.unsigned_compare a b < 0)".
+Extract Inlined Constant Soma.Word64.leb => "(fun a b -> Int64.unsigned_compare a b <= 0)".
+Extract Inlined Constant Soma.Word64.slt => "(fun a b -> Int64.compare a b < 0)".
+Extract Inlined Constant Soma.Word64.sle => "(fun a b -> Int64.compare a b <= 0)".
+Extract Inlined Constant Soma.Word64.bits => "Soma_word64.bits".
+Extract Inlined Constant Soma.Word64.to_hex => "(Printf.sprintf ""%Lx"")".
+|soma}
+
 let float_extraction = {soma|Extract Inductive PrimFloat.float_comparison => "Float64.float_comparison" [ "FEq" "FLt" "FGt" "FNotComparable" ].
 Extract Inductive FloatClass.float_class => "Float64.float_class" [ "PNormal" "NNormal" "PSubn" "NSubn" "PZero" "NZero" "PInf" "NInf" "NaN" ].
 Extract Constant PrimFloat.float => "Float64.t".
@@ -1969,7 +2045,8 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
     "Set Extraction Output Directory %s.\n\
      From Corelib Require PrimFloat FloatClass PrimInt63 CarryType.\n\
      From Stdlib Require ExtrOcamlBasic ExtrOcamlNativeString ExtrOcamlNatInt.\n\
-     %s%s%s\
+     From Soma Require Word64.\n\
+     %s%s%s%s\
      Definition soma_wire_take_line := Soma.Wire.take_line.\n\
      Definition soma_wire_take_frame (buffer : string) : option (option (string * string)) :=\n\
        match Soma.Wire.take_frame Soma.Wire.max_frame buffer with\n\
@@ -1979,7 +2056,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
        end.\n\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction
+     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction word64_extraction
        (String.concat "" (SomaOcamlBindings.extraction_lines ocaml_modules @ List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
@@ -2250,7 +2327,7 @@ let check_project ~wasm ~libraries ~native_files dir =
   mkdir_p checks;
   write_file (Filename.concat checks "standins.mli") standins_mli;
   write_file (Filename.concat checks "config.ml") (read_file (Filename.concat dir "config.ml"));
-  let base = ["uint63.ml"; "float64.ml"; "soma_nat.ml"] in
+  let base = ["uint63.ml"; "soma_word64.ml"; "float64.ml"; "soma_nat.ml"] in
   (* the C modules' OCaml, checked with the program's; their C, by the
      machine's C compiler, against the header and OCaml's (an image's
      C is compiled for Solo5 only when the image is built) *)
@@ -2458,7 +2535,7 @@ let image_build_inputs ~switch ~dir sources =
           List.map (Filename.concat dir)
             ["duniverse"; "mirage"; "Makefile"; "dune"; "dune-project"; "config.ml";
              "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_disk.ml"; "soma_wasm.ml";
-             "float64.ml"; "uint63.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
+             "float64.ml"; "uint63.ml"; "soma_word64.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
 
@@ -2520,6 +2597,7 @@ let build ~state ~source ~vo_file =
       "soma_wasm.ml", wasm_ml modules;
       "float64.ml", float64_ml;
       "uint63.ml", uint63_ml;
+      "soma_word64.ml", word64_ml;
       "gradual.ml", gradual_ml ~has_casts:(contains prog "module Gradual_rt");
       "prog.ml", prog;
       "prog.mli", read_file (Filename.concat staging "prog.mli");

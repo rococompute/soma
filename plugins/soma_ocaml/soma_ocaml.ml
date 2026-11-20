@@ -121,7 +121,7 @@ let type_variable used na =
 let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t)
 
 (* The OCaml type of a declared type: [string], [bool], [nat], [unit], [list],
-   [option], products, [float], functions, types of OCaml modules that a
+   [option], products, [float], [word64], functions, types of OCaml modules that a
    .definition declares, and type variables ([forall A, ...]), which
    extraction erases as arguments *)
 let rec ocaml_type env sigma vars t =
@@ -162,6 +162,9 @@ let rec ocaml_type env sigma vars t =
     (* Rocq's primitive 63-bit integer, as extraction has it: OCaml's
        int, Uint63.t of the generated uint63.ml *)
     else if is "num.int63.type" then "Uint63.t"
+    (* Soma.Word64's unsigned 64-bit words: OCaml's int64, read unsigned
+       (soma_word64.ml) *)
+    else if is "soma.word64.type" then "Soma_word64.t"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
     else if is "core.option.type" then arg (List.hd args) ^ " option"
     else if is "core.prod.type" then

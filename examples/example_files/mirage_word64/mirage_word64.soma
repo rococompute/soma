@@ -1,0 +1,63 @@
+(** Soma.Word64 in an image: unsigned 64-bit words, which the image
+    computes with OCaml's int64. [cases] is computed twice: by the kernel,
+    in mirage_word64.exp, which proves it equals [expected]; and by the
+    image, which compares what it computed with [expected] and says which
+    case differs, if one does. Wrapping, signed and unsigned comparison,
+    shift counts modulo 64, division by zero, bit fields, and words to and
+    from binary naturals and 63-bit integers. dev/mirage-check.sh boots it. *)
+Require Import Sandbox.
+From Stdlib Require Import NArith List.
+Import ListNotations.
+Require Import Soma.Word64.
+From Corelib Require PrimInt63.
+
+Definition yes (b : bool) : string := if b then "true" else "false".
+Definition big : N := 18446744073709551621.  (* 2^64 + 5 *)
+
+Definition cases : list string := [
+  to_hex (add ones one);
+  to_hex (sub zero one);
+  to_hex (mul (of_N 4294967295) (of_N 4294967295));
+  to_hex (divu ones (of_nat 16));
+  to_hex (remu (of_nat 100) zero);
+  to_hex (divu (of_nat 100) zero);
+  to_hex (sar (shl one 63) 4);
+  to_hex (shr (shl one 63) 4);
+  to_hex (shl one 64);
+  to_hex (shl one 65);
+  to_hex (bits (of_N 2516582469) 26 6);
+  to_hex (bits ones 60 8);
+  to_hex (bits ones 64 8);
+  yes (ltb ones zero); yes (slt ones zero); yes (leb one one); yes (sle zero ones);
+  yes (eqb (neg one) ones);
+  to_hex (of_N (to_N (of_N 16045690984503098046)));
+  yes (N.eqb (to_N ones) 18446744073709551615);
+  yes (N.eqb (to_N (of_nat 7)) 7);
+  to_hex (of_N big);
+  to_hex (of_int63 (to_int63 (of_N 4611686018427387904)));
+  to_hex (of_int63 (to_int63 ones));
+  to_hex (land (of_N 61440) (lnot (of_N 4095)));
+  to_hex (lor (of_N 61440) (lxor (of_N 255) (of_N 15)))
+].
+
+Definition expected : list string := [
+  "0"; "ffffffffffffffff"; "fffffffe00000001"; "fffffffffffffff"; "64"; "0";
+  "f800000000000000"; "800000000000000"; "1"; "2"; "25"; "f"; "0";
+  "false"; "true"; "true"; "false"; "true";
+  "deadbeefcafebabe"; "true"; "true"; "5"; "4000000000000000"; "7fffffffffffffff"; "f000"; "f0f0"
+].
+
+(** the cases that differ from what was expected: their positions, from 0 *)
+Fixpoint differing (n : nat) (got want : list string) : list nat :=
+  match got, want with
+  | g :: got, w :: want => (if String.eqb g w then [] else [n]) ++ differing (S n) got want
+  | [], [] => []
+  | _, _ => [n]
+  end.
+
+main : io unit :=
+  match differing 0 cases expected with
+  | [] => print "the words computed as expected"
+  | bad => print ("cases that differ: " ++ String.concat ", " (map to_string bad)) ;;
+           print (String.concat "|" cases) ;; exit 1
+  end.

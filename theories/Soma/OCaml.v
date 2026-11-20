@@ -37,7 +37,8 @@
     A declared type of [Type] (or [Type -> Type], ...)
     is an OCaml type ([html] is ['a File.html]); the type of a value is
     made of [string], [bool], [unit], [list], [option], products, [float],
-    [int] ([Uint63.t], OCaml's int), [nat],
+    [int] ([Uint63.t], OCaml's int), [nat], [word64] (Soma.Word64's
+    unsigned 64-bit words, OCaml's [int64]; C's [uint64_t]),
     functions, these types, and type variables ([forall A]).
 
     Soma never computes them: they are parameters to the kernel and when
@@ -80,5 +81,11 @@ Module Export Ints.
   Abbreviation int := PrimInt63.int.
   Number Notation PrimInt63.int PrimInt63.parser PrimInt63.printer : uint63_scope.
 End Ints.
+
+(** [word64], Soma.Word64's unsigned 64-bit words, by that name *)
+From Soma Require Word64.
+Module Export Words.
+  Abbreviation word64 := Soma.Word64.word64.
+End Words.
 
 Declare ML Module "soma-runtime.plugins.soma_ocaml".

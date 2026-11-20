@@ -19,6 +19,7 @@
    - int (Rocq's primitive 63-bit integer), nat: int64_t (a nat never
      below 0: a negative result is 0)
    - bool: bool; float: double
+   - word64 (Soma.Word64): uint64_t
    - string: soma_str { ptr; len } as an argument, valid during the call;
      as a result, a soma_buf the function fills with malloc'd bytes, which
      the stub copies and frees
@@ -32,6 +33,7 @@
 type atom =
   | Int                 (* int, nat *)
   | Nat
+  | Word                (* Soma.Word64's word64 *)
   | Bool
   | Float
   | Str
@@ -75,6 +77,7 @@ let atom ~top s =
   match strip_parens s with
   | "Uint63.t" -> Ok Int
   | "Soma_nat.nat" -> Ok Nat
+  | "Soma_word64.t" -> Ok Word
   | "bool" -> Ok Bool
   | "float" -> Ok Float
   | "string" -> Ok Str
@@ -117,7 +120,7 @@ let signature ~top ty =
     match args, res with
     | Ok args, Ok result -> Ok { args; result }
     | Error s, _ | _, Error s ->
-      Error ("C has no " ^ s ^ ": a C module's arguments are int, nat, bool, float, string or a type the definition declares (unit alone for none), its result one of these, unit, or an option of one")
+      Error ("C has no " ^ s ^ ": a C module's arguments are int, nat, word64, bool, float, string or a type the definition declares (unit alone for none), its result one of these, unit, or an option of one")
 
 (* the C name of a declaration *)
 let c_name ~file name = file ^ "_" ^ name
@@ -127,6 +130,7 @@ let base_of file = Filename.remove_extension (Filename.basename file)
 
 let c_type = function
   | Int | Nat -> "int64_t"
+  | Word -> "uint64_t"
   | Bool -> "bool"
   | Float -> "double"
   | Str -> "soma_str"
@@ -167,6 +171,7 @@ let header_h ~file ~definition sigs =
 (* OCaml value -> C *)
 let of_value a v = match a with
   | Int | Nat -> Printf.sprintf "(int64_t)Long_val(%s)" v
+  | Word -> Printf.sprintf "(uint64_t)Int64_val(%s)" v
   | Bool -> Printf.sprintf "(bool)Bool_val(%s)" v
   | Float -> Printf.sprintf "Double_val(%s)" v
   | Str -> Printf.sprintf "(soma_str){ (const uint8_t *)String_val(%s), caml_string_length(%s) }" v v
@@ -176,6 +181,7 @@ let of_value a v = match a with
 let to_value a c = match a with
   | Int -> Printf.sprintf "Val_long(%s)" c
   | Nat -> Printf.sprintf "Val_long(%s < 0 ? 0 : %s)" c c
+  | Word -> Printf.sprintf "caml_copy_int64((int64_t)%s)" c
   | Bool -> Printf.sprintf "Val_bool(%s)" c
   | Float -> Printf.sprintf "caml_copy_double(%s)" c
   | Str -> Printf.sprintf "soma_c_string(&%s)" c
@@ -222,6 +228,7 @@ let stubs_c ~file sigs =
 
 let ocaml_atom = function
   | Int | Nat | Handle _ -> "int"
+  | Word -> "int64"
   | Bool -> "bool"
   | Float -> "float"
   | Str -> "string"

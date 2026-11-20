@@ -1,0 +1,5 @@
+(** The kernel computes the cases mirage_word64.soma's image does, from
+    Word64's definitions: these are what the image must print. *)
+
+Theorem kernel_agrees : cases = expected.
+Proof. reflexivity. Qed.
