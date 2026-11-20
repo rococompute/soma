@@ -929,7 +929,12 @@ Bonsai in the browser, with no OCaml code of their own.
 `dev/ocaml-check.sh` builds and runs both. A `nat` is given to OCaml as
 extraction has it, OCaml's `int`, which is `Soma_nat.nat` to the
 project's modules (a generated `soma_nat.ml`), and not converted:
-`examples/example_projects/ocaml_succ` declares `succ : nat -> nat`. Not yet: the other numbers (`N`, `Z` and `int`); OCaml's modules as values (Bonsai's `state_machine0` takes
+`examples/example_projects/ocaml_succ` declares `succ : nat -> nat`. Rocq's
+primitive 63-bit `int` (`PrimInt63.int`, which `Soma.OCaml`, and so every
+`.definition`, names `int`, with its literals) is given as OCaml's `int`,
+which is `Uint63.t` to the project's modules (a generated `uint63.ml`), and
+not converted either; `Soma.Show` shows one, unsigned, in decimal. Not yet:
+the other numbers (`N` and `Z`); OCaml's modules as values (Bonsai's `state_machine0` takes
 the state's type as a module of the `Model` signature, so the counter's
 state is a `Bonsai.Var`); labeled arguments of a function given to OCaml;
 values named by a keyword of Soma's (`return`).
@@ -1080,6 +1085,64 @@ the Rocq it extends. A library's dependencies are named by their own `Rocq
 Library`, before it. `examples/example_projects/rocq_stdpp` keeps a shop's
 stock in std++'s finite maps, computed by Soma and proved with std++'s
 lemmas.
+
+### C modules: `.definition` next to `.c`
+
+A C file `FILE.c` is used through `FILE.definition`, next to it, as an
+OCaml module is, and is plain C: Soma writes the OCaml that calls it
+(`vernac/somaC.ml`), and `FILE.soma.h`, the declarations of the functions
+FILE.c defines, which it includes. Each declaration is the C function
+`FILE_name`, its type made of:
+
+| Declared | In C |
+| --- | --- |
+| `int`, `nat` | `int64_t` (a negative result given as a `nat` is `0`) |
+| `bool`, `float` | `bool`, `double` |
+| `string`, as an argument | `soma_str { const uint8_t *ptr; size_t len; }`, valid during the call |
+| `string`, as the result | the function returns `void` and fills its last argument, `soma_buf *out`, with bytes from `malloc`, which Soma copies and frees |
+| a type the definition declares (`ctx : Type.`) | `soma_handle`, an `uintptr_t` Soma keeps and gives back, never looks into |
+| `unit`, as the only argument, or the result | no parameters, `void` |
+| `option A`, as the result | the function returns whether there is one, and writes it to its last argument, `A *out` |
+
+```
+(* machine.definition, next to machine.c *)
+buffer : Type.
+buffer_new : nat -> buffer.
+buffer_get : buffer -> nat -> option int.
+ticks : unit -> int.
+```
+
+```c
+#include "machine.soma.h"
+bool machine_buffer_get(soma_handle h, int64_t i, int64_t *out) { ... }
+int64_t machine_ticks(void) { uint64_t t; __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t)); return t >> 1; }
+```
+
+A declaration C cannot take (a list, a product, a function, a type with
+parameters, a declaration in a submodule, a library) is refused when the
+definition is compiled, saying what C takes. The C file is compiled
+against the header, so a function whose type is not its declaration's is
+a C compiler error (`conflicting types`) when the program is built; an
+image's C is also checked so by `soma build --no-image`, with the
+machine's C compiler.
+
+An executable links FILE.c (dune's `foreign_stubs`). A Sandbox image
+builds it for Solo5, in a library of its own (`soma_c`, in the image's
+project, which a program with C modules has to itself: `-c` in its name):
+freestanding C, with the string functions and `malloc` of Solo5's libc,
+no stdio or threads, and assembly where C has none. A page cannot call C.
+
+A C function that does something (allocates, writes memory, reads a
+clock) is called when OCaml evaluates it: in an executable, at the point
+the extracted code reaches it, in OCaml's order within an expression. In
+an image, Sandbox's `call f` calls `f tt` in order with the other actions:
+`x <- call (fun _ => buffer_get b 3) ;; ...`, `t <- call ticks ;; ...`.
+`examples/example_projects/c_arith` is an executable calling C with each
+kind of argument; `examples/example_projects/c_image` fills a C buffer and
+reads the ARM counter with inline assembly in a unikernel;
+`test-suite/misc/soma_c.sh` builds both, more than five arguments, and the
+refusals. Not yet: callbacks from C into Soma, structures by value, a
+prebuilt C library, handles freed by the collector.
 
 ### Theorems proved in Lean: `.definition` next to `.lean`
 
@@ -1653,6 +1716,7 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `write s` | `io unit` | `s` on the console as it is, flushed: no line break added (`print` adds one) |
 | `monotonic_ns` | `io int` | monotonic nanoseconds since an arbitrary origin (`Mirage_mtime`), as Rocq's primitive 63-bit integer (`PrimInt63.int`, OCaml's `int` in the image): cheap to read in a loop |
 | `wall_clock` | `io (int * int)` | the UTC wall clock (`Mirage_ptime`): seconds since 1970-01-01 and the nanoseconds past them, as primitive integers |
+| `call f` | `io A` | `f tt`, called in order with the other actions: for a function of a C or OCaml module that does something (`call (fun _ => buffer_get b 3)`) |
 | `args` | `io (list string)` | the `--arg=...` given to the image, in order |
 | `exit n` | `io A` | stops with exit code `n` |
 | `serve port handler` | `io unit` | answers TCP connections on `port`: the first data a connection sends goes to `handler : string -> io string`, whose result is sent back before the connection is closed. Returns at once; the image keeps serving after `main` ends. |

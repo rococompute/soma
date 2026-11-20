@@ -1,0 +1,26 @@
+(** A unikernel that calls C: machine.c, which machine.definition
+    declares, built for Solo5 with the image. [call] puts each C call in
+    order with the image's other actions. It fills a C buffer, sums it,
+    checks a read past its end, and reads the ARM counter (inline
+    assembly) across a 10 ms sleep. It exits 0 when all went as expected:
+
+        soma run examples/example_projects/c_image/main.soma *)
+Require Import Sandbox.
+From Stdlib Require Import NArith.
+Import machine.
+
+main : io unit :=
+  b <- call (fun _ => buffer_new 4) ;;
+  first <- call (fun _ => buffer_set b 0 40) ;;
+  last <- call (fun _ => buffer_set b 3 2) ;;
+  outside <- call (fun _ => buffer_set b 4 1) ;;
+  sum <- call (fun _ => buffer_sum b) ;;
+  past <- call (fun _ => buffer_get b 9) ;;
+  t0 <- call ticks ;;
+  sleep_ms 10%N ;;
+  t1 <- call ticks ;;
+  print ("sum " ++ to_string sum) ;;
+  if first && last && negb outside && PrimInt63.eqb sum 42 &&
+     (match past with None => true | Some _ => false end) && PrimInt63.ltb t0 t1
+  then print "C ran in the unikernel as expected"
+  else print "C did not go as expected" ;; exit 1.

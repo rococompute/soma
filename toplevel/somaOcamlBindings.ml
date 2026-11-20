@@ -126,15 +126,58 @@ let checked_modules ?(reserved = []) () =
     names;
   modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
 
-let write_files ~file ~read_file ~directives modules =
+(* whether a module is FILE.c (vernac/somaC.ml), and its files: the
+   OCaml module of externals, FILE.soma.h, the stubs, and FILE.c itself,
+   under another name than the OCaml module's, which dune would give the
+   same object file *)
+let is_c (m : SomaForeign.ocaml_module) =
+  match m.ml_file with Some f -> Filename.check_suffix f ".c" | None -> false
+
+let c_files ~read_file (m : SomaForeign.ocaml_module) =
+  match m.ml_file with
+  | None -> []
+  | Some c ->
+    let file = String.uncapitalize_ascii m.top in
+    let definition = SomaC.base_of c ^ ".definition" in
+    let types = List.filter_map (fun (_, path, item) -> match item with
+        | SomaForeign.OCamlType _ -> Some path | _ -> None) m.items in
+    let values = List.filter_map (fun (_, path, item) -> match item with
+        | SomaForeign.OCamlValue (ty, labels) ->
+          (match SomaC.signature ~top:m.top ty with
+           | Ok s -> Some ((path, s), (path, labels))
+           | Error why -> error Pp.(str definition ++ str ": " ++ str path ++ str ": " ++ str why))
+        | _ -> None) m.items in
+    let sigs = List.map fst values and labels = List.map snd values in
+    [file ^ ".ml", SomaC.module_ml ~file ~types ~labels sigs;
+     file ^ ".soma.h", SomaC.header_h ~file ~definition sigs;
+     file ^ "_soma_stubs.c", SomaC.stubs_c ~file sigs;
+     file ^ "_soma_c.c", Printf.sprintf "#line 1 %S\n" c ^ read_file c]
+
+(* the C files' names, for dune's foreign_stubs *)
+let c_stub_names made =
+  List.filter_map (fun f ->
+      if Filename.check_suffix f ".c" then Some (Filename.remove_extension f) else None) made
+
+(* The program's modules; a C module's files go to [c_file], which is
+   [file] unless an image keeps them in a library of their own, and are
+   then not among those returned *)
+let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
   ["soma_nat.ml"; "soma_bindings.ml"] @
-  List.filter_map (fun (m : SomaForeign.ocaml_module) ->
-      Option.map (fun ml ->
-          let f = String.uncapitalize_ascii m.top ^ ".ml" in
-          file f ((if directives then Printf.sprintf "# 1 %S\n" ml else "") ^ read_file ml);
-          f) m.ml_file) modules
+  List.concat_map (fun (m : SomaForeign.ocaml_module) ->
+      if is_c m then begin
+        let files = c_files ~read_file m in
+        match c_file with
+        | Some write -> List.iter (fun (f, text) -> write f text) files; []
+        | None -> List.iter (fun (f, text) -> file f text) files; List.map fst files
+      end else
+      match m.ml_file with
+      | None -> []
+      | Some ml ->
+        let f = String.uncapitalize_ascii m.top ^ ".ml" in
+        file f ((if directives then Printf.sprintf "# 1 %S\n" ml else "") ^ read_file ml);
+        [f]) modules
 
 (* lwt.unix is a library of the opam package lwt *)
 let package_of library = match String.index_opt library '.' with

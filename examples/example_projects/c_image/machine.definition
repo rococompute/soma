@@ -1,0 +1,6 @@
+buffer : Type.
+buffer_new : nat -> buffer.
+buffer_set : buffer -> nat -> int -> bool.
+buffer_get : buffer -> nat -> option int.
+buffer_sum : buffer -> int.
+ticks : unit -> int.

@@ -1,0 +1,4 @@
+[project]
+name = "c_image"
+version = "0.1.0"
+description = "A C module, inline assembly included, called from a MirageOS unikernel"

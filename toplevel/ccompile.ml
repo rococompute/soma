@@ -72,8 +72,8 @@ let load_folder_rules ~state f = function
   | [] -> state
   | libs -> process_string ~file:f ~state ("Import " ^ String.concat " " libs ^ ".")
 
-(* Soma: FILE.definition declares what FILE.wasm or FILE.ml, next to it,
-   has, or, next to neither, what a library's OCaml module File has
+(* Soma: FILE.definition declares what FILE.wasm, FILE.ml or FILE.c, next
+   to it, has, or, next to neither, what a library's OCaml module File has
    (async.definition: Async): Soma.Wasm or Soma.OCaml first, then, after
    its declarations, [Wasm Bind] or [OCaml Bind], which ties them to the
    module (plugins/soma_wasm, plugins/soma_ocaml) *)
@@ -89,10 +89,11 @@ let definition_module f =
   | _ ->
     let base = Filename.chop_suffix f ".definition" in
     let name = Filename.basename base in
-    let next = List.filter (fun e -> Sys.file_exists (base ^ e)) [".wasm"; ".ml"; ".lean"] in
+    let next = List.filter (fun e -> Sys.file_exists (base ^ e)) [".wasm"; ".ml"; ".c"; ".lean"] in
     match next with
     | [".wasm"] -> `Wasm (absolute (base ^ ".wasm"))
     | [".ml"] -> `Ml (absolute (base ^ ".ml"))
+    | [".c"] -> `C (absolute (base ^ ".c"))
     | [".lean"] -> `Lean (absolute (base ^ ".lean"))
     | [] -> `Library (String.capitalize_ascii name)
     | _ ->
@@ -105,7 +106,7 @@ let load_definition_prologue ~state f =
   (* exported: what imports the module has its types, float among them *)
   match definition_module f with
   | `Wasm _ -> process_string ~state "Require Export Soma.Wasm."
-  | `Ml _ | `Library _ -> process_string ~state "Require Export Soma.OCaml."
+  | `Ml _ | `C _ | `Library _ -> process_string ~state "Require Export Soma.OCaml."
   | `Lean _ -> process_string ~state "Require Export Soma.Lean."
 
 let load_definition_epilogue ~state f =
@@ -113,6 +114,7 @@ let load_definition_epilogue ~state f =
   let bind = match definition_module f with
     | `Wasm wasm -> Printf.sprintf "Wasm Bind %S." wasm
     | `Ml ml -> Printf.sprintf "OCaml Bind %S." ml
+    | `C c -> Printf.sprintf "OCaml Bind C %S." c
     | `Library top -> Printf.sprintf "OCaml Bind Module %S." top
     | `Lean lean -> Printf.sprintf "Lean Bind %S." lean in
   (* its errors are the file's *)

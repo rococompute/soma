@@ -151,6 +151,11 @@ Inductive io : Type -> Type :=
 (** the wall clock, UTC: the seconds since 1970-01-01 00:00:00 and the
     nanoseconds past them, as [clock_gettime(CLOCK_REALTIME)] gives them *)
 | wall_clock : io (PrimInt63.int * PrimInt63.int)
+(** [f tt], called when the image comes to it, in order with the other
+    actions: for a function of a C or OCaml module that does something
+    ([call (fun _ => peek address 8)]). Such a function, called outside
+    [call], may be computed once, early, or not at all, as a value is. *)
+| call {A : Type} (f : unit -> A) : io A
 (** the arguments given to the image: [solo5-hvt -- prog.hvt --arg=a --arg=b]
     gives [["a", "b"]] *)
 | args : io (list string)
@@ -282,6 +287,7 @@ Arguments bind {A B} m k.
 Arguments forever {A} body.
 Arguments iterate {S A} step start.
 Arguments exit {A} code.
+Arguments call {A} f.
 
 Declare Scope io_scope.
 Delimit Scope io_scope with io.

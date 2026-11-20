@@ -18,6 +18,7 @@
 
 Require Import Soma.Strings.
 From Stdlib Require Numbers.DecimalString NArith.BinNatDef ZArith.BinIntDef Lists.List.
+From Corelib Require PrimInt63.
 
 Class Show (A : Type) := { to_string : A -> string }.
 
@@ -43,6 +44,31 @@ Class Show (A : Type) := { to_string : A -> string }.
 
 #[export] Instance show_Z : Show BinNums.Z :=
   { to_string z := DecimalString.NilZero.string_of_int (BinIntDef.Z.to_int z) }.
+
+(** Rocq's primitive 63-bit integer, unsigned, in decimal: its digits
+    from the last, at most 19 (2^63 has 19) *)
+Module IntDecimal.
+Import PrimInt63.
+
+Definition int_digit (d : PrimInt63.int) : String.string :=
+  if PrimInt63.eqb d 0%uint63 then "0" else if PrimInt63.eqb d 1%uint63 then "1"
+  else if PrimInt63.eqb d 2%uint63 then "2" else if PrimInt63.eqb d 3%uint63 then "3"
+  else if PrimInt63.eqb d 4%uint63 then "4" else if PrimInt63.eqb d 5%uint63 then "5"
+  else if PrimInt63.eqb d 6%uint63 then "6" else if PrimInt63.eqb d 7%uint63 then "7"
+  else if PrimInt63.eqb d 8%uint63 then "8" else "9".
+
+Fixpoint int_decimal (fuel : nat) (i : PrimInt63.int) (acc : String.string) : String.string :=
+  let acc := String.append (int_digit (PrimInt63.mod i 10%uint63)) acc in
+  let rest := PrimInt63.div i 10%uint63 in
+  match fuel with
+  | O => acc
+  | S more => if PrimInt63.eqb rest 0%uint63 then acc else int_decimal more rest acc
+  end.
+
+End IntDecimal.
+
+#[export] Instance show_int : Show PrimInt63.int :=
+  { to_string i := IntDecimal.int_decimal 19 i "" }.
 
 (** [[1,2,3]]: the elements' [to_string], between brackets, separated by
     commas. Strings are not quoted, so [["a", "b"]] is [[a,b]]. *)

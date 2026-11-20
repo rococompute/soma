@@ -1,0 +1,7 @@
+sum : int -> int -> int.
+scale : float -> float -> float.
+shout : string -> string.
+first_byte : string -> option nat.
+counter : Type.
+counter_new : unit -> counter.
+counter_bump : counter -> nat.

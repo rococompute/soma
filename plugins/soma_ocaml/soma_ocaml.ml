@@ -159,6 +159,9 @@ let rec ocaml_type env sigma vars t =
     (* nat as extraction has it, OCaml's int: Soma_nat.nat, which
        toplevel/somaOcaml.ml generates *)
     else if is "num.nat.type" then "Soma_nat.nat"
+    (* Rocq's primitive 63-bit integer, as extraction has it: OCaml's
+       int, Uint63.t of the generated uint63.ml *)
+    else if is "num.int63.type" then "Uint63.t"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
     else if is "core.option.type" then arg (List.hd args) ^ " option"
     else if is "core.prod.type" then
@@ -259,6 +262,36 @@ let bind file =
   let file = SomaImport.project_file file in
   bind_module ~key:file ~ml_file:(Some file) ~top:(module_name file)
     ~definition:(Filename.remove_extension base ^ ".definition")
+
+(* [OCaml Bind C "FILE.c"]: FILE.definition declares FILE.c, whose OCaml
+   module Soma generates (vernac/somaC.ml): what C can take is narrower
+   than what OCaml can, and said here, where the definition is compiled *)
+let bind_c file =
+  let base = Filename.basename file in
+  let definition = Filename.remove_extension base ^ ".definition" in
+  let file = SomaImport.project_file file in
+  let top = module_name file in
+  if !pending <> [] then
+    CErrors.user_err (str definition ++ str ": a C module uses no OCaml library (OCaml Library).");
+  bind_module ~key:file ~ml_file:(Some file) ~top ~definition;
+  Cmap_env.iter (fun _ b ->
+      if String.equal b.key file then begin
+        if String.contains b.path '.' then
+          CErrors.user_err (str definition ++ str ": " ++ str b.path ++
+                            str " is in a module; a C module's declarations are at its top, each the C function " ++
+                            str (SomaC.base_of base) ++ str "_name.");
+        match b.item with
+        | SomaForeign.OCamlType 0 -> ()
+        | SomaForeign.OCamlType _ ->
+          CErrors.user_err (str definition ++ str ": " ++ str b.path ++
+                            str " has parameters; a C module's types are handles (name : Type.), with none.")
+        | SomaForeign.OCamlValue (ty, _) ->
+          match SomaC.signature ~top ty with
+          | Ok _ -> ()
+          | Error why ->
+            CErrors.user_err (hov 0 (str definition ++ str ": " ++ str b.path ++ str " : " ++ str ty ++
+                                     str " is not given to C:" ++ spc () ++ str why ++ str "."))
+      end) !bindings
 
 (* [OCaml Bind Module "Async"]: async.definition, next to no module,
    declares a library's module *)

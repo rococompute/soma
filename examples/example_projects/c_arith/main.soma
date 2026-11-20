@@ -1,0 +1,15 @@
+(** A C module: arith.c, which arith.definition declares. Soma generates
+    the OCaml that calls it and arith.soma.h, which arith.c includes; the
+    executable links arith.c. A function that does something (here
+    [counter_bump]) is called when OCaml evaluates it: in one expression,
+    in OCaml's order, which is not the text's; an image puts such calls in
+    order with Sandbox's [call]. *)
+Import arith.
+
+c := counter_new tt.
+
+main : string :=
+  to_string (sum 40 2) ++ " " ++ shout "hello" ++ " " ++
+  (match first_byte "A" with Some n => to_string n | None => "none" end) ++ " " ++
+  (match first_byte "" with Some n => to_string n | None => "none" end) ++ " " ++
+  to_string (counter_bump c).

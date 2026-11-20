@@ -37,6 +37,7 @@
     A declared type of [Type] (or [Type -> Type], ...)
     is an OCaml type ([html] is ['a File.html]); the type of a value is
     made of [string], [bool], [unit], [list], [option], products, [float],
+    [int] ([Uint63.t], OCaml's int), [nat],
     functions, these types, and type variables ([forall A]).
 
     Soma never computes them: they are parameters to the kernel and when
@@ -67,5 +68,17 @@ Module Export Floats.
   Abbreviation float := PrimFloat.float.
   Number Notation PrimFloat.float PrimFloat.parser PrimFloat.printer : float_scope.
 End Floats.
+
+From Corelib Require PrimInt63.
+
+(** [int], Rocq's primitive 63-bit integer (OCaml's [int] once extracted:
+    [Uint63.t] in an OCaml module, [int64_t] in a C one), and its literals
+    ([42]), without PrimInt63's names ([add], [lsl], ...), which a module
+    may have *)
+Module Export Ints.
+  Export PrimInt63.PrimInt63Notations.
+  Abbreviation int := PrimInt63.int.
+  Number Notation PrimInt63.int PrimInt63.parser PrimInt63.printer : uint63_scope.
+End Ints.
 
 Declare ML Module "soma-runtime.plugins.soma_ocaml".
