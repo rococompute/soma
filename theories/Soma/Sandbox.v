@@ -141,6 +141,10 @@ Inductive event : Type :=
     its look and its wait is not missed. Made only by [new_signal]. *)
 Inductive signal : Type := Signal (id : nat).
 
+(** A dynamically scoped value, inherited by forked tasks and restored after
+    its scope, including across waits. Each task's scope is independent. *)
+Inductive context_key (A : Type) : Type := ContextKey (id : nat).
+
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
 (** [bind m k]: run [m], then [k] on its result *)
@@ -389,7 +393,21 @@ Inductive io : Type -> Type :=
 | forget {A : Type} (t : task A) : io unit
 (** wait for what OCaml promised: its value, or the task fails as OCaml's
     did *)
-| await_promise {A : Type} (p : promise A) : io A.
+| await_promise {A : Type} (p : promise A) : io A
+(** yield cooperatively without adding a clock delay *)
+| yield : io unit
+(** recover an action's failure without starting another task; exit still exits *)
+| attempt {A : Type} (body : io A) : io (awaited A)
+(** cleanup runs on success, failure and cooperative cancellation *)
+| finally {A : Type} (body : io A) (cleanup : io unit) : io A
+(** first result, cancelling the other action; tag values in A to distinguish sides *)
+| race {A : Type} (left right : io A) : io (awaited A)
+(** request cooperative cancellation of a pending forked task; false if absent/done *)
+| cancel {A : Type} (t : task A) : io bool
+| new_context_key {A : Type} : io (context_key A)
+| get_context {A : Type} (key : context_key A) : io (option A)
+| with_context {A B : Type} (key : context_key A) (value : option A) (body : io B) : io B
+| free_context_key {A : Type} (key : context_key A) : io unit.
 
 Arguments ret {A} a.
 Arguments bind {A B} m k.
@@ -411,6 +429,15 @@ Arguments TaskFailed {A} why.
 Arguments free_cell {A} c.
 Arguments forget {A} t.
 Arguments await_promise {A} p.
+Arguments ContextKey {A} id.
+Arguments attempt {A} body.
+Arguments finally {A} body cleanup.
+Arguments race {A} left right.
+Arguments cancel {A} t.
+Arguments new_context_key {A}.
+Arguments get_context {A} key.
+Arguments with_context {A B} key value body.
+Arguments free_context_key {A} key.
 
 Declare Scope io_scope.
 Delimit Scope io_scope with io.

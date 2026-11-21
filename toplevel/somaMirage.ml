@@ -585,6 +585,12 @@ let task_ended : unit Lwt_condition.t = Lwt_condition.create ()
 let forked : (int, (Obj.t, string) result Lwt.t) Hashtbl.t = Hashtbl.create 16
 let last_task = ref 0
 
+let contexts : (int, Obj.t Lwt.key) Hashtbl.t = Hashtbl.create 8
+let last_context = ref 0
+let context_key id = match Hashtbl.find_opt contexts id with
+  | Some key -> key
+  | None -> failwith (Printf.sprintf "no context key %d: a key is made by new_context_key" id)
+
 (* Named disks (disk_info, disk_read, disk_write), installed by the
    unikernel for each block device the program names: sector size and
    count; sectors from one on; data written from a sector *)
@@ -625,7 +631,7 @@ let awaited id : Obj.t awaited_value Lwt.t =
   match Hashtbl.find_opt forked id with
   | None -> Lwt.return (TaskFailed (chars_of_string (Printf.sprintf "no task %d: a task is made by fork" id)))
   | Some result ->
-      result >|= function
+      Lwt.protected result >|= function
       | Ok v -> Completed v
       | Error why -> TaskFailed (chars_of_string why)
 
@@ -674,7 +680,7 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       awaited (int_of_nat (check t)) >|= fun r -> Obj.magic r
   | Prog.Await_within (t, ms) ->
       let r = awaited (int_of_nat (check t)) in
-      Lwt.choose [ (r >|= fun r -> Some r); (sleep_milliseconds ms >|= fun () -> None) ]
+      Lwt.pick [ (r >|= fun r -> Some r); (sleep_milliseconds ms >|= fun () -> None) ]
       >|= fun r -> Obj.magic r
   | Prog.New_cell a ->
       incr last_cell;
@@ -904,6 +910,40 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Free_cell c -> Hashtbl.remove cells (int_of_nat (check c)); Lwt.return (Obj.magic ())
   | Prog.Forget t -> Hashtbl.remove forked (int_of_nat (check t)); Lwt.return (Obj.magic ())
   | Prog.Await_promise p -> Obj.magic (check p)
+  | Prog.Yield -> Lwt.pause () >|= Obj.magic
+  | Prog.Attempt body ->
+      capture net body >|= fun result -> Obj.magic (match result with
+        | Ok value -> Completed value | Error why -> TaskFailed (chars_of_string why))
+  | Prog.Finally (body, cleanup) ->
+      Lwt.finalize (fun () -> run net body) (fun () -> run net cleanup)
+  | Prog.Race (left, right) ->
+      Lwt.pick [capture net left; capture net right] >|= fun result ->
+      Obj.magic (match result with Ok value -> Completed value | Error why -> TaskFailed (chars_of_string why))
+  | Prog.Cancel t ->
+      let pending = match Hashtbl.find_opt forked (int_of_nat (check t)) with
+        | Some result -> (match Lwt.state result with
+            | Lwt.Sleep -> Lwt.cancel result; true
+            | Lwt.Return _ | Lwt.Fail _ -> false)
+        | None -> false in
+      Lwt.return (Obj.magic pending)
+  | Prog.New_context_key ->
+      incr last_context;
+      Hashtbl.add contexts !last_context (Lwt.new_key ());
+      Lwt.return (Obj.magic !last_context)
+  | Prog.Get_context key ->
+      let key = context_key (int_of_nat (check key)) in
+      Lwt.return (Obj.magic (Option.map Obj.obj (Lwt.get key)))
+  | Prog.With_context (key, value, body) ->
+      let key = context_key (int_of_nat (check key)) in
+      Lwt.with_value key (Option.map Obj.repr (check value)) (fun () -> run net body)
+  | Prog.Free_context_key key ->
+      Hashtbl.remove contexts (int_of_nat (check key)); Lwt.return (Obj.magic ())
+
+and capture : 'a. net -> 'a Prog.io -> (Obj.t, string) result Lwt.t = fun net body ->
+  Lwt.catch (fun () -> run net body >|= fun value -> Ok (Obj.repr value))
+    (function Exit_with _ as e -> Lwt.fail e
+      | Lwt.Canceled -> Lwt.return (Error "cancelled")
+      | e -> Lwt.return (Error (describe e)))
 
 (* [body] run alongside the rest (spawn, fork), counted among the tasks
    the image waits for: its result, or why it failed, which is reported.
@@ -914,6 +954,7 @@ and start_task : 'a. net -> 'a Prog.io -> (Obj.t, string) result Lwt.t = fun net
     Lwt.catch (fun () -> run net body >|= fun v -> Ok (Obj.repr v))
       (function
         | Exit_with code -> event "exit" ["code", I code; "reason", S "program"]; exit code
+        | Lwt.Canceled -> Lwt.return (Error "cancelled")
         | e -> report ~during:"task" e; Lwt.return (Error (describe e))) in
   Lwt.async (fun () -> result >|= fun _ -> decr tasks; Lwt_condition.broadcast task_ended ());
   result
@@ -2301,6 +2342,7 @@ let standins_mli = {soma|(* Compile-time contracts only: abstract types prevent 
      1.0, mirage/tls_mirage.mli (client_of_flow, and Mirage_flow.S's read,
      write, close, pp_error, pp_write_error) *)
 module Lwt : sig
+  exception Canceled
   type 'a t
   val return : 'a -> 'a t
   val return_unit : unit t
@@ -2311,6 +2353,15 @@ module Lwt : sig
   val pick : 'a t list -> 'a t
   val choose : 'a t list -> 'a t
   val cancel : 'a t -> unit
+  type 'a state = Return of 'a | Fail of exn | Sleep
+  val state : 'a t -> 'a state
+  val protected : 'a t -> 'a t
+  val pause : unit -> unit t
+  val finalize : (unit -> 'a t) -> (unit -> unit t) -> 'a t
+  type 'a key
+  val new_key : unit -> 'a key
+  val get : 'a key -> 'a option
+  val with_value : 'a key -> 'a option -> (unit -> 'b) -> 'b
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
     val ( >|= ) : 'a t -> ('a -> 'b) -> 'b t

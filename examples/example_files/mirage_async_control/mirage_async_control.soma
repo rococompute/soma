@@ -1,0 +1,49 @@
+(** Cancellation, cleanup, and process-local context across waits. *)
+Require Import Sandbox.
+
+check (ok : bool) (why : string) : io unit :=
+  if ok then ret tt else print why ;; exit 1.
+
+main : io unit :=
+  cleaned <- new_cell 0 ;;
+  touched <- new_cell false ;;
+  broken <- attempt (finally (read_cell (Cell 999 : cell nat)) (write_cell cleaned 1)) ;;
+  n <- read_cell cleaned ;;
+  check (match broken with TaskFailed _ => Nat.eqb n 1 | _ => false end) "failure cleanup" ;;
+  t <- fork (finally (sleep_ms 1000%N ;; write_cell touched true) (write_cell cleaned 2)) ;;
+  requested <- cancel t ;;
+  stopped <- await t ;;
+  again <- cancel t ;;
+  n <- read_cell cleaned ;;
+  check (requested && negb again && Nat.eqb n 2 &&
+    match stopped with TaskFailed "cancelled" => true | _ => false end) "cancel cleanup" ;;
+  winner <- race (sleep_ms 1%N ;; ret 7)
+    (finally (sleep_ms 1000%N ;; write_cell touched true ;; ret 9) (write_cell cleaned 3)) ;;
+  n <- read_cell cleaned ;;
+  check (Nat.eqb n 3 && match winner with Completed 7 => true | _ => false end) "race cleanup" ;;
+  key <- (new_context_key : io (context_key nat)) ;;
+  a <- with_context key (Some 1)
+    (fork (yield ;; sleep_ms 10%N ;; get_context key)) ;;
+  b <- with_context key (Some 2)
+    (fork (sleep_ms 2%N ;; get_context key)) ;;
+  nested <- with_context key (Some 3)
+    (inside <- with_context key (Some 4) (yield ;; get_context key) ;;
+     outside <- get_context key ;; ret (inside, outside)) ;;
+  ra <- await a ;; rb <- await b ;; plain <- get_context key ;;
+  check (match ra, rb, nested, plain with
+    | Completed (Some 1), Completed (Some 2), (Some 4, Some 3), None => true
+    | _, _, _, _ => false end) "task context leaked" ;;
+  failed <- attempt (with_context key (Some 5) (read_cell (Cell 999 : cell nat))) ;;
+  plain <- get_context key ;;
+  check (match failed, plain with TaskFailed _, None => true | _, _ => false end) "failed context leaked" ;;
+  t <- fork (sleep_ms 20%N ;; ret 42) ;;
+  early <- await_within t 1%N ;;
+  waiter <- fork (await t) ;; ignored <- cancel waiter ;;
+  late <- await t ;;
+  check (match early, late with None, Completed 42 => true | _, _ => false end) "waiter cancelled shared task" ;;
+  free_context_key key ;;
+  freed <- attempt (get_context key) ;;
+  check (match freed with TaskFailed _ => true | _ => false end) "freed key remained readable" ;;
+  changed <- read_cell touched ;;
+  check (negb changed) "cancelled action ran" ;;
+  print "async control and task context verified".

@@ -1753,6 +1753,31 @@ that add to one cell and count themselves done in another, and one that
 fails; `dev/mirage-check.sh` boots it, and checks the total and that the
 failure was reported while the others went on.
 
+`examples/example_files/mirage_async_control` checks cooperative cancellation,
+cleanup on failure and cancellation, races, and task-local context across waits.
+`attempt body` recovers a failure in the same task as `TaskFailed`; an explicit
+`exit` still exits the image. `finally body cleanup` always runs cleanup when
+an action finishes, fails or is cooperatively cancelled. A cleanup failure
+replaces the original result. `race left right` returns the first result as
+`awaited A` and cancels the other action; use a sum type to distinguish sides.
+Cancellation is cooperative: a foreign promise made with `Lwt.wait` cannot
+be cancelled. `yield` gives other ready tasks a turn without a timer.
+
+`cancel t` requests cancellation of a pending forked task and returns whether
+it was pending; its awaiters receive `TaskFailed "cancelled"`. Cancelling an
+awaiter, including the losing side of a race, does not cancel the shared task.
+`await_within` leaves the underlying task running when its timer wins.
+`new_context_key : io (context_key A)`, `get_context key`, and
+`with_context key (Some value) body` provide a dynamically scoped value:
+forked tasks inherit it, independent tasks cannot overwrite each other's
+scopes, and waits, failures and cancellation preserve/restore those scopes.
+`None` clears a value for the scope; outside a scope the value is `None`.
+`free_context_key` releases the key; subsequent reads/scopes fail. Keep a key
+alive until all tasks using it have ended. These are suitable for a guest
+process's address-space context, without putting process policy in OCaml.
+`test-suite/misc/soma_async_control.sh` checks extraction; set
+`SOMA_TEST_HVF=1` to build and boot its assertions on an HVF-capable Mac.
+
 Buffers, signals and promises are for a program that does what a C or
 OCaml one would: a page, a sector or a frame changed in place rather than
 a string made of each, tasks that wait for one another rather than
