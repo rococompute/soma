@@ -1,0 +1,3 @@
+guest_start : unit -> word64.
+guest_size : unit -> word64.
+text_address : unit -> word64.

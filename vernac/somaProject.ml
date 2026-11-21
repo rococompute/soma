@@ -276,12 +276,15 @@ type dependency = {
 (* * soma.toml *)
 
 (* [image]: how a MirageOS image of the project is built and run *)
+type user_memory = { name : string; address : int option; size : int }
+
 type image = {
   memory : int option;      (* MB, which soma run gives the image *)
   text_start : int option;  (* where the image's code is linked, past the guest's *)
+  user_memory : user_memory list;
 }
 
-let no_image = { memory = None; text_start = None }
+let no_image = { memory = None; text_start = None; user_memory = [] }
 
 type t = {
   root : string;
@@ -453,9 +456,9 @@ let load_uncached ?display root =
     | None -> no_image
     | Some { SomaToml.value = Table t; line = iline } ->
       List.iter (fun (k, { SomaToml.line; _ }) ->
-          if k <> "memory" && k <> "text_start" then
+          if k <> "memory" && k <> "text_start" && k <> "user_memory" then
             error line "%s is not a key of [image] (yet). [image] has memory, the megabytes soma run gives \
-                        the image, and text_start, the address its code is linked at: %s" k image_example) t;
+                        the image, text_start, the address its code is linked at, and user_memory regions: %s" k image_example) t;
       let memory = match List.assoc_opt "memory" t with
         | None -> None
         | Some { SomaToml.value = Int m; _ } when m > 0 && m <= 1048576 -> Some m
@@ -483,7 +486,54 @@ let load_uncached ?display root =
        | Some x, None ->
          error iline "text_start 0x%x needs memory above it: memory = %d, megabytes, at least" x (x / 1048576 + 64)
        | _ -> ());
-      { memory; text_start }
+      let user_memory = match List.assoc_opt "user_memory" t with
+        | None -> []
+        | Some { SomaToml.value = Array entries; line } ->
+          List.map (function
+            | SomaToml.Table fields ->
+              List.iter (fun (key, { SomaToml.line; _ }) ->
+                  if not (List.mem key ["name"; "address"; "size"]) then
+                    error line "%s is not a key of an image.user_memory region" key) fields;
+              let name = match List.assoc_opt "name" fields with
+                | Some { SomaToml.value = String n; _ } when n <> "" && String.length n <= 67 &&
+                    String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false) n -> n
+                | _ -> error line "user memory needs a name of 1 to 67 letters and digits" in
+              let bytes key = match List.assoc_opt key fields with
+                | Some { SomaToml.value = Int n; _ } -> n
+                | Some { SomaToml.value = String s; _ } ->
+                  (match hex_address s with Some n -> n | None -> error line "user memory %s is an integer or hexadecimal string" key)
+                | _ -> error line "user memory needs %s, in bytes" key in
+              let size = bytes "size" in
+              let address = if List.mem_assoc "address" fields then Some (bytes "address") else None in
+              if size <= 0 || size land 0xFFFF <> 0 then error line "user memory size is a positive multiple of 0x10000 (64 KB)";
+              (match address with
+               | Some a when a < lowest_text_start || a land 0xFFFF <> 0 ->
+                 error line "user memory address is at least 0x100000 and a multiple of 0x10000"
+               | Some a when a > max_int - size -> error line "user memory region overflows its address space"
+               | _ -> ());
+              (match address, memory with
+               | Some a, Some m when a > m * 1048576 || size > m * 1048576 - a ->
+                 error line "user memory region is past the image's memory"
+               | _ -> ());
+              (match address, text_start with
+               | Some a, Some code when a <= code && size > code - a ->
+                 error line "user memory region overlaps text_start"
+               | _ -> ());
+              { name; address; size }
+            | _ -> error line "user_memory is an array of region tables: [{ name = \"guest\", size = \"0x100000\" }]") entries
+        | Some { SomaToml.line; _ } -> error line "user_memory is an array of region tables" in
+      let rec check_regions = function
+        | [] -> ()
+        | (region : user_memory) :: rest ->
+          List.iter (fun (other : user_memory) ->
+              if region.name = other.name then error iline "user memory %S is declared twice" region.name;
+              match region.address, other.address with
+              | Some a, Some b when a < b + other.size && b < a + region.size ->
+                error iline "user memory regions %S and %S overlap" region.name other.name
+              | _ -> ()) rest;
+          check_regions rest in
+      check_regions user_memory;
+      { memory; text_start; user_memory }
     | Some { SomaToml.line; value } ->
       error line "image is %s; it is a table: [image], then %s" (SomaToml.describe value) image_example in
   { root; name; description; version; dependencies; opam; image }

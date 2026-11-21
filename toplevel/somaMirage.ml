@@ -2707,26 +2707,17 @@ let image_build_inputs ~switch ~dir sources =
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
 
-(* soma.toml's [image] text_start: the image is linked there rather than
-   at solo5's 1 MB, so that what it loads below (a guest's executables,
-   linked at 4 MB) fits. Commands, before make build, that make solo5's
-   hvt linker script with that address (ldscripts/solo5_hvthigh.lds, by
-   the hvt bindings) and have dune.build, which mirage configure wrote,
-   link with it: each time, as configure may have written dune.build
-   again. *)
-let high_link = function
-  | None -> ""
-  | Some x ->
-    let start = Printf.sprintf "0x%X" x in
-    Printf.sprintf
-      "lib=$(ls -d \"$(opam var prefix)\"/lib/*-solo5-none-static | head -n 1) && \
-       mkdir -p ldscripts && \
-       sed 's/^TEXT_START = 0x100000;/TEXT_START = %s;/' \"$lib/solo5_hvt.lds\" > ldscripts/solo5_hvthigh.lds && \
-       grep -q '^TEXT_START = %s;' ldscripts/solo5_hvthigh.lds && \
-       ln -sf \"$lib/solo5_hvt.o\" ldscripts/solo5_hvthigh.o && \
-       sed -i.orig 's|-cclib \"-z solo5-abi=hvt\"|-cclib \"-z solo5-abi=hvthigh\" -cclib \"-L'\"$(pwd)\"'/ldscripts\"|' dune.build && \
-       grep -q 'solo5-abi=hvthigh' dune.build && "
-      start start
+(* Forward layout to Mirage/Solo5, whose linker understands text_start.
+   Never rewrite the installed linker script: its format is not an API. *)
+let image_config (image : SomaProject.image) text =
+  let regions = List.map (fun (m : SomaProject.user_memory) ->
+      Printf.sprintf "user_memory%s ~size:0x%x %S"
+        (match m.address with None -> "" | Some a -> Printf.sprintf " ~address:0x%x" a) m.size m.name)
+      image.user_memory in
+  let options =
+    (match image.text_start with None -> "" | Some a -> Printf.sprintf " ~text_start:0x%x" a) ^
+    (if regions = [] then "" else " ~user_memory:[" ^ String.concat "; " regions ^ "]") in
+  replace_text text "register \"soma\"" ("register \"soma\"" ^ options)
 
 let build ~state ~source ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then with_build_lock (fun () ->
@@ -2773,10 +2764,11 @@ let build ~state ~source ~vo_file =
         ((if network then "net" else "plain") ^ (if web then "-web" else "") ^
          (if storage then "-storage" else "") ^ (if wasm then "-wasm" else "") ^
          String.concat "" (List.map (fun d -> "-disk-" ^ d) disks) ^ (if c then "-c" else "") ^ project ^
-         (match image.text_start with Some x -> Printf.sprintf "-text-%x" x | None -> "")) in
+         (match image.text_start with Some x -> Printf.sprintf "-text-%x" x | None -> "") ^
+         (if image.user_memory = [] then "" else "-user-" ^ Digest.to_hex (Digest.string (Marshal.to_string image.user_memory [])))) in
     mkdir_p dir;
     let file name contents = update_file (Filename.concat dir name) contents in
-    let config_changed = file "config.ml" (disks_config disks (config_ml ~c ~network ~wasm ~storage ~web ~libraries ())) in
+    let config_changed = file "config.ml" (image_config image (disks_config disks (config_ml ~c ~network ~wasm ~storage ~web ~libraries ()))) in
     let deps_changed = if native then file "soma-ocaml-deps.opam" dependencies else false in
     let native_files = write_ocaml_files dir ocaml_modules in
     let modules = List.sort_uniq compare
@@ -2823,7 +2815,7 @@ let build ~state ~source ~vo_file =
                               str " (once; fetches the dependencies)");
     if setup <> "" then execute (setup ^ "true");
     let inputs = image_build_inputs ~switch ~dir [] in
-    execute (high_link image.SomaProject.text_start ^ "make build");
+    execute "make build";
     let hvt = Filename.remove_extension vo_file ^ ".hvt" in
     copy_file ~src:(List.fold_left Filename.concat dir ["dist"; "soma.hvt"]) ~dst:hvt;
     (* the memory the image runs in, in MB: $SOMA_MIRAGE_MEM, or soma.toml's

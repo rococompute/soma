@@ -1,0 +1,8 @@
+[project]
+name = "user_memory"
+version = "0.1.0"
+
+[image]
+memory = 4096
+text_start = "0xC0000000"
+user_memory = [{ name = "guest", address = "0x200000", size = "0xbfd00000" }]

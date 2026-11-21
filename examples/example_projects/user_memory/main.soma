@@ -1,0 +1,15 @@
+(* A real Solo5 manifest/layout check; no guest agents or model calls.
+   SOMA_MIRAGE_SWITCH=kykeon soma run main.soma *)
+Require Import Sandbox.
+Require Import Soma.Word64.
+Import layout.
+
+main : io unit :=
+  start <- call guest_start ;;
+  size <- call guest_size ;;
+  text <- call text_address ;;
+  if Word64.eqb start (Word64.of_N 0x200000)
+     && Word64.eqb size (Word64.of_N 0xbfd00000)
+     && Word64.leb (Word64.of_N 0xc0000000) text
+  then print "user memory and high text address verified"
+  else print "unexpected image layout" ;; exit 1.

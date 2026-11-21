@@ -39,6 +39,17 @@ refused 'text_start = "0xC0000000"' 'needs memory above it: memory = 3136'
 refused 'text_start = "0xC0000000"
 memory = 2048' 'is past the image.s 2048 MB of memory'
 refused 'stack = 8' 'stack is not a key of \[image\]'
+refused 'user_memory = "guest"' 'user_memory is an array'
+refused 'user_memory = [{ name = "guest", size = 1 }]' 'size is a positive multiple'
+refused 'user_memory = [{ name = "bad-name", size = "0x100000" }]' 'name of 1 to 67'
+refused 'user_memory = [{ name = "guest", address = "0x100001", size = "0x100000" }]' 'address is at least'
+refused 'user_memory = [{ name = "guest", size = "0x100000" }, { name = "guest", size = "0x100000" }]' 'declared twice'
+refused 'user_memory = [{ name = "one", address = "0x200000", size = "0x200000" }, { name = "two", address = "0x300000", size = "0x100000" }]' 'regions.*overlap'
+refused 'memory = 4
+user_memory = [{ name = "guest", address = "0x200000", size = "0x400000" }]' 'past the image'
+refused 'memory = 4096
+text_start = "0xC0000000"
+user_memory = [{ name = "guest", address = "0x200000", size = "0xC0000000" }]' 'overlaps text_start'
 
 # accepted: memory alone keeps the usual project; text_start has its own
 project 'memory = 512'
@@ -48,4 +59,18 @@ project 'memory = 4096
 text_start = "0xC0000000"'
 soma build --no-image main.soma > high.log 2>&1
 grep -q 'mirage/plain-text-c0000000 (no image)' high.log
+grep -q 'register "soma" ~text_start:0xc0000000' "$SOMA_MIRAGE_DIR/plain-text-c0000000/config.ml"
+project 'memory = 4096
+text_start = "0xC0000000"
+user_memory = [{ name = "guest", address = "0x200000", size = "0xbfd00000" }]'
+soma build --no-image main.soma > user.log 2>&1
+P=$(sed -n 's/^Mirage: checked \(.*\) (no image)$/\1/p' user.log)
+grep -q 'user_memory ~address:0x200000 ~size:0xbfd00000 "guest"' "$P/config.ml"
+# Changing a manifest region cannot reuse another image's generated project.
+project 'memory = 4096
+text_start = "0xC0000000"
+user_memory = [{ name = "guest", address = "0x200000", size = "0xbfc00000" }]'
+soma build --no-image main.soma > other.log 2>&1
+Q=$(sed -n 's/^Mirage: checked \(.*\) (no image)$/\1/p' other.log)
+[ "$P" != "$Q" ]
 echo "image settings: ok"

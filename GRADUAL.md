@@ -511,20 +511,29 @@ requires Sandbox) is built and run:
 [image]
 memory = 4096             # megabytes, which soma run gives the image
 text_start = "0xC0000000" # where its code is linked: 3 GB
+user_memory = [{ name = "guest", address = "0x200000", size = "0xbfd00000" }]
 ```
 
 - `memory`: the image's megabytes (256 by default), which the command to
   run it states and `soma run` gives it; `$SOMA_MIRAGE_MEM` and `soma run
   --mem=MB` come first.
+- `user_memory`: hvt memory reserved for programs loaded by the unikernel.
+  Each region has a unique alphanumeric `name`, a `size` in bytes, and an
+  optional fixed `address`. Sizes and addresses are integers or hexadecimal
+  strings, aligned to 64 KiB. Fixed regions must not overlap each other, the
+  start of the image, or exceed configured memory. The tender validates the
+  final image layout. User memory is executable and writable; the rest of
+  guest memory keeps Solo5's W^X protections.
 - `text_start`: the address the image's code is linked at, rather than
   solo5's 1 MB (`0x100000`): an image that loads code of its own below it
   (kykeon's guest Linux executables, linked at 4 or 16 MB) moves out of its
   way. It is a multiple of `0x10000`, `0x100000` or above, below `memory`'s
-  end, as solo5-hvt loads the image in its memory. Soma makes solo5's hvt
-  linker script with that address (`ldscripts/solo5_hvthigh.lds` in the
-  image's project) and has `dune.build` link with it (`-z
-  solo5-abi=hvthigh`), as kykeon's Makefile does; such an image has a
-  project of its own (`plain-text-c0000000`).
+  end. Soma forwards both layout settings to Mirage's `register`; the current
+  mirage-mac toolchain implements them through its manifest and
+  `-z solo5-text-start=ADDR`, without rewriting installed linker scripts.
+  Layout features require Mirage `4.11.2+hvf.2` and Solo5 `0.13.0+hvf.4`
+  or later from the Mac overlay. Different layouts have separate generated
+  projects; ordinary images still work without these optional arguments.
 
 `soma extract` names the opam package after the project, and gives it its
 version and description, and `[opam]`'s versions (`"cryptokit" {= "1.20"}`). The TOML is TOML 1.0 (`vernac/somaToml.ml`, as

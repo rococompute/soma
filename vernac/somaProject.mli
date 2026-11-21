@@ -64,10 +64,13 @@ type dependency = {
 }
 
 (** its [image] table: how a MirageOS image of the project is built *)
+type user_memory = { name : string; address : int option; size : int }
+
 type image = {
   memory : int option;      (** megabytes, which soma run gives the image (256 by default) *)
   text_start : int option;  (** the address the image's code is linked at (solo5's 0x100000
                                 by default), a multiple of 0x10000 below [memory] *)
+  user_memory : user_memory list; (** hvt memory reserved for loaded guest programs *)
 }
 
 val no_image : image
