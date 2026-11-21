@@ -392,8 +392,21 @@ type chunk_value = Chunk of string | ChunkClosed | ChunkTimedOut
    reimplemented here. Standard options avoid relying on extracted names
    for the frame_step constructors. *)
 let take_line = Prog.soma_wire_take_line
-let take_frame s =
-  match Prog.soma_wire_take_frame s with
+(* Binary numbers crossing the runtime boundary, without unary nats. *)
+let rec positive_of_int64 n =
+  if n = 1L then Prog.XH
+  else
+    let half = positive_of_int64 (Int64.shift_right_logical n 1) in
+    if Int64.logand n 1L = 0L then Prog.XO half else Prog.XI half
+
+let n_of_int64 n = if n = 0L then Prog.N0 else Prog.Npos (positive_of_int64 n)
+
+let check_frame_limit limit =
+  if limit < 0 || Int64.of_int limit > 0xffff_ffffL then
+    invalid_arg "receive_frame_up_to: limit must be between 0 and 4294967295"
+let take_frame ?(limit = 1048576) s =
+  check_frame_limit limit;
+  match Prog.soma_wire_take_frame (n_of_int64 (Int64.of_int limit)) s with
   | None -> `Need_more
   | Some None -> `Oversized
   | Some (Some (data, rest)) -> `Whole (data, rest)
@@ -410,8 +423,8 @@ type net = {
   connect_within : string -> int -> (unit -> unit Lwt.t) -> link Lwt.t;
   send : int -> string -> bool Lwt.t;
   receive_line : int -> string option Lwt.t;
-  (* the connection, and the seconds to wait at most (0: no limit) *)
-  receive_frame : int -> int -> frame Lwt.t;
+  (* connection, seconds to wait (0: no timeout), maximum payload bytes *)
+  receive_frame : int -> int -> int -> frame Lwt.t;
   (* the connection, and when to give up: [None], never *)
   receive : int -> (unit -> unit Lwt.t) option -> raw Lwt.t;
   (* the unikernel's IPv4 address, if it has one *)
@@ -438,7 +451,7 @@ let no_network =
   { serve = (fun _ _ -> fail ()); fetch = (fun _ _ _ -> fail ());
     listen = (fun _ _ -> fail ()); connect = (fun _ _ -> fail ()); connect_within = (fun _ _ _ -> fail ());
     send = (fun _ _ -> fail ()); receive_line = (fun _ -> fail ());
-    receive_frame = (fun _ _ -> fail ());
+    receive_frame = (fun _ _ _ -> fail ());
     receive = (fun _ _ -> fail ()); local_address = (fun _ -> fail ());
     close = (fun _ -> fail ());
     listen_mailbox = (fun _ -> fail ()); watch = (fun _ -> fail ());
@@ -516,15 +529,6 @@ let seconds_and_ns (days, ps) =
 (* [monotonic_ns]: Mirage_mtime's unsigned nanoseconds, in OCaml's int
    (which Rocq's primitive int is in the image), the top bit dropped *)
 let ns_of_elapsed (ns : int64) = Int64.to_int ns land max_int
-
-(* Binary numbers crossing the runtime boundary, without unary nats. *)
-let rec positive_of_int64 n =
-  if n = 1L then Prog.XH
-  else
-    let half = positive_of_int64 (Int64.shift_right_logical n 1) in
-    if Int64.logand n 1L = 0L then Prog.XO half else Prog.XI half
-
-let n_of_int64 n = if n = 0L then Prog.N0 else Prog.Npos (positive_of_int64 n)
 
 let milliseconds_of_ns ns = Int64.unsigned_div ns 1_000_000L
 
@@ -753,7 +757,14 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Some l -> Line (chars_of_string l)
           | None -> Closed)
   | Prog.Receive_frame (c, seconds) ->
-      net.receive_frame (link_id c) (int_of_nat (check seconds))
+      net.receive_frame (link_id c) (int_of_nat (check seconds)) 1048576
+      >|= fun f -> Obj.magic (match f with
+          | Got_frame data -> Frame (chars_of_string data)
+          | Frame_closed -> FrameClosed
+          | Frame_timed_out -> FrameTimedOut
+          | Frame_too_large -> FrameTooLarge)
+  | Prog.Receive_frame_up_to (c, seconds, limit) ->
+      net.receive_frame (link_id c) (int_of_nat (check seconds)) (int_of_nat (check limit))
       >|= fun f -> Obj.magic (match f with
           | Got_frame data -> Frame (chars_of_string data)
           | Frame_closed -> FrameClosed
@@ -1179,7 +1190,8 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     in
     (* the next frame, waiting [seconds] at most (0: as long as it takes);
        what arrived of a frame when the time is up stays pending *)
-    let receive_frame id seconds =
+    let receive_frame id seconds limit =
+      Soma_rt.check_frame_limit limit;
       match Hashtbl.find_opt links id with
       | None -> Lwt.return Soma_rt.Frame_closed
       | Some l ->
@@ -1187,7 +1199,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             if seconds <= 0 then fst (Lwt.wait ())
             else Mirage_sleep.ns (Duration.of_sec seconds) >|= fun () -> `Time_up in
           let rec take () =
-            match Soma_rt.take_frame (Buffer.contents l.pending) with
+            match Soma_rt.take_frame ~limit (Buffer.contents l.pending) with
             | `Whole (data, rest) -> keep l rest; Lwt.return (Soma_rt.Got_frame data)
             | `Oversized ->
                 Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_too_large
@@ -2253,8 +2265,8 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
      From Soma Require Word64.\n\
      %s%s%s%s%s\
      Definition soma_wire_take_line := Soma.Wire.take_line.\n\
-     Definition soma_wire_take_frame (buffer : string) : option (option (string * string)) :=\n\
-       match Soma.Wire.take_frame Soma.Wire.max_frame buffer with\n\
+     Definition soma_wire_take_frame (limit : N) (buffer : string) : option (option (string * string)) :=\n\
+       match Soma.Wire.take_frame limit buffer with\n\
        | Soma.Wire.NeedMore => None\n\
        | Soma.Wire.Oversized => Some None\n\
        | Soma.Wire.Whole data rest => Some (Some (data, rest))\n\
@@ -2348,6 +2360,7 @@ module Lwt : sig
   val return_unit : unit t
   val async : (unit -> unit t) -> unit
   val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
+  val fail : exn -> 'a t
   type 'a u
   val wait : unit -> 'a t * 'a u
   val pick : 'a t list -> 'a t

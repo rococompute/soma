@@ -265,6 +265,10 @@ Inductive io : Type -> Type :=
     [FrameTooLarge], and the connection is closed. Lines and frames read
     the same bytes, in order: what one leaves, the other gets. *)
 | receive_frame (c : connection) (seconds : nat) : io framed
+(** As [receive_frame], with a per-read payload limit in bytes. [0] accepts
+    only empty frames. Limits above the 32-bit wire length fail the task
+    before reading; oversized frames close the connection as usual. *)
+| receive_frame_up_to (c : connection) (seconds limit : nat) : io framed
 (** what the connection has received, as TCP delivered it, cut nowhere:
     what was left past the last line or frame taken, or else the next
     bytes to arrive, waiting [milliseconds] at most ([0]: as long as it

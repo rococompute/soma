@@ -46,10 +46,25 @@ grep -q 'Receive_frame' "$NET/prog.ml"
 cp "$ROOT/examples/example_files/mirage_frame_client/mirage_frame_client.soma" .
 soma build --no-image mirage_frame_client.soma > client.log 2>&1
 grep -q '(no image)' client.log
+NET="$SOMA_MIRAGE_DIR/net-web"
 [ ! -f mirage_frame_client.hvt ]
 check_built
 applied Connect "$NET/prog.ml"
 grep -q 'Receive_frame' "$NET/prog.ml"
+
+# explicit per-read limit; this path must generate and type-check networking too
+cat > bounded.soma <<'SOMA'
+Require Import Sandbox.
+talk (c : connection) : io unit :=
+  r <- receive_frame_up_to c 5 67108864 ;;
+  match r with Frame data => print data | _ => ret tt end.
+main : io unit := listen 7001 talk.
+SOMA
+soma build --no-image bounded.soma > bounded.log 2>&1
+NET="$SOMA_MIRAGE_DIR/net"
+check_built
+grep -q 'Receive_frame_up_to' "$NET/prog.ml"
+grep -q 'take_frame ~limit' "$NET/unikernel.ml"
 
 # fails: soma build --no-image NAME must refuse the program in NAME.soma
 refused() {

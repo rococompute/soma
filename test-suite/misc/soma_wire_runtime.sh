@@ -34,6 +34,18 @@ let () =
   for n = 0 to 3 do assert (Adapter.take_frame (String.make n '\000') = `Need_more) done;
   assert (Adapter.take_frame "\000\016\000\001" = `Oversized);
   assert (Adapter.take_frame "\255\255\255\255" = `Oversized);
+  let large = frame (String.make 1048577 'x') ^ "tail" in
+  assert (Adapter.take_frame large = `Oversized);
+  (match Adapter.take_frame ~limit:67108864 large with
+   | `Whole (data, "tail") -> assert (String.length data = 1048577)
+   | _ -> assert false);
+  assert (Adapter.take_frame ~limit:67108864 "\004\000\000\001" = `Oversized);
+  assert (Adapter.take_frame ~limit:67108864 "\004\000\000\000" = `Need_more);
+  assert (Adapter.take_frame ~limit:0 (frame "") = `Whole ("", ""));
+  assert (Adapter.take_frame ~limit:0 (frame "a") = `Oversized);
+  List.iter (fun limit ->
+    assert (try ignore (Adapter.take_frame ~limit ""); false with Invalid_argument _ -> true)
+  ) [-1; 4294967296; max_int];
   for byte = 0 to 255 do
     let s = String.make 1 (Char.chr byte) in
     if byte <> 10 then assert (Adapter.take_line (s ^ "\r\ntail") = Some (s, "tail"))
