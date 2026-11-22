@@ -1732,6 +1732,18 @@ expects the echo, then the server's `"idle"` after its `receive` times out;
 `dev/mirage-check.sh` boots both (from the Mac, a terminal without macOS's
 Local Network permission cannot reach the image: `No route to host`).
 
+Checked TCP operations preserve Mirage's diagnostic reason, rather than
+translating it into an operating-system errno. This lets a Linux personality
+choose its own errno policy. The older `send`, `send_buffer`, `receive`,
+line/frame readers and mailbox events keep their existing types and treat
+transport failures as closure. After a checked failure closes a link, later
+operations see a closed link. A timed-out read retains both arriving data and
+its eventual terminal error until the next read observes them.
+`examples/example_files/mirage_tcp_errors` distinguishes an orderly close from
+a reset. `test-suite/misc/soma_tcp_errors.sh` checks the generated interfaces
+and, with host Lwt or `LWT_SOURCE` pointing at a vendored `lwt/src/core`, exercises
+the actual generated TCP adapter with controlled real Lwt promises.
+
 A disk is named by a string literal (`disk_read "rootfs" 0 8`): the image
 declares a block device for each name the program uses (MirageOS's
 `block_of_file`), so a name computed at run time is refused when the
@@ -1847,10 +1859,12 @@ unikernel does, as data; building an `io` does nothing, the image runs it.
 | `https verb host port path headers body` | `io answered` | an HTTPS request (HTTP/1.1 over TLS): the name resolved, the server's certificate checked against the NSS certificate authorities for that name, the answer read to its end: `Answer status headers body` (header names in lower case, a chunked body joined), or why there is none (`Unanswered why`: no address, no connection, a certificate not trusted, no HTTP answer), within 30 seconds and up to 16 MB. `Host`, `Connection` and `Content-Length` are set by the request; a header with a line break is refused. `https_get host path` and `https_post host path content_type body` are the usual ones, on port 443; `header name headers` finds a header. |
 | `listen port handler` | `io unit` | accepts TCP connections on `port`, each given to `handler : connection -> io unit`, which talks over it as long as it likes; the connection is closed when the handler ends. Returns at once; the image keeps listening after `main` ends. |
 | `connect address port` | `io connected` | opens a connection to the address (an IP address, or a host name, as `fetch`) that stays open (`Connected c`), or says why there is none: `ConnectRefused`, `ConnectTimedOut` (10 seconds), `ConnectBadAddress` (with an `unresolved` event). `connect_within address port ms` gives up after `ms : N` milliseconds, looking the name up included |
+| `send_checked c data` | `io tcp_write` | `TcpSent`, `TcpClosed` for an already closed link, or `TcpWriteError reason` for a failed write (which closes the link) |
 | `send c data` | `io sent` | writes `data` as it is (`send_line c line` adds `"\n"`): `Sent`, or `SendClosed` when the connection is closed |
 | `receive_line c` | `io received` | the next line, without its `"\n"` (or `"\r\n"`): `Line l`, or `Closed` when the connection ends first (a line left unfinished is dropped) |
 | `receive_frame c seconds` | `io framed` | the next length-prefixed frame (four bytes of length, most significant first, then the bytes; `send_frame c data` sends one): `Frame data`, `FrameClosed` when the connection ends first, `FrameTimedOut` when no whole frame came within `seconds` (`0`: no limit; what arrived is kept for the next receive), or `FrameTooLarge` for a length over `max_frame` (1 MiB), which closes the connection |
 | `receive_frame_up_to c seconds limit` | `io framed` | the same read, with an explicit per-read byte limit (0 through 4294967295); zero accepts empty frames only. Invalid limits fail before reading; oversized frames close the connection. For Kykeon's workspace protocol use `67108864` (64 MiB). The same extracted `Soma.Wire.take_frame` decoder enforces either limit |
+| `receive_checked c ms` | `io tcp_read` | raw bytes as `TcpData data`, orderly EOF as `TcpEof`, timeout as `TcpTimedOut`, or transport failure as `TcpReadError reason`. The timeout and buffering rules are the same as `receive`; an error closes the link |
 | `receive c ms` | `io chunk` | what the connection has received, as TCP delivered it, cut nowhere: what was left past the last line or frame taken, or else the next bytes to arrive, waiting `ms : N` milliseconds at most (`0`: no limit): `Chunk data` (never empty), `ChunkClosed` when the connection ends first (it is closed), or `ChunkTimedOut`. For connections accepted or opened; lines, frames and `receive` read the same bytes, in order |
 | `watch c` | `io unit` | the connection's bytes as `Linked` events of `select` (and `mailbox`): `LinkBytes` as they arrive, then `LinkClosed`; for a connection the program opened, as `listen_mailbox` does for those it accepts. Again does nothing |
 | `after ms tag` | `io unit` | a `Timer tag` event for `select` once `ms : N` milliseconds have passed; returns at once |

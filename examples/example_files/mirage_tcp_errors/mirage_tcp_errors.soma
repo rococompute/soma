@@ -1,0 +1,52 @@
+(** Checked TCP reports EOF separately from transport errors. Run against two
+    local test servers: the first closes normally, the second resets TCP.
+    Pass their IPv4 address and port strings through --arg. *)
+Require Import Sandbox.
+From Stdlib Require Import NArith Strings.Ascii.
+
+Fixpoint port_digits (s : string) (acc : nat) : option nat :=
+  match s with
+  | String.EmptyString => Some acc
+  | String.String c rest =>
+    let d := Ascii.nat_of_ascii c in
+    let next := acc * 10 + (d - 48) in
+    if Nat.leb 48 d && Nat.leb d 57 && Nat.leb next 65535
+    then port_digits rest next else None
+  end.
+
+read_end (c : connection) : io bool :=
+  (* The fixture sends no data; a response is EOF or a transport error. *)
+  got <- receive_checked c 2000%N ;;
+  match got with
+  | TcpEof => ret false
+  | TcpReadError why => print ("TCP error: " ++ why) ;; ret true
+  | _ => print "unexpected data or timeout" ;; exit 1
+  end.
+
+check_peer (host : string) (port : nat) (reset : bool) : io unit :=
+  opened <- connect host port ;;
+  match opened with
+  | Connected c =>
+    sent <- send_checked c "hello" ;;
+    match sent with
+    | TcpSent =>
+      failed <- read_end c ;;
+      if Bool.eqb failed reset then ret tt else print "EOF/error distinction lost" ;; exit 1
+    | _ => print "fixture write failed" ;; exit 1
+    end
+  | _ => print "fixture connection failed" ;; exit 1
+  end.
+
+main : io unit :=
+  av <- args ;;
+  match av with
+  | host :: eof_port :: reset_port :: nil =>
+    match port_digits eof_port 0, port_digits reset_port 0 with
+    | Some p, Some q =>
+      check_peer host p false ;;
+      check_peer host q true ;;
+      print "TCP EOF and transport errors distinguished"
+    | _, _ => print "ports must be numbers" ;; exit 1
+    end
+  | _ => print "give --arg=HOST --arg=EOF_PORT --arg=RESET_PORT" ;; exit 1
+  end.

@@ -370,6 +370,8 @@ type link = Link of int | Link_refused | Link_timed_out | Link_bad_address
 type connected_value = Connected of Obj.t | ConnectRefused | ConnectTimedOut | ConnectBadAddress
 type received_value = Line of string | Closed
 type sent_value = Sent | SendClosed
+type transmission = Write_ok | Write_closed | Write_failed of string
+type tcp_write_value = TcpSent | TcpClosed | TcpWriteError of string
 (* What [receive_frame] gets (Sandbox.framed), and its representation *)
 type frame = Got_frame of string | Frame_closed | Frame_timed_out | Frame_too_large
 type framed_value = Frame of string | FrameClosed | FrameTimedOut | FrameTooLarge
@@ -382,8 +384,11 @@ type link_event_value = LinkOpened of Obj.t * string | LinkBytes of Obj.t * stri
 type incoming = In_mail of mail | In_datagram of int * string * int * string | In_timer of int
 type event_value = Linked of Obj.t | Datagram of int * string * int * string | Timer of int
 (* What [receive] gets, and the representation of Sandbox.chunk *)
-type raw = Got_bytes of string | Raw_closed | Raw_timed_out
+type raw = Got_bytes of string | Raw_closed | Raw_timed_out | Raw_failed of string
 type chunk_value = Chunk of string | ChunkClosed | ChunkTimedOut
+type tcp_read_value = TcpData of string | TcpEof | TcpTimedOut | TcpReadError of string
+type read_end = Read_eof | Read_error of string
+type read_step = Read_chunk | Read_ended of read_end
 
 (* Framing, as Soma.Wire's take_line and take_frame (Sandbox exports it): the first message of
    what a connection has received, and the rest, which is kept for the
@@ -421,7 +426,7 @@ type net = {
   connect : string -> int -> link Lwt.t;
   (* connect, giving up when the promise the function gives resolves *)
   connect_within : string -> int -> (unit -> unit Lwt.t) -> link Lwt.t;
-  send : int -> string -> bool Lwt.t;
+  send : int -> string -> transmission Lwt.t;
   receive_line : int -> string option Lwt.t;
   (* connection, seconds to wait (0: no timeout), maximum payload bytes *)
   receive_frame : int -> int -> int -> frame Lwt.t;
@@ -750,7 +755,12 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
           | Link_bad_address -> ConnectBadAddress)
   | Prog.Send (c, data) ->
       net.send (link_id c) (string_of_chars (check data))
-      >|= fun ok -> Obj.magic (if ok then Sent else SendClosed)
+      >|= fun r -> Obj.magic (match r with Write_ok -> Sent | Write_closed | Write_failed _ -> SendClosed)
+  | Prog.Send_checked (c, data) ->
+      net.send (link_id c) (string_of_chars (check data))
+      >|= fun r -> Obj.magic (match r with
+          | Write_ok -> TcpSent | Write_closed -> TcpClosed
+          | Write_failed why -> TcpWriteError (chars_of_string why))
   | Prog.Receive_line c ->
       net.receive_line (link_id c)
       >|= fun line -> Obj.magic (match line with
@@ -777,8 +787,17 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       net.receive (link_id c) give_up
       >|= fun r -> Obj.magic (match r with
           | Got_bytes data -> Chunk (chars_of_string data)
-          | Raw_closed -> ChunkClosed
+          | Raw_closed | Raw_failed _ -> ChunkClosed
           | Raw_timed_out -> ChunkTimedOut)
+  | Prog.Receive_checked (c, ms) ->
+      let give_up = match check ms with
+        | Prog.N0 -> None
+        | Prog.Npos _ -> Some (fun () -> sleep_milliseconds ms) in
+      net.receive (link_id c) give_up
+      >|= fun r -> Obj.magic (match r with
+          | Got_bytes data -> TcpData (chars_of_string data)
+          | Raw_closed -> TcpEof | Raw_timed_out -> TcpTimedOut
+          | Raw_failed why -> TcpReadError (chars_of_string why))
   | Prog.Local_address ->
       Lwt.return (Obj.magic (Option.map chars_of_string (net.local_address ())))
   | Prog.Close c -> net.close (link_id c) >|= Obj.magic
@@ -898,7 +917,7 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
       if not (in_buffer b offset length) then
         failwith (Printf.sprintf "send_buffer: %d bytes from %d are past the buffer's %d" length offset (Bytes.length b));
       net.send (link_id c) (Bytes.sub_string b offset length)
-      >|= fun ok -> Obj.magic (if ok then Sent else SendClosed)
+      >|= fun r -> Obj.magic (match r with Write_ok -> Sent | Write_closed | Write_failed _ -> SendClosed)
   | Prog.New_signal -> Lwt.return (Obj.magic ((ref 0, Lwt_condition.create ()) : signal))
   | Prog.Notify s ->
       let (count, waiting) : signal = Obj.magic (check s) in
@@ -1038,7 +1057,10 @@ module Main (S : Tcpip.Stack.V4V6) = struct
   type link = {
     flow : S.TCP.flow;
     pending : Buffer.t;
-    mutable reading : bool Lwt.t option;
+    mutable reading : Soma_rt.read_step Lwt.t option;
+    (* A timed-out observer may miss completion of its read. Keep terminal
+       state until a reader consumes it and closes the link. *)
+    mutable ended : Soma_rt.read_end option;
     (* its bytes are posted as incoming (listen_mailbox, watch) *)
     mutable watched : bool;
   }
@@ -1109,7 +1131,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     let register flow =
       incr last_link;
       Hashtbl.replace links !last_link
-        { flow; pending = Buffer.create 256; reading = None; watched = false };
+        { flow; pending = Buffer.create 256; reading = None; ended = None; watched = false };
       !last_link
     in
     let close id =
@@ -1117,19 +1139,25 @@ module Main (S : Tcpip.Stack.V4V6) = struct
       | None -> Lwt.return_unit
       | Some l -> Hashtbl.remove links id; S.TCP.close l.flow
     in
-    (* the next chunk, added to what is pending: [true], or [false] when
-       the connection has ended *)
+    (* Share the one read across timeouts. Its data and terminal result are
+       retained even when it finishes after the observer stopped waiting. *)
     let next_chunk l =
+      match l.ended with
+      | Some ending -> Lwt.return (Soma_rt.Read_ended ending)
+      | None ->
       let p = match l.reading with
         | Some p -> p
         | None ->
             let p = S.TCP.read l.flow >|= function
-              | Ok (`Data b) -> Buffer.add_string l.pending (Cstruct.to_string b); true
-              | _ -> false in
+              | Ok (`Data b) -> Buffer.add_string l.pending (Cstruct.to_string b); Soma_rt.Read_chunk
+              | Ok `Eof -> l.ended <- Some Soma_rt.Read_eof; Soma_rt.Read_ended Soma_rt.Read_eof
+              | Error e ->
+                  let ending = Soma_rt.Read_error (Format.asprintf "%a" S.TCP.pp_error e) in
+                  l.ended <- Some ending; Soma_rt.Read_ended ending in
             l.reading <- Some p; p in
-      p >|= fun alive ->
+      p >|= fun step ->
       (match l.reading with Some q when q == p -> l.reading <- None | _ -> ());
-      alive
+      step
     in
     let listen port handler =
       incr servers;
@@ -1165,11 +1193,13 @@ module Main (S : Tcpip.Stack.V4V6) = struct
     in
     let send id data =
       match Hashtbl.find_opt links id with
-      | None -> Lwt.return false
+      | None -> Lwt.return Soma_rt.Write_closed
       | Some l ->
           S.TCP.write l.flow (Cstruct.of_string data) >>= function
-          | Ok () -> Lwt.return true
-          | Error _ -> close id >|= fun () -> false
+          | Ok () -> Lwt.return Soma_rt.Write_ok
+          | Error e ->
+              let why = Format.asprintf "%a" S.TCP.pp_write_error e in
+              close id >|= fun () -> Soma_rt.Write_failed why
     in
     let keep l rest = Buffer.clear l.pending; Buffer.add_string l.pending rest in
     (* the next line: from what was received already, or else read until a
@@ -1182,9 +1212,9 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             match Soma_rt.take_line (Buffer.contents l.pending) with
             | Some (line, rest) -> keep l rest; Lwt.return (Some line)
             | None ->
-                next_chunk l >>= fun alive ->
-                if alive then take ()
-                else (Buffer.clear l.pending; close id >|= fun () -> None)
+                next_chunk l >>= function
+                | Soma_rt.Read_chunk -> take ()
+                | Soma_rt.Read_ended _ -> Buffer.clear l.pending; close id >|= fun () -> None
           in
           take ()
     in
@@ -1204,10 +1234,10 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             | `Oversized ->
                 Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_too_large
             | `Need_more ->
-                Lwt.choose [ (next_chunk l >|= fun alive -> `Chunk alive); deadline ]
+                Lwt.choose [ (next_chunk l >|= fun step -> `Chunk step); deadline ]
                 >>= function
-                | `Chunk true -> take ()
-                | `Chunk false -> Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_closed
+                | `Chunk Soma_rt.Read_chunk -> take ()
+                | `Chunk (Soma_rt.Read_ended _) -> Buffer.clear l.pending; close id >|= fun () -> Soma_rt.Frame_closed
                 | `Time_up -> Lwt.return Soma_rt.Frame_timed_out
           in
           take ()
@@ -1225,13 +1255,16 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             Lwt.return (Soma_rt.Got_bytes data) in
           if Buffer.length l.pending > 0 then take ()
           else
-            let chunk = next_chunk l >|= fun alive -> `Chunk alive in
+            let chunk = next_chunk l >|= fun step -> `Chunk step in
             (match give_up with
              | None -> chunk
              | Some g -> Lwt.choose [ chunk; (g () >|= fun () -> `Time_up) ])
             >>= function
-            | `Chunk true -> take ()
-            | `Chunk false -> close id >|= fun () -> Soma_rt.Raw_closed
+            | `Chunk Soma_rt.Read_chunk -> take ()
+            | `Chunk (Soma_rt.Read_ended ending) ->
+                close id >|= fun () -> (match ending with
+                  | Soma_rt.Read_eof -> Soma_rt.Raw_closed
+                  | Soma_rt.Read_error why -> Soma_rt.Raw_failed why)
             | `Time_up -> Lwt.return Soma_rt.Raw_timed_out
     in
     let local_address () =
@@ -1248,16 +1281,16 @@ module Main (S : Tcpip.Stack.V4V6) = struct
         match Hashtbl.find_opt links id with
         | None -> Lwt.return_unit
         | Some l ->
-            next_chunk l >>= fun alive ->
-            if alive then begin
+            next_chunk l >>= function
+            | Soma_rt.Read_chunk ->
               let data = Buffer.contents l.pending in
               Buffer.clear l.pending;
               Soma_rt.post_incoming (Soma_rt.In_mail (Soma_rt.Mail_bytes (id, data)));
               read ()
-            end
-            else if Hashtbl.mem links id then
-              (close id >|= fun () -> Soma_rt.post_incoming (Soma_rt.In_mail (Soma_rt.Mail_closed id)))
-            else Lwt.return_unit
+            | Soma_rt.Read_ended _ ->
+                if Hashtbl.mem links id then
+                  (close id >|= fun () -> Soma_rt.post_incoming (Soma_rt.In_mail (Soma_rt.Mail_closed id)))
+                else Lwt.return_unit
       in
       (match Hashtbl.find_opt links id with Some l -> l.watched <- true | None -> ());
       Lwt.catch read (fun e -> Soma_rt.report ~during:"request" e; close id)
@@ -2523,6 +2556,8 @@ module Tcpip : sig
            Keep the private open row: implementations can add errors, and
            callers cannot invent additional constructors of this private row. *)
         type write_error = private [> `Refused | `Timeout | `Closed ]
+        val pp_error : Format.formatter -> error -> unit
+        val pp_write_error : Format.formatter -> write_error -> unit
         val listen : t -> port:int -> (flow -> unit Lwt.t) -> unit
         val read : flow -> ([ `Data of Cstruct.t | `Eof ], error) result Lwt.t
         val write : flow -> Cstruct.t -> (unit, write_error) result Lwt.t

@@ -102,6 +102,20 @@ Inductive chunk : Type :=
 | ChunkClosed            (* the connection ended first; it is closed *)
 | ChunkTimedOut.         (* nothing arrived within the milliseconds given *)
 
+(** Checked TCP operations preserve transport errors separately from EOF.
+    Reasons are Mirage's diagnostic text, not host errno numbers. An error
+    closes the connection; later operations see an already closed link. *)
+Inductive tcp_read : Type :=
+| TcpData (data : string)
+| TcpEof
+| TcpTimedOut
+| TcpReadError (reason : string).
+
+Inductive tcp_write : Type :=
+| TcpSent
+| TcpClosed
+| TcpWriteError (reason : string).
+
 (** a task [fork] started, whose result [await] gives; the image knows it
     by its number *)
 Inductive task (A : Type) : Type := Task (id : nat).
@@ -255,6 +269,9 @@ Inductive io : Type -> Type :=
 (** write [data] on the connection, as it is ([send_line] adds the line
     break) *)
 | send (c : connection) (data : string) : io sent
+(** [send], distinguishing an already closed link from a failed TCP write.
+    Legacy [send] and [send_buffer] map both failures to [SendClosed]. *)
+| send_checked (c : connection) (data : string) : io tcp_write
 (** the next line the other side sends, up to its line break ["\n"] (a
     ["\r"] before it is dropped too) *)
 | receive_line (c : connection) : io received
@@ -275,6 +292,11 @@ Inductive io : Type -> Type :=
     takes). For any connection, accepted or opened; lines, frames and
     [receive] read the same bytes, in order. *)
 | receive (c : connection) (milliseconds : N) : io chunk
+(** [receive], distinguishing orderly EOF from a transport failure. A timeout
+    preserves the in-flight read, including an error arriving after it.
+    Buffered data is delivered before a subsequent failure. Legacy [receive],
+    line/frame readers and mailbox events still report errors as closure. *)
+| receive_checked (c : connection) (milliseconds : N) : io tcp_read
 (** the unikernel's own IPv4 address, as the network configured it
     (["10.0.0.2"]); [None] when it has none *)
 | local_address : io (option string)
