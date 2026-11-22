@@ -1126,6 +1126,63 @@ proof the same position holds a tactic, as in Rocq, so both need the explicit
 command there; ssreflect's `set x := t.` is such a tactic. `Recursive` is
 another spelling of `Fixpoint`, and a recursive function still needs it.
 
+### ML expression blocks
+
+`ml { expression }` selects an ML-style expression grammar. It elaborates
+directly to ordinary Soma terms; it neither runs OCaml nor changes the kernel.
+Definitions, types and proofs outside a block keep their existing syntax.
+
+```rocq
+increment : nat -> nat := ml {
+  fun n -> let next = n + 1 in next
+}.
+
+from_option : option nat -> nat := ml {
+  function Some n -> n | None -> 0
+}.
+
+Require Import Sandbox.
+read_update (c : cell nat) : io nat := ml {
+  let* n = read_cell c in
+  write_cell c (n + 1);
+  ret n
+}.
+```
+
+Supported forms include `let x = value in body`, local function bindings
+(`let f (x : nat) = body in ...`), parallel pure bindings (`let x = a and y = b
+in ...`), tuple destructuring, `fun x -> body`, `function ...`, and
+`match value with | pattern -> body`. A block or enclosing parentheses closes
+a match; it needs no `end`. Parenthesize nested matches to delimit which match
+owns the following branches, as in OCaml. Tuples, semicolon-separated lists,
+applications, annotations and numeric scopes are available too.
+
+All right-hand sides of a parallel binding see the outer scope. No generated
+temporary name can capture a source variable. `let* pattern = action in body`
+expands to `Soma.Sandbox.bind action (fun pattern => body)`, and
+`action; body` discards the action's result with that same bind. These forms
+require `Sandbox` and its `io`; a pure `let` does not perform an action.
+
+Operators retain Soma's notation and numeric meaning: `=` is propositional
+equality, `=?` is its boolean numeric test, and `nat` arithmetic remains `nat`
+arithmetic. For example, `ml { -3 + 1 }%Z` uses integer arithmetic, and
+`ml { N.add 3%N 4%N }` scopes individual arguments. Supported infix spellings
+are `+ - * / mod`, `:: ++`, `&& ||`, and the usual comparisons. The
+corresponding notation must already be available, as it must outside a block.
+
+`soma { term }` inside an ML block embeds the full ordinary Soma grammar,
+including dependent matches and custom notation. For example:
+`ml { let n = soma { let k := 4 in k + 1 } in n + 1 }`.
+Scoped blocks can be nested. The names `ml`, `function` and `and` are not
+reserved globally; parsing uses separate entries rather than a persistent mode.
+Optional arguments, imperative mutation and unrestricted `let rec` are not
+introduced by this syntax. Existing cells, buffers and checked/effectful loops
+retain their explicit interfaces.
+
+`test-suite/misc/soma_ml_blocks.sh` proves representative pure results and the
+exact equality of effectful blocks with their original `bind` expressions,
+including capture avoidance, parallel scope and tuple patterns.
+
 ```rocq
 Definition succ_dyn (x : Any) : nat := x + 1.
 Print succ_dyn.

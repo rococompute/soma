@@ -193,6 +193,84 @@ let jsx_element ~loc tag attrs ending =
 let jsx_fragment ~loc children =
   jsx_app ~loc (jsx_ref ~loc "fragment") [jsx_list ~loc "jsx_cons" children]
 
+(* [ml { ... }] selects an expression grammar, without making [ml] a
+   keyword or changing the ordinary term grammar. No parser mode survives a
+   failed parse. [soma { ... }] embeds an ordinary term inside that grammar. *)
+let ml_open =
+  let open Procq.Lookahead in
+  to_entry "ml_open" (lk_kw "ml" >> lk_kw "{")
+
+let ml_soma_open =
+  let open Procq.Lookahead in
+  to_entry "ml_soma_open" (lk_kw "soma" >> lk_kw "{")
+
+let ml_reference_start =
+  let open Procq.Lookahead in
+  to_entry "ml_reference_start" (lk_ident_except ["and"; "function"; "mod"])
+
+(* Do not register operator tokens globally. In particular, reserving [mod]
+   breaks primitive identifiers, and reserving [=?] before Arith is loaded
+   changes the lexing of existing Ltac patterns such as [?x=?y]. *)
+let ml_operator entry_name operators =
+  Procq.Entry.(of_parser entry_name { parser_fun = fun kwstate stream ->
+    match Gramlib.LStream.peek kwstate stream with
+    | Some (Tok.KEYWORD op | Tok.IDENT op) when List.mem op operators ->
+      Gramlib.LStream.junk kwstate stream; Ok op
+    | _ -> Error () })
+let ml_or = ml_operator "ml_or" ["||"]
+let ml_and = ml_operator "ml_and" ["&&"]
+let ml_compare = ml_operator "ml_compare" ["=";"<>";"<";"<=";">";">=";"=?";"<?";"<=?"]
+let ml_cons = ml_operator "ml_cons" ["::";"++"]
+let ml_pattern_cons = ml_operator "ml_pattern_cons" ["::"]
+let ml_add = ml_operator "ml_add" ["+";"-"]
+let ml_mul = ml_operator "ml_mul" ["*";"/";"mod"]
+let ml_neg = ml_operator "ml_neg" ["-"]
+
+let ml_ref ~loc name = CAst.make ~loc @@ CRef (qualid_of_string ~loc name, None)
+let ml_app ~loc f args = CAst.make ~loc @@ CApp (f, List.map (fun a -> a, None) args)
+let ml_notation ~loc op args =
+  CAst.make ~loc @@ CNotation (None, (InConstrEntry, op), (args, [], [], []))
+let ml_binary ~loc op a b = ml_notation ~loc ("_ " ^ op ^ " _") [a;b]
+let ml_pair ~loc a b = ml_app ~loc (ml_ref ~loc "Corelib.Init.Datatypes.pair") [a;b]
+let ml_tuple ~loc = function
+  | [] -> ml_ref ~loc "Corelib.Init.Datatypes.tt"
+  | x :: xs -> List.fold_left (ml_pair ~loc) x xs
+let ml_tuple_pattern ~loc = function
+  | [] -> CAst.make ~loc @@ CPatCstr (qualid_of_string ~loc "Corelib.Init.Datatypes.tt",None,[])
+  | p :: ps -> List.fold_left (fun a b -> CAst.make ~loc @@ CPatCstr
+      (qualid_of_string ~loc "Corelib.Init.Datatypes.pair",None,[a;b])) p ps
+let ml_list ~loc xs =
+  List.fold_right (fun x tail -> ml_app ~loc (ml_ref ~loc "Corelib.Init.Datatypes.cons") [x;tail])
+    xs (ml_ref ~loc "Corelib.Init.Datatypes.nil")
+let ml_bind ~loc pattern action body =
+  let continuation = mkLambdaCN ~loc [CLocalPattern pattern] body in
+  ml_app ~loc (ml_ref ~loc "Soma.Sandbox.bind") [action; continuation]
+let ml_then ~loc action body =
+  ml_bind ~loc (CAst.make ~loc @@ CPatAtom None) action body
+let ml_function ~loc branches =
+  let used = List.fold_left (fun used branch ->
+      Id.Set.union used (free_vars_of_constr_expr (snd branch.CAst.v))) Id.Set.empty branches in
+  let rec fresh n =
+    let id = Id.of_string ("_ml_argument" ^ string_of_int n) in
+    if Id.Set.mem id used then fresh (n+1) else id in
+  let id = fresh 0 in
+  let binder = binder_of_name Explicit (CAst.make ~loc (Name id)) in
+  let argument = CAst.make ~loc @@ CRef (qualid_of_ident ~loc id,None) in
+  mkLambdaCN ~loc [binder]
+    (CAst.make ~loc @@ CCases (MatchStyle,None,[argument,None,None],branches))
+let ml_let ~loc bindings body = match bindings with
+  | [name, value] -> CAst.make ~loc @@ CLetIn (name, value, None, body)
+  | [] -> assert false
+  | (name, value) :: rest ->
+    (* Match one tuple of RHSs. New names cannot capture a later RHS, and no
+       generated temporary name can capture a user's variable. *)
+    let pair_pattern a b = CAst.make ~loc @@ CPatCstr
+        (qualid_of_string ~loc "Corelib.Init.Datatypes.pair", None, [a;b]) in
+    let pattern = List.fold_left (fun p (name,_) -> pair_pattern p (pat_of_name name)) (pat_of_name name) rest in
+    let value = List.fold_left (fun v (_,rhs) -> ml_pair ~loc v rhs) value rest in
+    CAst.make ~loc @@ CCases (LetPatternStyle, None, [value,None,None],
+      [CAst.make ~loc ([[pattern]], body)])
+
 }
 
 GRAMMAR EXTEND Gram
@@ -344,7 +422,8 @@ GRAMMAR EXTEND Gram
       | c = term; "%_"; key = IDENT ->
         { CAst.make ~loc @@ CDelimiters (DelimOnlyTmpScope,key,c) } ]
     | "0"
-      [ c = atomic_constr -> { c }
+      [ ml_open; IDENT "ml"; "{"; c = ml_sequence; "}" -> { c }
+      | c = atomic_constr -> { c }
       | c = term_match -> { c }
       | id = reference; i = univ_annot ->
         { CAst.make ~loc @@ CRef (id, i) }
@@ -372,6 +451,96 @@ GRAMMAR EXTEND Gram
         { jsx_element ~loc tag attrs e }
       | jsx_fragment_open; cs = LIST0 jsx_value; jsx_fragment_close ->
         { jsx_fragment ~loc cs } ] ]
+  ;
+  (* ML blocks keep their own delimiters and arrow spellings. Arithmetic
+     remains Soma notation, including scopes and propositional equality. *)
+  ml_sequence:
+    [ RIGHTA
+      [ a = ml_expr; ";"; b = ml_sequence -> { ml_then ~loc a b }
+      | a = ml_expr -> { a } ] ]
+  ;
+  ml_expr:
+    [ "200" RIGHTA
+      [ "let"; "*"; p = ml_pattern; "="; a = ml_expr;
+        "in"; b = ml_sequence -> { ml_bind ~loc p a b }
+      | "let"; bs = ml_bindings;
+        "in"; b = ml_sequence -> { ml_let ~loc bs b }
+      | "let"; "("; ps = LIST0 (pattern LEVEL "200") SEP ","; ")"; "="; a = ml_expr;
+        "in"; b = ml_sequence ->
+        { CAst.make ~loc @@ CCases (LetPatternStyle,None,[a,None,None],
+            [CAst.make ~loc ([[ml_tuple_pattern ~loc ps]],b)]) }
+      | "fun"; bs = open_binders; "->"; b = ml_sequence -> { mkLambdaCN ~loc bs b }
+      | IDENT "function"; br = ml_branches ->
+        { ml_function ~loc br }
+      | "if"; a = ml_expr; "then"; b = ml_expr; "else"; c = ml_expr ->
+        { CAst.make ~loc @@ CIf (a, (None,None), b, c) }
+      | "match"; a = ml_expr; "with"; br = ml_branches ->
+        { CAst.make ~loc @@ CCases (MatchStyle, None, [a,None,None], br) } ]
+    | "90" RIGHTA [ a = ml_expr; op = ml_or; b = ml_expr -> { ml_binary ~loc op a b } ]
+    | "80" RIGHTA [ a = ml_expr; op = ml_and; b = ml_expr -> { ml_binary ~loc op a b } ]
+    | "70" LEFTA
+      [ a = ml_expr; op = ml_compare; b = ml_expr -> { ml_binary ~loc op a b } ]
+    | "60" RIGHTA
+      [ a = ml_expr; op = ml_cons; b = ml_expr ->
+        { if op="::" then ml_app ~loc (ml_ref ~loc "Corelib.Init.Datatypes.cons") [a;b]
+          else ml_binary ~loc op a b } ]
+    | "50" LEFTA
+      [ a = ml_expr; op = ml_add; b = ml_expr -> { ml_binary ~loc op a b } ]
+    | "40" LEFTA
+      [ a = ml_expr; op = ml_mul; b = ml_expr -> { ml_binary ~loc op a b } ]
+    | "30" RIGHTA
+      [ ml_neg; a = ml_expr -> { ml_notation ~loc "- _" [a] } ]
+    | "10" LEFTA
+      [ f = ml_expr; args = LIST1 ml_argument -> { ml_app ~loc f args } ]
+    | "1" LEFTA
+      [ a = ml_expr; "%"; scope = IDENT -> { CAst.make ~loc @@ CDelimiters (DelimUnboundedScope,scope,a) } ]
+    | "0" [ a = ml_atom -> { a } ] ]
+  ;
+  ml_argument:
+    [ [ a = ml_expr LEVEL "1" -> { a } ] ]
+  ;
+  ml_binding:
+    [ [ id = name; bs = binders; "="; a = ml_expr -> { id, mkLambdaCN ~loc bs a } ] ]
+  ;
+  ml_bindings:
+    [ RIGHTA [ b = ml_binding; IDENT "and"; bs = ml_bindings -> { b :: bs }
+      | b = ml_binding -> { [b] } ] ]
+  ;
+  ml_branches:
+    [ [ OPT "|"; br = LIST1 ml_branch SEP "|" -> { br } ] ]
+  ;
+  ml_branch:
+    [ [ ps = LIST1 ml_mult_pattern SEP "|"; "->"; b = ml_sequence -> { CAst.make ~loc (ps,b) } ] ]
+  ;
+  ml_mult_pattern:
+    [ [ p = ml_pattern -> { [p] } ] ]
+  ;
+  ml_pattern:
+    [ "60" RIGHTA
+      [ p = ml_pattern; ml_pattern_cons; q = ml_pattern ->
+        { CAst.make ~loc @@ CPatCstr
+            (qualid_of_string ~loc "Corelib.Init.Datatypes.cons",None,[p;q]) } ]
+    | "10" [ p = pattern LEVEL "10" -> { p } ] ]
+  ;
+  ml_atom:
+    [ [ ml_soma_open; IDENT "soma"; "{"; a = lconstr; "}" -> { a }
+      | ml_open; IDENT "ml"; "{"; a = ml_sequence; "}" -> { a }
+      | "("; ")" -> { ml_tuple ~loc [] }
+      | "("; a = ml_sequence; tail = ml_paren_tail; ")" ->
+        { match tail with
+          | `Plain -> a
+          | `Tuple xs -> ml_tuple ~loc (a::xs)
+          | `Cast ty -> CAst.make ~loc @@ CCast (a,Some DEFAULTcast,ty) }
+      | "["; xs = LIST0 ml_expr SEP ";"; "]" -> { ml_list ~loc xs }
+      | "{|"; a = full_record_declaration; bar_cbrace -> { a }
+      | ml_reference_start; id = reference; u = univ_annot -> { CAst.make ~loc @@ CRef (id,u) }
+      | n = NUMBER -> { CAst.make ~loc @@ CPrim (Number (NumTok.SPlus,n)) }
+      | s = string -> { CAst.make ~loc @@ CPrim (String s) } ] ]
+  ;
+  ml_paren_tail:
+    [ [ ","; xs = LIST1 ml_expr SEP "," -> { `Tuple xs }
+      | ":"; ty = lconstr -> { `Cast ty }
+      | -> { `Plain } ] ]
   ;
   jsx_attr:
     [ [ name = IDENT; "="; v = jsx_value -> { (name, v) } ] ]
