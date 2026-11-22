@@ -978,6 +978,49 @@ values named by a keyword of Soma's (`return`).
 `examples/example_projects/wasm_add` uses a module built from Rust;
 `test-suite/misc/soma_wasm.sh` tests it.
 
+### Inserting OCaml source
+
+`soma insert FILE.ml --out DIR` translates OCaml into editable `.soma`
+source. It uses OCaml's parser and type inference in a separate frontend
+(`topbin/somaInsert.ml`), then checks the result with ordinary `soma check`.
+The source is never evaluated; PPX is not run. This is source migration,
+separate from the OCaml bindings above, which keep their implementation in
+OCaml. No placeholders, axioms or gradual holes stand in for missing code.
+
+```sh
+soma insert helpers.ml --out helpers-soma
+soma insert path/to/ocaml --partial --out migrated --report migration.json
+soma insert path/to/ocaml --partial --report-only --json
+```
+
+The initial subset includes inferred polymorphic pure functions, immutable
+records and variants, tuples, lists/options/results, matches, selected Stdlib
+operations and structurally checked list recursion. OCaml `int` is a primitive
+63-bit word, with wrapping arithmetic and signed comparisons, rather than an
+unbounded `Z` or saturating `nat`. Values are prefixed `oc_`, types `oct_`,
+constructors `occ_`, and fields `ocf_`; punctuation in names is hex-escaped.
+Generated files are ordinary Soma and may be edited and strengthened afterward.
+
+Unsupported constructs have source locations and diagnostic codes. Default
+mode writes no Soma source if any input remains unsupported. `--partial` keeps
+independently translated declarations that pass checking, and still exits 1
+when anything remains. Users of omitted declarations are omitted too, rather
+than linked to fake implementations. Effects, mutable state, exceptions,
+nonstructural/local recursion and native bindings need further translation
+rules. The JSON report lists checked item counts and diagnostics per file;
+those counts measure declarations, not lines or behavioral coverage.
+
+Directory input preserves relative paths and inventories files independently;
+cross-module translation and linking are not implemented yet. `-I DIR` supplies
+OCaml interface lookup directories. Existing destination files are never
+overwritten. `--report-only` writes no Soma source; `--report FILE` can preserve
+the inventory. Exit 0 means the input translated completely, 1 means migration
+is incomplete, and 2 means an invocation or destination error.
+
+`test-suite/misc/soma_insert.sh` checks synthetic OCaml reference behavior
+against kernel-checked expectations for generated Soma, and checks incomplete
+migrations, non-evaluation, shadowed library names, recursion and destinations.
+
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and
 `.ext`; given a name without an extension, they look for `.soma` first,

@@ -70,6 +70,9 @@ Commands:
                               lists them without building. soma test --help has details.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
+  insert PATH                 Translate an OCaml file or directory into checked Soma
+                              source. --out DIR, --partial, --report FILE, --json.
+                              soma insert --help describes the supported subset.
   hash                        Check a program and print each definition's hashes: CONTRACT
                               WITNESS NAME, and what it assumes. Comments and layout do not
                               change them; another proof changes only the witness.
@@ -1734,6 +1737,17 @@ let run_command ?(options = no_run_options) ~events ~supervise = function
 let () =
   match List.tl (Array.to_list Sys.argv) with
   | [] | ("help" | "--help" | "-h") :: _ -> print_string usage
+  | "insert" :: args ->
+    let opts, _ = parse_opts [] in
+    init opts [];
+    let prog = get_worker_path { package = "soma-runtime"; basename = "soma-insert" } in
+    let checker = if Filename.is_relative Sys.executable_name
+      then Filename.concat (Sys.getcwd ()) Sys.executable_name else Sys.executable_name in
+    let pid = Unix.create_process prog
+        (Array.of_list (prog :: "--checker" :: checker :: args)) Unix.stdin Unix.stdout Unix.stderr in
+    child := Some pid;
+    pass_signals ();
+    exit (exit_code (wait pid))
   | "check" :: rest when List.exists is_help rest -> print_string check_help
   | "check" :: rest ->
     let is_verbose a = a = "-v" || a = "--verbose" in

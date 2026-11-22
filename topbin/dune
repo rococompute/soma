@@ -33,6 +33,18 @@
  (modules soma somaTest)
  (libraries rocqshim soma-runtime.boot soma-runtime.clib findlib unix))
 
+; Keep compiler-libs' global modules separate from Rocq's compiler modules.
+; This frontend reads OCaml but emits source checked by the ordinary worker.
+(executable
+ (name somaInsert)
+ (modules somaInsert)
+ (libraries compiler-libs.common unix))
+
+(install
+ (section libexec)
+ (package soma-runtime)
+ (files (somaInsert.exe as soma-insert)))
+
 (executable
  (name rocqnative)
  (modules rocqnative)
