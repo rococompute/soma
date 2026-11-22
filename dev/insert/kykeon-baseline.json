@@ -1,0 +1,336 @@
+{
+  "version": 1,
+  "source_repository": "rococompute/kykeon",
+  "source_commit": "645056f45df109070c78c9e36edf6f734806302a",
+  "source_dirty": false,
+  "frontend_ocaml": "4.14.2",
+  "frontend_sha256": "d128f3f7e73a056fc692e7e0a35a770d3ed5b2bfd41a274e99f0a2ae98cc3eb8",
+  "measurement": "Independent top-level items checked as Soma; not whole-program translation or equivalence coverage. Missing OCaml interfaces contribute to diagnostics.",
+  "source_items": 686,
+  "checked_items": 74,
+  "allocator_differential_cases": 16,
+  "files": [
+    {
+      "source": "unikernel/config.ml",
+      "sha256": "5b3eaa54ce9dcf087f02eeb96ed7e172200d57fb81e02016321e62d4ed90dd3a",
+      "source_items": 3,
+      "checked_items": 0,
+      "diagnostics": {
+        "ocaml-type": 3
+      }
+    },
+    {
+      "source": "unikernel/lx/blk.ml",
+      "sha256": "826de15995c18d432102ab568fc52267aaa0b98de068aeb31635318b0ab6edf7",
+      "source_items": 8,
+      "checked_items": 2,
+      "diagnostics": {
+        "ocaml-type": 6
+      }
+    },
+    {
+      "source": "unikernel/lx/cmd.ml",
+      "sha256": "8b5efa318931aee686b3c634653bd310349264dec097a27c556e747072a29014",
+      "source_items": 24,
+      "checked_items": 5,
+      "diagnostics": {
+        "dependency": 6,
+        "equality": 2,
+        "ocaml-type": 9,
+        "recursion": 1,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/elf.ml",
+      "sha256": "cd010a1e85dbb0ff9144a7e4cf40d7fbc001f4bed389a52726bc58dbb61d3742",
+      "source_items": 16,
+      "checked_items": 4,
+      "diagnostics": {
+        "dependency": 3,
+        "exception": 1,
+        "ocaml-type": 7,
+        "shift": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/findx.ml",
+      "sha256": "bf84f1e37b322b031d4c147e18eb9e7826aa2f08cbf9078f5f2e53148d103238",
+      "source_items": 22,
+      "checked_items": 0,
+      "diagnostics": {
+        "exception": 2,
+        "mutation": 1,
+        "ocaml-type": 17,
+        "type": 2
+      }
+    },
+    {
+      "source": "unikernel/lx/glob.ml",
+      "sha256": "9d6fb7be71ff78db4554cd5ed8ba1502527507317b1f58810d5f27cad316a260",
+      "source_items": 7,
+      "checked_items": 0,
+      "diagnostics": {
+        "dependency": 2,
+        "pattern": 1,
+        "recursion": 3,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/guest.ml",
+      "sha256": "8241747c12f938f2de5a789ca765ba681a15acff3dad1db3eaf2ebde10bf6513",
+      "source_items": 63,
+      "checked_items": 7,
+      "diagnostics": {
+        "dependency": 2,
+        "exception": 1,
+        "native-binding": 25,
+        "ocaml-type": 25,
+        "unsupported": 3
+      }
+    },
+    {
+      "source": "unikernel/lx/kernel.ml",
+      "sha256": "a78fd330d1a64b420ff8c1d311b08a61a03cedb9bd79000778408acf0adc7371",
+      "source_items": 113,
+      "checked_items": 12,
+      "diagnostics": {
+        "dependency": 1,
+        "mutation": 1,
+        "ocaml-type": 90,
+        "type": 9
+      }
+    },
+    {
+      "source": "unikernel/lx/mem.ml",
+      "sha256": "8c2d93a6de1e943c63d1fa286a73304746fd490bc17438f3437f98a79f36b374",
+      "source_items": 15,
+      "checked_items": 5,
+      "diagnostics": {
+        "effect": 1,
+        "mutation": 4,
+        "type": 2,
+        "unsupported": 3
+      }
+    },
+    {
+      "source": "unikernel/lx/net.ml",
+      "sha256": "af4681455b7a38700391051a681f9d30a971a57a3cf986152d271986091a08f5",
+      "source_items": 4,
+      "checked_items": 0,
+      "diagnostics": {
+        "ocaml-type": 3,
+        "type": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/pinbox.ml",
+      "sha256": "c89c9876714198f3ccb8a77b16d897cb43af9676a2b9809a779614ddfdf974c4",
+      "source_items": 41,
+      "checked_items": 10,
+      "diagnostics": {
+        "dependency": 4,
+        "exception": 1,
+        "ocaml-type": 18,
+        "recursion": 1,
+        "type": 6,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/regex.ml",
+      "sha256": "9ded84fb4557119e37bd87b06435ef22b48b5ae59b4c2e08c3756d4b3d7321a6",
+      "source_items": 13,
+      "checked_items": 1,
+      "diagnostics": {
+        "exception": 1,
+        "ocaml-type": 9,
+        "pattern": 2
+      }
+    },
+    {
+      "source": "unikernel/lx/search.ml",
+      "sha256": "90996a688e6adff59de9efa98f01c24c0af263f5bbf39548f375415a45107669",
+      "source_items": 20,
+      "checked_items": 2,
+      "diagnostics": {
+        "mutation": 2,
+        "ocaml-type": 16
+      }
+    },
+    {
+      "source": "unikernel/lx/sed.ml",
+      "sha256": "1e1f9173488a6ca3f2b273aa73b6fc8cb19169b3bf5e47db4174b6963c6f1d7c",
+      "source_items": 20,
+      "checked_items": 2,
+      "diagnostics": {
+        "dependency": 1,
+        "exception": 1,
+        "ocaml-type": 13,
+        "type": 3
+      }
+    },
+    {
+      "source": "unikernel/lx/shell.ml",
+      "sha256": "13059b399dcc8e504627b452d2f0bc614a154c587acc16b54c05b5bd96849828",
+      "source_items": 71,
+      "checked_items": 3,
+      "diagnostics": {
+        "dependency": 9,
+        "exception": 7,
+        "mutation": 1,
+        "ocaml-type": 43,
+        "recursion": 5,
+        "type": 2,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/stubs.ml",
+      "sha256": "aed65e15c69849d63fa76730b9b76d0e9d82bbdb5d8d881370ca0e3162a4aebb",
+      "source_items": 16,
+      "checked_items": 5,
+      "diagnostics": {
+        "dependency": 2,
+        "ocaml-type": 5,
+        "recursion": 2,
+        "unsupported": 2
+      }
+    },
+    {
+      "source": "unikernel/lx/tar.ml",
+      "sha256": "4dbcb6811861c0fea076f2084698f07e8b091bce35fe31ffc1cf49405cf44707",
+      "source_items": 5,
+      "checked_items": 0,
+      "diagnostics": {
+        "dependency": 2,
+        "ocaml-type": 2,
+        "recursion": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/test/blk.ml",
+      "sha256": "5dd838ff6e75cb46bad00b2ca528301dd9115d2b90df5dd3a8bba6e4541e9c48",
+      "source_items": 3,
+      "checked_items": 1,
+      "diagnostics": {
+        "ocaml-type": 2
+      }
+    },
+    {
+      "source": "unikernel/lx/test/guest.ml",
+      "sha256": "0a1449b54b5010111cc5553fcb049457257ebc0c4d95de3931ac944e8edca8ae",
+      "source_items": 1,
+      "checked_items": 1,
+      "diagnostics": {}
+    },
+    {
+      "source": "unikernel/lx/test/mirage_sleep.ml",
+      "sha256": "cca46c49fcddebeb461c2210a18c90b7039db5675c3723e295bc866aef2e869d",
+      "source_items": 1,
+      "checked_items": 0,
+      "diagnostics": {
+        "ocaml-type": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/test/shell_test.ml",
+      "sha256": "a6fa7ae02c9bd123f374d1c29b4d0e1ddbf441901db48cf73958709ae1523103",
+      "source_items": 12,
+      "checked_items": 2,
+      "diagnostics": {
+        "dependency": 5,
+        "ocaml-type": 4,
+        "type": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/textutil.ml",
+      "sha256": "0ec3439770ec8dde67999db50ca9a0be5ceef841ccde7ed8db75579d1a5c4d6d",
+      "source_items": 49,
+      "checked_items": 5,
+      "diagnostics": {
+        "dependency": 2,
+        "ocaml-type": 32,
+        "recursion": 1,
+        "type": 8,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/tty.ml",
+      "sha256": "27f7da4b9d75d6abadbc2153a273b9ee7a3b9f8e5438723218fc2805f41ae57f",
+      "source_items": 29,
+      "checked_items": 0,
+      "diagnostics": {
+        "mutation": 1,
+        "type": 27,
+        "unsupported": 1
+      }
+    },
+    {
+      "source": "unikernel/lx/vfs.ml",
+      "sha256": "92c6b565e6bab553fc8d47d6530032bff5e31259683bbf49571a0879a7be1a4b",
+      "source_items": 29,
+      "checked_items": 2,
+      "diagnostics": {
+        "dependency": 2,
+        "exception": 1,
+        "ocaml-type": 6,
+        "type": 13,
+        "unsupported": 5
+      }
+    },
+    {
+      "source": "unikernel/lx/workspace.ml",
+      "sha256": "27122affb71b59f4bb8ade5d5973010dfeddbf6fdef4782743029696f9b5c3ce",
+      "source_items": 17,
+      "checked_items": 3,
+      "diagnostics": {
+        "dependency": 1,
+        "effect": 1,
+        "mutation": 1,
+        "ocaml-type": 9,
+        "recursion": 1,
+        "type": 1
+      }
+    },
+    {
+      "source": "unikernel/mirage/main.ml",
+      "sha256": "bef4fb5c91671be5e3e4351999b8846db0dd2414d8a2fb70903b938d1f6a4c10",
+      "source_items": 52,
+      "checked_items": 0,
+      "diagnostics": {
+        "ocaml-type": 52
+      }
+    },
+    {
+      "source": "unikernel/mirage/manifest.ml",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_items": 0,
+      "checked_items": 0,
+      "diagnostics": {}
+    },
+    {
+      "source": "unikernel/str_split.ml",
+      "sha256": "a514aa950897331095c2fead78aea83f3384de200276df51f89a788494002c33",
+      "source_items": 1,
+      "checked_items": 0,
+      "diagnostics": {
+        "recursion": 1
+      }
+    },
+    {
+      "source": "unikernel/unikernel.ml",
+      "sha256": "166c97083b60d254cb27bc9b2c22d7a62dc136e5a177c9b381b7e1c41e4a4689",
+      "source_items": 31,
+      "checked_items": 2,
+      "diagnostics": {
+        "dependency": 2,
+        "mutation": 1,
+        "ocaml-type": 26
+      }
+    }
+  ]
+}

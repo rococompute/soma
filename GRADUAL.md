@@ -982,7 +982,8 @@ values named by a keyword of Soma's (`return`).
 
 `soma insert FILE.ml --out DIR` translates OCaml into editable `.soma`
 source. It uses OCaml's parser and type inference in a separate frontend
-(`topbin/somaInsert.ml`), then checks the result with ordinary `soma check`.
+(`topbin/somaInsert414.ml`, selected by Dune), then checks
+the result with ordinary `soma check`.
 The source is never evaluated; PPX is not run. This is source migration,
 separate from the OCaml bindings above, which keep their implementation in
 OCaml. No placeholders, axioms or gradual holes stand in for missing code.
@@ -995,7 +996,9 @@ soma insert path/to/ocaml --partial --report-only --json
 
 The initial subset includes inferred polymorphic pure functions, immutable
 records and variants, tuples, lists/options/results, matches, selected Stdlib
-operations and structurally checked list recursion. OCaml `int` is a primitive
+operations and structurally checked list recursion. Simultaneous pure bindings,
+string concatenation, signed integer formatting and list predicates are included.
+OCaml `int` is a primitive
 63-bit word, with wrapping arithmetic and signed comparisons, rather than an
 unbounded `Z` or saturating `nat`. Values are prefixed `oc_`, types `oct_`,
 constructors `occ_`, and fields `ocf_`; punctuation in names is hex-escaped.
@@ -1012,7 +1015,12 @@ those counts measure declarations, not lines or behavioral coverage.
 
 Directory input preserves relative paths and inventories files independently;
 cross-module translation and linking are not implemented yet. `-I DIR` supplies
-OCaml interface lookup directories. Existing destination files are never
+OCaml interface lookup directories; these must match the frontend's compiler
+version. The first typedtree adapter supports OCaml 4.14 on 64-bit hosts.
+On OCaml 5 builds the new command reports the missing adapter; the other Soma
+commands remain available. Kernel checking checks the generated program's types
+and expectations, rather than proving its equivalence to the OCaml source.
+Existing destination files are never
 overwritten. `--report-only` writes no Soma source; `--report FILE` can preserve
 the inventory. Exit 0 means the input translated completely, 1 means migration
 is incomplete, and 2 means an invocation or destination error.
@@ -1020,6 +1028,15 @@ is incomplete, and 2 means an invocation or destination error.
 `test-suite/misc/soma_insert.sh` checks synthetic OCaml reference behavior
 against kernel-checked expectations for generated Soma, and checks incomplete
 migrations, non-evaluation, shadowed library names, recursion and destinations.
+`dev/insert-kykeon-check.py --kykeon ../kykeon --report /tmp/kykeon-insert.json`
+compares actual Kykeon allocator helpers against inserted Soma, then inventories
+the complete unikernel source without editing Kykeon or launching agents/VMs.
+`dev/insert/kykeon-baseline.json` records the initial target measurement, with
+source hashes: 74 of 686 top-level items across 29 files checked independently.
+These include constants, data types and pure helpers; they do not constitute
+a translated Kykeon application. The largest remaining diagnostic category
+is unavailable OCaml module/type information, followed by unsupported type,
+library, native-binding and effect translations.
 
 Soma source files end in `.soma`. `rocq c`, `Load`, `-l` and `rocq dep`
 also accept Rocq's `.v` (Corelib and the Rocq libraries are `.v`), and

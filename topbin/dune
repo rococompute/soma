@@ -37,8 +37,21 @@
 ; This frontend reads OCaml but emits source checked by the ordinary worker.
 (executable
  (name somaInsert)
- (modules somaInsert)
+ (modules somaInsert somaInsertCompiler)
  (libraries compiler-libs.common unix))
+
+; Typedtree is compiler-version-specific. A new frontend must never break
+; the existing compiler on versions whose typedtree adapter is not implemented.
+(rule
+ (target somaInsertCompiler.ml)
+ (enabled_if (< %{ocaml_version} 5.0))
+ (action (copy %{dep:somaInsert414.ml} %{target})))
+
+(rule
+ (target somaInsertCompiler.ml)
+ (enabled_if (>= %{ocaml_version} 5.0))
+ (action (write-file %{target}
+   "let main () = prerr_endline \"soma insert: this initial frontend requires Soma built with OCaml 4.14; the OCaml 5 typedtree adapter is not implemented yet.\"; exit 2\n")))
 
 (install
  (section libexec)
