@@ -1125,6 +1125,14 @@ lemmas.
 
 ### C modules: `.definition` next to `.c`
 
+The C binding mechanism is already available to executables and Sandbox
+images. A binding declares how to call a native operation; it does not supply
+the operation itself. For example, running a second guest program needs native
+CPU context entry, trap vectors and page-table operations. Those belong in a
+small architecture-specific C/assembly library, exposed through `.definition`
+handles and `word64` values. An application's loader, scheduler and syscall
+policy can remain Soma. No OCaml policy wrapper is required for that boundary.
+
 A C file `FILE.c` is used through `FILE.definition`, next to it, as an
 OCaml module is, and is plain C: Soma writes the OCaml that calls it
 (`vernac/somaC.ml`), and `FILE.soma.h`, the declarations of the functions
@@ -1737,12 +1745,26 @@ translating it into an operating-system errno. This lets a Linux personality
 choose its own errno policy. The older `send`, `send_buffer`, `receive`,
 line/frame readers and mailbox events keep their existing types and treat
 transport failures as closure. After a checked failure closes a link, later
-operations see a closed link. A timed-out read retains both arriving data and
-its eventual terminal error until the next read observes them.
+operations see a closed link. Orderly `TcpEof` ends reading but leaves writing
+available; use `close` when finished. Legacy `receive` still closes at EOF.
+A timed-out read retains both arriving data and
+its eventual terminal error until the next read observes them. Cancelling an
+individual reader (for example, the losing side of `race`) also leaves the
+connection's in-flight read intact. Closing the connection is explicit and
+separate from cancelling a wait.
 `examples/example_files/mirage_tcp_errors` distinguishes an orderly close from
 a reset. `test-suite/misc/soma_tcp_errors.sh` checks the generated interfaces
 and, with host Lwt or `LWT_SOURCE` pointing at a vendored `lwt/src/core`, exercises
 the actual generated TCP adapter with controlled real Lwt promises.
+On Solo5/Mac, `SOMA_MIRAGE_SWITCH=kykeon python3 dev/tcp-errors-check.py`
+builds and boots a guest against local orderly-close and TCP-reset fixtures,
+including a write after read EOF; it makes no model requests.
+Real peer-reset detection requires a stack that reports resets: upstream
+`tcpip` 9.0.1 collapses them into EOF. The rococompute Mirage/Mac overlay's
+`tcpip.9.0.1+hvf.1` preserves the reset reason. Update that overlay and re-lock
+existing Mirage projects to adopt it; an already cached dependency tree retains
+its locked stack version. The checked API preserves whichever errors its
+underlying stack supplies.
 
 A disk is named by a string literal (`disk_read "rootfs" 0 8`): the image
 declares a block device for each name the program uses (MirageOS's

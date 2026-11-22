@@ -31,6 +31,14 @@ check_peer (host : string) (port : nat) (reset : bool) : io unit :=
     match sent with
     | TcpSent =>
       failed <- read_end c ;;
+      (if failed then ret tt else
+         after_eof <- send_checked c "after EOF" ;;
+         match after_eof with
+         | TcpSent => ret tt
+         | TcpClosed => print "read EOF closed the write side" ;; exit 1
+         | TcpWriteError why => print ("write after EOF failed: " ++ why) ;; exit 1
+         end) ;;
+      close c ;;
       if Bool.eqb failed reset then ret tt else print "EOF/error distinction lost" ;; exit 1
     | _ => print "fixture write failed" ;; exit 1
     end

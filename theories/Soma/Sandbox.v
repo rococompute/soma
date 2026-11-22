@@ -294,7 +294,8 @@ Inductive io : Type -> Type :=
 | receive (c : connection) (milliseconds : N) : io chunk
 (** [receive], distinguishing orderly EOF from a transport failure. A timeout
     preserves the in-flight read, including an error arriving after it.
-    Buffered data is delivered before a subsequent failure. Legacy [receive],
+    Buffered data is delivered before a subsequent failure. [TcpEof] leaves the
+    write side available until [close]; an error closes the link. Legacy [receive],
     line/frame readers and mailbox events still report errors as closure. *)
 | receive_checked (c : connection) (milliseconds : N) : io tcp_read
 (** the unikernel's own IPv4 address, as the network configured it

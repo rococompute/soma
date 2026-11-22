@@ -118,5 +118,6 @@ let make () =
 PY
 cp "$ROOT/test-suite/misc/soma_tcp_runtime.ml" check.ml
 "${OCAMLC[@]}" -w -a -c uint63.ml soma_word64.ml soma_handles.ml float64.ml prog.mli prog.ml links.ml check.ml >> compile.log 2>&1
-"${OCAMLC[@]}" -o check "${LWT_FILES[@]}" uint63.cmo soma_word64.cmo soma_handles.cmo float64.cmo prog.cmo links.cmo check.cmo >> compile.log 2>&1
+# macOS Bash 3 treats an empty array as unset under nounset.
+"${OCAMLC[@]}" -o check ${LWT_FILES[@]+"${LWT_FILES[@]}"} uint63.cmo soma_word64.cmo soma_handles.cmo float64.cmo prog.cmo links.cmo check.cmo >> compile.log 2>&1
 ./check

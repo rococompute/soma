@@ -785,7 +785,11 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
         | Prog.N0 -> None
         | Prog.Npos _ -> Some (fun () -> sleep_milliseconds ms) in
       net.receive (link_id c) give_up
-      >|= fun r -> Obj.magic (match r with
+      >>= fun r ->
+      (* Legacy raw receive owns the whole connection. Checked receive
+         leaves orderly read EOF half-open so the caller may still write. *)
+      (match r with Raw_closed -> net.close (link_id c) | _ -> Lwt.return_unit)
+      >|= fun () -> Obj.magic (match r with
           | Got_bytes data -> Chunk (chars_of_string data)
           | Raw_closed | Raw_failed _ -> ChunkClosed
           | Raw_timed_out -> ChunkTimedOut)
@@ -1154,10 +1158,15 @@ module Main (S : Tcpip.Stack.V4V6) = struct
               | Error e ->
                   let ending = Soma_rt.Read_error (Format.asprintf "%a" S.TCP.pp_error e) in
                   l.ended <- Some ending; Soma_rt.Read_ended ending in
-            l.reading <- Some p; p in
-      p >|= fun step ->
-      (match l.reading with Some q when q == p -> l.reading <- None | _ -> ());
-      step
+            l.reading <- Some p;
+            let clear () = match l.reading with
+              | Some q when q == p -> l.reading <- None
+              | _ -> () in
+            (* Completion belongs to the flow, even when all observers were
+               cancelled. Clear once so later reads cannot replay Read_chunk. *)
+            Lwt.on_any p (fun _ -> clear ()) (fun _ -> clear ());
+            p in
+      Lwt.protected p
     in
     let listen port handler =
       incr servers;
@@ -1262,9 +1271,9 @@ module Main (S : Tcpip.Stack.V4V6) = struct
             >>= function
             | `Chunk Soma_rt.Read_chunk -> take ()
             | `Chunk (Soma_rt.Read_ended ending) ->
-                close id >|= fun () -> (match ending with
-                  | Soma_rt.Read_eof -> Soma_rt.Raw_closed
-                  | Soma_rt.Read_error why -> Soma_rt.Raw_failed why)
+                (match ending with
+                 | Soma_rt.Read_eof -> Lwt.return Soma_rt.Raw_closed
+                 | Soma_rt.Read_error why -> close id >|= fun () -> Soma_rt.Raw_failed why)
             | `Time_up -> Lwt.return Soma_rt.Raw_timed_out
     in
     let local_address () =
@@ -2402,6 +2411,7 @@ module Lwt : sig
   type 'a state = Return of 'a | Fail of exn | Sleep
   val state : 'a t -> 'a state
   val protected : 'a t -> 'a t
+  val on_any : 'a t -> ('a -> unit) -> (exn -> unit) -> unit
   val pause : unit -> unit t
   val finalize : (unit -> 'a t) -> (unit -> unit t) -> 'a t
   type 'a key
