@@ -205,12 +205,12 @@ let rec expr c scope e =
   | Texp_function {arg_label=Optional _;_} -> fail e.exp_loc "optional arguments need an explicit calling convention"
   | Texp_function {cases=[{c_lhs={pat_desc=Tpat_var (id,_);_};c_guard=None;c_rhs}];_} ->
     let input=match Types.get_desc e.exp_type with Types.Tarrow (_,a,_,_) -> a | _ -> assert false in
-    "(fun (" ^ value id ^ " : " ^ typ c e.exp_loc input ^ ") => " ^ expr c ((id,value id)::scope) c_rhs ^ ")"
+    "(fun (" ^ value id ^ " : " ^ typ c e.exp_loc input ^ ") -> " ^ expr c ((id,value id)::scope) c_rhs ^ ")"
   | Texp_function {param=_;cases;partial;_} ->
     let input = match Types.get_desc e.exp_type with
       | Types.Tarrow (_, a, _, _) -> a | _ -> assert false in
     let arg = "insert_arg_" ^ string_of_int (location_key e.exp_loc) in
-    "(fun (" ^ arg ^ " : " ^ typ c e.exp_loc input ^ ") => " ^
+    "(fun (" ^ arg ^ " : " ^ typ c e.exp_loc input ^ ") -> " ^
     cases_expr c scope e.exp_loc partial arg cases ^ ")"
   | Texp_match (arg, cases, partial) -> cases_expr c scope e.exp_loc partial (go arg) cases
   | Texp_apply (f, args) ->
@@ -223,16 +223,20 @@ let rec expr c scope e =
      | Texp_ident (p,_,_) -> standard c scope e p args
      | _ -> app (go f) (List.map go args))
   | Texp_let (Nonrecursive, bindings, body) ->
-    (* All RHSs refer to the outer scope, even when a later binding has the
-       same spelling. Materialize them before introducing the new names. *)
+    (* ML parallel lets now preserve the OCaml RHS scope directly. Keep
+       temporaries only when parallel destructuring needs a second stage. *)
+    let simple=List.for_all (fun vb -> match vb.vb_pat.pat_desc with Tpat_var _ -> true | _ -> false) bindings in
     let bindings=List.mapi (fun i vb ->
       let p,ids=pattern c vb.vb_pat in
       let temp="insert_let_" ^ string_of_int (location_key e.exp_loc) ^ "_" ^ string_of_int i in
       temp,go vb.vb_expr,p,ids) bindings in
     let ids=List.concat_map (fun (_,_,_,ids)->ids) bindings in
     let body=expr c (ids @ scope) body in
-    let body=List.fold_right (fun (temp,_,p,_) body -> "(let '" ^ p ^ " := " ^ temp ^ " in " ^ body ^ ")") bindings body in
-    List.fold_right (fun (temp,rhs,_,_) body -> "(let " ^ temp ^ " := " ^ rhs ^ " in " ^ body ^ ")") bindings body
+    let named bindings body = "(let " ^ String.concat " and " bindings ^ " in " ^ body ^ ")" in
+    if simple then named (List.map (fun (_,rhs,p,_)->p ^ " = " ^ rhs) bindings) body
+    else
+      let body=List.fold_right (fun (temp,_,p,_) body -> "(let (" ^ p ^ ") = " ^ temp ^ " in " ^ body ^ ")") bindings body in
+      named (List.map (fun (temp,rhs,_,_)->temp ^ " = " ^ rhs) bindings) body
   | Texp_let (Recursive, _, _) -> unsupported e.exp_loc "recursion" "local recursive functions need lifting and structural-recursion analysis"
   | Texp_record {fields; extended_expression;_} ->
     (* Rebuilding immutable records preserves their value semantics. *)
@@ -242,7 +246,9 @@ let rec expr c scope e =
         | Overridden (_, e), _ -> go e
         | Kept _, Some base -> app label [go base]
         | _ -> assert false in
-      label ^ " := " ^ rhs) in
+      (* Record delimiters embed ordinary Soma fields, so explicitly re-enter
+         ML syntax for a field's potentially compound expression. *)
+      label ^ " := ml { " ^ rhs ^ " }") in
     "{| " ^ String.concat "; " fields ^ " |}"
   | Texp_field (obj,_,desc) -> app (field c e.exp_loc desc) [go obj]
   | Texp_open (_,body) -> go body
@@ -267,16 +273,16 @@ and cases_expr : type k. context -> (Ident.t * string) list -> Location.t -> par
             expr c scope case.c_rhs ^ " else " ^ branch arg rest ^ ")"
           | Tpat_any when rest=[] -> expr c scope case.c_rhs
           | Tpat_var (id,_) when rest=[] ->
-            "(let " ^ value id ^ " := " ^ arg ^ " in " ^ expr c ((id,value id)::scope) case.c_rhs ^ ")"
+            "(let " ^ value id ^ " = " ^ arg ^ " in " ^ expr c ((id,value id)::scope) case.c_rhs ^ ")"
           | _ -> fail p.pat_loc "mixed integer and non-integer patterns need decision-tree translation" in
         inspect case.c_lhs in
     (* Evaluate the scrutinee once; it may itself be a sizeable pure term. *)
     let name = "insert_match_" ^ string_of_int (location_key loc) in
-    "(let " ^ name ^ " := " ^ arg ^ " in " ^ branch name cases ^ ")"
+    "(let " ^ name ^ " = " ^ arg ^ " in " ^ branch name cases ^ ")"
   else
     "(match " ^ arg ^ " with " ^ String.concat " " (List.map (fun case ->
       let p, ids = pattern c case.c_lhs in
-      "| " ^ p ^ " => " ^ expr c (ids @ scope) case.c_rhs) cases) ^ " end)"
+      "| " ^ p ^ " -> " ^ expr c (ids @ scope) case.c_rhs) cases) ^ ")"
 and standard c scope e path args =
   if not (stdlib_path path) then
     unsupported e.exp_loc "dependency" ("value is not a translated declaration or OCaml Stdlib binding: " ^ Path.name path);
@@ -289,12 +295,12 @@ and standard c scope e path args =
     | [a;b] ->
       let is_nil e = match e.exp_desc with Texp_construct (_,d,[]) -> base_type d.Types.cstr_res="list" && d.Types.cstr_name="[]" | _ -> false in
       let result = if builtin "list" a.exp_type && (is_nil a || is_nil b) then
-          "(match " ^ go (if is_nil a then b else a) ^ " with nil => true | _ => false end)"
+          "(match " ^ go (if is_nil a then b else a) ^ " with nil -> true | _ -> false)"
         else eq a.exp_type (go a) (go b) in
       if negate then app "negb" [result] else result
     | [a] ->
       let result=eq a.exp_type (go a) "insert_equal_arg" in
-      "(fun (insert_equal_arg : " ^ typ c e.exp_loc a.exp_type ^ ") => " ^
+      "(fun (insert_equal_arg : " ^ typ c e.exp_loc a.exp_type ^ ") -> " ^
         (if negate then app "negb" [result] else result) ^ ")"
     | _ -> fail e.exp_loc ("fully apply " ^ name) in
   match name with
@@ -387,7 +393,7 @@ let top_binding c recursive vb =
     let scope = List.map (fun (id,_) -> id,value id) args @ scope in
     let binders = List.map (fun (id,ty) -> "(" ^ value id ^ " : " ^ typ c vb.vb_loc ty ^ ")") args in
     let result = List.fold_left (fun ty _ -> match Types.get_desc ty with Types.Tarrow (_,_,b,_) -> b | _ -> assert false) vb.vb_expr.exp_type args in
-    "@@FIX@@" ^ String.concat " " binders ^ " {struct " ^ value id ^ "} : " ^ typ c vb.vb_loc result ^ " := " ^ expr c scope body in
+    "@@FIX@@" ^ String.concat " " binders ^ " {struct " ^ value id ^ "} : " ^ typ c vb.vb_loc result ^ " := ml { " ^ expr c scope body ^ " }" in
   (* New existential variables in local expressions cannot be implicitly made
      into global parameters; that would misrepresent OCaml let polymorphism. *)
   if c.next_variable <> signature_variables then
@@ -395,7 +401,7 @@ let top_binding c recursive vb =
   let vars = parameters c in
   let text = if recursive then
       "Fixpoint " ^ name ^ " " ^ vars ^ " " ^ String.sub body 7 (String.length body-7) ^ ".\n"
-    else "Definition " ^ name ^ " " ^ vars ^ " : " ^ signature ^ " := " ^ body ^ ".\n" in
+    else "Definition " ^ name ^ " " ^ vars ^ " : " ^ signature ^ " := ml { " ^ body ^ " }.\n" in
   c.values <- (id,name)::c.values;
   text
 
@@ -528,6 +534,7 @@ let help = {|Usage: soma insert PATH [--out DIR] [--partial] [--report FILE] [--
 
 Translate an OCaml .ml file or directory into editable, checked .soma files.
 Uses OCaml's parser and type inference. Never evaluates the source or runs PPX.
+Value bodies use ML expression blocks, including pure let/and and ML arrows.
 Each output is checked with soma check before publication. Existing files are
 never overwritten; source files are never edited. Directory inputs are scanned
 recursively, ignoring symlinks, hidden directories, _build and duniverse.

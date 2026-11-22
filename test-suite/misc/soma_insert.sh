@@ -48,6 +48,10 @@ let both = 3 and other = 4
 let nonempty xs = xs <> []
 let without_empty xs = List.filter ((<>) "") xs
 let repeat c = String.make 1 c
+let destructure t = let (a,b,c) = t in a+b+c
+let mixed old = let (a,b) = old and old = (3,4) in (a,b,old)
+type callback = { apply : int -> int }
+let callback n = { apply = fun x -> let y = x+n in y+y }
 ''')
 original=source.read_bytes()
 # Execute only this synthetic reference fixture, never user-supplied input.
@@ -71,18 +75,25 @@ let () =
   assert (simultaneous 10 = (11,12));
   assert (without_empty ["";"x";""] = ["x"]);
   assert (nonempty [true] && not (nonempty []));
-  assert (repeat 'x' = "x")
+  assert (repeat 'x' = "x");
+  assert (destructure (1,2,3) = 6);
+  assert (mixed (1,2) = (1,2,(3,4)));
+  assert ((callback 2).apply 3 = 10)
 ''')
 run(['ocamlc','-o','reference','arithmetic.ml','reference.ml'])
 run([str(root/'reference')])
 out=root/'generated'
 p=run(['soma','insert',str(source),'--out',str(out),'--json'])
 r=json.loads(p.stdout)
-assert r['complete'] and r['files'][0]['translated_items']==25, r
+assert r['complete'] and r['files'][0]['translated_items']==29, r
 assert json.loads((out/'insert-report.json').read_text())==r
 assert source.read_bytes()==original
 text=(out/'arithmetic.soma').read_text()
 assert 'PrimInt63.ltsb' in text and 'Fixpoint oc_sum' in text
+assert ':= ml {' in text and ' -> ' in text
+parallel=next(line for line in text.splitlines() if line.startswith('Definition oc_simultaneous '))
+assert 'let oc_a = ' in parallel and ' and oc_x = ' in parallel
+assert 'insert_let_' not in parallel, parallel
 assert 'Admitted' not in text and '\nAxiom ' not in text and 'unknown' not in text
 (out/'arithmetic.exp').write_text('''Example added : oc_add 2%uint63 3%uint63 = 5%uint63. Proof. reflexivity. Qed.
 Example signed : oc_negative 9223372036854775807%uint63 = true. Proof. reflexivity. Qed.
@@ -103,6 +114,9 @@ Example min_decimal : oc_decimal 4611686018427387904%uint63 = "-4611686018427387
 Example simultaneous_ok : oc_simultaneous 10%uint63 = (11%uint63,12%uint63). Proof. reflexivity. Qed.
 Example nonempty_ok : oc_nonempty [true] = true. Proof. reflexivity. Qed.
 Example filtered : oc_without_5fempty ["";"x";""] = ["x"]. Proof. reflexivity. Qed.
+Example destructured : oc_destructure (1%uint63,2%uint63,3%uint63) = 6%uint63. Proof. reflexivity. Qed.
+Example mixed_parallel : oc_mixed (1%uint63,2%uint63) = (1%uint63,2%uint63,(3%uint63,4%uint63)). Proof. reflexivity. Qed.
+Example callback_record : ocf_oct_callback_apply (oc_callback 2%uint63) 3%uint63 = 10%uint63. Proof. reflexivity. Qed.
 ''')
 run(['soma','check',str(out/'arithmetic.soma')])
 # Destination files are preserved, including previous generated output.

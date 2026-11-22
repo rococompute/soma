@@ -4,7 +4,7 @@
   "source_commit": "645056f45df109070c78c9e36edf6f734806302a",
   "source_dirty": false,
   "frontend_ocaml": "4.14.2",
-  "frontend_sha256": "d128f3f7e73a056fc692e7e0a35a770d3ed5b2bfd41a274e99f0a2ae98cc3eb8",
+  "frontend_sha256": "509b6f50b7eb81467bd615ce7ead97ba7e87304a6b2332311b14fc215061324d",
   "measurement": "Independent top-level items checked as Soma; not whole-program translation or equivalence coverage. Missing OCaml interfaces contribute to diagnostics.",
   "source_items": 686,
   "checked_items": 74,
@@ -332,5 +332,7 @@
         "ocaml-type": 26
       }
     }
-  ]
+  ],
+  "output_syntax": "ml-blocks",
+  "syntax_commit": "edb2da490d"
 }

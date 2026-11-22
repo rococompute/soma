@@ -1003,6 +1003,14 @@ OCaml `int` is a primitive
 unbounded `Z` or saturating `nat`. Values are prefixed `oc_`, types `oct_`,
 constructors `occ_`, and fields `ocf_`; punctuation in names is hex-escaped.
 Generated files are ordinary Soma and may be edited and strengthened afterward.
+Value and function bodies use `ml { ... }` blocks: local pure bindings print as
+`let ... = ... in ...`, parallel bindings as `let ... and ...`, and lambdas
+and matches use `->`. Parallel bindings no longer need synthetic temporaries
+unless they also destructure patterns. Signatures, data declarations and the
+small support definitions retain ordinary Soma syntax. Record fields can
+re-enter ML blocks for compound field expressions. This output change preserves
+the existing primitive integer and library mappings; it does not translate
+previously unsupported mutation or effects implicitly.
 
 Unsupported constructs have source locations and diagnostic codes. Default
 mode writes no Soma source if any input remains unsupported. `--partial` keeps
@@ -1182,6 +1190,8 @@ retain their explicit interfaces.
 `test-suite/misc/soma_ml_blocks.sh` proves representative pure results and the
 exact equality of effectful blocks with their original `bind` expressions,
 including capture avoidance, parallel scope and tuple patterns.
+
+### Gradual expressions
 
 ```rocq
 Definition succ_dyn (x : Any) : nat := x + 1.
