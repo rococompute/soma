@@ -156,6 +156,7 @@ printf 'let invoke f = f ()\nlet check_triple (value, (), flag) = if flag then v
 cat > image/main.soma <<'SOMA'
 Require Import Sandbox.
 Require Import Soma.Native.
+From Corelib Require Import PrimInt63.
 Import caller.
 Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
@@ -172,11 +173,16 @@ Definition curried_check (value : nat) : Native.program nat :=
 Definition paired_check (original copied : string) : Native.program (promise nat) :=
  Native.Bind (Native.Promise_return (if String.eqb original copied then 42 else 0)) (fun left =>
  Native.Bind (Native.Promise_return tt) (fun right =>
- Native.Bind (Native.Promise_both left right) (fun combined =>
+ Native.Bind Native.Promise_unit (fun unit_pending =>
+ Native.Bind (@Native.Promise_none unit) (fun none_pending =>
+ Native.Bind (Native.Int64_of_int 200000000%uint63) (fun duration =>
+ Native.Bind (Native.Promise_settled unit_pending) (fun ready =>
+ Native.Bind (Native.Promise_pick (left::nil)) (fun winner =>
+ Native.Bind (Native.Promise_both winner right) (fun combined =>
  Native.Promise_map (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
  Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>
- curried_check (fst result)))))))).
+ curried_check (fst result))))))))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>

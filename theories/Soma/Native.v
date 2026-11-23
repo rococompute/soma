@@ -9,6 +9,7 @@
     module does not make a program a Sandbox image. Native primitive callbacks
     remain explicit trusted interfaces. *)
 Require Export Soma.Handles.
+Require Import Soma.Word64.
 From Stdlib Require Import Strings.String Strings.Ascii.
 From Corelib Require Import PrimInt63.
 
@@ -125,6 +126,11 @@ Inductive program : Type -> Type :=
     (body : callback A (callback B (callback C (callback D (callback E (callback F R))))) ->
       A -> B -> C -> D -> E -> F -> program R)
     : program (callback A (callback B (callback C (callback D (callback E (callback F R))))))
+| Promise_unit : program (promise unit)
+| Promise_none {A} : program (promise (option A))
+| Promise_settled {A} (pending : promise A) : program bool
+| Promise_pick {A} (pending : list (promise A)) : program (promise A)
+| Int64_of_int (value : PrimInt63.int) : program Word64.word64
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -149,6 +155,9 @@ Arguments Assert_failure {A} file line column.
 Arguments Filter {A} predicate items.
 Arguments New_callback {A B} body.
 Arguments New_callback2 {A B R} body.
+Arguments Promise_none {A}.
+Arguments Promise_settled {A} pending.
+Arguments Promise_pick {A} pending.
 Arguments New_callback6 {A B C D E F R} body.
 Arguments Call_callback {A B} body argument.
 Arguments Vector_of_list {A} items.

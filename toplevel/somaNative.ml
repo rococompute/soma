@@ -50,7 +50,9 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.string_substring" "Soma_effect.raise_not_found"
    "Soma_effect.string_length" "Soma_effect.vector_map"
    "Soma_effect.promise_both" "Soma_effect.raise_failure"
-   "Soma_effect.new_callback2" "Soma_effect.new_callback6" ]
+   "Soma_effect.new_callback2" "Soma_effect.new_callback6"
+   "Soma_effect.promise_unit" "Soma_effect.promise_none"
+   "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -115,6 +117,12 @@ let assert_failure diagnostic () = raise (Assert_failure diagnostic)
    input spine is not pinned while the primitive consumes it. *)
 let[@inline never] run_filter predicate items = List.filter predicate items
 let filter (predicate, items) () = run_filter predicate items
+let promise_unit () = Lwt.return_unit
+let promise_none () = Lwt.return_none
+let promise_settled pending () =
+  match Lwt.state pending with Lwt.Sleep -> false | Lwt.Return _ | Lwt.Fail _ -> true
+let promise_pick pending () = Lwt.pick pending
+let int64_of_int value () = Int64.of_int value
 let new_callback body () =
   let rec self argument = export (body self argument) in self
 let new_callback2 body () =

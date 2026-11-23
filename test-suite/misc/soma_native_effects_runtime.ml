@@ -603,3 +603,35 @@ let ()=
   ignore(Sys.opaque_identity result)
  )[false;true])[2;6];
  print_endline"native curried callbacks: pending self/provider ownership releases after completion and cancellation"
+
+let ()=
+ let pending,wake=Lwt.task()in
+ assert(not(Prog.promise_ready pending));Lwt.wakeup wake();assert(Prog.promise_ready pending);
+ let reason=Failure"promise-state"in assert(Prog.promise_ready(Lwt.fail reason));
+ assert(Prog.native_unit()==Lwt.return_unit);
+ assert(Prog.native_none()==Lwt.return_none);
+ List.iter(fun value->assert(Prog.signed_timer value=Int64.of_int value))
+  [min_int;max_int;-200000000;-1;0;1;200000000];
+ let a=Prog.literal_timer()and b=Prog.literal_timer()in assert(a=200000000L&&a==b);
+ print_endline"native promise queries/constants and signed timer conversion: settled/failed/pending states, shared promise identities, signed bounds and shared boxed timer passed"
+
+let ()=
+ let key=Lwt.new_key()in let reason=Failure"native race"in
+ let run race mode=
+  let events=ref[]in
+  let a,wa=Lwt.task()and b,wb=Lwt.task()in
+  let record label=Lwt.on_cancel a(fun()->events:=(label,Lwt.get key)::!events)in
+  record"cancel-a";Lwt.on_cancel b(fun()->events:=("cancel-b",Lwt.get key)::!events);
+  let pending=match mode with 0->[a;b]|1->[Lwt.return 17;b]|2->[Lwt.fail reason;b]|3->[]|_->[a;b]in
+  let started=try `Promise(Lwt.with_value key(Some 31)(fun()->race pending))with e->`Throw(Printexc.to_string e)in
+  let observe()=match started with `Throw e->`Throw e|`Promise p->
+   match Lwt.state p with Lwt.Sleep->`Sleep|Lwt.Return value->`Return value|Lwt.Fail e->`Fail(Printexc.to_string e,e==reason)in
+  let before=observe()in
+  Lwt.with_value key(Some 47)(fun()->match started,mode with
+   |`Promise p,4->Lwt.cancel p
+   |_,0->Lwt.wakeup wb 19
+   |_,5->Lwt.wakeup wa 23
+   |_->());
+  before,observe(),List.rev !events in
+ List.iter(fun mode->assert(run Lwt.pick mode=run Prog.promise_race mode))[0;1;2;3;4;5];
+ print_endline"native promise race: empty/settled/failed/pending races preserve raw Lwt.pick results, exception identity, winner/loser cancellation and dynamic scope"
