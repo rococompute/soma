@@ -127,8 +127,19 @@ ocaml ocamlrun "$WORK/native/_build/default/probe.bc"
 sed 's/:= "join"\./:= "join_other"./' "$WORK/app/fixture.definition" >"$WORK/changed"
 mv "$WORK/changed" "$WORK/app/fixture.definition"
 "$SOMA" hash "$WORK/app/main.soma" >"$WORK/changed-hash"
-! cmp -s "$WORK/hash" "$WORK/changed-hash"
-printf '%s\n' 'PASS: declaration target changes invalidate source hashes'
+"$SOMA" extract "$WORK/app/main.soma" -o "$WORK/changed-native" >"$WORK/changed-extract.log" 2>&1 || { cat "$WORK/changed-extract.log";exit 1; }
+python3 - "$WORK/hash" "$WORK/changed-hash" "$WORK/native/native_abi.manifest" "$WORK/changed-native/native_abi.manifest" <<'PY'
+import pathlib,sys
+def hashes(path):
+    return {parts[2]:tuple(parts[:2]) for line in pathlib.Path(path).read_text().splitlines()
+            if len(parts:=line.split()) >= 3}
+before,after=map(hashes,sys.argv[1:3])
+for symbol in ('fixture.join','main.main'):
+    assert before[symbol] != after[symbol], ('stale dependent hash',symbol)
+original,changed=(pathlib.Path(p).read_bytes() for p in sys.argv[3:5])
+assert original != changed and b'join_other' in changed, 'stale native ABI provenance'
+print('PASS: declaration target changes invalidate imported and dependent main hashes and generated provenance')
+PY
 # Symbolic constructors and destructors never act as a native evaluator.
 runtime_negative() {
  name=$1; program=$2; expected=$3; phase=${4:-runtime}
