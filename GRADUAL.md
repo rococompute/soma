@@ -1967,6 +1967,31 @@ actual generated runtime branches, exception and result identity, and garbage
 collection. Set `SOMA_TEST_HVF=1` to also execute the complete Soma program in
 a Solo5 guest.
 
+`new_reference value : io (reference A)` allocates a mutable location whose
+lifetime follows its owners. `read_reference r`, `write_reference r value`
+and `modify_reference r f` operate on that location. The last operation
+computes, stores and returns the replacement without yielding; if computing
+it raises an exception, no replacement is stored. Aliases see each other's
+writes. References can form cyclic graphs, and unreachable cycles are
+collectible. There is no global ID table or explicit free operation. Existing
+`cell` handles retain their explicit `free_cell` semantics.
+
+The current backend uses `'a ref`, named `'a Soma_handles.reference` in
+`.definition` signatures. A typed native function sees the same location, not
+a copy. Constructing `Reference n`, inspecting its number, or casting to an
+incompatible value type fails. Native functions remain trusted to obey their
+declared signatures and effect ordering. These primitives let a Soma program
+own mutable state directly rather than require project-specific OCaml ref
+allocation/read/write interpreters. Their runtime is tested, not formally
+verified.
+
+`examples/example_files/mirage_references` checks aliases, cooperative
+updates, failure preservation, deferred reads, cycles and handle safety.
+`test-suite/misc/soma_references.sh` checks native signatures and the actual
+generated runtime, including physical identity and collection of unreachable
+locations, payloads and cycles. `SOMA_TEST_HVF=1` adds the complete program's
+Solo5 boot.
+
 Buffers, signals and promises are for a program that does what a C or
 OCaml one would: a page, a sector or a frame changed in place rather than
 a string made of each, tasks that wait for one another rather than

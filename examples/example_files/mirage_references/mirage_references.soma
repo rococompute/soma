@@ -1,0 +1,54 @@
+(** Owner-managed mutable state, including aliases and cyclic graphs.
+    No project-specific native implementation or explicit free operation. *)
+Require Import Sandbox.
+
+Inductive chain : Type := Link (next : reference (option chain)).
+
+check (ok : bool) (why : string) : io unit :=
+  if ok then ret tt else print why ;; exit 1.
+
+Fixpoint increment (r : reference nat) (count : nat) : io unit :=
+  match count with
+  | 0 => ret tt
+  | S n => _ <- modify_reference r S ;; yield ;; increment r n
+  end.
+
+main : io unit :=
+  r <- new_reference 0 ;;
+  alias <- call (fun _ => cast Any (reference nat) (cast (reference nat) Any r)) ;;
+  write_reference alias 2 ;;
+  initial <- read_reference r ;;
+  check (Nat.eqb initial 2) "alias did not share location" ;;
+  a <- fork (increment r 20) ;; b <- fork (increment alias 20) ;;
+  _ <- await a ;; _ <- await b ;;
+  total <- read_reference r ;;
+  check (Nat.eqb total 42) "cooperative updates lost a write" ;;
+  forget a ;; forget b ;;
+  (* Failure while computing a replacement preserves the original value. *)
+  broken <- attempt (modify_reference r (fun _ => cast bool nat true)) ;;
+  preserved <- read_reference r ;;
+  check (Nat.eqb preserved 42 && match broken with TaskFailed _ => true | _ => false end)
+    "failed modification changed the location" ;;
+  delayed <- new_deferred (fun _ => read_reference r) ;;
+  write_reference r 43 ;;
+  first <- force_deferred delayed ;;
+  write_reference r 44 ;;
+  cached <- force_deferred delayed ;;
+  check (Nat.eqb first 43 && Nat.eqb cached 43) "deferred reference read was not shared" ;;
+  cycle <- new_reference (None : option chain) ;;
+  write_reference cycle (Some (Link cycle)) ;;
+  value <- read_reference cycle ;;
+  match value with
+  | Some (Link same) => write_reference same None
+  | None => exit 1
+  end ;;
+  cleared <- read_reference cycle ;;
+  check (match cleared with None => true | _ => false end) "cyclic alias lost its identity" ;;
+  fake <- attempt (call (fun _ => (Reference 0 : reference nat))) ;;
+  inspect <- attempt (call (fun _ => match r with Reference id => id end)) ;;
+  wrong <- attempt (call (fun _ =>
+    cast Any (reference bool) (cast (reference nat) Any r))) ;;
+  check (match fake, inspect, wrong with
+    TaskFailed _, TaskFailed _, TaskFailed _ => true | _, _, _ => false end)
+    "fabricated, inspected or changed a reference's value type" ;;
+  print "reference aliases, updates, failure, deferred reads and cycles verified".

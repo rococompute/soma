@@ -427,6 +427,13 @@ Inductive io : Type -> Type :=
     during first invocation is cached too; reentrant first force fails. *)
 | new_deferred {A : Type} (body : unit -> io A) : io (deferred A)
 | force_deferred {A : Type} (d : deferred A) : io A
+(** Mutable locations collected once their owners are unreachable, without
+    [free_cell]. Aliases observe the same value. A failed [modify_reference]
+    leaves the value unchanged; the pure update does not yield. *)
+| new_reference {A : Type} (value : A) : io (reference A)
+| read_reference {A : Type} (r : reference A) : io A
+| write_reference {A : Type} (r : reference A) (value : A) : io unit
+| modify_reference {A : Type} (r : reference A) (f : A -> A) : io A
 (** yield cooperatively without adding a clock delay *)
 | yield : io unit
 (** recover an action's failure without starting another task; exit still exits *)
@@ -464,6 +471,10 @@ Arguments forget {A} t.
 Arguments await_promise {A} p.
 Arguments new_deferred {A} body.
 Arguments force_deferred {A} d.
+Arguments new_reference {A} value.
+Arguments read_reference {A} r.
+Arguments write_reference {A} r value.
+Arguments modify_reference {A} r f.
 Arguments ContextKey {A} id.
 Arguments attempt {A} body.
 Arguments finally {A} body cleanup.

@@ -53,7 +53,8 @@ python3 - "$P/soma_rt.ml" > runtime.ml <<'PY'
 import sys
 text = open(sys.argv[1]).read()
 start = text.index('  | Prog.New_deferred body ->')
-end = text.index('  | Prog.Yield ->', start)
+force = text.index('  | Prog.Force_deferred d ->', start)
+end = text.index('  | Prog.', force + 1)
 await_start = text.index('  | Prog.Await_promise p ->')
 print('let check = Prog.Gradual_rt.check')
 print("let rec run : 'a. unit -> 'a Prog.io -> 'a Lwt.t = fun net m -> match check m with")

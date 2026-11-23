@@ -27,3 +27,10 @@ Arguments Promise {A} id.
 Inductive deferred (A : Type) : Type := Deferred (id : nat).
 Register deferred as soma.deferred.type.
 Arguments Deferred {A} id.
+
+(** A mutable location owned by its holders, including aliases and cycles.
+    Unlike [cell], it needs no explicit release from an indexed table.
+    Only [new_reference] creates one; [Reference n] is not a location. *)
+Inductive reference (A : Type) : Type := Reference (id : nat).
+Register reference as soma.reference.type.
+Arguments Reference {A} id.

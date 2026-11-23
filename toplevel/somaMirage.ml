@@ -949,6 +949,19 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Force_deferred d ->
       let d : Obj.t Lwt.t Lazy.t = Obj.magic (check d) in
       Obj.magic (Lazy.force d)
+  | Prog.New_reference value -> Lwt.return (Obj.magic (ref value))
+  | Prog.Read_reference r ->
+      let r : Obj.t ref = Obj.magic (check r) in
+      Lwt.return (Obj.obj !r)
+  | Prog.Write_reference (r, value) ->
+      let r : Obj.t ref = Obj.magic (check r) in
+      r := Obj.repr value;
+      Lwt.return (Obj.magic ())
+  | Prog.Modify_reference (r, f) ->
+      let r : Obj.t ref = Obj.magic (check r) in
+      let value = (check f) (Obj.obj !r) in
+      r := Obj.repr value;
+      Lwt.return (Obj.magic value)
   | Prog.Yield -> Lwt.pause () >|= Obj.magic
   | Prog.Attempt body ->
       capture net body >|= fun result -> Obj.magic (match result with
@@ -2098,9 +2111,10 @@ Extract Inlined Constant Soma.Word64.to_hex => "(Printf.sprintf ""%Lx"")".
 (* Sandbox's handles that are OCaml values in the image, rather than
    numbers it looks up: a buffer is bytes (freed by the collector), a
    signal its count and condition (Soma_rt.signal), a promise Lwt's,
-   a deferred computation a lazy promise.
+   a deferred computation a lazy promise, a reference a mutable location.
    None is made by its constructor, which only the kernel has. Signals
-   promises and deferred computations are types of soma_handles.ml, so that prog.ml names no
+   references, promises and deferred computations are types of soma_handles.ml,
+   so that prog.ml names no
    Lwt module (checked without an image, it is compiled without Lwt
    unless a definition declares it). *)
 let buffer_extraction = {soma|Extract Inductive Soma.Handles.buffer => "Bytes.t"
@@ -2113,16 +2127,20 @@ Extract Inductive Soma.Handles.promise => "Soma_handles.promise"
   [ "(fun _ -> failwith ""a promise is made by OCaml"")" ] "(fun _ _ -> failwith ""a promise has no number"")".
 Extract Inductive Soma.Handles.deferred => "Soma_handles.deferred"
   [ "(fun _ -> failwith ""a deferred computation is made by new_deferred"")" ] "(fun _ _ -> failwith ""a deferred computation has no number"")".
+Extract Inductive Soma.Handles.reference => "Soma_handles.reference"
+  [ "(fun _ -> failwith ""a reference is made by new_reference"")" ] "(fun _ _ -> failwith ""a reference has no number"")".
 |soma}
 
 (* soma_handles.ml: a signal, which the program only passes to the
-   runtime (Soma_rt.signal, by Obj.magic), a deferred lazy promise, and a promise, Lwt's, which an
+   runtime (Soma_rt.signal, by Obj.magic), a native reference, a deferred lazy
+   promise, and a promise, Lwt's, which an
    OCaml module gives ([promise A] in a definition is
    [A Soma_handles.promise]). Without Lwt (an image's check, when no
    definition declares lwt), it is abstract: nothing gives one. *)
 let handles_ml ~lwt =
-  header ^ "(* Sandbox's signal, promise and deferred computation handles. *)\n\
-            type signal\n" ^
+  header ^ "(* Sandbox's signal, reference, promise and deferred handles. *)\n\
+            type signal\n\
+            type 'a reference = 'a ref\n" ^
   (if lwt then "type 'a promise = 'a Lwt.t\ntype 'a deferred = 'a Lwt.t Lazy.t\n"
    else "type 'a promise\ntype 'a deferred\n")
 
