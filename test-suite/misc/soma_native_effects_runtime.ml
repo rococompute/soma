@@ -359,3 +359,60 @@ let ()=
  assert(List.length during=3&&List.for_all(fun roots->roots.(2))during);
  assert(Array.for_all not after);
  print_endline "native vector map: input/mapper/payload Weak roots match raw Array.map during callbacks and release after return"
+
+let consumed_list_roots=ref(fun()->[||])
+let consumed_list_seen=ref[]
+let consumed_list_sample()=collect();(!consumed_list_roots)()
+let rec raw_consumed_list observe items=
+ observe items;match items with []->()|_::tail->raw_consumed_list observe tail
+let[@inline never] consumed_list_owner invoke=
+ let items=List.init 5(fun n->string_of_int n)in
+ let a=weak items and b=weak(List.tl items)and c=weak(List.tl(List.tl items))in
+ consumed_list_roots:=(fun()->[|Weak.check a 0;Weak.check b 0;Weak.check c 0|]);
+ invoke(fun _->consumed_list_seen:=consumed_list_sample()::!consumed_list_seen)items
+let consumed_list_observe invoke=
+ consumed_list_seen:=[];consumed_list_owner invoke;
+ List.rev !consumed_list_seen,consumed_list_sample()
+let ()=
+ let expected=consumed_list_observe raw_consumed_list and actual=consumed_list_observe Prog.consumed_list in
+ if expected<>actual then begin
+  let show(seen,after)=String.concat ";"(List.map(fun a->String.concat "/"(Array.to_list(Array.map string_of_bool a)))(seen@[after]))in
+  Printf.eprintf "loop consumed input: raw=%s Source=%s\n%!"(show expected)(show actual);
+  failwith "native loop retained the consumed initial input"
+ end;
+ let seen,after=actual in
+ assert((List.hd seen).(0)&&not(List.nth seen 1).(0));
+ assert(Array.for_all not after);
+ print_endline "native loop: consumed initial list cells release in the same callback phases as raw tail recursion"
+
+let rec raw_consumed_list_after observe after items=
+ observe items;match items with []->after()|_::tail->raw_consumed_list_after observe after tail
+let ()=
+ let expected=consumed_list_observe(fun observe items->raw_consumed_list_after observe Fun.id items)
+ and actual=consumed_list_observe(fun observe items->Prog.consumed_list_after observe Fun.id items)in
+ if expected<>actual then begin
+  let show(seen,after)=String.concat ";"(List.map(fun a->String.concat "/"(Array.to_list(Array.map string_of_bool a)))(seen@[after]))in
+  Printf.eprintf "fused loop consumed input: raw=%s Source=%s\n%!"(show expected)(show actual);
+  failwith "native tail-terminal loop retained the consumed initial input"
+ end;
+ print_endline "native tail-terminal loop: consumed input releases in the original recursive callback phases"
+
+let ()=
+ let borrowed=Bytes.to_string(Bytes.make 4096 'p')in
+ let events=ref[]in
+ let step n=events:=n::!events;if n=0 then Soma_effect.Finish borrowed else Soma_effect.Continue(n-1)in
+ let next value=assert(value==borrowed);events:=(-1)::!events;value in
+ assert(Prog.finished_loop step 100 next==borrowed);
+ assert(List.rev !events=List.init 102(fun i->100-i));
+ let pending,_=Lwt.task()in
+ assert(Prog.finished_loop(fun()->Soma_effect.Finish borrowed)()(fun _->pending)==pending);
+ let final_called=ref false in
+ let caught=try ignore(Prog.finished_loop(fun()->raise reason)()(fun _->final_called:=true));false with error->error==reason in
+ assert(caught&&not !final_called);
+ let caught=try ignore(Prog.finished_loop(fun()->Soma_effect.Finish borrowed)()(fun _->raise reason));false with error->error==reason in
+ assert caught;
+ let key=Lwt.new_key()in
+ Lwt.with_value key(Some 17)(fun()->ignore(Prog.finished_loop
+  (fun()->assert(Lwt.get key=Some 17);Soma_effect.Finish borrowed)()
+  (fun value->assert(Lwt.get key=Some 17);value)));
+ print_endline "native tail-terminal loop: step/final order, borrowed result/promise identities, exact throws and Lwt context passed"

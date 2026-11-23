@@ -148,7 +148,9 @@ Definition native_probe : Native.entry (promise nat) := Native.Export
  Native.Bind (Native.Table_replace entries "key" text) (fun _ =>
  Native.Bind (Native.Table_find entries "key") (fun copied =>
  Native.Bind (Native.Vector_get mapped_items 0%uint63) (fun original =>
- Native.Promise_return (if String.eqb original copied then 42 else 0)))))))))))).
+ Native.loop_then (fun remaining => Native.Return (match remaining with
+   0 => Native.Finish tt | S next => Native.Continue next end)) 3
+   (fun _ => Native.Promise_return (if String.eqb original copied then 42 else 0))))))))))))).
 Definition main : io unit :=
  pending <- call (fun _ => invoke (fun _ => native_probe)) ;;
  value <- await_promise pending ;;

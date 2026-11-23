@@ -162,3 +162,10 @@ Definition opaque {A} (value : A) := value.
 (** Preserve an ordinary caller frame around a native entry invocation.
     This remains an identity on symbolic entries, not an evaluator. *)
 Definition ordinary {A} (value : entry A) : entry A := value.
+
+(** Fuse a consuming loop with its terminal continuation. The native loop
+    tailcalls [next] after finishing, without a separate caller frame that
+    retains the initial input while the loop consumes it. There is no logical
+    evaluator: the symbolic computation is ordinary [Bind] after [Loop]. *)
+Definition loop_then {S A B} (step : S -> program (progress S A)) (initial : S)
+    (next : A -> program B) : program B := Bind (Loop step initial) next.

@@ -102,6 +102,16 @@ Definition mapped_vector {A B : Type} (mapper : callback A B) (items : vector A)
 Definition owned_mapped_vector (mapper : string -> string) (items : vector string) := Export
  (Bind (New_callback (fun _ value => Invoke (fun _ => mapper value) Return))
   (fun owned => Vector_map owned items)).
+Definition consumed_list_step (observe : list string -> unit) (state : list string) :=
+ Invoke (fun _ => observe state) (fun _ => Return
+   (match state with nil => Finish tt | _ :: tail => Continue tail end)).
+Definition consumed_list (observe : list string -> unit) (items : list string) := Export
+ (Loop (consumed_list_step observe) items).
+Definition consumed_list_after (observe : list string -> unit) (after : unit -> unit) (items : list string) := Export
+ (loop_then (consumed_list_step observe) items (fun _ => Invoke after Return)).
+Definition finished_loop {S A B : Type} (step : S -> progress S A) (initial : S) (next : A -> B) := Export
+ (loop_then (fun state => Invoke (fun _ => step state) Return) initial
+   (fun value => Invoke (fun _ => next value) Return)).
 
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop).
