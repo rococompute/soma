@@ -1,0 +1,10 @@
+Import fixture other.
+From Soma Require Native.
+Definition main := Native.Export
+ (Native.Bind (Native.Call_callback fixture.make_item ("old", ("label", fun _ => tt))) (fun item =>
+ Native.Bind (Native.Call_callback fixture.set_value (item, "new")) (fun _ =>
+ Native.Bind (Native.Call_callback fixture.get_value item) (fun text =>
+ Native.Bind (Native.Call_callback fixture.copy_value (item, "copy")) (fun copied =>
+ Native.Bind (Native.Call_callback fixture.same (item, copied)) (fun same =>
+ Native.Bind (Native.Call_callback fixture.join (text, if same then " wrong" else " native ABI")) (fun message =>
+ Native.Call_callback other.say message))))))).

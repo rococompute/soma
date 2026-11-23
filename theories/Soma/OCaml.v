@@ -64,6 +64,58 @@
     See examples/example_projects/native_crypto and
     dev/ocaml-mirage-check.sh. *)
 
+(** ** Assumption-free native ABI declarations
+
+    A [.definition] may instead import [Soma.Native] and declare executable
+    descriptors. These commands define symbolic, namespaced values; they add
+    no Parameter or Axiom and never evaluate the external library in Soma:
+
+        From Soma Require Native.
+        OCaml Native Type item := "item".
+        OCaml Native Get value : item -> string := "value".
+        OCaml Native Set put_value : item -> string -> unit := "value".
+        OCaml Native Build make : string -> bool -> item := "value" "flag".
+        OCaml Native Copy with_value : item -> string -> item := "value".
+        OCaml Native Callback join : forall (left : string), string -> string := "join".
+
+    Paths are relative to the OCaml module declared by the file, including
+    its submodules. A native type is an opaque handle indexed by the full
+    logical declaration name. A callback is [Native.Named_callback namespace
+    name], where the compiler supplies the logical module and declaration
+    names. Two same-typed imports in different modules have distinct symbolic
+    identities. Native wrapper names encode both components injectively, so
+    nested module paths cannot collide with names containing underscores.
+    Placeholder constructors fail if executed; inspection is rejected during
+    extraction. Neither can create or inspect real native values.
+
+    Execute a descriptor with [Native.Call_callback]. Its arguments are one
+    value, or a right-nested product for multiple arguments: [join (left,
+    right)], [make (value, flag)]. The generated wrapper unpacks that product
+    and applies the native function fully, using named binders as OCaml
+    labels. No wrapper catches exceptions, maps promises, or stores providers.
+
+    Get and Set keep native record identity. Get may return a function value
+    without allocating a replacement. Set requires a mutable native field.
+    Build supplies every field; Copy allocates a record using native copy
+    syntax and preserves all unspecified components. Record arguments are
+    positional. OCaml checks field existence, field types, mutability and
+    construction completeness against the actual module. Field access and
+    mutation are callback effects, with no mutable pure projection laws.
+
+    Extraction emits [native_abi.manifest], containing canonical descriptor
+    names, signatures, operations and source digests. The same metadata is
+    included in definition hashes: changing a target or record operation
+    invalidates dependents even if the symbolic placeholder stays unchanged.
+    Binding discovery follows opaque exported main bodies as well as ordinary
+    definitions. An unavailable opaque dependency is an explicit error.
+
+    The first stage supports monomorphic opaque types and callback signatures.
+    Explicitly supplied optional arguments, polymorphic descriptors, native
+    variant views, exception declarations and emission of owned native record
+    types are not yet supported. Existing
+    parameter-based [.definition] declarations remain available separately.
+    See [examples/example_projects/native_abi] and [dev/native-abi-check.sh]. *)
+
 From Stdlib Require Strings.String.
 From Corelib Require PrimFloat.
 

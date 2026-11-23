@@ -33,9 +33,27 @@ let evaluate ~reduce env sigma c =
   in
   go c 100000
 
+type native_operation =
+  | NativeValue of string
+  | NativeGet of string
+  | NativeSet of string
+  | NativeBuild of string list
+  | NativeCopy of string list
+
+type native_callback = {
+  namespace : string;
+  name : string;
+  arguments : string list;
+  result : string;
+  labels : string option list;
+  operation : native_operation;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
+  | OCamlNativeType of string
+  | OCamlNativeCallback of native_callback
 
 type ocaml_module = {
   ml_file : string option;
@@ -45,3 +63,16 @@ type ocaml_module = {
 }
 
 let ocaml_modules : (unit -> ocaml_module list) ref = ref (fun () -> [])
+
+let native_identity = function
+ | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path
+ | OCamlNativeCallback n ->
+   let operation=match n.operation with
+    | NativeValue p->"call "^Printf.sprintf "%S" p
+    | NativeGet p->"get "^Printf.sprintf "%S" p
+    | NativeSet p->"set "^Printf.sprintf "%S" p
+    | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
+    | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs) in
+   String.concat "\n" (["native-callback";n.namespace;n.name;operation;n.result] @
+    List.map2(fun t l->Printf.sprintf "%S %S" t (Option.default "" l))n.arguments n.labels)
+ | _ -> invalid_arg "not a native declaration"

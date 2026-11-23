@@ -125,6 +125,11 @@ let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t
    .definition declares, and type variables ([forall A, ...]), which
    extraction erases as arguments *)
 let rec ocaml_type env sigma vars t =
+  let native = match EConstr.kind sigma t with
+    | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
+      | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path | _ -> None)
+    | _ -> None in
+  match native with Some path -> path | None ->
   let t = Reductionops.whd_all env sigma t in
   match EConstr.kind sigma t with
   | Prod (na, dom, cod) ->
@@ -249,6 +254,7 @@ let bind_module ~key ~ml_file ~top ~definition =
       | Some subs -> (c, subs, cb) :: acc
       | None -> acc) env [] in
   let constants = List.sort (fun (a, _, _) (b, _, _) -> Constant.CanOrd.compare a b) constants in
+  let constants = List.filter (fun (c, _, _) -> not (Cmap_env.mem c !bindings)) constants in
   let constants = List.map (fun (c, subs, cb) ->
       let name = Id.to_string (Constant.label c) in
       (match cb.Declarations.const_body with
@@ -274,6 +280,140 @@ let bind_module ~key ~ml_file ~top ~definition =
       Lib.add_leaf (in_binding (c, { key; top; path; item = SomaForeign.OCamlValue (ty, labels ~definition env sigma t) })))
     values;
   Lib.add_leaf (in_module (key, (ml_file, top, !pending)))
+
+(* Assumption-free native declarations. Every generated logical constant has
+   a body: a canonical named placeholder, never an external evaluator. *)
+let native_error message = CErrors.user_err (str "OCaml Native: " ++ str message)
+let native_context () =
+  let file = match !SomaImport.source_file with
+    | Some file when Filename.check_suffix file ".definition" -> file
+    | _ -> native_error "declarations belong in a .definition file" in
+  let base = Filename.chop_suffix file ".definition" in
+  let ml = base ^ ".ml" in
+  let top = module_name ml in
+  let ml_file = if Sys.file_exists ml then Some (SomaImport.project_file ml) else None in
+  let key = Option.default top ml_file in
+  key, ml_file, top
+
+let native_path path =
+  let parts = String.split_on_char '.' path in
+  match List.rev parts with
+  | [] -> native_error "an external path is empty"
+  | value :: modules ->
+    ignore (ocaml_name ~definition:"native declaration" value);
+    if not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)value)
+    then native_error "an external path has an invalid value name";
+    if List.exists (fun p -> not (is_module_name p) || p.[0] <> Char.uppercase_ascii p.[0]) modules
+    then native_error "an external path has an invalid module name";
+    path
+
+let native_global name =
+  CAst.make (Constrexpr.CRef (Libnames.qualid_of_path
+    (Nametab.path_of_global (Rocqlib.lib_ref name)), None))
+let native_app f args = CAst.make (Constrexpr.CApp (f, List.map (fun a -> a, None) args))
+let native_string value =
+  let byte c = native_app (native_global "core.ascii.ascii")
+    (List.init 8 (fun bit -> native_global
+      (if Char.code c land (1 lsl bit) = 0 then "core.bool.false" else "core.bool.true"))) in
+  let result = ref (native_global "core.string.empty") in
+  for i=String.length value-1 downto 0 do
+    result := native_app (native_global "core.string.string") [byte value.[i];!result]
+  done;
+  !result
+let native_declare name body typ =
+  ComDefinition.do_definition ~name ~poly:PolyFlags.default ~kind:Decls.Definition
+    None [] None body typ;
+  match Nametab.locate (Libnames.qualid_of_ident name) with
+  | GlobRef.ConstRef c -> c
+  | _ -> CErrors.anomaly (str "native declaration is not a constant")
+let native_namespace () = ModPath.to_string (Lib.current_mp ())
+let native_register name c item =
+  let key, ml_file, top = native_context () in
+  (* The descriptor symbol, rather than its target, names a generated wrapper. *)
+  let path = "__native__." ^ native_namespace () ^ "." ^ Id.to_string name in
+  Lib.add_leaf (in_binding (c, {key; top; path; item}));
+  Lib.add_leaf (in_module (key, (ml_file, top, !pending)))
+let native_type name path =
+  ignore (native_context ());
+  if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
+  let _, _, top = native_context () in
+  let path = top ^ "." ^ native_path path in
+  let symbol = native_namespace () ^ "." ^ Id.to_string name in
+  let body = native_app (native_global "soma.native.handle") [native_string symbol] in
+  let c = native_declare name body None in
+  native_register name c (SomaForeign.OCamlNativeType path)
+
+let native_callback name typ operation =
+  ignore (native_context ());
+  if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
+  let env = Global.env () in
+  let sigma, typ = Constrintern.interp_type_evars env (Evd.from_env env) typ in
+  let fixed_arity = match operation with
+    | SomaForeign.NativeGet _ -> Some 1 | SomaForeign.NativeSet _ -> Some 2
+    | SomaForeign.NativeBuild fields -> Some(List.length fields)
+    | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
+    | SomaForeign.NativeValue _ -> None in
+  let rec arguments previous remaining t =
+    if remaining=Some 0 then List.rev previous,t else
+    (* Leave native aliases intact: they denote opaque external types. *)
+    let known = match EConstr.kind sigma t with Const(c,_) -> Cmap_env.mem c !bindings | _ -> false in
+    let t = if known then t else Reductionops.whd_all env sigma t in
+    match EConstr.kind sigma t with
+    | Prod (binder, domain, codomain) ->
+      if is_sort env sigma domain then native_error "polymorphic native descriptors are not supported yet";
+      if not (EConstr.Vars.noccurn sigma 1 codomain) then native_error "a native result cannot depend on a value";
+      let label = match binder.Context.binder_name with
+        | Name id -> Some (ocaml_name ~definition:"native callback" (Id.to_string id))
+        | Anonymous -> None in
+      arguments ((domain,label)::previous) (Option.map pred remaining) (EConstr.Vars.subst1 (EConstr.mkProp) codomain)
+    | _ -> List.rev previous,t in
+  let args, result = arguments [] fixed_arity typ in
+  if args=[] then native_error "a callback declaration needs at least one argument";
+  let args_types, labels = List.split args in
+  let types = try List.map (ocaml_type env sigma []) args_types,ocaml_type env sigma [] result
+    with Not_ocaml why -> CErrors.user_err (str "OCaml Native: " ++ why) in
+  let argument_names,result_name = types in
+  let field name =
+    if String.contains name '.' then native_error "a field is a single name";
+    native_path name in
+  let record_type t = match EConstr.kind sigma t with
+    | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
+      | Some {item=SomaForeign.OCamlNativeType _;_}->()
+      | _->native_error "a record operation needs a declared native type")
+    | _->native_error "a record operation needs a declared native type" in
+  (match operation with
+   | SomaForeign.NativeValue _ -> ()
+   | SomaForeign.NativeBuild _ -> record_type result
+   | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
+   | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
+  let operation = match operation with
+    | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
+    | SomaForeign.NativeGet f ->
+      if List.length args<>1 then native_error "Get needs one record argument";
+      SomaForeign.NativeGet(field f)
+    | SomaForeign.NativeSet f ->
+      if List.length args<>2 || result_name<>"unit" then native_error "Set needs record -> value -> unit";
+      SomaForeign.NativeSet(field f)
+    | SomaForeign.NativeBuild fields | SomaForeign.NativeCopy fields as op ->
+      let expected = List.length fields + (match op with SomaForeign.NativeCopy _ -> 1 | _ -> 0) in
+      if List.length args<>expected then native_error "record field and argument counts differ";
+      if List.length(List.sort_uniq String.compare fields)<>List.length fields then native_error "record fields must be distinct";
+      List.iter(fun f->ignore(field f))fields;op in
+  (match operation with SomaForeign.NativeValue _ -> () | _ ->
+    if List.exists Option.has_some labels then native_error "record callback arguments are positional");
+  let ast t = Constrextern.extern_constr ~flags:(PrintingFlags.current ()) env sigma t in
+  let rec product = function
+    | [t] -> ast t
+    | t::rest -> native_app (native_global "core.prod.type") [ast t;product rest]
+    | [] -> assert false in
+  let descriptor_type = native_app (native_global "soma.native.callback") [product args_types;ast result] in
+  let namespace = native_namespace () in
+  let body = native_app
+    (CAst.make(Constrexpr.CRef(Libnames.qualid_of_string "Soma.Native.Named_callback",None)))
+    [native_string namespace;native_string(Id.to_string name)] in
+  let c = native_declare name body (Some descriptor_type) in
+  native_register name c (SomaForeign.OCamlNativeCallback {
+    namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
 
 (* [OCaml Bind "FILE.ml"]: FILE.definition declares FILE.ml *)
 let bind file =
@@ -302,6 +442,8 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
+        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeCallback _ ->
+          CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
           CErrors.user_err (str definition ++ str ": " ++ str b.path ++
@@ -341,6 +483,11 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
+        | SomaForeign.OCamlNativeType path ->
+          str "native opaque type " ++ str path ++ str ", with no logical evaluator"
+        | SomaForeign.OCamlNativeCallback n ->
+          str "native callback " ++ str n.namespace ++ str "." ++ str n.name ++
+          str ", checked by OCaml, with no logical evaluator"
         | SomaForeign.OCamlType _ ->
           whose ++ str "type " ++ str path ++ str ", opaque to Soma"
         | SomaForeign.OCamlValue (ty, labels) ->

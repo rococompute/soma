@@ -75,7 +75,7 @@ grep -q 'Native programs and entry points cannot be inspected' inspect-extract.l
 cat > inspect_callback.soma <<'SOMA'
 Require Import Soma.Native.
 Definition inspect (value : callback nat nat) : nat :=
- match value with Callback id => id end.
+ match value with Callback id => id | Named_callback _ _ => 0 end.
 Definition main := inspect.
 SOMA
 if soma extract inspect_callback.soma -o inspected-callback > inspect-callback.log 2>&1; then

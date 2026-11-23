@@ -1,0 +1,3 @@
+Import fixture.
+From Soma Require Native.
+Definition opaque_probe := Native.Export (Native.Call_callback fixture.say "opaque native ABI").

@@ -1,0 +1,2 @@
+Definition main : Native.entry unit.
+Proof. exact opaque_probe. Qed.

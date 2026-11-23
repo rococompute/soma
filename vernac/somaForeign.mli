@@ -49,9 +49,27 @@ val evaluate : reduce:(EConstr.t -> EConstr.t) -> Environ.env -> Evd.evar_map ->
     whose arguments are given by position, and the labels of its
     arguments in OCaml (a named argument, [forall (attrs : ...), ...], is
     OCaml's [~attrs]) *)
+type native_operation =
+  | NativeValue of string
+  | NativeGet of string
+  | NativeSet of string
+  | NativeBuild of string list
+  | NativeCopy of string list
+
+type native_callback = {
+  namespace : string;
+  name : string;
+  arguments : string list;
+  result : string;
+  labels : string option list;
+  operation : native_operation;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
+  | OCamlNativeType of string
+  | OCamlNativeCallback of native_callback
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
@@ -63,3 +81,6 @@ type ocaml_module = {
 
 (** the OCaml modules of the libraries loaded *)
 val ocaml_modules : (unit -> ocaml_module list) ref
+
+(** Canonical native declaration metadata, included in hashes and manifests. *)
+val native_identity : ocaml_item -> string

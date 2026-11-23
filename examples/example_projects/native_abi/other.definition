@@ -1,0 +1,2 @@
+From Soma Require Native.
+OCaml Native Callback say : string -> unit := "say".

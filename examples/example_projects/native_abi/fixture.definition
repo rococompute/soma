@@ -1,0 +1,21 @@
+From Soma Require Native.
+OCaml Native Type item := "item".
+OCaml Native Get get_value : item -> string := "value".
+OCaml Native Get get_root : item -> (unit -> unit) := "root".
+OCaml Native Set set_value : item -> string -> unit := "value".
+OCaml Native Build make_item : string -> string -> (unit -> unit) -> item := "value" "label" "root".
+OCaml Native Copy copy_value : item -> string -> item := "value".
+OCaml Native Callback join : forall (left : string), string -> string := "join".
+OCaml Native Callback same : item -> item -> bool := "same".
+OCaml Native Callback visit : item -> (unit -> unit) -> unit := "visit".
+OCaml Native Callback say : string -> unit := "say".
+OCaml Native Callback pending : item -> (unit -> promise unit) -> promise unit := "pending".
+OCaml Native Callback inspect : item -> (unit -> bool) -> bool := "inspect".
+Module A__B.
+OCaml Native Callback x : string -> string := "left".
+End A__B.
+Module A.
+Module B.
+OCaml Native Callback x : string -> string := "right".
+End B.
+End A.

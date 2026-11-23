@@ -1,0 +1,6 @@
+Theorem imported_descriptors_are_distinct : fixture.say <> other.say.
+Proof. discriminate. Qed.
+Theorem imported_native_names_are_canonical :
+ fixture.say = @Native.Named_callback string unit "fixture" "say" /\
+ other.say = @Native.Named_callback string unit "other" "say".
+Proof. split;reflexivity. Qed.

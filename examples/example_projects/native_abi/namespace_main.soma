@@ -1,0 +1,7 @@
+Import fixture.
+From Soma Require Native.
+Definition main := Native.Export
+ (Native.Bind (Native.Call_callback fixture.A__B.x "namespace") (fun first =>
+ Native.Bind (Native.Call_callback fixture.A.B.x "namespace") (fun second =>
+ Native.Bind (Native.Call_callback fixture.say first) (fun _ =>
+ Native.Call_callback fixture.say second)))).

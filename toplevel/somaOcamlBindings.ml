@@ -27,11 +27,42 @@ let used_modules () =
   match (try Some (Nametab.locate (Libnames.qualid_of_ident (Id.of_string "main"))) with Not_found -> None) with
   | None -> []
   | Some main ->
-    let st = Conv_oracle.get_transp_state (Environ.oracle (Global.env ())) in
-    let _, assums = Assumptions.assumptions (Library.indirect_accessor [@ocaml.alert "-deprecated"]) st [main] in
-    let used = Printer.ContextObjectMap.fold (fun o _ acc -> match o with
-        | Printer.Axiom (Printer.Constant k, _) -> Cset_env.add k acc
-        | _ -> acc) assums Cset_env.empty in
+    (* Defined descriptors have no assumptions. Follow checked bodies and types,
+       including opaque proofs, rather than treating the assumption set as the
+       dependency graph. No imported native body is ever executed here. *)
+    let env = Global.env () in
+    let used = ref Cset_env.empty in
+    let minds = Hashtbl.create 37 in
+    let rec visit term =
+      (match Constr.kind term with
+       | Constr.Const(c,_) when not(Cset_env.mem c !used) ->
+         used := Cset_env.add c !used;
+         let cb = Environ.lookup_constant c env in
+         visit cb.Declarations.const_type;
+         (match cb.Declarations.const_body with
+          | Declarations.Def body -> visit body
+          | Declarations.OpaqueDef opaque ->
+            let body,_ = try Global.force_proof (Library.indirect_accessor [@ocaml.alert "-deprecated"]) opaque
+              with e when CErrors.noncritical e ->
+                error Pp.(str "cannot read opaque dependency " ++
+                  str (KerName.to_string(Constant.canonical c)) ++
+                  str " while collecting native bindings: " ++ CErrors.print_no_report e) in
+            visit body
+          | _ -> ())
+       | Constr.Ind((m,_),_) | Constr.Construct(((m,_),_),_) -> visit_mind m
+       | Constr.Proj(p,_,_) -> visit_mind(fst(Projection.inductive p))
+       | _ -> ());
+      Constr.iter visit term
+    and visit_mind m =
+      let key=KerName.to_string(MutInd.canonical m) in
+      if not(Hashtbl.mem minds key)then begin
+        Hashtbl.add minds key ();
+        let mb=Environ.lookup_mind m env in
+        Array.iter(fun(p:Declarations.one_inductive_body)->visit p.mind_user_arity;
+          Array.iter visit p.mind_user_lc)mb.mind_packets
+      end in
+    (match main with GlobRef.ConstRef c -> visit (Constr.mkConstU (c,UVars.Instance.empty)) | _ -> ());
+    let used = !used in
     List.filter (fun (m : SomaForeign.ocaml_module) ->
         List.exists (fun (c, _, _) -> Cset_env.mem c used) m.items) modules
 
@@ -55,6 +86,40 @@ let type_variables ty =
 let binding_name (m : SomaForeign.ocaml_module) path =
   String.uncapitalize_ascii m.top ^ "__" ^ String.concat "__" (String.split_on_char '.' path)
 
+(* Native descriptors use an injective encoding of the semantic pair. The
+   legacy dot-to-underscore spelling collides for A__B.x and A.B.x. Hex
+   contains no underscore, so this separator also distinguishes tuple parts. *)
+let native_binding_name (n:SomaForeign.native_callback) =
+  let hex text = String.concat "" (List.init(String.length text)
+    (fun i->Printf.sprintf "%02x" (Char.code text.[i]))) in
+  "soma_native_" ^ hex n.namespace ^ "_" ^ hex n.name
+
+let rec native_product = function
+  | [] -> "unit" | [value] -> value
+  | first::rest -> "(" ^ first ^ " * " ^ native_product rest ^ ")"
+let rec native_pattern = function
+  | [] -> "()" | [value] -> value
+  | first::rest -> "(" ^ first ^ ", " ^ native_pattern rest ^ ")"
+let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
+  let args = List.mapi(fun i _->"a"^string_of_int i)n.arguments in
+  let signature = native_product(List.map(fun t->"("^t^")")n.arguments)^" -> ("^n.result^")" in
+  let record_prefix ty = try String.sub ty 0 (String.rindex ty '.') with Not_found ->
+    error Pp.(str "a native record needs a declared native type") in
+  let field prefix name = prefix ^ "." ^ name in
+  let assignments prefix names values = String.concat "; " (List.map2(fun n a->field prefix n^" = "^a)names values) in
+  let body = match n.operation,args with
+    | SomaForeign.NativeValue path,_ ->
+      let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
+      m.top^"."^path^" "^String.concat " "given
+    | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
+    | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
+    | SomaForeign.NativeBuild names,_ ->
+      "({ "^assignments(record_prefix n.result)names args^" } : "^n.result^")"
+    | SomaForeign.NativeCopy names,record::values ->
+      "{ "^record^" with "^assignments(record_prefix(List.hd n.arguments))names values^" }"
+    | _ -> error Pp.(str "invalid native record callback metadata") in
+  signature,"fun "^native_pattern args^" -> "^body
+
 (* soma_bindings.ml: each value that the definitions declare, at its
    declared type, its type variables those of a polymorphic value, so that
    OCaml checks it. Each is applied to as many arguments as it is declared
@@ -68,7 +133,11 @@ let bindings_ml modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlType _ -> None
+          | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ -> None
+          | SomaForeign.OCamlNativeCallback n ->
+            let signature,body=native_binding m n in
+            Some(Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s =\n  %s\n"
+              n.namespace n.name (native_binding_name n) signature body)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -96,6 +165,10 @@ let extraction_lines modules =
       List.map (fun (c, path, item) ->
           let soma = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef c)) in
           match item with
+          | SomaForeign.OCamlNativeType target ->
+            Printf.sprintf "Extract Constant %s => %S.\n" soma target
+          | SomaForeign.OCamlNativeCallback n ->
+            Printf.sprintf "Extract Constant %s => %S.\n" soma ("Soma_bindings."^native_binding_name n)
           | SomaForeign.OCamlValue _ ->
             Printf.sprintf "Extract Constant %s => \"Soma_bindings.%s\".\n" soma (binding_name m path)
           | SomaForeign.OCamlType n ->
@@ -165,6 +238,14 @@ let c_stub_names made =
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
+  let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
+    List.filter_map(fun(c,path,item)->match item with
+      | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeCallback _ ->
+        let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
+        let source=match m.ml_file with None->"library"|Some f->SomaMerkle.file_hash f in
+        Some(Printf.sprintf "%S %S %S %S\n" symbol m.top source (SomaForeign.native_identity item))
+      | _->None)m.items)modules in
+  file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; "soma_bindings.ml"] @
   List.concat_map (fun (m : SomaForeign.ocaml_module) ->
       if is_c m then begin

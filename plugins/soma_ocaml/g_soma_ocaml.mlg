@@ -17,6 +17,10 @@
 {
 
 open Stdarg
+open Procq.Constr
+let pr_native_signature typ =
+  let env = Global.env () in
+  Ppconstr.pr_constr_expr ~flags:(Ppconstr.current_flags ()) env (Evd.from_env env) typ
 
 }
 
@@ -30,4 +34,25 @@ VERNAC COMMAND EXTEND SomaOCamlBind CLASSIFIED AS SIDEFF
 | [ "OCaml" "Bind" string(file) ] -> { Soma_ocaml.bind file }
 | [ "OCaml" "Bind" "Module" string(name) ] -> { Soma_ocaml.bind_library name }
 | [ "OCaml" "Bind" "C" string(file) ] -> { Soma_ocaml.bind_c file }
+END
+
+VERNAC ARGUMENT EXTEND native_signature PRINTED BY { pr_native_signature }
+| [ lconstr(typ) ] -> { typ }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeValue path) }
+| [ "OCaml" "Native" "Get" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeGet field) }
+| [ "OCaml" "Native" "Set" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeSet field) }
+| [ "OCaml" "Native" "Build" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuild fields) }
+| [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END

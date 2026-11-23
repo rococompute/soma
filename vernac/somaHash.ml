@@ -203,6 +203,7 @@ let foreign_identity c =
     match ocaml with
     | Some (m, path, item) ->
       let shown = match item with
+        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeCallback _ -> SomaForeign.native_identity item
         | SomaForeign.OCamlType n -> "type " ^ string_of_int n
         | SomaForeign.OCamlValue (ty, labels) ->
           ty ^ " " ^ String.concat "," (List.map (Option.default "") labels) in
@@ -341,6 +342,7 @@ and constant c =
           assumes = rests_on w ~name:key cb.const_typing_flags }
       | Def body ->
         tag w "def"; universes w cb.const_universes; relevance w cb.const_relevance;
+        Option.iter (text w) (foreign_identity c);
         term w cb.const_type; term w body; close w;
         let assumes = rests_on w ~name:key cb.const_typing_flags in
         let contract = hash ["def\n"; Buffer.contents w.buf; assumes_bytes assumes] in

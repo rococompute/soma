@@ -1,0 +1,2 @@
+Theorem nested_descriptor_names_are_distinct : fixture.A__B.x <> fixture.A.B.x.
+Proof. discriminate. Qed.

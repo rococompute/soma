@@ -16,9 +16,18 @@ From Corelib Require Import PrimInt63.
     handle contains no evaluator and is independent of the program syntax's
     universe. The runtime creates it with [New_callback], preserving physical
     identity even when its body refers to itself. *)
-Inductive callback (A B : Type) : Type := Callback (id : nat).
+Inductive callback (A B : Type) : Type := Callback (id : nat)
+ | Named_callback (namespace name : string).
 Arguments Callback {A B} id.
+Arguments Named_callback {A B} namespace name.
 Register callback as soma.native.callback.
+
+(** Compiler-declared native types have a canonical name in the logical type.
+    Constructors are placeholders, never a way to construct or inspect the
+    external value. Generated typed bindings are the only runtime boundary. *)
+Inductive native_handle (name : string) : Type := Native_handle (id : nat).
+Arguments Native_handle {name} id.
+Register native_handle as soma.native.handle.
 
 (** Native owned storage. Sizes and indices use the existing machine-word
     type, preserving negative values and native bounds errors at the ABI. This
