@@ -635,3 +635,18 @@ let ()=
   before,observe(),List.rev !events in
  List.iter(fun mode->assert(run Lwt.pick mode=run Prog.promise_race mode))[0;1;2;3;4;5];
  print_endline"native promise race: empty/settled/failed/pending races preserve raw Lwt.pick results, exception identity, winner/loser cancellation and dynamic scope"
+
+let ()=
+ let message=Bytes.to_string(Bytes.of_string "native invalid argument")in
+ let catch f=try ignore(f message);failwith "expected invalid argument"with Invalid_argument text->text in
+ assert(catch invalid_arg==message&&catch Prog.invalid_value==message);
+ let source1=(try Prog.invalid_value message with e->e)in
+ let source2=(try Prog.invalid_value message with e->e)in
+ assert(source1!=source2);
+ let bytes=Bytes.unsafe_of_string message in Bytes.set bytes 0 'N';
+ assert(catch Prog.invalid_value==message);
+ List.iter(fun make->
+  let result=Lwt.map(fun()->Prog.invalid_value message)(make())in
+  assert(match Lwt.state result with Lwt.Fail(Invalid_argument text)->text==message|_->false)
+ )[fun()->Lwt.return_unit];
+ print_endline "native invalid_argument: borrowed mutable message, fresh exception identity and mapped failure phase passed"

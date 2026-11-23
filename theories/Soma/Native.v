@@ -131,6 +131,7 @@ Inductive program : Type -> Type :=
 | Promise_settled {A} (pending : promise A) : program bool
 | Promise_pick {A} (pending : list (promise A)) : program (promise A)
 | Int64_of_int (value : PrimInt63.int) : program Word64.word64
+| Raise_invalid_argument {A} (message : string) : program A
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -180,6 +181,7 @@ Arguments Raise_not_found {A}.
 Arguments Vector_map {A B} mapper items.
 Arguments Promise_both {A B} left right.
 Arguments Raise_failure {A} message.
+Arguments Raise_invalid_argument {A} message.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

@@ -52,7 +52,8 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.promise_both" "Soma_effect.raise_failure"
    "Soma_effect.new_callback2" "Soma_effect.new_callback6"
    "Soma_effect.promise_unit" "Soma_effect.promise_none"
-   "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int" ]
+   "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int"
+   "Soma_effect.raise_invalid_argument" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -123,6 +124,7 @@ let promise_settled pending () =
   match Lwt.state pending with Lwt.Sleep -> false | Lwt.Return _ | Lwt.Fail _ -> true
 let promise_pick pending () = Lwt.pick pending
 let int64_of_int value () = Int64.of_int value
+let raise_invalid_argument message () = invalid_arg message
 let new_callback body () =
   let rec self argument = export (body self argument) in self
 let new_callback2 body () =
