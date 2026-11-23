@@ -343,7 +343,7 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   end;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
-      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; "soma_bindings.ml"; "native_abi.manifest"; "native_owned.manifest"]
+      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; SomaOcamlBindings.bindings_filename(); "native_abi.manifest"; "native_owned.manifest"; "native_variants.manifest"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else [])
        @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
@@ -586,7 +586,7 @@ let build ~state ~source ~vo_file =
                 str (String.concat ", " (List.map (fun (m : SomaForeign.ocaml_module) ->
                     match m.ml_file with Some f -> Filename.basename f | None -> m.top) modules)) ++
                 str " failed; the end of " ++ str log ++ str ":" ++ fnl () ++ str (tail_of_file log) ++ fnl () ++
-                str "(" ++ str dir ++ str "/soma_bindings.ml has each value that a .definition declares," ++
+                str "(" ++ str dir ++ str "/" ++ str(SomaOcamlBindings.bindings_filename()) ++ str " has each value that a .definition declares," ++
                 spc () ++ str "at its declared type)");
     let built = List.fold_left Filename.concat dir ["_build"; "default"; Filename.basename target] in
     let out = Filename.remove_extension vo_file in

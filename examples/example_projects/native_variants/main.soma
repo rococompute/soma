@@ -1,0 +1,18 @@
+From Soma Require Native.
+Import protocol.
+Definition reply_view value := Native.Export (Native.Call_callback view_reply value).
+Definition make_data value := Native.Export (Native.Call_callback data value).
+Definition make_eof (_ : unit) := Native.Export (Native.Call_callback eof tt).
+Definition make_error value := Native.Export (Native.Call_callback error value).
+Definition owned_view value := Native.Export (Native.Call_callback view_owned value).
+Definition make_borrowed value := Native.Export (Native.Call_callback borrowed_value value).
+Definition make_callback value := Native.Export (Native.Call_callback callback_value value).
+Definition make_unit (_ : unit) := Native.Export (Native.Call_callback unit_value tt).
+Definition make_empty (_ : unit) := Native.Export (Native.Call_callback empty_value tt).
+Definition namespace_one value := Native.Export (Native.Call_callback A__B.view value).
+Definition namespace_two value := Native.Export (Native.Call_callback A.B.view value).
+Definition classify (value : Native.result string (Native.result unit string)) :=
+ match value with Native.Ok _ => 1 | Native.Error (Native.Ok _) => 2 | Native.Error (Native.Error _) => 3 end.
+Definition view_during value (observe : Native.result string (Native.result unit string) -> bool) := Native.Export
+ (Native.Bind (Native.Call_callback view_reply value) (fun selected => Native.Invoke (fun _ => observe selected) Native.Return)).
+Definition main := (reply_view,make_data,make_eof,make_error,owned_view,make_borrowed,make_callback,make_unit,make_empty,namespace_one,namespace_two,classify,view_during).

@@ -68,3 +68,18 @@ VERNAC COMMAND EXTEND SomaOCamlNativeRecord CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Record" ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
  { Soma_ocaml.native_record name fields }
 END
+
+VERNAC ARGUMENT EXTEND native_variant_case
+ PRINTED BY { fun (case_name,typ) -> Pp.(qstring case_name ++ (match typ with None -> mt () | Some t -> str " : " ++ pr_native_signature t)) }
+| [ string(tag) ] -> { tag,None }
+| [ string(tag) ":" native_signature(typ) ] -> { tag,Some typ }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Polymorphic" "Variant" ident(name) ":=" "[" ne_native_variant_case_list_sep(cases, ";") "]" ] ->
+ { Soma_ocaml.native_variant name cases }
+| [ "OCaml" "Native" "View" ident(name) ":" native_signature(typ) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeVariantView None) }
+| [ "OCaml" "Native" "Construct" ident(name) ":" native_signature(typ) ":=" string(tag) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeVariantBuild(tag,None)) }
+END

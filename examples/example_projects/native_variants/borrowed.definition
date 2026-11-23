@@ -1,0 +1,3 @@
+From Soma Require Native.
+OCaml Native Type node := "node".
+OCaml Native Callback make_node : string -> node := "make_node".

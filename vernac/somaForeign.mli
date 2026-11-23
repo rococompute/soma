@@ -49,12 +49,27 @@ val evaluate : reduce:(EConstr.t -> EConstr.t) -> Environ.env -> Evd.evar_map ->
     whose arguments are given by position, and the labels of its
     arguments in OCaml (a named argument, [forall (attrs : ...), ...], is
     OCaml's [~attrs]) *)
+type native_variant_case = {
+  case_tag : string;
+  case_payload : string option;
+  case_is_function : bool;
+}
+
+type native_variant = {
+  variant_namespace : string;
+  variant_name : string;
+  variant_source : string;
+  variant_cases : native_variant_case list;
+}
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
   | NativeSet of string
   | NativeBuild of string list
   | NativeCopy of string list
+  | NativeVariantView of native_variant option
+  | NativeVariantBuild of string * native_variant option
 
 type native_callback = {
   namespace : string;
@@ -82,6 +97,7 @@ type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
   | OCamlNativeOwnedRecord of native_record
+  | OCamlNativeOwnedVariant of native_variant
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
 
@@ -104,3 +120,11 @@ val native_record_module : native_record -> string
 val native_record_type : native_record -> string
 val native_record_filename : native_record -> string
 val native_record_ml : native_record -> string
+
+(** Closed polymorphic variants borrow their native payloads without casts. *)
+val native_variant_module : native_variant -> string
+val native_variant_type : native_variant -> string
+val native_variant_filename : native_variant -> string
+val native_variant_ml : native_variant -> string
+val native_variant_view_type : native_variant -> string
+val native_variant_identity : native_variant -> string

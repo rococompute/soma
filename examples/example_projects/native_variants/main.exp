@@ -1,0 +1,6 @@
+Theorem data_classification : forall text, classify (Native.Ok text) = 1.
+Proof. reflexivity. Qed.
+Theorem eof_classification : classify (Native.Error (Native.Ok tt)) = 2.
+Proof. reflexivity. Qed.
+Theorem error_classification : forall text, classify (Native.Error (Native.Error text)) = 3.
+Proof. reflexivity. Qed.

@@ -1017,6 +1017,50 @@ also boots a native caller of a generated entry in Solo5. These shared
 execution primitives remain part of the trusted runtime; the tests do not
 constitute a proof of native execution or Lwt semantics.
 
+### Declarative native polymorphic variants
+
+A `.definition` can describe an existing closed OCaml polymorphic variant
+without a companion implementation:
+
+```coq
+From Soma Require Native.
+OCaml Native Polymorphic Variant reply :=
+ [ "Data" : string; "Eof"; "Error" : string ].
+OCaml Native View view_reply :
+ reply -> Native.result string (Native.result unit string).
+OCaml Native Construct data : string -> reply := "Data".
+OCaml Native Construct eof : unit -> reply := "Eof".
+```
+
+Soma emits the corresponding closed OCaml row type
+and typed constructors/matchers. The logical handle is opaque; call each
+operation with `Native.Call_callback`. The view is an ordered, right-nested
+`Native.result` over payloads, using `unit` for nullary tags and the final
+payload directly. Payloads retain their native identity, including mutable
+objects and callbacks. A nullary tag and a tag carrying `unit` remain distinct
+native layouts. Schemas are monomorphic and nonrecursive; duplicate/invalid
+or colliding tag hashes and mismatched operation signatures are rejected.
+Declarations have checked bodies and introduce no new logical axioms or
+native evaluator. Native implementations remain part of the trusted boundary.
+
+`native_variants.manifest` binds each logical symbol to its schema source and
+generated module hashes. Payload-type dependencies are retained even when a
+consumer uses only a nullary constructor. The
+[`native_variants` example](examples/example_projects/native_variants/main.soma)
+and [`dev/native-variant-check.sh`](dev/native-variant-check.sh) check native
+and bytecode layouts, borrowed aliases, callback/promise identity, Weak roots,
+logical hashes, rejected signatures and optional actual Solo5 execution.
+
+`SOMA_OCAML_BINDINGS_MODULE=Kernel_network_bindings` gives the generated
+binding module a distinct name when composing extracted libraries. It applies
+to native extraction and Mirage generation, preserves logical program hashes,
+and rejects malformed names or collisions with generated/caller modules.
+The default remains `Soma_bindings`.
+
+`Native.Raise_invalid_argument message` raises the original native
+`Invalid_argument` with its borrowed message, preserving exception and
+promise-map failure boundaries.
+
 ### Inserting OCaml source
 
 `soma insert FILE.ml --out DIR` translates OCaml into editable `.soma`

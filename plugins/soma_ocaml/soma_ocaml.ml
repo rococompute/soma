@@ -129,6 +129,7 @@ let rec ocaml_type env sigma vars t =
     | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
       | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
       | Some { item = SomaForeign.OCamlNativeOwnedRecord r; _ } -> Some(SomaForeign.native_record_type r)
+      | Some { item = SomaForeign.OCamlNativeOwnedVariant v; _ } -> Some(SomaForeign.native_variant_type v)
       | _ -> None)
     | _ -> None in
   match native with Some path -> path | None ->
@@ -379,6 +380,50 @@ let native_record name fields =
   native_register name c (SomaForeign.OCamlNativeOwnedRecord{
     record_namespace=namespace;record_name=Id.to_string name;record_source=source;record_fields=List.map snd checked})
 
+(* Closed native tag schemas are checked types, not handwritten conversion
+   callbacks. Type-valued lets retain every payload's logical dependencies. *)
+let native_variant_tag tag =
+  let letter=function 'a'..'z'|'A'..'Z'->true|_->false in
+  if tag="" || not(letter tag.[0]) || List.mem tag keywords ||
+     not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)tag)
+  then native_error "a polymorphic variant tag must be an OCaml identifier";
+  tag
+let native_variant_tag_hash tag =
+  let h=String.fold_left(fun h c->Int64.logand 0x7fffffffL
+    (Int64.add(Int64.mul 223L h)(Int64.of_int(Char.code c))))0L tag in
+  Int64.to_int h
+let native_variant name cases =
+  ignore(native_context());
+  if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
+  if cases=[]then native_error "a polymorphic variant needs at least one tag";
+  let tags=List.map(fun(tag,_)->native_variant_tag tag)cases in
+  if List.length(List.sort_uniq String.compare tags)<>List.length tags then
+    native_error "polymorphic variant tags must be distinct";
+  let hashes=List.map native_variant_tag_hash tags in
+  if List.length(List.sort_uniq Int.compare hashes)<>List.length hashes then
+    native_error "polymorphic variant tag hash collision";
+  let env=Global.env()in
+  let checked=List.map(fun(tag,syntax)->
+    let payload=Option.map(fun syntax->
+      let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)syntax in
+      let rec monomorphic t =
+        (match EConstr.kind sigma t with
+         | Prod(_,domain,_) when EConstr.isSort sigma domain -> native_error "polymorphic variant payloads must be monomorphic"
+         | _->());EConstr.iter sigma monomorphic t in
+      monomorphic typ;
+      try ocaml_type env sigma [] typ,EConstr.isProd sigma(Reductionops.whd_all env sigma typ) with Not_ocaml why->
+        CErrors.user_err(str "OCaml Native variant payload: "++why))syntax in
+    syntax,{SomaForeign.case_tag=tag;case_payload=Option.map fst payload;
+      case_is_function=(match payload with None->false|Some(_,fn)->fn)})cases in
+  let namespace=native_namespace()in
+  let handle=native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]in
+  let body=List.fold_right(fun(syntax,_)rest->match syntax with None->rest|Some typ->
+    CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,typ,None,rest)))checked handle in
+  let c=native_declare name body None in
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  native_register name c (SomaForeign.OCamlNativeOwnedVariant{
+    variant_namespace=namespace;variant_name=Id.to_string name;variant_source=source;variant_cases=List.map snd checked})
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -388,7 +433,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeGet _ -> Some 1 | SomaForeign.NativeSet _ -> Some 2
     | SomaForeign.NativeBuild fields -> Some(List.length fields)
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
-    | SomaForeign.NativeValue _ -> None in
+    | SomaForeign.NativeValue _ -> None
+    | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -417,13 +463,33 @@ let native_callback name typ operation =
       | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _);_}->()
       | _->native_error "a record operation needs a declared native type")
     | _->native_error "a record operation needs a declared native type" in
+  let variant_type t = match EConstr.kind sigma t with
+    | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
+      | Some {item=SomaForeign.OCamlNativeOwnedVariant v;_}->v
+      | _->native_error "a variant operation needs a declared native polymorphic variant")
+    | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
-   | SomaForeign.NativeValue _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeBuild _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
   let operation = match operation with
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
+    | SomaForeign.NativeVariantView _ ->
+      if List.length args<>1 then native_error "View needs one native variant argument";
+      let v=variant_type(List.hd args_types)in
+      if result_name<>SomaForeign.native_variant_view_type v then
+        native_error "View result must be the ordered nested result of its payloads (unit for nullary tags)";
+      SomaForeign.NativeVariantView(Some v)
+    | SomaForeign.NativeVariantBuild(tag,_) ->
+      if List.length args<>1 then native_error "Construct needs one payload argument (unit for a nullary tag)";
+      let v=variant_type result in
+      let tag=native_variant_tag tag in
+      let case=match List.find_opt(fun c->c.SomaForeign.case_tag=tag)v.variant_cases with
+        | Some c->c|None->native_error "Construct tag is absent from the native variant" in
+      if List.hd argument_names<>Option.default "unit" case.SomaForeign.case_payload then
+        native_error "Construct argument differs from the declared payload (unit for a nullary tag)";
+      SomaForeign.NativeVariantBuild(tag,Some v)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)
@@ -436,7 +502,7 @@ let native_callback name typ operation =
       if List.length(List.sort_uniq String.compare fields)<>List.length fields then native_error "record fields must be distinct";
       List.iter(fun f->ignore(field f))fields;op in
   (match operation with SomaForeign.NativeValue _ -> () | _ ->
-    if List.exists Option.has_some labels then native_error "record callback arguments are positional");
+    if List.exists Option.has_some labels then native_error "native data callback arguments are positional");
   let ast t = Constrextern.extern_constr ~flags:(PrintingFlags.current ()) env sigma t in
   let rec product = function
     | [t] -> ast t
@@ -478,7 +544,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -519,6 +585,8 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
+        | SomaForeign.OCamlNativeOwnedVariant v ->
+          str "closed native polymorphic variant " ++ str(SomaForeign.native_variant_type v) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeOwnedRecord r ->
           str "owned native record " ++ str(SomaForeign.native_record_type r) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeType path ->

@@ -2665,8 +2665,8 @@ let check_project ~wasm ~libraries ~native_files dir =
   let c_ml = List.filter (fun f -> Filename.check_suffix f ".ml") c_names in
   let c_c = List.filter (fun f -> Filename.check_suffix f ".c") c_names in
   List.iter (fun f -> write_file (Filename.concat checks f) (read_file (Filename.concat c_dir f))) c_ml;
-  let own = c_ml @ List.filter (fun f -> f <> "soma_nat.ml" && f <> "soma_bindings.ml") native_files in
-  let program = ["soma_bindings.ml"; "soma_wasm.ml"; "prog.mli"; "prog.ml"] in
+  let own = c_ml @ List.filter (fun f -> f <> "soma_nat.ml" && f <> SomaOcamlBindings.bindings_filename()) native_files in
+  let program = [SomaOcamlBindings.bindings_filename(); "soma_wasm.ml"; "prog.mli"; "prog.ml"] in
   let runtime = ["gradual.ml"; "soma_store.ml"; "soma_rt.ml"; "soma_disk.ml"; "unikernel.ml"] in
   (* A prior check's interfaces must not make a removed module appear to
      exist, or allow a new module to depend on an obsolete interface. *)

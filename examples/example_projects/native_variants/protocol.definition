@@ -1,0 +1,21 @@
+From Soma Require Native.
+Import borrowed.
+OCaml Native Polymorphic Variant reply := [ "Data" : string; "Eof"; "Error" : string ].
+OCaml Native View view_reply : reply -> Native.result string (Native.result unit string).
+OCaml Native Construct data : string -> reply := "Data".
+OCaml Native Construct eof : unit -> reply := "Eof".
+OCaml Native Construct error : string -> reply := "Error".
+OCaml Native Polymorphic Variant owned := [ "Borrowed" : node; "Callback" : unit -> promise unit; "Unit" : unit; "Empty" ].
+OCaml Native View view_owned : owned -> Native.result node (Native.result (unit -> promise unit) (Native.result unit unit)).
+OCaml Native Construct borrowed_value : node -> owned := "Borrowed".
+OCaml Native Construct callback_value : (unit -> promise unit) -> owned := "Callback".
+OCaml Native Construct unit_value : unit -> owned := "Unit".
+OCaml Native Construct empty_value : unit -> owned := "Empty".
+Module A__B.
+OCaml Native Polymorphic Variant item := [ "Value" : string ].
+OCaml Native View view : item -> string.
+End A__B.
+Module A. Module B.
+OCaml Native Polymorphic Variant item := [ "Value" : bool ].
+OCaml Native View view : item -> bool.
+End B. End A.
