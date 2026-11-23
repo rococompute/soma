@@ -34,3 +34,9 @@ Arguments Deferred {A} id.
 Inductive reference (A : Type) : Type := Reference (id : nat).
 Register reference as soma.reference.type.
 Arguments Reference {A} id.
+
+(** An exception object, preserved across catch/rethrow and native signatures.
+    It is owned by its holders, not an indexed table. [ExceptionValue n]
+    cannot create a runtime exception. *)
+Inductive exception_value : Type := ExceptionValue (id : nat).
+Register exception_value as soma.exception_value.type.

@@ -1924,6 +1924,37 @@ replaces the original result. `race left right` returns the first result as
 Cancellation is cooperative: a foreign promise made with `Lwt.wait` cannot
 be cancelled. `yield` gives other ready tasks a turn without a timer.
 
+`catch body recover` executes `body` and gives `recover` the original
+`exception_value` if execution fails. It preserves native exception identity,
+payloads and dynamic task context, including for a promise rejected later.
+Cancellation is recoverable too. An explicit `exit` bypasses the handler.
+`throw_exception error` rejects with that same exception object; a handler's
+own failure escapes its catch. This uses the current backend's `Lwt.catch`
+boundary, including its distinction between a handler throwing synchronously
+and returning a rejected promise. Native resource-exhaustion exceptions that
+Lwt excludes from recovery remain excluded.
+
+`new_failure message` allocates a native `Failure` exception without raising
+it. `same_exception a b` compares object identity, and `exception_message e`
+returns `Printexc.to_string e` for diagnostics. Native `.definition`
+signatures can accept or return `exception_value` (the backend's `exn`),
+so classifiers can recognize their actual exception constructors without
+string parsing. The handle has no numeric ID and is garbage-collected.
+`ExceptionValue n` and matching the handle to obtain a number fail.
+`attempt` retains its existing string-based `TaskFailed` interface; use
+`catch` when identity, classification or rethrow matters. Keep native effectful
+calls inside `call`: catch protects execution of the action, not its earlier
+construction. `finally` cleanup still runs before an outer handler, and a
+cleanup failure replaces the body's outcome.
+
+`examples/example_files/mirage_exceptions` restores scoped mutable state in
+Soma and checks identity, rethrow, cleanup replacement and cancellation.
+`test-suite/misc/soma_exceptions.sh` runs the actual emitted backend cases
+against real Lwt and checks native signatures. `SOMA_TEST_HVF=1` also boots
+the complete example, native exception fixtures and an exit-bypass check.
+These are tested shared runtime primitives; their native implementation is
+part of the trusted runtime, not a formal proof of Lwt or native exceptions.
+
 `cancel t` requests cancellation of a pending forked task and returns whether
 it was pending; its awaiters receive `TaskFailed "cancelled"`. Cancelling an
 awaiter, including the losing side of a race, does not cancel the shared task.

@@ -43,6 +43,7 @@
     write in place), [promise A] (Sandbox's, OCaml's ['a Lwt.t], which a
     program waits for with [await_promise]; an image's only), [deferred A]
     (Sandbox's cached computation), [reference A] (a mutable location),
+    [exception_value] (the native exception object),
     functions, these types, and type variables ([forall A]).
 
     Soma never computes them: they are parameters to the kernel and when
@@ -87,7 +88,7 @@ Module Export Ints.
 End Ints.
 
 (** [word64], Soma.Word64's unsigned 64-bit words, and Sandbox's
-    [buffer], [promise], [deferred] and [reference], by those names *)
+    [buffer], [promise], [deferred], [reference] and [exception_value] *)
 From Soma Require Word64 Handles.
 Module Export Words.
   Abbreviation word64 := Soma.Word64.word64.
@@ -95,6 +96,7 @@ Module Export Words.
   Abbreviation promise := Soma.Handles.promise.
   Abbreviation deferred := Soma.Handles.deferred.
   Abbreviation reference := Soma.Handles.reference.
+  Abbreviation exception_value := Soma.Handles.exception_value.
 End Words.
 
 Declare ML Module "soma-runtime.plugins.soma_ocaml".

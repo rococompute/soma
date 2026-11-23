@@ -438,6 +438,14 @@ Inductive io : Type -> Type :=
 | yield : io unit
 (** recover an action's failure without starting another task; exit still exits *)
 | attempt {A : Type} (body : io A) : io (awaited A)
+(** Recover execution failures as the original exception object, including
+    cooperative cancellation. Explicit [exit] bypasses recovery. Failures
+    raised by [recover] escape this catch rather than invoking it again. *)
+| catch {A : Type} (body : io A) (recover : exception_value -> io A) : io A
+| throw_exception {A : Type} (error : exception_value) : io A
+| new_failure (message : string) : io exception_value
+| exception_message (error : exception_value) : io string
+| same_exception (left right : exception_value) : io bool
 (** cleanup runs on success, failure and cooperative cancellation *)
 | finally {A : Type} (body : io A) (cleanup : io unit) : io A
 (** first result, cancelling the other action; tag values in A to distinguish sides *)
@@ -477,6 +485,8 @@ Arguments write_reference {A} r value.
 Arguments modify_reference {A} r f.
 Arguments ContextKey {A} id.
 Arguments attempt {A} body.
+Arguments catch {A} body recover.
+Arguments throw_exception {A} error.
 Arguments finally {A} body cleanup.
 Arguments race {A} left right.
 Arguments cancel {A} t.

@@ -172,6 +172,7 @@ let rec ocaml_type env sigma vars t =
     else if is "soma.promise.type" then arg (List.hd args) ^ " Soma_handles.promise"
     else if is "soma.deferred.type" then arg (List.hd args) ^ " Soma_handles.deferred"
     else if is "soma.reference.type" then arg (List.hd args) ^ " Soma_handles.reference"
+    else if is "soma.exception_value.type" then "Soma_handles.exception_value"
     else if is "core.list.type" then arg (List.hd args) ^ " list"
     else if is "core.option.type" then arg (List.hd args) ^ " option"
     else if is "core.prod.type" then

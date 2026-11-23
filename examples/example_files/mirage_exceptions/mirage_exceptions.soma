@@ -1,0 +1,52 @@
+(** Recover and rethrow original exceptions, with state restoration in Soma. *)
+Require Import Sandbox.
+
+check (ok : bool) (why : string) : io unit :=
+  if ok then ret tt else print why ;; exit 1.
+
+main : io unit :=
+  original <- new_failure "original" ;;
+  other <- new_failure "original" ;;
+  equal <- same_exception original other ;; check (negb equal) "distinct exceptions collapsed" ;;
+  calls <- new_reference 0 ;;
+  success <- catch (ret 42) (fun _ => _ <- modify_reference calls S ;; ret 0) ;;
+  n <- read_reference calls ;;
+  check (Nat.eqb success 42 && Nat.eqb n 0) "success invoked recovery" ;;
+  caught <- catch (throw_exception original) (fun error => ret error) ;;
+  equal <- same_exception original caught ;; check equal "catch replaced the exception" ;;
+  caught <- catch
+    (catch (throw_exception original) (fun error =>
+      _ <- modify_reference calls S ;; throw_exception error))
+    (fun error => ret error) ;;
+  equal <- same_exception original caught ;; n <- read_reference calls ;;
+  check (equal && Nat.eqb n 1) "rethrow changed identity or recaught its handler" ;;
+  (* Environment restoration happens before the outer handler runs. *)
+  environment <- new_reference "outside" ;;
+  restored <- catch
+    (finally (write_reference environment "inside" ;; throw_exception original)
+             (write_reference environment "outside"))
+    (fun error => equal <- same_exception original error ;;
+      value <- read_reference environment ;; ret (equal && String.eqb value "outside")) ;;
+  check restored "cleanup did not restore state before recovery" ;;
+  replacement <- new_failure "cleanup" ;;
+  caught <- catch (finally (throw_exception original) (throw_exception replacement))
+    (fun error => ret error) ;;
+  equal <- same_exception replacement caught ;; check equal "cleanup failure lost its identity" ;;
+  description <- exception_message original ;;
+  check (String.prefix "Failure" description) "exception description missing" ;;
+  fake <- attempt (call (fun _ => ExceptionValue 0)) ;;
+  inspected <- attempt (call (fun _ => match original with ExceptionValue id => id end)) ;;
+  check (match fake, inspected with TaskFailed _, TaskFailed _ => true | _, _ => false end)
+    "fabricated or inspected an exception handle" ;;
+  (* Cancellation is recoverable as an exception, and cleanup runs first. *)
+  cleaned <- new_reference false ;;
+  recovered <- new_reference false ;;
+  waiting <- fork (catch
+    (finally (sleep_ms 100000%N) (write_reference cleaned true))
+    (fun error => value <- read_reference cleaned ;;
+      write_reference recovered value ;; throw_exception error)) ;;
+  pending <- cancel waiting ;; _ <- await waiting ;;
+  value <- read_reference recovered ;;
+  check (pending && value) "cancellation skipped cleanup or recovery" ;;
+  forget waiting ;;
+  print "exception identity, rethrow, scoped cleanup and cancellation verified".

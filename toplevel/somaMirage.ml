@@ -966,6 +966,20 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Attempt body ->
       capture net body >|= fun result -> Obj.magic (match result with
         | Ok value -> Completed value | Error why -> TaskFailed (chars_of_string why))
+  | Prog.Catch (body, recover) ->
+      Lwt.catch (fun () -> run net body)
+        (function Exit_with _ as e -> Lwt.fail e
+          | e -> run net ((check recover) (Obj.magic e)))
+  | Prog.Throw_exception error ->
+      let error : exn = Obj.magic (check error) in
+      Lwt.fail error
+  | Prog.New_failure message ->
+      Lwt.return (Obj.magic (Failure (string_of_chars (check message))))
+  | Prog.Exception_message error ->
+      let error : exn = Obj.magic (check error) in
+      Lwt.return (Obj.magic (chars_of_string (Printexc.to_string error)))
+  | Prog.Same_exception (left, right) ->
+      Lwt.return (Obj.magic (check left == check right))
   | Prog.Finally (body, cleanup) ->
       Lwt.finalize (fun () -> run net body) (fun () -> run net cleanup)
   | Prog.Race (left, right) ->
@@ -2111,9 +2125,10 @@ Extract Inlined Constant Soma.Word64.to_hex => "(Printf.sprintf ""%Lx"")".
 (* Sandbox's handles that are OCaml values in the image, rather than
    numbers it looks up: a buffer is bytes (freed by the collector), a
    signal its count and condition (Soma_rt.signal), a promise Lwt's,
-   a deferred computation a lazy promise, a reference a mutable location.
+   a deferred computation a lazy promise, a reference a mutable location,
+   an exception the original native exception object.
    None is made by its constructor, which only the kernel has. Signals
-   references, promises and deferred computations are types of soma_handles.ml,
+   references, exceptions, promises and deferred computations are types of soma_handles.ml,
    so that prog.ml names no
    Lwt module (checked without an image, it is compiled without Lwt
    unless a definition declares it). *)
@@ -2129,6 +2144,8 @@ Extract Inductive Soma.Handles.deferred => "Soma_handles.deferred"
   [ "(fun _ -> failwith ""a deferred computation is made by new_deferred"")" ] "(fun _ _ -> failwith ""a deferred computation has no number"")".
 Extract Inductive Soma.Handles.reference => "Soma_handles.reference"
   [ "(fun _ -> failwith ""a reference is made by new_reference"")" ] "(fun _ _ -> failwith ""a reference has no number"")".
+Extract Inductive Soma.Handles.exception_value => "Soma_handles.exception_value"
+  [ "(fun _ -> failwith ""an exception is made by new_failure or caught"")" ] "(fun _ _ -> failwith ""an exception has no number"")".
 |soma}
 
 (* soma_handles.ml: a signal, which the program only passes to the
@@ -2138,9 +2155,10 @@ Extract Inductive Soma.Handles.reference => "Soma_handles.reference"
    [A Soma_handles.promise]). Without Lwt (an image's check, when no
    definition declares lwt), it is abstract: nothing gives one. *)
 let handles_ml ~lwt =
-  header ^ "(* Sandbox's signal, reference, promise and deferred handles. *)\n\
+  header ^ "(* Sandbox's signal, reference, exception, promise and deferred handles. *)\n\
             type signal\n\
-            type 'a reference = 'a ref\n" ^
+            type 'a reference = 'a ref\n\
+            type exception_value = exn\n" ^
   (if lwt then "type 'a promise = 'a Lwt.t\ntype 'a deferred = 'a Lwt.t Lazy.t\n"
    else "type 'a promise\ntype 'a deferred\n")
 
