@@ -41,7 +41,8 @@
     unsigned 64-bit words, OCaml's [int64]; C's [uint64_t]), [buffer]
     (Sandbox's, OCaml's [bytes]; C's [soma_bytes], an argument it may
     write in place), [promise A] (Sandbox's, OCaml's ['a Lwt.t], which a
-    program waits for with [await_promise]; an image's only), functions, these types, and type variables ([forall A]).
+    program waits for with [await_promise]; an image's only), [deferred A]
+    (Sandbox's cached computation), functions, these types, and type variables ([forall A]).
 
     Soma never computes them: they are parameters to the kernel and when
     Soma evaluates a term, so that no proof holds by running OCaml. A
@@ -85,12 +86,13 @@ Module Export Ints.
 End Ints.
 
 (** [word64], Soma.Word64's unsigned 64-bit words, and Sandbox's
-    [buffer] and [promise], by those names *)
+    [buffer], [promise] and [deferred], by those names *)
 From Soma Require Word64 Handles.
 Module Export Words.
   Abbreviation word64 := Soma.Word64.word64.
   Abbreviation buffer := Soma.Handles.buffer.
   Abbreviation promise := Soma.Handles.promise.
+  Abbreviation deferred := Soma.Handles.deferred.
 End Words.
 
 Declare ML Module "soma-runtime.plugins.soma_ocaml".

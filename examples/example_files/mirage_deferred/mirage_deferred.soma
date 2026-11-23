@@ -1,0 +1,69 @@
+(** One computation, deferred until first force, with a shared pending result.
+    This program has no project-specific foreign implementation. *)
+Require Import Sandbox.
+
+check (ok : bool) (why : string) : io unit :=
+  if ok then ret tt else print why ;; exit 1.
+
+main : io unit :=
+  calls <- new_cell 0 ;;
+  shared <- new_deferred (fun _ =>
+    _ <- modify_cell calls S ;; sleep_ms 5%N ;; ret 42) ;;
+  before <- read_cell calls ;; check (Nat.eqb before 0) "ran at creation" ;;
+  a <- fork (force_deferred shared) ;;
+  b <- fork (force_deferred shared) ;;
+  ra <- await a ;; rb <- await b ;; again <- force_deferred shared ;;
+  n <- read_cell calls ;;
+  check (Nat.eqb n 1 && Nat.eqb again 42 &&
+    match ra, rb with Completed 42, Completed 42 => true | _, _ => false end)
+    "pending result was not shared" ;;
+  (* Handles survive Any round trips, but cannot be fabricated or inspected. *)
+  restored <- call (fun _ => cast Any (deferred nat) (cast (deferred nat) Any shared)) ;;
+  restored_value <- force_deferred restored ;;
+  check (Nat.eqb restored_value 42) "handle round trip changed its result" ;;
+  fake <- attempt (call (fun _ => (Deferred 0 : deferred nat))) ;;
+  inspect <- attempt (call (fun _ => match shared with Deferred id => id end)) ;;
+  wrong <- attempt (call (fun _ =>
+    cast Any (deferred bool) (cast (deferred nat) Any shared))) ;;
+  check (match fake, inspect, wrong with
+    TaskFailed _, TaskFailed _, TaskFailed _ => true | _, _, _ => false end)
+    "fabricated, inspected or changed a handle's result type" ;;
+  (* Failure is cached as well; force never retries the producer. *)
+  failures <- new_cell 0 ;;
+  broken <- new_deferred (fun _ =>
+    _ <- modify_cell failures S ;; read_cell (Cell 999999 : cell nat)) ;;
+  first <- attempt (force_deferred broken) ;;
+  second <- attempt (force_deferred broken) ;;
+  n <- read_cell failures ;;
+  check (Nat.eqb n 1 && match first, second with
+    TaskFailed _, TaskFailed _ => true | _, _ => false end) "failed producer retried" ;;
+  (* A reentrant first force fails instead of starting the producer twice. *)
+  holder <- new_cell (None : option (deferred nat)) ;;
+  recursive <- new_deferred (fun _ =>
+    current <- read_cell holder ;;
+    match current with Some d => force_deferred d | None => ret 0 end) ;;
+  write_cell holder (Some recursive) ;;
+  reentered <- attempt (force_deferred recursive) ;;
+  check (match reentered with TaskFailed _ => true | _ => false end) "recursive force succeeded" ;;
+  (* Dynamic task context is selected when first forced. *)
+  key <- (new_context_key : io (context_key nat)) ;;
+  contextual <- with_context key (Some 1)
+    (new_deferred (fun _ => get_context key)) ;;
+  captured <- with_context key (Some 2) (force_deferred contextual) ;;
+  cached <- with_context key (Some 3) (force_deferred contextual) ;;
+  check (match captured, cached with Some 2, Some 2 => true | _, _ => false end)
+    "context was captured at creation or recomputed" ;;
+  (* A force shares cancellation with the cached underlying promise. *)
+  started <- new_cell 0 ;;
+  slow <- new_deferred (fun _ =>
+    _ <- modify_cell started S ;; sleep_ms 100000%N ;; ret 9) ;;
+  waiting <- fork (force_deferred slow) ;;
+  canceled <- cancel waiting ;;
+  stopped <- await waiting ;;
+  later <- attempt (force_deferred slow) ;;
+  n <- read_cell started ;;
+  check (canceled && Nat.eqb n 1 && match stopped, later with
+    TaskFailed _, TaskFailed _ => true | _, _ => false end) "canceled producer restarted" ;;
+  free_context_key key ;;
+  free_cell holder ;; free_cell failures ;; free_cell started ;; free_cell calls ;;
+  print "deferred computation sharing, failure, reentry and cancellation verified".

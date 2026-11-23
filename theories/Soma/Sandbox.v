@@ -421,6 +421,12 @@ Inductive io : Type -> Type :=
 (** wait for what OCaml promised: its value, or the task fails as OCaml's
     did *)
 | await_promise {A : Type} (p : promise A) : io A
+(** Create without running [body]. The first force invokes [body] and caches
+    the promise it returns before waiting for its result. Later forces share
+    that promise, including its failure/cancellation. A synchronous exception
+    during first invocation is cached too; reentrant first force fails. *)
+| new_deferred {A : Type} (body : unit -> io A) : io (deferred A)
+| force_deferred {A : Type} (d : deferred A) : io A
 (** yield cooperatively without adding a clock delay *)
 | yield : io unit
 (** recover an action's failure without starting another task; exit still exits *)
@@ -456,6 +462,8 @@ Arguments TaskFailed {A} why.
 Arguments free_cell {A} c.
 Arguments forget {A} t.
 Arguments await_promise {A} p.
+Arguments new_deferred {A} body.
+Arguments force_deferred {A} d.
 Arguments ContextKey {A} id.
 Arguments attempt {A} body.
 Arguments finally {A} body cleanup.

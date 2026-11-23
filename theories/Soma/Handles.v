@@ -20,3 +20,10 @@ Register buffer as soma.buffer.type.
 Inductive promise (A : Type) : Type := Promise (id : nat).
 Register promise as soma.promise.type.
 Arguments Promise {A} id.
+
+(** A deferred computation caches its first promise, including a pending,
+    failed or cancelled promise. It is owned by the values holding it rather
+    than an indexed runtime table. Only [new_deferred] creates one. *)
+Inductive deferred (A : Type) : Type := Deferred (id : nat).
+Register deferred as soma.deferred.type.
+Arguments Deferred {A} id.

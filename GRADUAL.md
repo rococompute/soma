@@ -1939,6 +1939,34 @@ process's address-space context, without putting process policy in OCaml.
 `test-suite/misc/soma_async_control.sh` checks extraction; set
 `SOMA_TEST_HVF=1` to build and boot its assertions on an HVF-capable Mac.
 
+`new_deferred (fun _ => body) : io (deferred A)` creates a computation without
+running `body`. `force_deferred d : io A` starts it on first use and caches the
+promise immediately, so concurrent forces share the pending computation as
+well as its eventual result. Failure and cancellation remain cached; forcing
+never retries the producer. A synchronous first-invocation exception is cached
+too. Reentering a first force before the producer has returned its promise
+fails. Task-local context comes from the first force, not creation. Cancelling
+a force can cancel the shared promise and therefore affect its other waiters;
+use a forked task and `await` when the computation needs protection from a
+waiter's cancellation. An uncancellable underlying promise stays uncancellable.
+
+Deferred handles belong to the values holding them, with no numbered runtime
+table or explicit release operation. Once forced, the producer closure is
+released; the result remains reachable through the handle. `Deferred n` cannot
+manufacture a handle and matching a handle cannot reveal an ID. Native
+`.definition` signatures can name `deferred A`, preserving the result type.
+The current backend represents it as `'a Lwt.t Lazy.t` in `Soma_handles`.
+The language API does not require application-specific OCaml glue; this
+backend still generates OCaml and uses Lwt. It is not a C/native backend or a
+proof of that runtime's semantics.
+
+`examples/example_files/mirage_deferred` exercises sharing, failure, reentry,
+context, cancellation and handle safety without any project foreign code.
+`test-suite/misc/soma_deferred.sh`, with host `ocamlfind`/`lwt`, checks the
+actual generated runtime branches, exception and result identity, and garbage
+collection. Set `SOMA_TEST_HVF=1` to also execute the complete Soma program in
+a Solo5 guest.
+
 Buffers, signals and promises are for a program that does what a C or
 OCaml one would: a page, a sector or a frame changed in place rather than
 a string made of each, tasks that wait for one another rather than
