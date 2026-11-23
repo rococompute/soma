@@ -82,5 +82,14 @@ Definition dirname (path : string) := Export (Path_dirname path).
 Definition concat_path (directory file : string) := Export (Path_concat directory file).
 Definition applied (body : unit -> promise nat) := Export (Promise_apply (fun _ => Export (Invoke body Return))).
 
+(** Compose Source-defined callbacks without a pure evaluator for entries.
+    Invocation still happens before the native map/bind exception scope. *)
+Definition mapped_callback (source : callback unit (promise string)) (render : string -> nat) := Export
+ (Promise_map_entry (fun _ => Export (Call_callback source tt))
+ (fun value => Export (Invoke (fun _ => render value) Return))).
+Definition bound_callback (source : callback unit (promise string)) (next : string -> promise nat) := Export
+ (Promise_bind_entry (fun _ => Export (Call_callback source tt))
+ (fun value => Export (Invoke (fun _ => next value) Return))).
+
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback).

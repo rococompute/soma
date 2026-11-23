@@ -39,7 +39,8 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.table_find" "Soma_effect.table_find_opt" "Soma_effect.table_replace" "Soma_effect.table_remove"
    "Soma_effect.string_map" "Soma_effect.string_get" "Soma_effect.string_get_nat"
    "Soma_effect.word_decimal" "Soma_effect.nat_decimal" "Soma_effect.path_basename"
-   "Soma_effect.path_dirname" "Soma_effect.path_concat" "Soma_effect.promise_apply" ]
+   "Soma_effect.path_dirname" "Soma_effect.path_concat" "Soma_effect.promise_apply"
+   "Soma_effect.promise_map" "Soma_effect.promise_bind" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]

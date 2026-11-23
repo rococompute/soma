@@ -245,3 +245,20 @@ let ()=
  storage_ownership();collect();
  assert(List.for_all(fun value->not(Weak.check(Obj.obj value)0))!storage_roots);
  storage_roots:=[];print_endline "native storage: owner-managed arrays/tables/buffers collect without registry roots"
+
+let ()=
+ let read()=raise reason in
+ same_outcome(observed(fun()->Lwt.map String.length(read())))
+  (observed(fun()->Prog.mapped_callback read String.length));
+ same_outcome(observed(fun()->Lwt.bind(read())(fun _->Lwt.return 1)))
+  (observed(fun()->Prog.bound_callback read(fun _->Lwt.return 1)));
+ let render _=raise reason in
+ same_outcome(observed(fun()->Lwt.map render(Lwt.return "value")))
+  (observed(fun()->Prog.mapped_callback(fun()->Lwt.return "value")render));
+ same_outcome(observed(fun()->Lwt.bind(Lwt.return "value")render))
+  (observed(fun()->Prog.bound_callback(fun()->Lwt.return "value")render));
+ let pending,wake=Lwt.task()in let result=Prog.mapped_callback(fun()->pending)String.length in
+ Lwt.wakeup wake "value";assert(returned result=5);
+ let pending,_=Lwt.task()in let result=Prog.bound_callback(fun()->pending)(fun _->Lwt.return 7)in
+ Lwt.cancel result;assert(failed result=Lwt.Canceled&&failed pending=Lwt.Canceled);
+ print_endline "native library effects: entry map/bind preserve sync provider throws, callback rejections, delayed results and cancellation"

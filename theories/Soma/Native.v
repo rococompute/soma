@@ -91,6 +91,8 @@ Inductive program : Type -> Type :=
 | Path_dirname (path : string) : program string
 | Path_concat (directory file : string) : program string
 | Promise_apply {A} (body : unit -> entry (promise A)) : program (promise A)
+| Promise_map_entry {A B} (body : unit -> entry (promise A)) (next : A -> entry B) : program (promise B)
+| Promise_bind_entry {A B} (body : unit -> entry (promise A)) (next : A -> entry (promise B)) : program (promise B)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -127,6 +129,8 @@ Arguments Table_find_opt {K V} entries key.
 Arguments Table_replace {K V} entries key value.
 Arguments Table_remove {K V} entries key.
 Arguments Promise_apply {A} body.
+Arguments Promise_map_entry {A B} body next.
+Arguments Promise_bind_entry {A B} body next.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
