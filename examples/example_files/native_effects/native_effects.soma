@@ -37,4 +37,15 @@ Definition finalized (body : unit -> promise nat) (cleanup : unit -> promise uni
 Definition folded (step : nat -> string -> promise nat) (initial : nat) (items : list string) : entry (promise nat) :=
  Export (Promise_fold (fun before item => Export (Invoke (fun _ => step before item) Return)) initial items).
 
-Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded).
+Definition mapped_list (step : string -> promise nat) (items : list string) : entry (promise (list nat)) :=
+ Export (Promise_map_s (fun word => Export (Invoke (fun _ => step word) Return)) items).
+Definition failed (error : exception_value) : entry (promise nat) := Export (Promise_fail error).
+Definition make_reference (value : nat) : entry (reference nat) := Export (New_reference value).
+Definition change_reference (location : reference nat) (change : nat -> nat) : entry nat := Export
+ (Bind (Read_reference location) (fun before => Invoke (fun _ => change before) (fun after =>
+ Bind (Write_reference location after) (fun _ => Return before)))).
+Definition asserted (file : string) (line column : nat) : entry nat := Export (Assert_failure file line column).
+Definition ordinary_entry (body : unit -> nat) : entry nat := ordinary (Export (Invoke body Return)).
+
+Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry).

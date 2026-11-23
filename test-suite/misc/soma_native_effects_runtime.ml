@@ -133,3 +133,29 @@ let ()=
  assert(before= !lifetime_seen);
  if Sys.backend_type=Sys.Native then assert(before=[false]);
  print_endline "native library effects: executing synchronous primitives release consumed closure environments"
+
+let ()=
+ let seen=ref [] in
+ let pending,wake=Lwt.task()in
+ let step word=seen:=word::!seen;if word="first"then pending else Lwt.return(String.length word)in
+ let result=Prog.mapped_list step["first";"second"]in
+ assert(!seen=["first"]&&Lwt.state result=Lwt.Sleep);
+ Lwt.wakeup wake 3;assert(returned result=[3;6]&&List.rev !seen=["first";"second"]);
+ let read _=raise reason in
+ same_outcome(observed(fun()->Lwt_list.map_s read["first"]))
+  (observed(fun()->Prog.mapped_list read["first"]));
+ let pending,_=Lwt.task()in
+ let result=Prog.mapped_list(fun _->pending)["first";"second"]in
+ Lwt.cancel result;assert(failed result=Lwt.Canceled&&failed pending=Lwt.Canceled);
+ assert(failed(Prog.failed reason)==reason);
+ let location=Prog.make_reference 40 in
+ assert(Prog.change_reference location((+)2)=40&& !location=42);
+ let same=location in same:=7;
+ assert(Prog.change_reference location((+)1)=7&& !same=8);
+ let raised=try ignore(Prog.change_reference location(fun _->raise reason));false with e->e==reason in
+ assert(raised&& !location=8);
+ let caught=try ignore(Prog.asserted "native-client" 23 9);false with Assert_failure(file,line,column)->file="native-client"&&line=23&&column=9 in
+ assert caught;
+ assert(Prog.ordinary_entry(fun()->73)=73);
+ let escaped=try ignore(Prog.ordinary_entry(fun()->raise reason));false with e->e==reason in assert escaped;
+ print_endline "native library effects: sequential map order, cancellation, failed promise identity, native reference aliases and assertion provenance passed"

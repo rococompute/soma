@@ -9,6 +9,7 @@
     module does not make a program a Sandbox image. Native primitive callbacks
     remain explicit trusted interfaces. *)
 Require Export Soma.Handles.
+From Stdlib Require Import Strings.String.
 
 (** The native result representation, for callbacks supplied by existing
     libraries. Constructors and payloads retain their native identities. *)
@@ -36,6 +37,12 @@ Inductive program : Type -> Type :=
 | Promise_finally {A} (body : unit -> entry (promise A))
     (cleanup : unit -> entry (promise unit)) : program (promise A)
 | Promise_fold {A B} (step : A -> B -> entry (promise A)) (initial : A) (items : list B) : program (promise A)
+| Promise_map_s {A B} (step : A -> entry (promise B)) (items : list A) : program (promise (list B))
+| Promise_fail {A} (error : exception_value) : program (promise A)
+| New_reference {A} (value : A) : program (reference A)
+| Read_reference {A} (location : reference A) : program A
+| Write_reference {A} (location : reference A) (value : A) : program unit
+| Assert_failure {A} (file : string) (line column : nat) : program A
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -51,6 +58,12 @@ Arguments Promise_bind {A B} body next.
 Arguments Promise_catch {A} body recover.
 Arguments Promise_finally {A} body cleanup.
 Arguments Promise_fold {A B} step initial items.
+Arguments Promise_map_s {A B} step items.
+Arguments Promise_fail {A} error.
+Arguments New_reference {A} value.
+Arguments Read_reference {A} location.
+Arguments Write_reference {A} location value.
+Arguments Assert_failure {A} file line column.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
@@ -59,3 +72,7 @@ Register entry as soma.native.entry.
 (** A value-preserving native barrier, for scopes that intentionally keep a
     borrowed resource alive through an observable callback. *)
 Definition opaque {A} (value : A) := value.
+
+(** Preserve an ordinary caller frame around a native entry invocation.
+    This remains an identity on symbolic entries, not an evaluator. *)
+Definition ordinary {A} (value : entry A) : entry A := value.
