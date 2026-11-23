@@ -49,7 +49,8 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.new_deferred" "Soma_effect.force_deferred"
    "Soma_effect.string_substring" "Soma_effect.raise_not_found"
    "Soma_effect.string_length" "Soma_effect.vector_map"
-   "Soma_effect.promise_both" "Soma_effect.raise_failure" ]
+   "Soma_effect.promise_both" "Soma_effect.raise_failure"
+   "Soma_effect.new_callback2" "Soma_effect.new_callback6" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -116,6 +117,10 @@ let[@inline never] run_filter predicate items = List.filter predicate items
 let filter (predicate, items) () = run_filter predicate items
 let new_callback body () =
   let rec self argument = export (body self argument) in self
+let new_callback2 body () =
+  let rec self a b = export (body self a b) in self
+let new_callback6 body () =
+  let rec self a b c d e f = export (body self a b c d e f) in self
 let[@inline never] run_callback body argument = body argument
 let call_callback (body, argument) () = run_callback body argument
 let vector_of_list items () = Array.of_list items

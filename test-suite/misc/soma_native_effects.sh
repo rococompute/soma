@@ -157,6 +157,18 @@ cat > image/main.soma <<'SOMA'
 Require Import Sandbox.
 Require Import Soma.Native.
 Import caller.
+Definition curried_check (value : nat) : Native.program nat :=
+ Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
+ Native.Bind (Native.Call_callback pair value) (fun second =>
+ Native.Bind (Native.Call_callback second tt) (fun pair =>
+ Native.Bind (Native.New_callback6 (fun _ (a : nat) (b : unit) (c : bool) (d e f : unit) =>
+   Native.Call_callback check_triple (Native.Triple a b c))) (fun callback =>
+ Native.Bind (Native.Call_callback callback (fst pair)) (fun next =>
+ Native.Bind (Native.Call_callback next (snd pair)) (fun next =>
+ Native.Bind (Native.Call_callback next true) (fun next =>
+ Native.Bind (Native.Call_callback next tt) (fun next =>
+ Native.Bind (Native.Call_callback next tt) (fun next =>
+ Native.Call_callback next tt))))))))).
 Definition paired_check (original copied : string) : Native.program (promise nat) :=
  Native.Bind (Native.Promise_return (if String.eqb original copied then 42 else 0)) (fun left =>
  Native.Bind (Native.Promise_return tt) (fun right =>
@@ -164,7 +176,7 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Promise_map (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
  Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>
- Native.Call_callback check_triple (Native.Triple (fst result) tt true)))))))).
+ curried_check (fst result)))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>

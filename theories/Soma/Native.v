@@ -116,6 +116,15 @@ Inductive program : Type -> Type :=
 | Vector_map {A B} (mapper : callback A B) (items : vector A) : program (vector B)
 | Promise_both {A B} (left : promise A) (right : promise B) : program (promise (A * B))
 | Raise_failure {A} (message : string) : program A
+(** Multiargument callbacks create one native curried closure. Nested
+    [New_callback] allocations instead execute between partial applications. *)
+| New_callback2 {A B R}
+    (body : callback A (callback B R) -> A -> B -> program R)
+    : program (callback A (callback B R))
+| New_callback6 {A B C D E F R}
+    (body : callback A (callback B (callback C (callback D (callback E (callback F R))))) ->
+      A -> B -> C -> D -> E -> F -> program R)
+    : program (callback A (callback B (callback C (callback D (callback E (callback F R))))))
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -139,6 +148,8 @@ Arguments Write_reference {A} location value.
 Arguments Assert_failure {A} file line column.
 Arguments Filter {A} predicate items.
 Arguments New_callback {A B} body.
+Arguments New_callback2 {A B R} body.
+Arguments New_callback6 {A B C D E F R} body.
 Arguments Call_callback {A B} body argument.
 Arguments Vector_of_list {A} items.
 Arguments Vector_to_list {A} items.

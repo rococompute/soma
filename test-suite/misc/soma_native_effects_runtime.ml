@@ -550,3 +550,56 @@ let ()=
  let replacement=ref 99 in Obj.set_field(Obj.repr value)0(Obj.repr replacement);
  let x,(y,z)=Prog.triple_parts value in assert(x==replacement&&y==b&&z==c);
  print_endline"native triples: flat tuple ABI, borrowed fields, pattern matching and mutation aliases passed"
+
+let curried_returned pending=match Lwt.state pending with Lwt.Return value->value|_->failwith "expected an immediate curried result"
+(* Full and partial application must execute the body only at saturation;
+   callback handles cross the boundary as ordinary curried OCaml functions. *)
+let ()=
+ let scope=Lwt.new_key()in let calls=ref[]in
+ let a=ref 1 and b=Bytes.of_string "borrowed"in
+ let f=Prog.owned_callback2(fun x y->calls:=(x==a,y==b,Lwt.get scope)::!calls;Lwt.return(x,y))in
+ let partial=f a in assert(!calls=[]);
+ let x,y=Lwt.with_value scope(Some 17)(fun()->curried_returned(partial b))in
+ assert(x==a&&y==b&& !calls=[true,true,Some 17]);
+ let x,y=curried_returned(f a b)in assert(x==a&&y==b);
+ let calls=ref 0 in
+ let f=Prog.owned_callback6(fun a b c d e f->incr calls;Lwt.return(a,b,c,d,e,f,Lwt.get scope))in
+ let one=f a in let three=one b "third"in let five=three false 19 in assert(!calls=0);
+ let x,y,c,d,e,last,context=Lwt.with_value scope(Some 23)(fun()->curried_returned(five a))in
+ assert(x==a&&y==b&&c="third"&&not d&&e=19&&last==a&&context=Some 23&& !calls=1);
+ ignore(curried_returned(f a b "third" false 19 a));assert(!calls=2);
+ let reason=Failure "curried callback"in
+ let f=Prog.owned_callback2(fun _ _->raise reason)in
+ let partial=f()in
+ assert(try ignore(partial());false with e->e==reason);
+ let f=Prog.owned_callback6(fun _ _ _ _ _ _->raise reason)in
+ let partial=f()()()()()in
+ assert(try ignore(partial());false with e->e==reason);
+ let pending,wake=Lwt.task()in let f=Prog.owned_callback2(fun _ _->pending)in
+ let result=f a b in assert(Lwt.state result=Lwt.Sleep);Lwt.wakeup wake a;
+ assert(match Lwt.state result with Lwt.Return x->x==a|_->false);
+ let pending,_=Lwt.task()in let f=Prog.owned_callback6(fun _ _ _ _ _ _->pending)in
+ let result=f()()()()()()in Lwt.cancel result;assert(Lwt.state pending=Lwt.Fail Lwt.Canceled);
+ print_endline"native curried callbacks: two/six arguments, full/partial/stored calls, borrowed aliases, dynamic scope, throw timing, pending results and cancellation passed"
+
+let curried_handle=ref(Weak.create 0)
+let curried_payload=ref(Weak.create 0)
+let[@inline never] make_curried_pending arity=
+ let marker=Bytes.create 2048 in curried_payload:=weak marker;
+ let pending,wake=Lwt.task()in
+ let result=if arity=2 then begin
+  let f=Prog.owned_callback2(fun _ _->ignore(Sys.opaque_identity marker);pending)in
+  curried_handle:=weak(Obj.repr f);f()()
+ end else begin
+  let f=Prog.owned_callback6(fun _ _ _ _ _ _->ignore(Sys.opaque_identity marker);pending)in
+  curried_handle:=weak(Obj.repr f);f()()()()()()
+ end in result,wake
+let ()=
+ List.iter(fun arity->List.iter(fun cancel->
+  let result,wake=make_curried_pending arity in collect();
+  assert(Weak.check !curried_handle 0&&Weak.check !curried_payload 0);
+  if cancel then Lwt.cancel result else Lwt.wakeup wake();
+  collect();assert(not(Weak.check !curried_handle 0)&&not(Weak.check !curried_payload 0));
+  ignore(Sys.opaque_identity result)
+ )[false;true])[2;6];
+ print_endline"native curried callbacks: pending self/provider ownership releases after completion and cancellation"

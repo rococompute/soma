@@ -54,6 +54,14 @@ Definition filtered (predicate : string -> bool) (items : list string) : entry (
 Definition owned_callback (read : unit -> promise nat) : entry (callback unit (promise nat)) := Export
  (New_callback (fun self _ => Promise_map read (fun value => Export
   (Invoke (fun _ => opaque self) (fun _ => Return value))))).
+Definition owned_callback2 {A B R} (body : A -> B -> promise R) := Export
+ (New_callback2 (fun self a b => Invoke (fun _ => body a b)
+   (fun pending => Promise_map (fun _ => pending) (fun result => Export
+    (Invoke (fun _ => opaque self) (fun _ => Return result)))))).
+Definition owned_callback6 {A B C D E F R} (body : A -> B -> C -> D -> E -> F -> promise R) := Export
+ (New_callback6 (fun self a b c d e f => Invoke (fun _ => body a b c d e f)
+   (fun pending => Promise_map (fun _ => pending) (fun result => Export
+    (Invoke (fun _ => opaque self) (fun _ => Return result)))))).
 Definition called_callback (body : callback nat nat) (value : nat) : entry nat := Export (Call_callback body value).
 
 (** Native storage exposes the original ABI types, not copied model values. *)
@@ -150,4 +158,4 @@ Fixpoint family_program {A : Type} (action : family_action A) : program (promise
 Definition family_run {A : Type} (action : family_action A) := Export (family_program action).
 
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,literal_asserted,@family_run,@triple_value,@triple_parts).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,literal_asserted,@family_run,@triple_value,@triple_parts,@owned_callback2,@owned_callback6).
