@@ -1,0 +1,15 @@
+Import records consumer.
+From Soma Require Native.
+Definition run_program owner data callback :=
+ (Native.Bind (Native.Call_callback records.make_pipe (data, (0%uint63, (owner,callback)))) (fun original =>
+ Native.Bind (Native.Call_callback records.set_offset (original, 42%uint63)) (fun _ =>
+ Native.Bind (Native.Call_callback records.copy_offset (original, 9%uint63)) (fun copied =>
+ Native.Bind (Native.Call_callback records.make_descriptor (original, (3%uint63, owner))) (fun fd =>
+ Native.Bind (Native.Call_callback records.get_pipe fd) (fun shared =>
+ Native.Bind (Native.Call_callback records.set_offset (shared, 7%uint63)) (fun _ =>
+ Native.Bind (Native.Call_callback records.get_offset original) (fun changed =>
+ Native.Bind (Native.Call_callback records.get_offset copied) (fun copy_value =>
+ Native.Return (if andb (PrimInt63.eqb changed 7%uint63) (PrimInt63.eqb copy_value 9%uint63) then 42 else 0)))))))))).
+Definition run owner data callback := Native.Export(run_program owner data callback).
+Definition pass (value:records.pipe) := Native.Export(Native.Call_callback consumer.same value).
+Definition main := (run,pass).

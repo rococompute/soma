@@ -1,0 +1,3 @@
+From Soma Require Native.
+Import records.
+OCaml Native Callback same : records.pipe -> records.pipe := "same".

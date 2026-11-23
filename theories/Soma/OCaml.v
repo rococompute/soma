@@ -111,10 +111,61 @@
 
     The first stage supports monomorphic opaque types and callback signatures.
     Explicitly supplied optional arguments, polymorphic descriptors, native
-    variant views, exception declarations and emission of owned native record
-    types are not yet supported. Existing
+    variant views and exception declarations are not yet supported. Existing
     parameter-based [.definition] declarations remain available separately.
     See [examples/example_projects/native_abi] and [dev/native-abi-check.sh]. *)
+
+(** ** Compiler-owned native records
+
+    A source-only [.definition], with no companion [.ml], may own record
+    declarations and use the same Get/Set/Build/Copy descriptors:
+
+        From Soma Require Native.
+        OCaml Native Record state := {
+          mutable bytes : buffer;
+          mutable offset : int;
+          callback : unit -> promise unit
+        }.
+        OCaml Native Build make : buffer -> int -> (unit -> promise unit) -> state
+          := "bytes" "offset" "callback".
+        OCaml Native Get bytes : state -> buffer := "bytes".
+        OCaml Native Set offset : state -> int -> unit := "offset".
+
+    Each record emits a standalone [Soma_owned_SHA256] module with a type [t].
+    Its bounded name hashes a domain-separated, length-prefixed full logical
+    namespace/name pair. Logical handles retain the full canonical names;
+    collisions between emitted names of different declarations are rejected. Each field keeps its declared name, order, native type and
+    mutability. A collision with a caller, native/library or reserved module
+    is rejected before writing generated files. No fictitious module matching
+    the [.definition] filename is required or emitted.
+
+    The logical type remains a named opaque handle, with effectful access.
+    Its anonymous type-valued lets retain checked field-type dependencies for
+    module discovery and contract hashes; they expose no mutable projections.
+    Fields may borrow native objects and refer to previously declared owned
+    records. Callback fields are ordinary native functions: Get preserves
+    their identity, and Copy shares all unspecified fields.
+
+    A native consumer may re-export [type state = Generated.t] or the complete
+    representation [type state = Generated.t = { ... }]. The latter must
+    match field order, types and mutability, which OCaml checks. Such aliases
+    preserve representation and identity. Imported primitive declarations
+    should use the owned source type directly in their signatures; OCaml
+    checks any consumer-side aliases against it. Importing the caller's
+    re-export as a new Native Type can recreate the dependency cycle that the
+    standalone generated module is intended to avoid.
+
+    [native_abi.manifest] includes ordered field schema metadata. A separate
+    [native_owned.manifest] starts with [soma-native-owned-v1] and has five
+    quoted strings per sorted row: logical record name, schema source path,
+    source SHA-256, generated module filename and generated source SHA-256.
+    Generated modules and the manifest are tracked as compiler artifacts;
+    manifests are never treated as compilation sources.
+
+    This stage is monomorphic and nonrecursive. Mutual/recursive records,
+    variants and owned polymorphic types remain unsupported. See
+    [examples/example_projects/native_owned_records] and
+    [dev/native-owned-record-check.sh]. *)
 
 From Stdlib Require Strings.String.
 From Corelib Require PrimFloat.

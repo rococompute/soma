@@ -88,3 +88,8 @@
   (rocqworker.bc as rocqworker.byte)
   (rocqworker_with_drop.bc as rocqworker_with_drop)
   (rocqnative.exe as rocqnative)))
+
+(test
+ (name somaOwnedNamesTest)
+ (modules somaOwnedNamesTest)
+ (libraries soma-runtime.toplevel))

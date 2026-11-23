@@ -1,0 +1,4 @@
+From Soma Require Native.
+Import borrowed.
+OCaml Native Record carrier := { borrowed_owner : borrowed.node; number : int }.
+OCaml Native Get number : carrier -> int := "number".

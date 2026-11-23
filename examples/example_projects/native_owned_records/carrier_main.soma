@@ -1,0 +1,4 @@
+Import carrier.
+From Soma Require Native.
+Definition read_carrier (value : carrier.carrier) := Native.Export (Native.Call_callback carrier.number value).
+Definition main := read_carrier.

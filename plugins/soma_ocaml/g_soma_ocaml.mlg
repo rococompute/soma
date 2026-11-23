@@ -17,6 +17,7 @@
 {
 
 open Stdarg
+open Procq.Prim
 open Procq.Constr
 let pr_native_signature typ =
   let env = Global.env () in
@@ -55,4 +56,15 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuild fields) }
 | [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
+END
+
+VERNAC ARGUMENT EXTEND native_record_field
+ PRINTED BY { fun (name,mutable_,typ) -> Pp.(str(if mutable_ then "mutable " else "") ++ Names.Id.print name ++ str " : " ++ pr_native_signature typ) }
+| [ ident(name) ":" native_signature(typ) ] -> { name,false,typ }
+| [ "mutable" ident(name) ":" native_signature(typ) ] -> { name,true,typ }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeRecord CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Record" ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
+ { Soma_ocaml.native_record name fields }
 END

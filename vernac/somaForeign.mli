@@ -65,9 +65,23 @@ type native_callback = {
   operation : native_operation;
 }
 
+type native_record_field = {
+  field_name : string;
+  field_type : string;
+  field_mutable : bool;
+}
+
+type native_record = {
+  record_namespace : string;
+  record_name : string;
+  record_source : string;
+  record_fields : native_record_field list;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
+  | OCamlNativeOwnedRecord of native_record
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
 
@@ -84,3 +98,9 @@ val ocaml_modules : (unit -> ocaml_module list) ref
 
 (** Canonical native declaration metadata, included in hashes and manifests. *)
 val native_identity : ocaml_item -> string
+
+(** Collision-free standalone record modules; fields retain declaration order. *)
+val native_record_module : native_record -> string
+val native_record_type : native_record -> string
+val native_record_filename : native_record -> string
+val native_record_ml : native_record -> string

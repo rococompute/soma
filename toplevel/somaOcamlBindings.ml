@@ -94,6 +94,11 @@ let native_binding_name (n:SomaForeign.native_callback) =
     (fun i->Printf.sprintf "%02x" (Char.code text.[i]))) in
   "soma_native_" ^ hex n.namespace ^ "_" ^ hex n.name
 
+let owned_records modules = List.concat_map(fun(m:SomaForeign.ocaml_module)->
+  List.filter_map(fun(c,_,item)->match item with
+    | SomaForeign.OCamlNativeOwnedRecord r -> Some(c,r)
+    | _->None)m.items)modules
+
 let rec native_product = function
   | [] -> "unit" | [value] -> value
   | first::rest -> "(" ^ first ^ " * " ^ native_product rest ^ ")"
@@ -133,7 +138,7 @@ let bindings_ml modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ -> None
+          | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             let signature,body=native_binding m n in
             Some(Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s =\n  %s\n"
@@ -165,6 +170,8 @@ let extraction_lines modules =
       List.map (fun (c, path, item) ->
           let soma = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef c)) in
           match item with
+          | SomaForeign.OCamlNativeOwnedRecord r ->
+            Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_record_type r)
           | SomaForeign.OCamlNativeType target ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma target
           | SomaForeign.OCamlNativeCallback n ->
@@ -179,6 +186,18 @@ let extraction_lines modules =
               (String.concat " " (List.map (Printf.sprintf "%S") ps)) applied m.top path)
         m.items) modules
 
+(* Hashes bound filesystem names, never logical identity. Refuse a collision
+   between canonical declarations before emitting or overwriting a module. *)
+let check_owned_module_names entries =
+  let emitted=Hashtbl.create 17 in
+  List.iter(fun(module_name,canonical)->
+    let key=String.lowercase_ascii module_name in
+    match Hashtbl.find_opt emitted key with
+    | Some previous when previous<>canonical ->
+      error Pp.(str "owned record emitted-name collision for "++str module_name)
+    | Some _->()
+    | None->Hashtbl.add emitted key canonical)entries
+
 let checked_modules ?(reserved = []) () =
   let modules = used_modules () in
   ignore (main_reference ());
@@ -186,6 +205,14 @@ let checked_modules ?(reserved = []) () =
      and an own module must not shadow a library top used by another binding.
      Apostrophes are legal OCaml identifiers and remain supported. *)
   let same_name a b = String.equal (String.lowercase_ascii a) (String.lowercase_ascii b) in
+  let owned_names=List.map(fun(_,r)->SomaForeign.native_record_module r,
+    (r.SomaForeign.record_namespace,r.record_name))(owned_records modules)in
+  check_owned_module_names owned_names;
+  let generated=List.map fst owned_names in
+  List.iter(fun name->
+    if List.exists(fun(m:SomaForeign.ocaml_module)->same_name name m.top)modules ||
+       List.exists(same_name name)reserved then
+      error Pp.(str "owned record module "++str name++str " collides with a caller, native or reserved module"))generated;
   let names = List.filter_map (fun (m : SomaForeign.ocaml_module) ->
       Option.map (fun _ -> m.top) m.ml_file) modules in
   List.iter (fun n ->
@@ -238,15 +265,27 @@ let c_stub_names made =
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
   file "soma_bindings.ml" (bindings_ml modules);
+  let owned=owned_records modules in
+  let owned_entries=List.map(fun(c,r)->
+    let filename=SomaForeign.native_record_filename r in
+    let contents=SomaForeign.native_record_ml r in
+    file filename contents;
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))in
+    let source=SomaImport.resolve_project_file r.SomaForeign.record_source in
+    Printf.sprintf "%S %S %S %S %S\n" symbol r.record_source
+      (SomaMerkle.string(read_file source))filename(SomaMerkle.string contents))owned in
+  file "native_owned.manifest" ("soma-native-owned-v1\n"^String.concat ""(List.sort String.compare owned_entries));
   let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
     List.filter_map(fun(c,path,item)->match item with
-      | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeCallback _ ->
+      | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeCallback _ ->
         let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
-        let source=match m.ml_file with None->"library"|Some f->SomaMerkle.file_hash f in
+        let source=match item with
+          | SomaForeign.OCamlNativeOwnedRecord r -> SomaMerkle.string(read_file(SomaImport.resolve_project_file r.record_source))
+          | _->(match m.ml_file with None->"library"|Some f->SomaMerkle.file_hash f)in
         Some(Printf.sprintf "%S %S %S %S\n" symbol m.top source (SomaForeign.native_identity item))
       | _->None)m.items)modules in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
-  ["soma_nat.ml"; "soma_bindings.ml"] @
+  ["soma_nat.ml"; "soma_bindings.ml"] @ List.map(fun(_,r)->SomaForeign.native_record_filename r)owned @
   List.concat_map (fun (m : SomaForeign.ocaml_module) ->
       if is_c m then begin
         let files = c_files ~read_file m in

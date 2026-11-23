@@ -127,7 +127,9 @@ let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t
 let rec ocaml_type env sigma vars t =
   let native = match EConstr.kind sigma t with
     | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
-      | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path | _ -> None)
+      | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
+      | Some { item = SomaForeign.OCamlNativeOwnedRecord r; _ } -> Some(SomaForeign.native_record_type r)
+      | _ -> None)
     | _ -> None in
   match native with Some path -> path | None ->
   let t = Reductionops.whd_all env sigma t in
@@ -343,6 +345,38 @@ let native_type name path =
   let c = native_declare name body None in
   native_register name c (SomaForeign.OCamlNativeType path)
 
+(* The opaque handle has no pure mutable fields. Anonymous type-valued lets
+   retain checked schema dependencies in the kernel term for module discovery
+   and hashing, without exposing a projection or evaluating any native value. *)
+let native_record name fields =
+  ignore(native_context());
+  if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
+  if fields=[]then native_error "an owned record must have fields";
+  let names=List.map(fun(id,_,_)->Id.to_string id)fields in
+  List.iter(fun field->ignore(native_path field))names;
+  if List.length(List.sort_uniq String.compare names)<>List.length names then
+    native_error "owned record fields must be distinct";
+  let env=Global.env()in
+  let checked=List.map(fun(id,mutable_,syntax)->
+    let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)syntax in
+    let rec monomorphic t =
+      (match EConstr.kind sigma t with
+       | Prod(_,domain,_) when EConstr.isSort sigma domain -> native_error "polymorphic owned fields are not supported"
+       | _->());EConstr.iter sigma monomorphic t in
+    monomorphic typ;
+    let field_type=try ocaml_type env sigma [] typ with Not_ocaml why->
+      CErrors.user_err(str "OCaml Native owned field: "++why)in
+    syntax,{SomaForeign.field_name=Id.to_string id;field_type;field_mutable=mutable_})fields in
+  let namespace=native_namespace()in
+  let symbol=namespace^"."^Id.to_string name in
+  let handle=native_app(native_global "soma.native.handle")[native_string symbol]in
+  let body=List.fold_right(fun(syntax,_)rest->
+    CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,syntax,None,rest)))checked handle in
+  let c=native_declare name body None in
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  native_register name c (SomaForeign.OCamlNativeOwnedRecord{
+    record_namespace=namespace;record_name=Id.to_string name;record_source=source;record_fields=List.map snd checked})
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -378,7 +412,7 @@ let native_callback name typ operation =
     native_path name in
   let record_type t = match EConstr.kind sigma t with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=SomaForeign.OCamlNativeType _;_}->()
+      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _);_}->()
       | _->native_error "a record operation needs a declared native type")
     | _->native_error "a record operation needs a declared native type" in
   (match operation with
@@ -442,7 +476,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -483,6 +517,8 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
+        | SomaForeign.OCamlNativeOwnedRecord r ->
+          str "owned native record " ++ str(SomaForeign.native_record_type r) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeType path ->
           str "native opaque type " ++ str path ++ str ", with no logical evaluator"
         | SomaForeign.OCamlNativeCallback n ->

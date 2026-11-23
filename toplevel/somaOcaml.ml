@@ -343,7 +343,7 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   end;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
-      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; "soma_bindings.ml"; "native_abi.manifest"]
+      (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; "soma_bindings.ml"; "native_abi.manifest"; "native_owned.manifest"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else [])
        @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own) in
   let names = List.sort_uniq String.compare (List.map (fun f ->

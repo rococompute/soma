@@ -1,0 +1,4 @@
+Theorem record_namespace_descriptors_are_canonical :
+ records.A__B.make_item = @Native.Named_callback PrimInt63.int records.A__B.item "records.A__B" "make_item" /\
+ records.A.B.make_item = @Native.Named_callback PrimInt63.int records.A.B.item "records.A.B" "make_item".
+Proof. split;reflexivity. Qed.

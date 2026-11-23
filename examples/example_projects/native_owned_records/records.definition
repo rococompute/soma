@@ -1,0 +1,30 @@
+From Soma Require Native.
+Import borrowed.
+OCaml Native Record pipe := {
+ mutable data : buffer;
+ mutable offset : int;
+ owner : borrowed.node;
+ callback : unit -> promise unit
+}.
+OCaml Native Build make_pipe : buffer -> int -> borrowed.node -> (unit -> promise unit) -> pipe := "data" "offset" "owner" "callback".
+OCaml Native Get get_data : pipe -> buffer := "data".
+OCaml Native Get get_offset : pipe -> int := "offset".
+OCaml Native Get get_owner : pipe -> borrowed.node := "owner".
+OCaml Native Get get_callback : pipe -> (unit -> promise unit) := "callback".
+OCaml Native Set set_offset : pipe -> int -> unit := "offset".
+OCaml Native Set set_data : pipe -> buffer -> unit := "data".
+OCaml Native Copy copy_offset : pipe -> int -> pipe := "offset".
+OCaml Native Record descriptor := { mutable pipe_ref : pipe; position : int; node : borrowed.node }.
+OCaml Native Build make_descriptor : pipe -> int -> borrowed.node -> descriptor := "pipe_ref" "position" "node".
+OCaml Native Get get_pipe : descriptor -> pipe := "pipe_ref".
+OCaml Native Set set_pipe : descriptor -> pipe -> unit := "pipe_ref".
+Module A__B.
+OCaml Native Record item := { mutable value : int }.
+OCaml Native Build make_item : int -> item := "value".
+End A__B.
+Module A.
+Module B.
+OCaml Native Record item := { value : int }.
+OCaml Native Build make_item : int -> item := "value".
+End B.
+End A.
