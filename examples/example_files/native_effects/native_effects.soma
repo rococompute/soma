@@ -1,0 +1,40 @@
+(** Native library entry points. No Sandbox import and no project interpreter. *)
+Require Import Soma.Native.
+
+Definition update (get : unit -> nat) (put : nat -> unit) : entry nat :=
+ Export (Invoke get (fun old => Invoke (fun _ => put (S old)) (fun _ => Return old))).
+
+Definition sequenced (get : unit -> nat) (put : nat -> unit) : entry nat :=
+ Export (Bind (Invoke get Return) (fun old => Invoke (fun _ => put old) (fun _ => Return old))).
+
+Definition promised (value : string) : entry (promise string) := Export (Promise_return value).
+Definition result_alias (value : result string string) : entry (result string string) := Export (Return value).
+Definition result_length (value : result string string) : entry nat := Export (Return
+ (match value with Ok text => String.length text | Error _ => 0 end)).
+
+Definition count (initial : nat) (value : string) : entry string := Export (Loop
+ (fun left => Return (match left with 0 => Finish value | S next => Continue next end)) initial).
+
+Definition protected (body : unit -> nat) (recover : exception_value -> nat) : entry nat :=
+ Export (Protect (Invoke body Return) (fun error => Invoke (fun _ => recover error) Return)).
+
+Definition rethrow (error : exception_value) : entry nat := Export (Throw error).
+
+Definition mapped (read : unit -> promise string) (render : string -> nat) : entry (promise nat) :=
+ Export (Promise_map read (fun value => Export (Invoke (fun _ => render value) Return))).
+
+Definition bound (read : unit -> promise string) (next : string -> promise nat) : entry (promise nat) :=
+ Export (Promise_bind read (fun value => Export (Invoke (fun _ => next value) Return))).
+
+Definition caught (body : unit -> promise nat) (recover : exception_value -> promise nat) : entry (promise nat) :=
+ Export (Promise_catch (fun _ => Export (Invoke body Return))
+   (fun error => Export (Invoke (fun _ => recover error) Return))).
+
+Definition finalized (body : unit -> promise nat) (cleanup : unit -> promise unit) : entry (promise nat) :=
+ Export (Promise_finally (fun _ => Export (Invoke body Return))
+   (fun _ => Export (Invoke cleanup Return))).
+
+Definition folded (step : nat -> string -> promise nat) (initial : nat) (items : list string) : entry (promise nat) :=
+ Export (Promise_fold (fun before item => Export (Invoke (fun _ => step before item) Return)) initial items).
+
+Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded).

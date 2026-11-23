@@ -978,6 +978,45 @@ values named by a keyword of Soma's (`return`).
 `examples/example_projects/wasm_add` uses a module built from Rust;
 `test-suite/misc/soma_wasm.sh` tests it.
 
+### Native library effects
+
+`Require Import Soma.Native.` provides effects for extracted libraries without
+making the program a Sandbox image. `program A` describes execution; `Export`
+turns a program into an `entry A` at a native caller boundary. In generated
+OCaml, a program is a thunk and an entry has the ordinary result type `A`.
+The generated project includes the shared `soma_effect.ml`, handles and Lwt
+dependency. No project-specific OCaml interpreter is required.
+
+`Return`, `Invoke` and `Bind` express synchronous sequencing. `Invoke f next`
+calls `f ()` exactly once, then continues with its value, including when that
+value is `unit`. `Loop` advances through `Continue state` until `Finish result`
+with no implicit bound or asynchronous bind. `Protect` and `Throw` retain
+ordinary synchronous exception scopes. Programs and entries are data in the
+logic: there is no evaluator `program A -> A`, no termination axiom and no
+disabled guard check. Extracted code cannot pattern-match programs or entries,
+because their native representations are executable code and results rather
+than the logical constructor layout.
+
+`Promise_return`, `Promise_map`, `Promise_bind`, `Promise_catch`,
+`Promise_finally` and `Promise_fold` select the corresponding native Lwt
+scopes. Map/bind take a provider thunk and an entry-returning callback; their
+provider is invoked before entering Lwt's map/bind. This keeps a provider's
+synchronous throw distinct from a promise rejection or callback failure.
+Pure synchronous preparation can therefore precede a returned promise without
+introducing extra asynchronous scopes. `result A E` has the native
+`Stdlib.result` representation. Native signatures can name `entry A` and
+`program A` after requiring `Soma.Native`, and `opaque value` is a
+value-preserving native liveness barrier.
+
+`examples/example_files/native_effects` exposes callable library functions.
+`test-suite/misc/soma_native_effects.sh` builds the generated project, calls
+its entries from both native and bytecode clients, checks a million-step
+loop, exception scopes, aliases, cleanup, cancellation, task context and
+provider release, and checks foreign callback signatures. `SOMA_TEST_HVF=1`
+also boots a native caller of a generated entry in Solo5. These shared
+execution primitives remain part of the trusted runtime; the tests do not
+constitute a proof of native execution or Lwt semantics.
+
 ### Inserting OCaml source
 
 `soma insert FILE.ml --out DIR` translates OCaml into editable `.soma`

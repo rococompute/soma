@@ -1155,12 +1155,20 @@ and extract_cons_app table env sg mle mlt (cp, u) args =
 (*S Extraction of a case. *)
 
 and extract_case ?rty table env sg mle ((kn,i) as ip, u, c, br) mlt =
+  (* Native library programs become executable thunks and entries become
+     their results. Their logical constructors are not a native data layout
+     that an extracted consumer may inspect. *)
   (* [br]: bodies of each branch (in functional form) *)
   (* [ni]: number of arguments without parameters in each branch *)
   let ni = constructors_nrealargs env ip in
   let br_size = Array.length br in
   let inst = InfvInst.ground (EConstr.EInstance.kind sg u) in
   let gind = { glob = GlobRef.IndRef ip; inst } in
+  if lang () == Ocaml && is_custom gind && List.exists (fun name ->
+      Rocqlib.has_ref name &&
+      GlobRef.CanOrd.equal (Rocqlib.lib_ref name) gind.glob)
+      ["soma.native.program"; "soma.native.entry"] then
+    CErrors.user_err Pp.(str "Native programs and entry points cannot be inspected by extracted code.");
   assert (Int.equal (Array.length ni) br_size);
   if Int.equal br_size 0 then begin
     add_recursors (Common.State.get_table table) env kn; (* May have passed unseen if logical ... *)

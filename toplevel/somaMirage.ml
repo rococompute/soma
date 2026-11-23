@@ -2143,9 +2143,7 @@ let buffer_extraction = {soma|Extract Inductive Soma.Handles.buffer => "Bytes.t"
   [ "(fun _ -> failwith ""a buffer is made by new_buffer"")" ] "(fun _ _ -> failwith ""a buffer has no number"")".
 |soma}
 
-let sandbox_extraction = buffer_extraction ^ {soma|Extract Inductive Soma.Sandbox.signal => "Soma_handles.signal"
-  [ "(fun _ -> failwith ""a signal is made by new_signal"")" ] "(fun _ _ -> failwith ""a signal has no number"")".
-Extract Inductive Soma.Handles.promise => "Soma_handles.promise"
+let handles_extraction = buffer_extraction ^ {soma|Extract Inductive Soma.Handles.promise => "Soma_handles.promise"
   [ "(fun _ -> failwith ""a promise is made by OCaml"")" ] "(fun _ _ -> failwith ""a promise has no number"")".
 Extract Inductive Soma.Handles.deferred => "Soma_handles.deferred"
   [ "(fun _ -> failwith ""a deferred computation is made by new_deferred"")" ] "(fun _ _ -> failwith ""a deferred computation has no number"")".
@@ -2153,6 +2151,10 @@ Extract Inductive Soma.Handles.reference => "Soma_handles.reference"
   [ "(fun _ -> failwith ""a reference is made by new_reference"")" ] "(fun _ _ -> failwith ""a reference has no number"")".
 Extract Inductive Soma.Handles.exception_value => "Soma_handles.exception_value"
   [ "(fun _ -> failwith ""an exception is made by new_failure or caught"")" ] "(fun _ _ -> failwith ""an exception has no number"")".
+|soma}
+
+let sandbox_extraction = handles_extraction ^ {soma|Extract Inductive Soma.Sandbox.signal => "Soma_handles.signal"
+  [ "(fun _ -> failwith ""a signal is made by new_signal"")" ] "(fun _ _ -> failwith ""a signal has no number"")".
 |soma}
 
 (* soma_handles.ml: a signal, which the program only passes to the
@@ -2367,7 +2369,7 @@ let extract ?(calls = []) ?(ocaml_modules = []) ~state dir =
        end.\n\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction word64_extraction sandbox_extraction
+     Extraction \"prog\" soma_main soma_wire_take_line soma_wire_take_frame.\n" (quote_soma_string dir) float_extraction nat_string_extraction word64_extraction (sandbox_extraction ^ (if SomaNative.loaded () then SomaNative.extraction else ""))
        (String.concat "" (SomaOcamlBindings.extraction_lines ocaml_modules @ List.map call_extraction calls)));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
@@ -2864,7 +2866,8 @@ let image_build_inputs ~switch ~dir sources =
           List.map (Filename.concat dir)
             ["duniverse"; "mirage"; "Makefile"; "dune"; "dune-project"; "config.ml";
              "prog.ml"; "prog.mli"; "soma_rt.ml"; "soma_store.ml"; "soma_disk.ml"; "soma_wasm.ml";
-             "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_handles.ml"; "gradual.ml"; "unikernel.ml"] @ sources in
+             "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_handles.ml"; "gradual.ml"; "unikernel.ml"] @
+          (if SomaNative.loaded () then [Filename.concat dir "soma_effect.ml"] else []) @ sources in
       SomaBuildInfo.prepare_inputs paths
     with Sys_error _ | Unix.Unix_error _ | Failure _ -> None
 
@@ -2932,6 +2935,13 @@ let build ~state ~source ~vo_file =
     let config_changed = file "config.ml" (image_config image (disks_config disks (config_ml ~c ~network ~wasm ~storage ~web ~libraries ()))) in
     let deps_changed = if native then file "soma-ocaml-deps.opam" dependencies else false in
     let native_files = write_ocaml_files dir ocaml_modules in
+    let native_files = if SomaNative.loaded () then begin
+      ignore (file "soma_effect.ml" SomaNative.ml);
+      "soma_effect.ml" :: native_files
+    end else begin
+      (try Sys.remove (Filename.concat dir "soma_effect.ml") with Sys_error _ -> ());
+      native_files
+    end in
     let modules = List.sort_uniq compare
         (List.map (fun (_, (c : SomaForeign.image_call)) -> module_name c.module_file, read_file c.module_file) calls) in
     List.iter (fun (name, contents) -> ignore (file name contents)) [

@@ -215,7 +215,8 @@ let extract ~state ~modules dir =
      Extraction Inline main.\n\
      Extraction \"prog\" soma_main.\n" (quote_soma_string dir) SomaMirage.float_extraction
        SomaMirage.nat_string_extraction SomaMirage.word64_extraction
-       SomaMirage.buffer_extraction (String.concat "" lines));
+       ((if SomaNative.loaded () then SomaMirage.handles_extraction ^ SomaNative.extraction
+         else SomaMirage.buffer_extraction)) (String.concat "" lines));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;
@@ -327,6 +328,10 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
         List.iter (fun f -> file f (read_file (Filename.concat staging f))) ["prog.ml"; "prog.mli"])
   end else extract ~state ~modules dir;
   file "soma_main.ml" (entry_ml ());
+  if SomaNative.loaded () then begin
+    file "soma_effect.ml" SomaNative.ml;
+    file "soma_handles.ml" (SomaMirage.handles_ml ~lwt:true)
+  end;
   file "float64.ml" SomaMirage.float64_ml;
   file "uint63.ml" SomaMirage.uint63_ml;
   file "soma_word64.ml" SomaMirage.word64_ml;
@@ -339,7 +344,8 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let made = List.sort_uniq String.compare
       (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; "soma_bindings.ml"]
-       @ (if host then ["soma_host.ml"; "soma_host_io.c"] else []) @ own) in
+       @ (if host then ["soma_host.ml"; "soma_host_io.c"] else [])
+       @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
   let c = SomaOcamlBindings.c_stub_names own in

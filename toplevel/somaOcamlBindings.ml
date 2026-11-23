@@ -121,10 +121,11 @@ let checked_modules ?(reserved = []) () =
       if List.exists (fun (m : SomaForeign.ocaml_module) -> m.ml_file = None && same_name n m.top) modules then
         CErrors.user_err Pp.(str "the OCaml module " ++ str n ++
           str " shadows a library module used by the program.");
-      if List.exists (same_name n) (["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Soma_host"; "Soma_word64"; "Soma_handles"; "Float64"; "Uint63"] @ reserved) then
+      if List.exists (same_name n) (["Prog"; "Soma_main"; "Soma_bindings"; "Soma_nat"; "Soma_host"; "Soma_word64"; "Soma_handles"; "Soma_effect"; "Float64"; "Uint63"] @ reserved) then
         CErrors.user_err Pp.(str "an OCaml module cannot be named " ++ str n ++ str ", the name of one Soma makes."))
     names;
-  modules, List.sort_uniq compare (List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
+  modules, List.sort_uniq compare ((if SomaNative.loaded () then ["lwt"] else []) @
+    List.concat_map (fun (m : SomaForeign.ocaml_module) -> m.libraries) modules)
 
 (* whether a module is FILE.c (vernac/somaC.ml), and its files: the
    OCaml module of externals, FILE.soma.h, the stubs, and FILE.c itself,
