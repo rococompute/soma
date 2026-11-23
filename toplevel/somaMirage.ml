@@ -663,6 +663,13 @@ let rec run : 'a. net -> 'a Prog.io -> 'a Lwt.t = fun net m ->
   | Prog.Iterate (step, start) ->
       let rec loop s = run net (step s) >>= loop in
       loop start
+  | Prog.Loop (step, start) ->
+      let rec advance state =
+        run net ((check step) state) >>= fun result ->
+        match (Obj.magic (check result) : (Obj.t, Obj.t) Prog.loop_step) with
+        | Prog.Continue state -> advance state
+        | Prog.Finish value -> Lwt.return value in
+      Obj.magic (advance start)
   | Prog.Now ->
       let _, ((h, m, s), _) = Ptime.to_date_time (Mirage_ptime.now ()) in
       Lwt.return (Obj.magic ((nat_of_int h, nat_of_int m), nat_of_int s))

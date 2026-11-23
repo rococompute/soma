@@ -63,7 +63,7 @@ else
 fi
 cp "$P"/{prog.ml,prog.mli,uint63.ml,soma_word64.ml,soma_handles.ml,float64.ml} .
 python3 - "$P/soma_rt.ml" > runtime.ml <<'PY'
-import sys
+import re, sys
 text = open(sys.argv[1]).read()
 print('open Lwt.Infix\nexception Exit_with of int\nlet check = Prog.Gradual_rt.check')
 print('let string_of_chars s = s\nlet chars_of_string s = s')
@@ -71,7 +71,7 @@ print("let rec run : 'a. unit -> 'a Prog.io -> 'a Lwt.t = fun net m -> match che
 for name in ('Ret', 'Bind', 'Call', 'Await_promise', 'Catch', 'Throw_exception',
              'New_failure', 'Exception_message', 'Same_exception', 'Finally'):
     start = text.index('  | Prog.' + name + ' ')
-    end = text.index('  | Prog.', start + 1)
+    end = start + 1 + re.search(r'^  \| Prog\.', text[start+1:], re.M).start()
     print(text[start:end])
 print('  | _ -> failwith "unexpected effect in exception runtime test"')
 PY

@@ -159,6 +159,14 @@ Inductive signal : Type := Signal (id : nat).
     its scope, including across waits. Each task's scope is independent. *)
 Inductive context_key (A : Type) : Type := ContextKey (id : nat).
 
+(** A state-machine step either requests another iteration or returns a value.
+    The state and result can have unrelated types. *)
+Inductive loop_step (S A : Type) : Type :=
+| Continue (state : S)
+| Finish (value : A).
+Arguments Continue {S A} state.
+Arguments Finish {S A} value.
+
 Inductive io : Type -> Type :=
 | ret {A : Type} (a : A) : io A
 (** [bind m k]: run [m], then [k] on its result *)
@@ -176,6 +184,9 @@ Inductive io : Type -> Type :=
 (** [step] from [start], then from what it returned, again and again: a
     loop that carries a state. It never ends, so its type is any [io A]. *)
 | iterate {S A : Type} (step : S -> io S) (start : S) : io A
+(** Like [iterate], but [Finish] returns a result. There is no implicit
+    iteration limit or yield; the step supplies its own cooperative waits. *)
+| loop {S A : Type} (step : S -> io (loop_step S A)) (start : S) : io A
 (** the time of day, UTC: [(hour, minute, second)] *)
 | now : io (nat * nat * nat)
 (** a random number below [bound] ([0] when [bound] is [0]) *)
@@ -461,6 +472,7 @@ Arguments ret {A} a.
 Arguments bind {A B} m k.
 Arguments forever {A} body.
 Arguments iterate {S A} step start.
+Arguments loop {S A} step start.
 Arguments exit {A} code.
 Arguments call {A} f.
 Arguments new_cell {A} a.

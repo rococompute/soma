@@ -1914,6 +1914,23 @@ that add to one cell and count themselves done in another, and one that
 fails; `dev/mirage-check.sh` boots it, and checks the total and that the
 failure was reported while the others went on.
 
+`loop step initial : io A` runs a returning state machine. Each step returns
+`Continue next_state` to run again or `Finish value` to return the result.
+State and result types can differ. Unlike the existing never-ending
+`iterate`, it can implement an interpreter that advances through work and
+then returns a command's result. There is no implicit iteration quota,
+termination assumption, yield or fork. The step's own effects provide any
+waits and cooperative cancellation. Failures stop the loop and keep their
+original identity; catch/finally scopes work around the whole loop.
+
+`examples/example_files/mirage_loop` checks a 100,000-step loop, context,
+failure and cancellation. `test-suite/misc/soma_loop.sh` executes the emitted
+runtime with real Lwt, checks a million immediate steps, early finish, native
+result identity, pending work, exception boundaries and state/closure
+collection; `SOMA_TEST_HVF=1` adds the Solo5 example. This is runtime support
+for unrestricted effectful iteration, not a proof that a user's step
+terminates or that the native loop implements a formally verified semantics.
+
 `examples/example_files/mirage_async_control` checks cooperative cancellation,
 cleanup on failure and cancellation, races, and task-local context across waits.
 `attempt body` recovers a failure in the same task as `TaskFailed`; an explicit

@@ -1,0 +1,40 @@
+(** Returning state-machine loops without a fuel bound or project executor. *)
+Require Import Sandbox.
+
+check (ok : bool) (why : string) : io unit :=
+  if ok then ret tt else print why ;; exit 1.
+
+countdown (left : nat) : io (loop_step nat string) :=
+  match left with
+  | 0 => ret (Finish "finished")
+  | S next => ret (Continue next)
+  end.
+
+main : io unit :=
+  result <- loop countdown (N.to_nat 100000%N) ;;
+  check (String.eqb result "finished") "loop lost result" ;;
+  key <- (new_context_key : io (context_key nat)) ;;
+  result <- with_context key (Some 7)
+    (loop (fun index =>
+      match index with
+      | 0 => value <- get_context key ;; ret (Finish value)
+      | S next => yield ;; ret (Continue next)
+      end) 3) ;;
+  check (match result with Some 7 => true | _ => false end) "loop lost task context" ;;
+  error <- new_failure "loop" ;;
+  calls <- new_reference 0 ;;
+  caught <- catch
+    ((loop (fun index => _ <- modify_reference calls S ;;
+      if Nat.eqb index 2 then throw_exception error else ret (Continue (S index))) 0 : io unit) ;;
+      new_failure "unreachable")
+    (fun value => ret value) ;;
+  equal <- same_exception error caught ;; n <- read_reference calls ;;
+  check (equal && Nat.eqb n 3) "loop retried after failure" ;;
+  cleaned <- new_reference false ;;
+  waiting <- fork (finally
+    (loop (fun state => sleep_ms 100000%N ;; ret (Continue state)) tt : io unit)
+    (write_reference cleaned true)) ;;
+  pending <- cancel waiting ;; _ <- await waiting ;;
+  value <- read_reference cleaned ;; check (pending && value) "loop ignored cancellation" ;;
+  forget waiting ;; free_context_key key ;;
+  print "returning loops, context, failure and cancellation verified".
