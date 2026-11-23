@@ -416,3 +416,104 @@ let ()=
   (fun()->assert(Lwt.get key=Some 17);Soma_effect.Finish borrowed)()
   (fun value->assert(Lwt.get key=Some 17);value)));
  print_endline "native tail-terminal loop: step/final order, borrowed result/promise identities, exact throws and Lwt context passed"
+
+let both_state show promise=match Lwt.state promise with
+ |Lwt.Sleep->`Pending|Lwt.Return value->`Return(show value)|Lwt.Fail error->`Fail(error==reason,error==Lwt.Canceled,Printexc.to_string error)
+let both_observe combine left_mode right_mode cancel resolve_right_first=
+ let left,left_wake=Lwt.task()and right,right_wake=Lwt.task()in
+ let events=ref[]in
+ Lwt.on_cancel left(fun()->events:="left-cancel"::!events);Lwt.on_cancel right(fun()->events:="right-cancel"::!events);
+ let prepare promise wake mode value=match mode with 0->Lwt.wakeup wake value|1->()|2->Lwt.wakeup_exn wake reason|_->Lwt.cancel promise in
+ prepare left left_wake left_mode"left";prepare right right_wake right_mode"right";
+ let combined=combine left right in
+ let snapshot()=both_state Fun.id left,both_state Fun.id right,both_state Fun.id combined,List.rev !events in
+ let before=snapshot()in if cancel then Lwt.cancel combined;
+ let settle promise wake value=match Lwt.state promise with Lwt.Sleep->Lwt.wakeup wake value|_->()in
+ if resolve_right_first then settle right right_wake"right"else settle left left_wake"left";
+ let middle=snapshot()in
+ if resolve_right_first then settle left left_wake"left"else settle right right_wake"right";
+ before,middle,snapshot()
+let ()=
+ for left=0 to 3 do for right=0 to 3 do List.iter(fun cancel->List.iter(fun reverse->
+  let expected=both_observe Lwt.both left right cancel reverse and actual=both_observe Prog.paired_promises left right cancel reverse in
+  assert(expected=actual)
+ )[false;true])[false;true]done done;
+ let borrowed_left=ref"left"and borrowed_right=Bytes.make 4096 'r'in
+ let combined=Prog.paired_promises(Lwt.return borrowed_left)(Lwt.return borrowed_right)in
+ (match Lwt.state combined with Lwt.Return(a,b)->assert(a==borrowed_left&&b==borrowed_right)|_->assert false);
+ let same=ref"same"in
+ (match Lwt.state(Prog.paired_promises(Lwt.return same)(Lwt.return same))with Lwt.Return(a,b)->assert(a==same&&b==same)|_->assert false);
+ let key=Lwt.new_key()and seen=ref[]in
+ let a,wa=Lwt.task()and b,wb=Lwt.task()in
+ let mapped=Lwt.with_value key(Some 17)(fun()->Lwt.map(fun pair->seen:=Lwt.get key::!seen;pair)(Prog.paired_promises a b))in
+ Lwt.with_value key(Some 21)(fun()->Lwt.wakeup wa 1);Lwt.with_value key(Some 29)(fun()->Lwt.wakeup wb 2);
+ assert(!seen=[Some 17]);(match Lwt.state mapped with Lwt.Return(1,2)->()|_->assert false);
+ print_endline"native both: 64 raw comparisons preserve ready/pending/rejected/cancelled states, cancellation order, borrowed results and Lwt context"
+
+let started_both_observe invoke fault=
+ let events=ref[]in
+ let start label value()=events:=label::!events;if Some label=fault then raise reason else Lwt.return value in
+ let result=try let promise=invoke(start"left""L")(start"middle""M")(start"right""R")in
+  match Lwt.state promise with Lwt.Return pair->`Return pair|_->assert false
+ with error->assert(error==reason);`Thrown in
+ result,List.rev !events
+let ()=
+ List.iter(fun fault->
+  let expected=started_both_observe(fun left middle right->Lwt.both(Lwt.both(left())(middle()))(right()))fault
+  and actual=started_both_observe Prog.started_nested_pair fault in assert(expected=actual)
+ )[None;Some"left";Some"middle";Some"right"];
+ let pair_order invoke=let events=ref[]in
+  let left()=events:="left"::!events;Lwt.return 1 and right()=events:="right"::!events;Lwt.return 2 in
+  let promise=invoke left right in ignore(Sys.opaque_identity promise);List.rev !events in
+ assert(pair_order(fun left right->Lwt.both(left())(right()))=pair_order Prog.started_pair);
+ assert(pair_order Prog.started_pair=["right";"left"]);
+ print_endline"native both: Source consumers retain right-to-left pair/nested initialization and exact synchronous provider throws"
+
+let failure_capture invoke message=try ignore(invoke message);assert false with Failure actual as error->error,actual
+let ()=
+ let mutable_facts invoke=
+  let bytes=Bytes.of_string"borrowed failure payload"in let message=Bytes.unsafe_to_string bytes in
+  let first,payload=failure_capture invoke message in
+  Bytes.set bytes 0 'B';let second,again=failure_capture invoke message in
+  first==second,payload==message,again==message,payload==again,payload.[0] in
+ let raw=mutable_facts(fun message->failwith message)and actual=mutable_facts Prog.failure_value in
+ assert(raw=actual);let _,a,b,c,byte=actual in assert(a&&b&&c&&byte='B');
+ let literal_facts invoke=let first,a=failure_capture invoke()and second,b=failure_capture invoke()in
+  first==second,a==b,a,b in
+ assert(literal_facts(fun()->failwith"tl")=literal_facts Prog.literal_failure_value);
+ let message=Bytes.to_string(Bytes.make 4096 'f')in
+ let immediate=Prog.mapped(fun()->Lwt.return "source")(fun _->Prog.failure_value message)in
+ (match Lwt.state immediate with Lwt.Fail(Failure actual)->assert(actual==message)|_->assert false);
+ let pending,wake=Lwt.task()in let mapped=Prog.mapped(fun()->pending)(fun _->Prog.failure_value message)in
+ Lwt.wakeup wake "source";(match Lwt.state mapped with Lwt.Fail(Failure actual)->assert(actual==message)|_->assert false);
+ print_endline"native failure: raw-matched mutable/literal message and exception allocation, plus mapped immediate/deferred failure phases passed"
+
+let ()=
+ let borrowed=Bytes.to_string(Bytes.make 4096 'x')in
+ let action=Prog.Family_text(Prog.Family_count(Prog.Family_unit(Prog.Family_value(),fun()->7),string_of_int),fun value->value,borrowed)in
+ (match Lwt.state(Prog.family_run action)with Lwt.Return("7",same)->assert(same==borrowed)|_->assert false);
+ let pending,wake=Lwt.task()in
+ let action=Prog.Family_unit(Prog.Family_text(Prog.Family_source(fun()->pending),fun value->assert(value==borrowed)),fun()->29)in
+ let result=Prog.family_run action in assert(Lwt.state result=Lwt.Sleep);Lwt.wakeup wake borrowed;
+ (match Lwt.state result with Lwt.Return 29->()|_->assert false);
+ let action=Prog.Family_text(Prog.Family_source(fun()->raise reason),fun _->0)in
+ let same=try ignore(Prog.family_run action);false with error->error==reason in assert same;
+ print_endline"native indexed structural compiler: heterogeneous text/unit/count bodies preserve typed results, pending phases and provider throw identity"
+
+let both_roots=ref(fun()->[||])
+let[@inline never] both_owner combine=
+ let value=ref"borrowed-left"in let left=Lwt.return value and right,wake=Lwt.task()in
+ let a=weak value and b=weak left and c=weak right in
+ both_roots:=(fun()->[|Weak.check a 0;Weak.check b 0;Weak.check c 0|]);
+ combine left right,wake
+let both_weak_observe combine finish=
+ let combined,wake=both_owner combine in collect();let pending=(!both_roots)()in
+ if finish then Lwt.wakeup wake(ref"borrowed-right")else Lwt.cancel combined;
+ collect();let terminal=(!both_roots)()in
+ ignore(Sys.opaque_identity(combined,wake));pending,terminal
+let ()=
+ List.iter(fun finish->
+  let expected=both_weak_observe Lwt.both finish and actual=both_weak_observe Prog.paired_promises finish in
+  assert(expected=actual);let pending,terminal=actual in assert(pending.(0)&&terminal.(0)=finish)
+ )[false;true];
+ print_endline"native both: raw-matched promise/input Weak lifetimes through pending, completion and cancellation"

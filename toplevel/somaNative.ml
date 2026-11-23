@@ -47,7 +47,8 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.promise_map" "Soma_effect.promise_bind"
    "Soma_effect.new_deferred" "Soma_effect.force_deferred"
    "Soma_effect.string_substring" "Soma_effect.raise_not_found"
-   "Soma_effect.string_length" "Soma_effect.vector_map" ]
+   "Soma_effect.string_length" "Soma_effect.vector_map"
+   "Soma_effect.promise_both" "Soma_effect.raise_failure" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -99,6 +100,8 @@ let promise_finally (body, cleanup) () = Lwt.finalize body cleanup
 let promise_fold (step, initial, items) () = Lwt_list.fold_left_s step initial items
 let promise_map_s (step, items) () = Lwt_list.map_s step items
 let promise_fail error () = Lwt.fail error
+let promise_both (left, right) () = Lwt.both left right
+let raise_failure message () = failwith message
 let new_reference value () = ref value
 let read_reference location () = !location
 let write_reference (location, value) () = location := value

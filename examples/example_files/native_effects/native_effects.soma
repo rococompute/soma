@@ -113,5 +113,36 @@ Definition finished_loop {S A B : Type} (step : S -> progress S A) (initial : S)
  (loop_then (fun state => Invoke (fun _ => step state) Return) initial
    (fun value => Invoke (fun _ => next value) Return)).
 
+(** The primitive combines already-started promises. Source controls any
+    initializer evaluation order before reaching the actual Lwt.both call. *)
+Definition paired_promises {A B : Type} (left : promise A) (right : promise B) :=
+ Export (Promise_both left right).
+Definition started_pair {A B : Type} (left : unit -> promise A) (right : unit -> promise B) := Export
+ (Invoke right (fun right_pending => Invoke left (fun left_pending => Promise_both left_pending right_pending))).
+Definition started_nested_pair {A B C : Type} (left : unit -> promise A) (middle : unit -> promise B) (right : unit -> promise C) := Export
+ (Invoke right (fun right_pending => Invoke middle (fun middle_pending => Invoke left (fun left_pending =>
+ Bind (Promise_both left_pending middle_pending) (fun pair_pending => Promise_both pair_pending right_pending))))).
+Definition failure_value {A : Type} (message : string) : entry A := Export (Raise_failure message).
+Definition literal_failure_value (_ : unit) : entry unit := Export (Raise_failure "tl").
+
+(** Structural recursion over differently typed promise bodies stays typed;
+    no recursive native evaluator or result cast is part of the Source API. *)
+Inductive family_action (A : Type) :=
+ | Family_value (value : A)
+ | Family_text (body : family_action string) (next : string -> A)
+ | Family_unit (body : family_action unit) (next : unit -> A)
+ | Family_count (body : family_action nat) (next : nat -> A)
+ | Family_source (source : unit -> promise A).
+Arguments Family_value {A} value. Arguments Family_text {A} body next.
+Arguments Family_unit {A} body next. Arguments Family_count {A} body next.
+Arguments Family_source {A} source.
+Fixpoint family_program {A : Type} (action : family_action A) : program (promise A) := match action with
+ | Family_value value => Promise_return value
+ | Family_text body next => Promise_map_entry (fun _ => Export (family_program body)) (fun value => Export (Return (next value)))
+ | Family_unit body next => Promise_map_entry (fun _ => Export (family_program body)) (fun value => Export (Return (next value)))
+ | Family_count body next => Promise_map_entry (fun _ => Export (family_program body)) (fun value => Export (Return (next value)))
+ | Family_source source => Invoke source Return end.
+Definition family_run {A : Type} (action : family_action A) := Export (family_program action).
+
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,@family_run).

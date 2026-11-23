@@ -108,6 +108,8 @@ Inductive program : Type -> Type :=
 | Raise_not_found {A} : program A
 | String_length (text : string) : program PrimInt63.int
 | Vector_map {A B} (mapper : callback A B) (items : vector A) : program (vector B)
+| Promise_both {A B} (left : promise A) (right : promise B) : program (promise (A * B))
+| Raise_failure {A} (message : string) : program A
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -150,6 +152,8 @@ Arguments New_deferred {A} body.
 Arguments Force_deferred {A} body.
 Arguments Raise_not_found {A}.
 Arguments Vector_map {A B} mapper items.
+Arguments Promise_both {A B} left right.
+Arguments Raise_failure {A} message.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
