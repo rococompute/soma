@@ -294,3 +294,68 @@ let ()=
  let result=Prog.deferred_force body in collect();assert(not(Weak.check !deferred_payload 0));
  ignore(Sys.opaque_identity body);ignore(Sys.opaque_identity result);
  print_endline "native deferred: force releases provider closure while cached promise remains pending"
+
+(* Compare actual extracted entry points with Array.map, including the points
+   at which callbacks can observe mutation, exception identity and live roots. *)
+let ()=
+ let pool=Array.init 8(fun n->Bytes.to_string(Bytes.of_string(string_of_int n)))in
+ let probe invoke size fault=
+  let input=Array.init size(fun n->pool.(n mod Array.length pool))in
+  let seen=ref[]and step=ref 0 in
+  let mapper value=
+   let i= !step in incr step;seen:=(i,value)::!seen;
+   if i+1<size then input.(i+1)<-pool.((i+3)mod Array.length pool);
+   if i=fault then raise reason;
+   value in
+  let outcome=try let output=invoke mapper input in
+    assert(Array.length output=size);
+    Array.iteri(fun i value->assert(value==snd(List.nth(List.rev !seen)i)))output;
+    `Done(Array.to_list output,output==input)
+   with error->assert(error==reason);`Error in
+  outcome,List.rev !seen,Array.to_list input in
+ List.iter(fun size->List.iter(fun fault->
+  assert(probe Array.map size fault=probe Prog.mapped_vector size fault)
+ )[-1;0;1;7;31])[0;1;2;8;32];
+ let source=[|pool.(1);pool.(2)|]in
+ let output=Prog.owned_mapped_vector Fun.id source in
+ assert(output!=source&&output.(0)==source.(0)&&output.(1)==source.(1));
+ let caught=try ignore(Prog.owned_mapped_vector(fun _->raise reason)source);false with error->error==reason in
+ assert caught;
+ let key=Lwt.new_key()in
+ Lwt.with_value key(Some 73)(fun()->
+  ignore(Prog.mapped_vector(fun value->assert(Lwt.get key=Some 73);value)source));
+ let floating=[|0.;Float.nan;Float.infinity;(-0.);(-1.25)|]in
+ let old=Array.map Fun.id floating and fresh=Prog.mapped_vector Fun.id floating in
+ assert(Obj.tag(Obj.repr old)=Obj.tag(Obj.repr fresh));
+ Array.iteri(fun i value->assert(Int64.bits_of_float value=Int64.bits_of_float fresh.(i)))old;
+ let old=Array.map String.length source and fresh=Prog.mapped_vector String.length source in assert(old=fresh);
+ let old=Array.map float_of_string source and fresh=Prog.mapped_vector float_of_string source in
+ assert(old=fresh&&Obj.tag(Obj.repr old)=Obj.tag(Obj.repr fresh));
+ let old=Array.map string_of_float floating and fresh=Prog.mapped_vector string_of_float floating in assert(old=fresh);
+ print_endline "native vector map: mutation order, borrowed aliases, exact exceptions, owned callbacks, Lwt context and polymorphic float-array layouts match Array.map"
+
+let vector_map_roots=ref(fun()->[||])
+let vector_map_seen=ref[]
+let vector_map_sample()=collect();(!vector_map_roots)()
+let[@inline never] vector_map_owner invoke=
+ let marker=Bytes.create 4096 in
+ let payload=Bytes.to_string(Bytes.make 1024 'p')in
+ let input=[|payload;payload;payload|]in
+ let mapper text=
+  vector_map_seen:=vector_map_sample()::!vector_map_seen;
+  ignore(Sys.opaque_identity marker);String.length text in
+ let a=weak input and b=weak mapper and c=weak marker and d=weak payload in
+ vector_map_roots:=(fun()->[|Weak.check a 0;Weak.check b 0;Weak.check c 0;Weak.check d 0|]);
+ invoke mapper input
+let vector_map_observe invoke=
+ vector_map_seen:=[];
+ let output=vector_map_owner invoke in
+ let after=vector_map_sample()in
+ ignore(Sys.opaque_identity output);List.rev !vector_map_seen,after
+let ()=
+ let expected=vector_map_observe Array.map and actual=vector_map_observe Prog.mapped_vector in
+ assert(expected=actual);
+ let during,after=actual in
+ assert(List.length during=3&&List.for_all(fun roots->roots.(2))during);
+ assert(Array.for_all not after);
+ print_endline "native vector map: input/mapper/payload Weak roots match raw Array.map during callbacks and release after return"

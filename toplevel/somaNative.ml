@@ -47,7 +47,7 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.promise_map" "Soma_effect.promise_bind"
    "Soma_effect.new_deferred" "Soma_effect.force_deferred"
    "Soma_effect.string_substring" "Soma_effect.raise_not_found"
-   "Soma_effect.string_length" ]
+   "Soma_effect.string_length" "Soma_effect.vector_map" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -132,4 +132,8 @@ let force_deferred body () = Lazy.force body
 let string_substring (text, offset, count) () = String.sub text offset count
 let raise_not_found () = raise Not_found
 let string_length text () = String.length text
+(* Enter a fully applied worker before Array.map. The effect's unpacked
+   argument tuple must not pin an extra input/mapper root through callbacks. *)
+let[@inline never] run_vector_map mapper items = Array.map mapper items
+let vector_map (mapper, items) () = run_vector_map mapper items
 |soma}

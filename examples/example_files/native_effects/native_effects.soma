@@ -98,6 +98,10 @@ Definition deferred_force (body : deferred string) := Export (Force_deferred bod
 Definition substring (text : string) (offset count : PrimInt63.int) := Export (String_substring text offset count).
 Definition missing_value (_ : unit) : entry nat := Export Raise_not_found.
 Definition text_size (text : string) := Export (String_length text).
+Definition mapped_vector {A B : Type} (mapper : callback A B) (items : vector A) := Export (Vector_map mapper items).
+Definition owned_mapped_vector (mapper : string -> string) (items : vector string) := Export
+ (Bind (New_callback (fun _ value => Invoke (fun _ => mapper value) Return))
+  (fun owned => Vector_map owned items)).
 
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector).
