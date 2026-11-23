@@ -82,6 +82,25 @@ if soma extract inspect_callback.soma -o inspected-callback > inspect-callback.l
  echo 'accepted inspection of a native callback handle' >&2; exit 1
 fi
 grep -q 'Native programs and entry points cannot be inspected' inspect-callback.log
+# A flat native triple is distinct from nested binary products at the ABI.
+mkdir triple
+cat > triple/caller.definition <<'SOMA'
+Require Import Soma.Native.
+OCaml Native Callback check : triple nat string bool -> nat := "check".
+SOMA
+printf 'let check (value, text, flag) = if text = "payload" && flag then value else 0\n' > triple/caller.ml
+cat > triple/main.soma <<'SOMA'
+Require Import Soma.Native.
+Import caller.
+Definition main := Export (Call_callback check (Triple 42 "payload" true)).
+SOMA
+(cd triple && soma extract main.soma -o native && cd native && dune build --profile release) > triple-signature.log 2>&1
+printf 'let check (value, (text, flag)) = if text = "payload" && flag then value else 0\n' > triple/caller.ml
+(cd triple && soma extract main.soma -o native) > bad-triple-signature.log 2>&1
+if (cd triple/native && dune build --profile release) >> bad-triple-signature.log 2>&1; then
+ echo 'accepted a nested pair at the flat native triple boundary' >&2; exit 1
+fi
+grep -q 'expected of type\|but an expression was expected' bad-triple-signature.log
 # Native storage handles carry their actual Stdlib types across definitions.
 mkdir storage
 printf '[project]\nname = "native_storage_signature"\nversion = "0.1.0"\n' > storage/soma.toml
@@ -131,8 +150,9 @@ printf '[project]\nname = "native_entry_image"\nversion = "0.1.0"\n' > image/som
 cat > image/caller.definition <<'SOMA'
 Require Import Soma.Native.
 invoke : (unit -> entry (promise nat)) -> promise nat.
+OCaml Native Callback check_triple : triple nat unit bool -> nat := "check_triple".
 SOMA
-printf 'let invoke f = f ()\n' > image/caller.ml
+printf 'let invoke f = f ()\nlet check_triple (value, (), flag) = if flag then value else 0\n' > image/caller.ml
 cat > image/main.soma <<'SOMA'
 Require Import Sandbox.
 Require Import Soma.Native.
@@ -143,7 +163,8 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Bind (Native.Promise_both left right) (fun combined =>
  Native.Promise_map (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
- Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ => Native.Return (fst result)))))))).
+ Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>
+ Native.Call_callback check_triple (Native.Triple (fst result) tt true)))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>

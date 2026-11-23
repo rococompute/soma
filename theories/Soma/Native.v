@@ -48,6 +48,12 @@ Arguments Ok {A E} value.
 Arguments Error {A E} error.
 Register result as soma.native.result.
 
+(** A native flat triple. Coq's chained binary products have a different
+    runtime layout, so native three-component APIs use this explicit shape. *)
+Inductive triple (A B C : Type) := Triple (first : A) (second : B) (third : C).
+Arguments Triple {A B C} first second third.
+Register triple as soma.native.triple.
+
 Inductive progress (S A : Type) := Continue (state : S) | Finish (value : A).
 Arguments Continue {S A} state.
 Arguments Finish {S A} value.

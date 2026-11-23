@@ -541,3 +541,12 @@ let ()=
  let _,(raw_file,_,_)=assertion_capture raw and _,(actual_file,_,_)=assertion_capture actual in
  assert(raw_file==file&&actual_file==file);Bytes.set bytes 0 'B';assert(raw_file.[0]='B'&&actual_file.[0]='B');
  print_endline"native assertions: raw-matched literal/dynamic exception allocation and borrowed shared diagnostic tuples preserve unsafe filename mutation visibility"
+
+let ()=
+ let a=ref 1 and b=Bytes.make 4096 'b' and c=ref "last"in
+ let value=Prog.triple_value a b c in
+ let x,y,z=value in assert(x==a&&y==b&&z==c);
+ let x,(y,z)=Prog.triple_parts value in assert(x==a&&y==b&&z==c);
+ let replacement=ref 99 in Obj.set_field(Obj.repr value)0(Obj.repr replacement);
+ let x,(y,z)=Prog.triple_parts value in assert(x==replacement&&y==b&&z==c);
+ print_endline"native triples: flat tuple ABI, borrowed fields, pattern matching and mutation aliases passed"
