@@ -159,3 +159,42 @@ let ()=
  assert(Prog.ordinary_entry(fun()->73)=73);
  let escaped=try ignore(Prog.ordinary_entry(fun()->raise reason));false with e->e==reason in assert escaped;
  print_endline "native library effects: sequential map order, cancellation, failed promise identity, native reference aliases and assertion provenance passed"
+
+let filter_handle=ref(Weak.create 0)
+let[@inline never] filter_lifetime original=
+ let marker=Bytes.to_string(Bytes.make(1024*1024)'d')in filter_handle:=weak marker;
+ let calls=ref 0 in
+ let predicate text=incr calls;
+  if !calls=16 then begin collect();lifetime_seen:=Weak.check !filter_handle 0::!lifetime_seen end;
+  text="keep"in
+ let items=marker::List.init 100000(fun _->"keep")in
+ if original then List.filter predicate items else Prog.filtered predicate items
+let ()=
+ lifetime_seen:=[];assert(List.length(filter_lifetime true)=100000);let before= !lifetime_seen in
+ lifetime_seen:=[];assert(List.length(filter_lifetime false)=100000);
+ assert(before=[false]&&before= !lifetime_seen);
+ let raised=try ignore(Prog.filtered(fun _->raise reason)["value"]);false with e->e==reason in assert raised;
+ print_endline "native library effects: native filter releases discarded input spine and preserves predicate exception identity"
+
+let callback_handle=ref(Weak.create 0)
+let callback_payload=ref(Weak.create 0)
+let[@inline never] construct_owned_callback ()=
+ let marker=Bytes.create 2048 in callback_payload:=weak marker;
+ let pending,wake=Lwt.task()in
+ let source=Prog.owned_callback(fun()->ignore(Sys.opaque_identity marker);pending)in
+ callback_handle:=weak source;
+ source(),wake
+let ()=
+ List.iter(fun finish->
+  let result,wake=construct_owned_callback()in collect();
+  assert(Weak.check !callback_handle 0&&Weak.check !callback_payload 0);
+  if finish then begin Lwt.wakeup wake 9;assert(returned result=9)end else Lwt.cancel result;
+  collect();assert(not(Weak.check !callback_handle 0)&&not(Weak.check !callback_payload 0));
+  ignore(Sys.opaque_identity result);ignore(Sys.opaque_identity wake)
+ )[false;true];
+ print_endline "native library effects: returned entry callbacks retain self while pending and collect cyclic ownership after completion/cancel"
+
+let ()=
+ assert(Prog.called_callback(fun value->value+1)41=42);
+ let raised=try ignore(Prog.called_callback(fun _->raise reason)0);false with e->e==reason in assert raised;
+ print_endline "native library effects: typed callback invocation preserves native arguments and exception identity"

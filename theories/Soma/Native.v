@@ -11,6 +11,14 @@
 Require Export Soma.Handles.
 From Stdlib Require Import Strings.String.
 
+(** An owned native function, callable only through an effect. Its logical
+    handle contains no evaluator and is independent of the program syntax's
+    universe. The runtime creates it with [New_callback], preserving physical
+    identity even when its body refers to itself. *)
+Inductive callback (A B : Type) : Type := Callback (id : nat).
+Arguments Callback {A B} id.
+Register callback as soma.native.callback.
+
 (** The native result representation, for callbacks supplied by existing
     libraries. Constructors and payloads retain their native identities. *)
 Inductive result (A E : Type) := Ok (value : A) | Error (error : E).
@@ -43,6 +51,9 @@ Inductive program : Type -> Type :=
 | Read_reference {A} (location : reference A) : program A
 | Write_reference {A} (location : reference A) (value : A) : program unit
 | Assert_failure {A} (file : string) (line column : nat) : program A
+| Filter {A} (predicate : A -> bool) (items : list A) : program (list A)
+| New_callback {A B} (body : callback A B -> A -> program B) : program (callback A B)
+| Call_callback {A B} (body : callback A B) (argument : A) : program B
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -64,6 +75,9 @@ Arguments New_reference {A} value.
 Arguments Read_reference {A} location.
 Arguments Write_reference {A} location value.
 Arguments Assert_failure {A} file line column.
+Arguments Filter {A} predicate items.
+Arguments New_callback {A B} body.
+Arguments Call_callback {A B} body argument.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

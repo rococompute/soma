@@ -31,21 +31,29 @@ printf '[project]\nname = "native_entry_signature"\nversion = "0.1.0"\n' > forei
 cat > foreign/caller.definition <<'SOMA'
 Require Import Soma.Native.
 check : (unit -> entry nat) -> nat.
+check_callback : callback unit nat -> nat.
 SOMA
-printf 'let check f = f ()\n' > foreign/caller.ml
+printf 'let check f = f ()\nlet check_callback f = f ()\n' > foreign/caller.ml
 cat > foreign/main.soma <<'SOMA'
 Require Import Soma.Native.
 Import caller.
 Definition main : entry nat := Export (Invoke
- (fun _ => check (fun _ => Export (Return 42))) Return).
+ (fun _ => check (fun _ => Export (Return 42))) (fun value =>
+ Bind (New_callback (fun _ _ => Return value)) (fun body => Invoke (fun _ => check_callback body) Return))).
 SOMA
 (cd foreign && soma extract main.soma -o native && cd native && dune build --profile release) > signature.log 2>&1
-printf 'let check (_ : unit -> string) = 0\n' > foreign/caller.ml
+printf 'let check (_ : unit -> string) = 0\nlet check_callback f = f ()\n' > foreign/caller.ml
 (cd foreign && soma extract main.soma -o native) > bad-signature.log 2>&1
 if (cd foreign/native && dune build --profile release) >> bad-signature.log 2>&1; then
  echo 'accepted a foreign callback with the wrong native entry type' >&2; exit 1
 fi
 grep -q 'Soma_effect.entry\|int\|Soma_nat.nat' bad-signature.log
+printf 'let check f = f ()\nlet check_callback (_ : string -> int) = 0\n' > foreign/caller.ml
+(cd foreign && soma extract main.soma -o native) > bad-callback-signature.log 2>&1
+if (cd foreign/native && dune build --profile release) >> bad-callback-signature.log 2>&1; then
+ echo 'accepted a foreign callback with the wrong native callback type' >&2; exit 1
+fi
+grep -q 'Soma_effect.callback\|string\|unit' bad-callback-signature.log
 # A native result cannot be converted back into its original effect program.
 cat > inspect.soma <<'SOMA'
 Require Import Soma.Native.
@@ -57,6 +65,16 @@ if soma extract inspect.soma -o inspected > inspect-extract.log 2>&1; then
   echo 'accepted inspection of a native entry' >&2; exit 1
 fi
 grep -q 'Native programs and entry points cannot be inspected' inspect-extract.log
+cat > inspect_callback.soma <<'SOMA'
+Require Import Soma.Native.
+Definition inspect (value : callback nat nat) : nat :=
+ match value with Callback id => id end.
+Definition main := inspect.
+SOMA
+if soma extract inspect_callback.soma -o inspected-callback > inspect-callback.log 2>&1; then
+ echo 'accepted inspection of a native callback handle' >&2; exit 1
+fi
+grep -q 'Native programs and entry points cannot be inspected' inspect-callback.log
 # The same generated library boundaries work inside an image, with a native
 # caller standing in for Kykeon's current entry-point consumers.
 mkdir image

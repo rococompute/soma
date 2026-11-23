@@ -47,5 +47,14 @@ Definition change_reference (location : reference nat) (change : nat -> nat) : e
 Definition asserted (file : string) (line column : nat) : entry nat := Export (Assert_failure file line column).
 Definition ordinary_entry (body : unit -> nat) : entry nat := ordinary (Export (Invoke body Return)).
 
+Definition filtered (predicate : string -> bool) (items : list string) : entry (list string) := Export (Filter predicate items).
+
+(** Returned callbacks remain opaque handles in the logic. Native callers
+    see ordinary functions whose physical identity also names their self. *)
+Definition owned_callback (read : unit -> promise nat) : entry (callback unit (promise nat)) := Export
+ (New_callback (fun self _ => Promise_map read (fun value => Export
+  (Invoke (fun _ => opaque self) (fun _ => Return value))))).
+Definition called_callback (body : callback nat nat) (value : nat) : entry nat := Export (Call_callback body value).
+
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback).

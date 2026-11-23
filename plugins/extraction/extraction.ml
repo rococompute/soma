@@ -1167,7 +1167,7 @@ and extract_case ?rty table env sg mle ((kn,i) as ip, u, c, br) mlt =
   if lang () == Ocaml && is_custom gind && List.exists (fun name ->
       Rocqlib.has_ref name &&
       GlobRef.CanOrd.equal (Rocqlib.lib_ref name) gind.glob)
-      ["soma.native.program"; "soma.native.entry"] then
+      ["soma.native.program"; "soma.native.entry"; "soma.native.callback"] then
     CErrors.user_err Pp.(str "Native programs and entry points cannot be inspected by extracted code.");
   assert (Int.equal (Array.length ni) br_size);
   if Int.equal br_size 0 then begin
