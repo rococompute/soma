@@ -262,3 +262,35 @@ let ()=
  let pending,_=Lwt.task()in let result=Prog.bound_callback(fun()->pending)(fun _->Lwt.return 7)in
  Lwt.cancel result;assert(failed result=Lwt.Canceled&&failed pending=Lwt.Canceled);
  print_endline "native library effects: entry map/bind preserve sync provider throws, callback rejections, delayed results and cancellation"
+
+let ()=
+ let calls=ref 0 in let pending,wake=Lwt.task()in
+ let deferred=Prog.deferred_read(fun()->incr calls;pending)in
+ assert(!calls=0);
+ let first=Prog.deferred_force deferred in
+ assert(!calls=1&&first==pending&&Prog.deferred_force deferred==first);
+ Lwt.wakeup wake "done";assert(returned(Prog.deferred_force deferred)="done"&& !calls=1);
+ let calls=ref 0 in let deferred=Prog.deferred_read(fun()->incr calls;raise reason)in
+ List.iter(fun()->let caught=try ignore(Prog.deferred_force deferred);false with e->e==reason in assert caught)[();()];
+ assert(!calls=1);
+ let calls=ref 0 in let deferred=Prog.deferred_read(fun()->incr calls;Lwt.fail reason)in
+ let first=Prog.deferred_force deferred in
+ assert(failed first==reason&&Prog.deferred_force deferred==first&& !calls=1);
+ let pending,_=Lwt.task()in let deferred=Prog.deferred_read(fun()->pending)in
+ let first=Prog.deferred_force deferred in Lwt.cancel first;
+ assert(Prog.deferred_force deferred==first&&failed first=Lwt.Canceled);
+ let text="a\000bc"in
+ assert(Prog.text_size text=String.length text);
+ List.iter(fun(offset,count)->assert(sync_outcome(fun()->String.sub text offset count)=sync_outcome(fun()->Prog.substring text offset count)))
+ [0,0;0,4;1,2;4,0;(-1),1;0,(-1);max_int,1;min_int,0;3,max_int];
+ let caught=try ignore(Prog.missing_value());false with Not_found->true in assert caught;
+ print_endline "native deferred: lazy/delayed invocation, cached pending/failure/cancel/exn identity and signed substring ABI passed"
+let deferred_payload=ref(Weak.create 0)
+let[@inline never] deferred_owner ()=
+ let marker=Bytes.create 2048 in deferred_payload:=weak marker;
+ let promise,_=Lwt.task()in Prog.deferred_read(fun()->ignore(Sys.opaque_identity marker);promise)
+let ()=
+ let body=deferred_owner()in collect();assert(Weak.check !deferred_payload 0);
+ let result=Prog.deferred_force body in collect();assert(not(Weak.check !deferred_payload 0));
+ ignore(Sys.opaque_identity body);ignore(Sys.opaque_identity result);
+ print_endline "native deferred: force releases provider closure while cached promise remains pending"

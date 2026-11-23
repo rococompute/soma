@@ -93,6 +93,11 @@ Inductive program : Type -> Type :=
 | Promise_apply {A} (body : unit -> entry (promise A)) : program (promise A)
 | Promise_map_entry {A B} (body : unit -> entry (promise A)) (next : A -> entry B) : program (promise B)
 | Promise_bind_entry {A B} (body : unit -> entry (promise A)) (next : A -> entry (promise B)) : program (promise B)
+| New_deferred {A} (body : unit -> entry (promise A)) : program (deferred A)
+| Force_deferred {A} (body : deferred A) : program (promise A)
+| String_substring (text : string) (offset count : PrimInt63.int) : program string
+| Raise_not_found {A} : program A
+| String_length (text : string) : program PrimInt63.int
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -131,6 +136,9 @@ Arguments Table_remove {K V} entries key.
 Arguments Promise_apply {A} body.
 Arguments Promise_map_entry {A B} body next.
 Arguments Promise_bind_entry {A B} body next.
+Arguments New_deferred {A} body.
+Arguments Force_deferred {A} body.
+Arguments Raise_not_found {A}.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

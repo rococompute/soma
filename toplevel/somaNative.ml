@@ -40,7 +40,10 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.string_map" "Soma_effect.string_get" "Soma_effect.string_get_nat"
    "Soma_effect.word_decimal" "Soma_effect.nat_decimal" "Soma_effect.path_basename"
    "Soma_effect.path_dirname" "Soma_effect.path_concat" "Soma_effect.promise_apply"
-   "Soma_effect.promise_map" "Soma_effect.promise_bind" ]
+   "Soma_effect.promise_map" "Soma_effect.promise_bind"
+   "Soma_effect.new_deferred" "Soma_effect.force_deferred"
+   "Soma_effect.string_substring" "Soma_effect.raise_not_found"
+   "Soma_effect.string_length" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -119,4 +122,9 @@ let path_basename path () = Filename.basename path
 let path_dirname path () = Filename.dirname path
 let path_concat (directory, file) () = Filename.concat directory file
 let promise_apply body () = Lwt.apply body ()
+let new_deferred body () = lazy (body ())
+let force_deferred body () = Lazy.force body
+let string_substring (text, offset, count) () = String.sub text offset count
+let raise_not_found () = raise Not_found
+let string_length text () = String.length text
 |soma}
