@@ -89,3 +89,47 @@ let ()=
  assert(not(Weak.check data 0));
  Lwt.wakeup wake "finished";assert(returned result=8);
  print_endline "native library effects: consumed provider payload released while promise is pending"
+
+(* An executing provider must be released before it tailcalls another native
+   callback. Keeping the thunk's environment for the later continuation would
+   pin the consumed provider even though its own frame has gone away. *)
+let lifetime_handle=ref(Weak.create 0)
+let lifetime_seen=ref []
+let[@inline never] observe_provider ()=
+ collect();lifetime_seen:=Weak.check !lifetime_handle 0::!lifetime_seen;
+ Lwt.return "value"
+let[@inline never] provide marker ()=
+ ignore(Sys.opaque_identity marker);observe_provider()
+let[@inline never] provider_lifetime original bind=
+ let marker=Bytes.make 2048 'p' in lifetime_handle:=weak marker;
+ let read=provide marker in
+ if bind then
+  if original then Lwt.bind(read())(fun text->Lwt.return(String.length text))
+  else Prog.bound read(fun text->Lwt.return(String.length text))
+ else if original then Lwt.map String.length(read())
+ else Prog.mapped read String.length
+let ()=
+ List.iter(fun bind->
+  lifetime_seen:=[];assert(returned(provider_lifetime true bind)=5);
+  let before= !lifetime_seen in
+  lifetime_seen:=[];assert(returned(provider_lifetime false bind)=5);
+  if before<> !lifetime_seen then failwith(Printf.sprintf "provider lifetime changed for bind=%b raw=%b generated=%b" bind(List.hd before)(List.hd !lifetime_seen));
+  if Sys.backend_type=Sys.Native then assert(before=[false])
+ )[false;true];
+ print_endline "native library effects: executing map/bind providers release consumed closure environments"
+
+let[@inline never] observe_value ()=
+ collect();lifetime_seen:=Weak.check !lifetime_handle 0::!lifetime_seen;41
+let[@inline never] provide_value marker ()=
+ ignore(Sys.opaque_identity marker);observe_value()
+let[@inline never] primitive_lifetime original=
+ let marker=Bytes.make 2048 'i' in lifetime_handle:=weak marker;
+ let read=provide_value marker in
+ if original then let old=read()in ignore(old+1);old
+ else Prog.update read(fun _->())
+let ()=
+ lifetime_seen:=[];assert(primitive_lifetime true=41);let before= !lifetime_seen in
+ lifetime_seen:=[];assert(primitive_lifetime false=41);
+ assert(before= !lifetime_seen);
+ if Sys.backend_type=Sys.Native then assert(before=[false]);
+ print_endline "native library effects: executing synchronous primitives release consumed closure environments"

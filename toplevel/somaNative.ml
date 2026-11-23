@@ -28,7 +28,11 @@ type 'a t = unit -> 'a
 type 'a entry = 'a
 type ('s, 'a) progress = Continue of 's | Finish of 'a
 let return value () = value
-let invoke (primitive, next) () = let value = primitive () in next value ()
+(* Fully enter a worker before the provider call. A partially applied thunk
+   otherwise shares its closure environment with the still-live continuation,
+   retaining the provider through callbacks it tailcalls. *)
+let[@inline never] run_invoke primitive next = let value = primitive () in next value ()
+let invoke (primitive, next) () = run_invoke primitive next
 let bind (before, next) () = let value = before () in next value ()
 let loop (step, initial) () =
   let rec advance state = match step state () with
@@ -39,8 +43,10 @@ let protect (body, recover) () = try body () with error -> recover error ()
 let throw error () = raise error
 let export body = body ()
 let promise_return value () = Lwt.return value
-let promise_map (body, next) () = let pending = body () in Lwt.map next pending
-let promise_bind (body, next) () = let pending = body () in Lwt.bind pending next
+let[@inline never] run_map body next = let pending = body () in Lwt.map next pending
+let promise_map (body, next) () = run_map body next
+let[@inline never] run_bind body next = let pending = body () in Lwt.bind pending next
+let promise_bind (body, next) () = run_bind body next
 let promise_catch (body, recover) () = Lwt.catch body recover
 let promise_finally (body, cleanup) () = Lwt.finalize body cleanup
 let promise_fold (step, initial, items) () = Lwt_list.fold_left_s step initial items
