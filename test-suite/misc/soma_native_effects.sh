@@ -10,9 +10,16 @@ cp "$ROOT/examples/example_files/native_effects/native_effects.soma" "$WORK/main
 cd "$WORK"
 soma extract main.soma -o native > extract.log 2>&1
 soma hash main.soma > hash.log 2>&1
-if grep -q '  assumes ' hash.log; then
- echo 'native library example introduced logical assumptions' >&2; exit 1
-fi
+# Signed storage indices use Rocq's existing primitive machine-integer type.
+# No additional axiom, evaluator or admitted proposition is permitted.
+python3 - <<'PY_AUDIT'
+from pathlib import Path
+allowed={"Corelib.Numbers.Cyclic.Int63.PrimInt63.int"}
+observed=set()
+for line in Path("hash.log").read_text().splitlines():
+ if "  assumes " in line:observed.update(line.split("  assumes ",1)[1].split())
+if observed!=allowed:raise SystemExit("unexpected native library assumptions: "+repr(observed))
+PY_AUDIT
 test -f native/soma_effect.ml
 test -f native/soma_handles.ml
 test ! -f native/config.ml
@@ -75,6 +82,48 @@ if soma extract inspect_callback.soma -o inspected-callback > inspect-callback.l
  echo 'accepted inspection of a native callback handle' >&2; exit 1
 fi
 grep -q 'Native programs and entry points cannot be inspected' inspect-callback.log
+# Native storage handles carry their actual Stdlib types across definitions.
+mkdir storage
+printf '[project]\nname = "native_storage_signature"\nversion = "0.1.0"\n' > storage/soma.toml
+cat > storage/caller.definition <<'SOMA'
+Require Import Soma.Native.
+check : vector string -> text_buffer -> table string string -> PrimInt63.int.
+SOMA
+cat > storage/caller.ml <<'OCAML'
+let check items buffer table =
+ Buffer.add_string buffer items.(0);
+ Hashtbl.replace table "key" (Buffer.contents buffer);
+ Array.length items
+OCAML
+cat > storage/main.soma <<'SOMA'
+Require Import Soma.Native.
+Import caller.
+Definition main := Export (Bind (Vector_of_list ("payload"::nil)) (fun items =>
+ Bind (New_text_buffer 0%uint63) (fun buffer => Bind (New_table 0%uint63) (fun entries =>
+ Invoke (fun _ => check items buffer entries) Return)))).
+SOMA
+(cd storage && soma extract main.soma -o native && cd native && dune build --profile release) > storage-signature.log 2>&1
+printf 'let check (_ : string list) (_ : Buffer.t) (_ : (string,string) Hashtbl.t) = 0\n' > storage/caller.ml
+(cd storage && soma extract main.soma -o native) > bad-storage-signature.log 2>&1
+if (cd storage/native && dune build --profile release) >> bad-storage-signature.log 2>&1; then
+ echo 'accepted a list in place of a native vector' >&2; exit 1
+fi
+grep -q 'vector\|array' bad-storage-signature.log
+for handle in vector buffer table; do
+ case "$handle" in
+  vector) handle_type='vector nat'; handle_pattern='Vector id' ;;
+  buffer) handle_type='text_buffer'; handle_pattern='Text_buffer id' ;;
+  table) handle_type='table nat nat'; handle_pattern='Table id' ;;
+ esac
+ cat > "inspect_${handle}.soma" <<SOMA
+Require Import Soma.Native.
+Definition main (value : $handle_type) : nat := match value with $handle_pattern => id end.
+SOMA
+ if soma extract "inspect_${handle}.soma" -o "inspected_${handle}" > "inspect_${handle}.log" 2>&1; then
+  echo "accepted inspection of native $handle" >&2; exit 1
+ fi
+ grep -q 'Native programs and entry points cannot be inspected' "inspect_${handle}.log"
+done
 # The same generated library boundaries work inside an image, with a native
 # caller standing in for Kykeon's current entry-point consumers.
 mkdir image
@@ -88,8 +137,18 @@ cat > image/main.soma <<'SOMA'
 Require Import Sandbox.
 Require Import Soma.Native.
 Import caller.
+Definition native_probe : Native.entry (promise nat) := Native.Export
+ (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
+ Native.Bind (Native.New_text_buffer 0%uint63) (fun buffer =>
+ Native.Bind (Native.Text_buffer_append buffer "payload") (fun _ =>
+ Native.Bind (Native.Text_buffer_contents buffer) (fun text =>
+ Native.Bind (Native.New_table 0%uint63) (fun entries =>
+ Native.Bind (Native.Table_replace entries "key" text) (fun _ =>
+ Native.Bind (Native.Table_find entries "key") (fun copied =>
+ Native.Bind (Native.Vector_get items 0%uint63) (fun original =>
+ Native.Promise_return (if String.eqb original copied then 42 else 0)))))))))).
 Definition main : io unit :=
- pending <- call (fun _ => invoke (fun _ => Native.Export (Native.Promise_return 42))) ;;
+ pending <- call (fun _ => invoke (fun _ => native_probe)) ;;
  value <- await_promise pending ;;
  if Nat.eqb value 42 then print "native library boundary in Solo5 verified" else exit 1.
 SOMA

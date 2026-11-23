@@ -9,7 +9,8 @@
     module does not make a program a Sandbox image. Native primitive callbacks
     remain explicit trusted interfaces. *)
 Require Export Soma.Handles.
-From Stdlib Require Import Strings.String.
+From Stdlib Require Import Strings.String Strings.Ascii.
+From Corelib Require Import PrimInt63.
 
 (** An owned native function, callable only through an effect. Its logical
     handle contains no evaluator and is independent of the program syntax's
@@ -18,6 +19,18 @@ From Stdlib Require Import Strings.String.
 Inductive callback (A B : Type) : Type := Callback (id : nat).
 Arguments Callback {A B} id.
 Register callback as soma.native.callback.
+
+(** Native owned storage. Sizes and indices use the existing machine-word
+    type, preserving negative values and native bounds errors at the ABI. This
+    reuses [PrimInt63.int], the existing kernel primitive type; no storage
+    axiom or logical evaluator is introduced. *)
+Inductive vector (A : Type) : Type := Vector (id : nat).
+Inductive text_buffer : Type := Text_buffer (id : nat).
+Inductive table (K V : Type) : Type := Table (id : nat).
+Arguments Vector {A} id. Arguments Table {K V} id.
+Register vector as soma.native.vector.
+Register text_buffer as soma.native.text_buffer.
+Register table as soma.native.table.
 
 (** The native result representation, for callbacks supplied by existing
     libraries. Constructors and payloads retain their native identities. *)
@@ -54,6 +67,30 @@ Inductive program : Type -> Type :=
 | Filter {A} (predicate : A -> bool) (items : list A) : program (list A)
 | New_callback {A B} (body : callback A B -> A -> program B) : program (callback A B)
 | Call_callback {A B} (body : callback A B) (argument : A) : program B
+| Vector_of_list {A} (items : list A) : program (vector A)
+| Vector_to_list {A} (items : vector A) : program (list A)
+| Vector_length {A} (items : vector A) : program PrimInt63.int
+| Vector_get {A} (items : vector A) (index : PrimInt63.int) : program A
+| Vector_set {A} (items : vector A) (index : PrimInt63.int) (value : A) : program unit
+| New_text_buffer (capacity : PrimInt63.int) : program text_buffer
+| Text_buffer_append (buffer : text_buffer) (text : string) : program unit
+| Text_buffer_char (buffer : text_buffer) (character : ascii) : program unit
+| Text_buffer_contents (buffer : text_buffer) : program string
+| New_table {K V} (capacity : PrimInt63.int) : program (table K V)
+| Table_mem {K V} (entries : table K V) (key : K) : program bool
+| Table_find {K V} (entries : table K V) (key : K) : program V
+| Table_find_opt {K V} (entries : table K V) (key : K) : program (option V)
+| Table_replace {K V} (entries : table K V) (key : K) (value : V) : program unit
+| Table_remove {K V} (entries : table K V) (key : K) : program unit
+| String_map (mapper : callback ascii ascii) (text : string) : program string
+| String_get (text : string) (index : PrimInt63.int) : program ascii
+| String_get_nat (text : string) (index : nat) : program ascii
+| Word_decimal (value : PrimInt63.int) : program string
+| Nat_decimal (value : nat) : program string
+| Path_basename (path : string) : program string
+| Path_dirname (path : string) : program string
+| Path_concat (directory file : string) : program string
+| Promise_apply {A} (body : unit -> entry (promise A)) : program (promise A)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -78,6 +115,18 @@ Arguments Assert_failure {A} file line column.
 Arguments Filter {A} predicate items.
 Arguments New_callback {A B} body.
 Arguments Call_callback {A B} body argument.
+Arguments Vector_of_list {A} items.
+Arguments Vector_to_list {A} items.
+Arguments Vector_length {A} items.
+Arguments Vector_get {A} items index.
+Arguments Vector_set {A} items index value.
+Arguments New_table {K V} capacity.
+Arguments Table_mem {K V} entries key.
+Arguments Table_find {K V} entries key.
+Arguments Table_find_opt {K V} entries key.
+Arguments Table_replace {K V} entries key value.
+Arguments Table_remove {K V} entries key.
+Arguments Promise_apply {A} body.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

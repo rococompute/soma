@@ -56,5 +56,31 @@ Definition owned_callback (read : unit -> promise nat) : entry (callback unit (p
   (Invoke (fun _ => opaque self) (fun _ => Return value))))).
 Definition called_callback (body : callback nat nat) (value : nat) : entry nat := Export (Call_callback body value).
 
+(** Native storage exposes the original ABI types, not copied model values. *)
+Definition make_vector (items : list string) := Export (Vector_of_list items).
+Definition vector_snapshot (items : vector string) := Export (Vector_to_list items).
+Definition vector_size (items : vector string) := Export (Vector_length items).
+Definition get_vector (items : vector string) (index : PrimInt63.int) := Export (Vector_get items index).
+Definition set_vector (items : vector string) (index : PrimInt63.int) (value : string) := Export (Vector_set items index value).
+Definition make_builder (capacity : PrimInt63.int) := Export (New_text_buffer capacity).
+Definition append_builder (buffer : text_buffer) (text : string) := Export (Text_buffer_append buffer text).
+Definition char_builder (buffer : text_buffer) (character : Ascii.ascii) := Export (Text_buffer_char buffer character).
+Definition contents_builder (buffer : text_buffer) := Export (Text_buffer_contents buffer).
+Definition make_table (capacity : PrimInt63.int) : entry (table string string) := Export (New_table capacity).
+Definition has_table (items : table string string) (key : string) := Export (Table_mem items key).
+Definition find_table (items : table string string) (key : string) := Export (Table_find items key).
+Definition lookup_table (items : table string string) (key : string) := Export (Table_find_opt items key).
+Definition put_table (items : table string string) (key value : string) := Export (Table_replace items key value).
+Definition remove_table (items : table string string) (key : string) := Export (Table_remove items key).
+Definition mapped_text (mapper : callback Ascii.ascii Ascii.ascii) (text : string) := Export (String_map mapper text).
+Definition get_byte (text : string) (index : PrimInt63.int) := Export (String_get text index).
+Definition get_byte_nat (text : string) (index : nat) := Export (String_get_nat text index).
+Definition format_word (value : PrimInt63.int) := Export (Word_decimal value).
+Definition format_nat (value : nat) := Export (Nat_decimal value).
+Definition basename (path : string) := Export (Path_basename path).
+Definition dirname (path : string) := Export (Path_dirname path).
+Definition concat_path (directory file : string) := Export (Path_concat directory file).
+Definition applied (body : unit -> promise nat) := Export (Promise_apply (fun _ => Export (Invoke body Return))).
+
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied).

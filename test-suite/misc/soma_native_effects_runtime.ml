@@ -198,3 +198,50 @@ let ()=
  assert(Prog.called_callback(fun value->value+1)41=42);
  let raised=try ignore(Prog.called_callback(fun _->raise reason)0);false with e->e==reason in assert raised;
  print_endline "native library effects: typed callback invocation preserves native arguments and exception identity"
+
+let sync_outcome f=try `Value(f())with e->`Error(Printexc.to_string e)
+let ()=
+ let first=Bytes.to_string(Bytes.of_string "first")and second=Bytes.to_string(Bytes.of_string "second")in
+ let items=Prog.make_vector[first;second]in
+ assert(Array.length items=2&&Prog.vector_size items=2&&items.(0)==first);
+ let copied=Prog.vector_snapshot items in assert(List.hd copied==first&&List.nth copied 1==second);
+ List.iter(fun index->assert(sync_outcome(fun()->Array.get items index)=sync_outcome(fun()->Prog.get_vector items index)))
+  [-1;0;1;2;max_int;min_int];
+ Prog.set_vector items 0 second;assert(items.(0)==second&&Prog.get_vector items 0==second&&List.hd copied==first);
+ List.iter(fun index->assert(sync_outcome(fun()->Array.set items index first)=sync_outcome(fun()->Prog.set_vector items index first)))[-1;2;max_int;min_int];
+ List.iter(fun capacity->
+  let old=Buffer.create capacity and fresh=Prog.make_builder capacity in
+  List.iter(fun text->Buffer.add_string old text;Prog.append_builder fresh text)[first;String.make(1024*1024)'x';second];
+  Buffer.add_char old '\000';Prog.char_builder fresh '\000';
+  assert(Buffer.contents old=Prog.contents_builder fresh)
+ )[-1;0;1;256];
+ let table=Prog.make_table 1 in
+ assert(Prog.lookup_table table "missing"=None&&not(Prog.has_table table "missing"));
+ assert(sync_outcome(fun()->Hashtbl.find table "missing")=sync_outcome(fun()->Prog.find_table table "missing"));
+ Prog.put_table table "key" first;assert(Hashtbl.find table "key"==first&&Prog.find_table table "key"==first);
+ Hashtbl.replace table "key" second;assert(Option.get(Prog.lookup_table table "key")==second);
+ Prog.remove_table table "key";assert(not(Hashtbl.mem table "key"));
+ List.iter(fun index->
+  let expected=sync_outcome(fun()->String.get first index)in
+  assert(expected=sync_outcome(fun()->Prog.get_byte first index));
+  assert(expected=sync_outcome(fun()->Prog.get_byte_nat first index))
+ )[-1;0;4;5;max_int;min_int];
+ assert(Prog.mapped_text Char.uppercase_ascii first=String.map Char.uppercase_ascii first);
+ let raised=try ignore(Prog.mapped_text(fun _->raise reason)first);false with e->e==reason in assert raised;
+ List.iter(fun value->assert(Prog.format_word value=string_of_int value&&Prog.format_nat value=string_of_int value))[-1;0;1;max_int;min_int];
+ List.iter(fun path->assert(Prog.basename path=Filename.basename path&&Prog.dirname path=Filename.dirname path))["";"/";"//";"a/b/";"../x";"relative"];
+ List.iter(fun(a,b)->assert(Prog.concat_path a b=Filename.concat a b))["","";"/a","/b";"a/","b";".",".."];
+ same_outcome(observed(fun()->Lwt.apply(fun()->raise reason)()))(observed(fun()->Prog.applied(fun()->raise reason)));
+ let pending,_=Lwt.task()in let result=Prog.applied(fun()->pending)in Lwt.cancel result;
+ assert(failed result=Lwt.Canceled&&failed pending=Lwt.Canceled);
+ print_endline "native storage: borrowed elements/snapshots, signed bounds, native buffer/table aliases, byte mapping, decimal/path ABI and Lwt.apply passed"
+let storage_roots=ref []
+let[@inline never] storage_ownership ()=
+ let payload=Bytes.to_string(Bytes.make(1024*1024)'p')in
+ let vector=Prog.make_vector[payload]and table=Prog.make_table 1 and buffer=Prog.make_builder 8 in
+ Prog.put_table table "payload" payload;Prog.append_builder buffer payload;
+ storage_roots:=[Obj.repr(weak vector);Obj.repr(weak table);Obj.repr(weak buffer);Obj.repr(weak payload)]
+let ()=
+ storage_ownership();collect();
+ assert(List.for_all(fun value->not(Weak.check(Obj.obj value)0))!storage_roots);
+ storage_roots:=[];print_endline "native storage: owner-managed arrays/tables/buffers collect without registry roots"
