@@ -105,7 +105,9 @@ let raise_failure message () = failwith message
 let new_reference value () = ref value
 let read_reference location () = !location
 let write_reference (location, value) () = location := value
-let assert_failure (file, line, column) () = raise (Assert_failure (file, line, column))
+(* The caller may supply a shared literal location block. Borrow that exact
+   tuple instead of allocating a reconstructed diagnostic on every raise. *)
+let assert_failure diagnostic () = raise (Assert_failure diagnostic)
 (* Tailcall the list primitive after unpacking the effect, so its original
    input spine is not pinned while the primitive consumes it. *)
 let[@inline never] run_filter predicate items = List.filter predicate items

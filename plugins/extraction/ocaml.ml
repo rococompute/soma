@@ -276,6 +276,23 @@ let expr_needs_par = function
   | MLif _ -> true
   | _        -> false
 
+(* Under the exact standard nat-to-int mapping, a closed constructor spine
+   is a machine integer literal. Leaving it as succ calls prevents bytecode
+   from sharing otherwise constant tuples (notably assertion locations).
+   Other inductives and user-provided constructor mappings stay untouched. *)
+let native_nat_literal expression =
+  let rec count value = function
+    | MLcons (_, r, []) when Rocqlib.check_ref "num.nat.O" r.glob &&
+        String.equal (find_custom r) "0" &&
+        String.equal (find_custom (get_ind r)) "int" -> Some value
+    | MLcons (_, r, [next]) when Rocqlib.check_ref "num.nat.S" r.glob &&
+        String.equal (find_custom r) "Stdlib.Int.succ" &&
+        String.equal (find_custom (get_ind r)) "int" -> count (value + 1) next
+    | _ -> None
+  in
+  if not (Rocqlib.has_ref "num.nat.O" && Rocqlib.has_ref "num.nat.S") then None
+  else try count 0 expression with Not_found -> None
+
 let rec pp_expr table par env args =
   let apply st = pp_apply st par args
   and apply2 st = pp_apply2 st par args in
@@ -326,6 +343,9 @@ let rec pp_expr table par env args =
                       hov 2 (str "else" ++ spc () ++ pp b)))
     | MLcons (_,r,a) as c ->
         assert (List.is_empty args);
+        (match native_nat_literal c with
+        | Some value -> pp_par (par && value < 0) (str (string_of_int value))
+        | None ->
         begin match a with
           | _ when is_native_char c -> pp_native_char c
           | _ when is_native_string c -> pp_native_string c
@@ -346,7 +366,7 @@ let rec pp_expr table par env args =
               if String.is_empty (str_global table Cons r) (* hack Extract Inductive prod *)
               then tuple
               else pp_par par (pp_global table Cons r ++ spc () ++ tuple)
-        end
+        end)
     | MLtuple l ->
         assert (List.is_empty args);
         pp_boxed_tuple (pp_expr table true env []) l

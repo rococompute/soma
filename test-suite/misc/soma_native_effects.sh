@@ -142,7 +142,8 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Bind (Native.Promise_return tt) (fun right =>
  Native.Bind (Native.Promise_both left right) (fun combined =>
  Native.Promise_map (fun _ => combined) (fun result => Native.Export (
- Native.Protect (Native.Raise_failure "native image failure") (fun _ => Native.Return (fst result))))))).
+ Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
+ Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ => Native.Return (fst result)))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>

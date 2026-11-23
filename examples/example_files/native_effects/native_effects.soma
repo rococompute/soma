@@ -124,6 +124,7 @@ Definition started_nested_pair {A B C : Type} (left : unit -> promise A) (middle
  Bind (Promise_both left_pending middle_pending) (fun pair_pending => Promise_both pair_pending right_pending))))).
 Definition failure_value {A : Type} (message : string) : entry A := Export (Raise_failure message).
 Definition literal_failure_value (_ : unit) : entry unit := Export (Raise_failure "tl").
+Definition literal_asserted (_ : unit) : entry unit := Export (Assert_failure "native_assertion_site" 7 9).
 
 (** Structural recursion over differently typed promise bodies stays typed;
     no recursive native evaluator or result cast is part of the Source API. *)
@@ -145,4 +146,4 @@ Fixpoint family_program {A : Type} (action : family_action A) : program (promise
 Definition family_run {A : Type} (action : family_action A) := Export (family_program action).
 
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,@family_run).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,literal_asserted,@family_run).

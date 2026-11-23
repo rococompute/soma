@@ -517,3 +517,27 @@ let ()=
   assert(expected=actual);let pending,terminal=actual in assert(pending.(0)&&terminal.(0)=finish)
  )[false;true];
  print_endline"native both: raw-matched promise/input Weak lifetimes through pending, completion and cancellation"
+
+let raw_literal_assertion()=assert false
+let raw_dynamic_assertion file line column()=raise(Assert_failure(file,line,column))
+let assertion_capture invoke=try invoke();failwith"returned assertion"with Assert_failure diagnostic as error->error,diagnostic
+let assertion_allocation invoke=
+ let first,a=assertion_capture invoke and second,b=assertion_capture invoke in first==second,a==b
+let assertion_mutation invoke=
+ let _,((file,line,column)as diagnostic)=assertion_capture invoke in
+ let previous=file.[0]in let bytes=Bytes.unsafe_of_string file in
+ Bytes.set bytes 0 '#';
+ let _,((again,after_line,after_column)as after)=assertion_capture invoke in
+ let visible=diagnostic==after&&file==again&&again.[0]='#'&&line=after_line&&column=after_column in
+ Bytes.set bytes 0 previous;visible
+let ()=
+ assert(assertion_allocation raw_literal_assertion=assertion_allocation Prog.literal_asserted);
+ assert(assertion_mutation raw_literal_assertion&&assertion_mutation Prog.literal_asserted);
+ let literal,tuple=assertion_capture Prog.literal_asserted in
+ ignore(Sys.opaque_identity literal);assert(tuple=("native_assertion_site",7,9));
+ let bytes=Bytes.of_string"borrowed_dynamic_assertion"in let file=Bytes.unsafe_to_string bytes in
+ let raw()=raw_dynamic_assertion file 71 23()and actual()=Prog.asserted file 71 23 in
+ assert(assertion_allocation raw=assertion_allocation actual);
+ let _,(raw_file,_,_)=assertion_capture raw and _,(actual_file,_,_)=assertion_capture actual in
+ assert(raw_file==file&&actual_file==file);Bytes.set bytes 0 'B';assert(raw_file.[0]='B'&&actual_file.[0]='B');
+ print_endline"native assertions: raw-matched literal/dynamic exception allocation and borrowed shared diagnostic tuples preserve unsafe filename mutation visibility"
