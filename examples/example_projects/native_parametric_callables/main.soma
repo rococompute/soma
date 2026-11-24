@@ -12,4 +12,6 @@ Definition partial{A B:Type}target label:=Native.Export(Native.Call_callback(sta
 Definition resume{A B:Type}target value:=Native.Export(Native.Call_callback(tail_apply A B)(target,value)).
 Definition redirect_with{T Q:Type}target persist delimiter items context callback:=
  Native.Export(Native.Call_callback(redirect_apply T Q)(target,(persist,(delimiter,(items,(context,callback)))))).
-Definition main:=(@pass,@invoke,invoke_bool,invoke_function,invoke_curried_function,invoke_arrow,invoke_pair,invoke_schema,@partial,@resume,@redirect_with).
+Definition invoke_options{A B:Type}target stop numeric spec args :=
+ Native.Export(Native.Call_callback(apply_options A B)(target,(stop,(numeric,(spec,args))))).
+Definition main:=(@pass,@invoke,invoke_bool,invoke_function,invoke_curried_function,invoke_arrow,invoke_pair,invoke_schema,@partial,@resume,@redirect_with,@invoke_options).

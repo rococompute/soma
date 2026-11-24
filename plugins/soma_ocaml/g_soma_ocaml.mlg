@@ -110,6 +110,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeConstructor CLASSIFIED AS SIDEFF
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeCallable CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Callable" ident(name) "Optional" ne_ident_list(optional) ":=" native_signature(typ) ] ->
+ { Soma_ocaml.native_callable ~optional name typ }
 | [ "OCaml" "Native" "Callable" ident(name) ":=" native_signature(typ) ] ->
  { Soma_ocaml.native_callable name typ }
 | [ "OCaml" "Native" "Apply" ident(name) ":" native_signature(typ) ] ->

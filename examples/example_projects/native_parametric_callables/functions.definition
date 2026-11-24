@@ -11,3 +11,9 @@ OCaml Native Callable staged:=forall(A B:Type),forall(label:string),tail A B.
 OCaml Native Apply stage:forall(A B:Type),staged A B->string->tail A B.
 OCaml Native Callable redirect:=forall(T Q:Type),forall(persist:bool)(delimiter:option ascii),list T->Q->Native.callback Q(promise PrimInt63.int)->promise PrimInt63.int.
 OCaml Native Apply redirect_apply:forall(T Q:Type),redirect T Q->bool->option ascii->list T->Q->Native.callback Q(promise PrimInt63.int)->promise PrimInt63.int.
+
+OCaml Native Callable parse_options Optional stop numeric :=
+  forall(A B:Type), forall(stop:option bool)(numeric:option string),
+  A -> list string -> B.
+OCaml Native Apply apply_options :
+  forall(A B:Type), parse_options A B -> option bool -> option string -> A -> list string -> B.

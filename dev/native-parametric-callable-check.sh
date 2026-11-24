@@ -13,7 +13,7 @@ python3 - "$WORK" <<'PY'
 from pathlib import Path
 import hashlib,shlex,sys
 w=Path(sys.argv[1]);out=w/'native';rows=[shlex.split(s)for s in(out/'native_callables.manifest').read_text().splitlines()[1:]]
-assert len(rows)==4
+assert len(rows)==5
 seen=set()
 for line in(w/'hash').read_text().splitlines():
  if '  assumes 'in line:seen.update(line.split('  assumes ',1)[1].split(', '))
@@ -101,6 +101,20 @@ let ()=
  let result=Lwt.with_value key(Some 505)(fun()->partially true)in
  ensure"curried result final alias/context/stage"(result==text&& !calls=["last",Some 505;"middle",Some 404;"make",Some 303]);
  print_endline"PASS: concrete Apply function/curried-function results preserve raw identity, exact partial stages, context, aliases and target/deferred throws"
+let ()=
+ let spec=ref 1 and args=[Bytes.to_string(Bytes.make 991 'a')] in
+ let number=Bytes.to_string(Bytes.make 997 '3') in
+ let target ?(stop=false) ?numeric actual_spec actual_args=
+  ensure"optional call borrowed aliases"(actual_spec==spec&&actual_args==args);
+  stop,numeric in
+ ensure"omitted optional arguments"(Prog.invoke_options target None None spec args=(false,None));
+ let stop,numeric=Prog.invoke_options target (Some true)(Some number)spec args in
+ ensure"supplied optional arguments"(stop&&Option.get numeric==number);
+ let reason=Failure"optional callable failure"in
+ let throw ?stop:_ ?numeric:_ _ _=raise reason in
+ ensure"optional call throws synchronously"(try
+   ignore(Prog.invoke_options throw None (Some number)spec args);false with e->e==reason);
+ print_endline"PASS: exact optional callable defaults, supplied values, aliases and synchronous exception identity"
 let[@inline never] lifetime invoke()=
  let owner=Bytes.create 2048 in
  let target ~label:_ value=ignore(Sys.opaque_identity owner);value in
@@ -139,6 +153,9 @@ negative(){
  if "$SOMA" extract "$WORK/$name/main.soma" -o "$WORK/$name/native" > "$WORK/$name.log" 2>&1;then echo "accepted $name" >&2;exit 1;fi
  grep -q "$pattern" "$WORK/$name.log"
 }
+negative optional_nonoption 'OCaml Native Callable bad Optional flag:=forall(flag:bool),unit->bool.' 'Definition main:=bad.bad.' 'must have type option'
+negative optional_unknown 'OCaml Native Callable bad Optional absent:=forall(flag:option bool),unit->bool.' 'Definition main:=bad.bad.' 'exactly once'
+negative optional_wrong_apply 'OCaml Native Apply bad:parse_options unit bool->bool->option string->unit->list string->bool.' 'Definition main:=bad.bad.' 'signature differs'
 negative proof_parameter 'OCaml Native Callable bad:=forall(A:Prop),A->A.' 'Definition main:=@bad.bad.' 'named Type or Set'
 negative strict_proof_parameter 'OCaml Native Callable bad:=forall(A:SProp),A->A.' 'Definition main:=@bad.bad.' 'named Type or Set'
 negative duplicate 'OCaml Native Callable bad:=forall(A A:Type),A->A.' 'Definition main:=@bad.bad.' 'parameters must be distinct'

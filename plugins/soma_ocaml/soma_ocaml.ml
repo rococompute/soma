@@ -499,7 +499,7 @@ let native_variant ?(parameters=[]) name cases =
    signature in a type-valued let so Apply instantiates logical types rather
    than replacing generated OCaml strings. Existing monomorphic metadata stays
    byte-for-byte unchanged. *)
-let native_callable name syntax =
+let native_callable ?(optional=[]) name syntax =
   ignore(native_context());
   if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
   let env=Global.env()in
@@ -529,14 +529,33 @@ let native_callable name syntax =
       if not(EConstr.Vars.noccurn sigma 1 codomain)then native_error "native callable result depends on a value";
       monomorphic domain;
       let label=match binder.Context.binder_name with
-        | Anonymous->None|Name id->Some(ocaml_name ~definition:"native callable"(Id.to_string id))in
+        | Anonymous->None
+        | Name id->
+          let label=ocaml_name ~definition:"native callable"(Id.to_string id)in
+          if List.mem id optional then begin
+            let head,payload=EConstr.decompose_app sigma(Reductionops.whd_all env sigma domain)in
+            if Array.length payload<>1 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.option.type")head)then
+              native_error "an optional callable argument must have type option";
+            Some("?"^label)
+          end else Some label in
       let arg=try ocaml_type env sigma vars domain with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
+      (match label with
+       | Some label when String.starts_with ~prefix:"?" label &&
+           not(String.ends_with ~suffix:" option" arg)->
+         native_error "an optional callable argument must use the native option representation"
+       | _->());
       signature(arg::args)(label::labels)(EConstr.Vars.subst1(EConstr.mkProp)codomain)
     | _->
       monomorphic t;
       let result=try ocaml_type env sigma vars t with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
       List.rev args,List.rev labels,result in
   let args,labels,result=signature[][]typ in
+  let optional_labels=List.map(fun id->Some("?"^Id.to_string id))optional in
+  let observed_optional=List.filter(function
+    | Some label->String.starts_with ~prefix:"?" label
+    | None->false)labels in
+  if List.sort compare optional_labels<>List.sort compare observed_optional then
+    native_error "Optional must list each optional callable value argument exactly once";
   if args=[]then native_error "a native callable needs at least one argument";
   let namespace=native_namespace()in
   let type_args=List.map(fun id->CAst.make(Constrexpr.CRef(Libnames.qualid_of_ident id,None)))ids in

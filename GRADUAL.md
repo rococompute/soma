@@ -1080,6 +1080,19 @@ supplies the native labels. Callable schemas are monomorphic, nondependent
 signatures with at least one argument; named binders are labels, and arrow
 arguments are positional. `Apply` signatures must match the schema exactly.
 
+An `Optional` clause lists the binders that use OCaml optional labels.
+
+```coq
+OCaml Native Callable reader Optional limit :=
+  forall (limit : option string), string -> string.
+OCaml Native Apply read : reader -> option string -> string -> string.
+```
+
+The generated callable type is `?limit:string -> string -> string`.
+Pass `None` to omit the argument and use the native default, or pass
+`Some value` to supply it. The generated binding forwards the option with
+`?limit`, preserving the callable's argument order.
+
 Schemas retain checked type dependencies and have no logical evaluator or
 new axiom. `native_callables.manifest` records source and generated-module
 hashes; changing labels changes the logical declaration identity. The

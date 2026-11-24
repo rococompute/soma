@@ -173,7 +173,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeCopy names,record::values ->
       "{ "^record^" with "^assignments(record_prefix(List.hd n.arguments))names values^" }"
     | SomaForeign.NativeCallableApply(Some c),body::values ->
-      let given=List.map2(fun value label->match label with None->value|Some label->"~"^label^":"^value)values c.callable_labels in
+      let given=List.map2(fun value->function
+        | None->value
+        | Some label when String.starts_with ~prefix:"?" label->label^":"^value
+        | Some label->"~"^label^":"^value)values c.callable_labels in
       body ^ " " ^ String.concat " "given
     | SomaForeign.NativeVariantView(Some v),[value] ->
       let rec branches depth=function
