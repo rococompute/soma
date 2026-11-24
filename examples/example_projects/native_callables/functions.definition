@@ -1,0 +1,7 @@
+From Soma Require Native.
+OCaml Native Callable normalizer := forall (cwd : string), string -> string.
+OCaml Native Apply normalize : normalizer -> string -> string -> string.
+OCaml Native Callable labelled_pair := forall (left : string) (right : string), string.
+OCaml Native Apply pair : labelled_pair -> string -> string -> string.
+OCaml Native Callable scoped := (unit -> promise unit) -> promise unit.
+OCaml Native Apply invoke : scoped -> (unit -> promise unit) -> promise unit.

@@ -130,6 +130,7 @@ let rec ocaml_type env sigma vars t =
       | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
       | Some { item = SomaForeign.OCamlNativeOwnedRecord r; _ } -> Some(SomaForeign.native_record_type r)
       | Some { item = SomaForeign.OCamlNativeOwnedVariant v; _ } -> Some(SomaForeign.native_variant_type v)
+      | Some { item = SomaForeign.OCamlNativeCallableType c; _ } -> Some(SomaForeign.native_callable_type c)
       | _ -> None)
     | _ -> None in
   match native with Some path -> path | None ->
@@ -424,6 +425,39 @@ let native_variant name cases =
   native_register name c (SomaForeign.OCamlNativeOwnedVariant{
     variant_namespace=namespace;variant_name=Id.to_string name;variant_source=source;variant_cases=List.map snd checked})
 
+let native_callable name syntax =
+  ignore(native_context());
+  if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
+  let env=Global.env()in
+  let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)syntax in
+  let rec signature args labels t =
+    match EConstr.kind sigma(Reductionops.whd_all env sigma t)with
+    | Prod(binder,domain,codomain)->
+      if is_sort env sigma domain then native_error "native callable schemas must be monomorphic";
+      if not(EConstr.Vars.noccurn sigma 1 codomain)then native_error "native callable result depends on a value";
+      let label=match binder.Context.binder_name with
+        | Anonymous->None|Name id->Some(ocaml_name ~definition:"native callable"(Id.to_string id))in
+      let arg=try ocaml_type env sigma [] domain with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
+      signature(arg::args)(label::labels)(EConstr.Vars.subst1(EConstr.mkProp)codomain)
+    | _->
+      let result=try ocaml_type env sigma [] t with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
+      List.rev args,List.rev labels,result in
+  let args,labels,result=signature[][]typ in
+  if args=[]then native_error "a native callable needs at least one argument";
+  let namespace=native_namespace()in
+  let handle=native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]in
+  let body=CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,syntax,None,handle))in
+  let c=native_declare name body None in
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  native_register name c(SomaForeign.OCamlNativeCallableType{
+    callable_namespace=namespace;callable_name=Id.to_string name;callable_source=source;
+    callable_arguments=args;callable_labels=labels;callable_result=result})
+let native_callable_type env sigma typ = match EConstr.kind sigma typ with
+  | Const(c,_)->(match Cmap_env.find_opt c !bindings with
+    | Some{item=SomaForeign.OCamlNativeCallableType c;_}->c
+    | _->native_error "Apply needs a declared native callable as its first argument")
+  | _->native_error "Apply needs a declared native callable as its first argument"
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -433,6 +467,10 @@ let native_callback name typ operation =
     | SomaForeign.NativeGet _ -> Some 1 | SomaForeign.NativeSet _ -> Some 2
     | SomaForeign.NativeBuild fields -> Some(List.length fields)
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
+    | SomaForeign.NativeCallableApply _ ->
+      (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+       | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma domain).SomaForeign.callable_arguments)
+       | _->native_error "Apply needs a native callable argument")
     | SomaForeign.NativeValue _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> Some 1 in
   let rec arguments previous remaining t =
@@ -469,11 +507,16 @@ let native_callback name typ operation =
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
-   | SomaForeign.NativeValue _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeBuild _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
   let operation = match operation with
+    | SomaForeign.NativeCallableApply _ ->
+      let c=native_callable_type env sigma(List.hd args_types)in
+      if List.tl argument_names<>c.SomaForeign.callable_arguments || result_name<>c.callable_result then
+        native_error "Apply signature differs from the declared callable";
+      SomaForeign.NativeCallableApply(Some c)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
     | SomaForeign.NativeVariantView _ ->
       if List.length args<>1 then native_error "View needs one native variant argument";
@@ -544,7 +587,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -585,6 +628,8 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
+        | SomaForeign.OCamlNativeCallableType c ->
+          str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeOwnedVariant v ->
           str "closed native polymorphic variant " ++ str(SomaForeign.native_variant_type v) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeOwnedRecord r ->

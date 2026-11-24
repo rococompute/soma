@@ -62,12 +62,22 @@ type native_variant = {
   variant_cases : native_variant_case list;
 }
 
+type native_callable = {
+  callable_namespace : string;
+  callable_name : string;
+  callable_source : string;
+  callable_arguments : string list;
+  callable_labels : string option list;
+  callable_result : string;
+}
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
   | NativeSet of string
   | NativeBuild of string list
   | NativeCopy of string list
+  | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
 
@@ -98,6 +108,7 @@ type ocaml_item =
   | OCamlValue of string * string option list
   | OCamlNativeOwnedRecord of native_record
   | OCamlNativeOwnedVariant of native_variant
+  | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
 
@@ -128,3 +139,9 @@ val native_variant_filename : native_variant -> string
 val native_variant_ml : native_variant -> string
 val native_variant_view_type : native_variant -> string
 val native_variant_identity : native_variant -> string
+
+val native_callable_module : native_callable -> string
+val native_callable_type : native_callable -> string
+val native_callable_filename : native_callable -> string
+val native_callable_ml : native_callable -> string
+val native_callable_identity : native_callable -> string

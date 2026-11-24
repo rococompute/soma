@@ -1061,6 +1061,33 @@ The default remains `Soma_bindings`.
 `Invalid_argument` with its borrowed message, preserving exception and
 promise-map failure boundaries.
 
+### Typed native callables
+
+A `.definition` can retain a native function's labelled ABI as an opaque
+value, without a handwritten adaptation function:
+
+```coq
+From Soma Require Native.
+OCaml Native Callable normalizer := forall (cwd : string), string -> string.
+OCaml Native Apply normalize : normalizer -> string -> string -> string.
+```
+
+The generated type is `cwd:string -> string -> string`. A record or caller
+can store the original native function directly, preserving its identity.
+`Native.Call_callback normalize (target,(cwd,path))` applies it with the
+declared label. The Source call is positional; the typed generated binding
+supplies the native labels. Callable schemas are monomorphic, nondependent
+signatures with at least one argument; named binders are labels, and arrow
+arguments are positional. `Apply` signatures must match the schema exactly.
+
+Schemas retain checked type dependencies and have no logical evaluator or
+new axiom. `native_callables.manifest` records source and generated-module
+hashes; changing labels changes the logical declaration identity. The
+[`native_callables` example](examples/example_projects/native_callables/main.soma)
+and [`dev/native-callable-check.sh`](dev/native-callable-check.sh) check native
+and bytecode labels, aliases, exceptions, promise/context/cancellation behavior,
+Weak roots, signature rejection and optional actual Solo5 execution.
+
 ### Inserting OCaml source
 
 `soma insert FILE.ml --out DIR` translates OCaml into editable `.soma`

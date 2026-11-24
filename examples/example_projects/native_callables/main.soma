@@ -1,0 +1,7 @@
+From Soma Require Native.
+Import functions.
+Definition pass (target : normalizer) := Native.Export (Native.Return target).
+Definition normalize_with target cwd path := Native.Export (Native.Call_callback normalize (target,(cwd,path))).
+Definition pair_with target left right := Native.Export (Native.Call_callback pair (target,(left,right))).
+Definition invoke_with target callback := Native.Export (Native.Call_callback invoke (target,callback)).
+Definition main := (pass,normalize_with,pair_with,invoke_with).
