@@ -10,6 +10,7 @@ let extraction = {soma|
 Extract Inductive Soma.Native.result => "Stdlib.result" [ "Stdlib.Ok" "Stdlib.Error" ].
 Extract Inductive Soma.Native.triple => "Soma_effect.triple" [ "" ].
 Extract Inductive Soma.Native.quadruple => "Soma_effect.quadruple" [ "" ].
+Extract Inductive Soma.Native.quintuple => "( * )" [ "" ].
 Extract Inductive Soma.Native.progress => "Soma_effect.progress"
  [ "Soma_effect.Continue" "Soma_effect.Finish" ].
 Extract Inductive Soma.Native.callback => "Soma_effect.callback"

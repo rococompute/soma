@@ -67,6 +67,11 @@ Inductive quadruple (A B C D:Type) := Quadruple (first:A)(second:B)(third:C)(fou
 Arguments Quadruple {A B C D} first second third fourth.
 Register quadruple as soma.native.quadruple.
 
+Inductive quintuple (A B C D E : Type) :=
+| Quintuple (first : A) (second : B) (third : C) (fourth : D) (fifth : E).
+Arguments Quintuple {A B C D E} first second third fourth fifth.
+Register quintuple as soma.native.quintuple.
+
 
 Inductive progress (S A : Type) := Continue (state : S) | Finish (value : A).
 Arguments Continue {S A} state.

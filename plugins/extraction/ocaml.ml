@@ -233,6 +233,10 @@ let pp_type table par vl t =
     | Tmeta _ | Tvar' _ | Taxiom -> assert false
     | Tvar i -> (try pp_tvar (List.nth vl (pred i))
                  with Failure _ -> (str "'a" ++ int i))
+    | Tglob (r,([_;_;_;_;_] as fields))
+        when Rocqlib.check_ref "soma.native.quintuple" r.glob &&
+             is_inline_custom r && String.equal (find_custom r) "( * )" ->
+        pp_par par (prlist_with_sep (fun () -> str " * ") (pp_rec true) fields)
     | Tglob (r,[a1;a2]) when is_infix r ->
         pp_par par (pp_rec true a1 ++ str (get_infix r) ++ pp_rec true a2)
     | Tglob (r,[]) -> pp_global table Type r
