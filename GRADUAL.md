@@ -2764,3 +2764,10 @@ in-memory map stays unchanged; reopening may recover the complete snapshot.
 Older valid headers with zero padding remain readable, but cannot gain this
 protection retroactively. `soma_aa0_storage_first_receipt.sh` covers checksum
 damage and every sector-prefix interruption of the marker rewrite.
+
+`Native.Promise_bind_borrowed owner body next` preserves a direct native
+provider/bind call's consumed-owner argument frame. The owner is not inspected
+or retained by the continuation. Native liveness can release a dead owner
+before the provider; bytecode retains its argument slot until the tailcall to
+`Lwt.bind`. The provider, bind semantics, exceptions, cancellation and dynamic
+context are otherwise those of `Native.Promise_bind`.

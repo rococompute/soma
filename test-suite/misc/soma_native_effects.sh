@@ -158,6 +158,8 @@ Require Import Sandbox.
 Require Import Soma.Native.
 From Corelib Require Import PrimInt63.
 Import caller.
+Definition borrowed_pair {A:Type} (owner:string)(pending:promise A) :=
+ Native.Promise_bind_borrowed owner (fun _=>pending)(fun value=>Native.Export(Native.Promise_return value)).
 Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
  Native.Bind (Native.Call_callback pair value) (fun second =>
@@ -178,7 +180,7 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Bind (Native.Int64_of_int 200000000%uint63) (fun duration =>
  Native.Bind (Native.Promise_settled unit_pending) (fun ready =>
  Native.Bind (Native.Promise_pick (left::nil)) (fun winner =>
- Native.Bind (Native.Promise_both winner right) (fun combined =>
+ Native.Bind (Native.Bind (Native.Promise_both winner right) (borrowed_pair original)) (fun combined =>
  Native.Promise_map (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
  Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>

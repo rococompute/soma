@@ -650,3 +650,25 @@ let ()=
   assert(match Lwt.state result with Lwt.Fail(Invalid_argument text)->text==message|_->false)
  )[fun()->Lwt.return_unit];
  print_endline "native invalid_argument: borrowed mutable message, fresh exception identity and mapped failure phase passed"
+
+let ()=
+ let[@inline never] raw _owner body next=let pending=body()in Lwt.bind pending next in
+ let trial bind mode=
+  let weak=Weak.create 1 and stages=ref[]and events=ref[]in
+  let key=Lwt.new_key()and error=Fault(Bytes.to_string(Bytes.of_string "borrowed bind"))in
+  let pending,wake=Lwt.task()in let payload=Bytes.to_string(Bytes.of_string "borrowed payload")in
+  let sample label=Gc.full_major();Gc.full_major();stages:=(label,Weak.check weak 0)::!stages in
+  Lwt.on_cancel pending(fun()->events:=("cancel",Lwt.get key)::!events);
+  let provider()=sample "provider";events:=("provider",Lwt.get key)::!events;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let next value=sample "next";assert(value==payload);events:=("next",Lwt.get key)::!events;Lwt.return value in
+  let[@inline never] start()=let owner=Bytes.to_string(Bytes.make 1001 'o')in Weak.set weak 0(Some owner);bind owner provider next in
+  let answer=try `Promise(Lwt.with_value key(Some 17)start)with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  sample "before-wake";let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with
+   |2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  sample "returned";before,state(),List.rev !events,List.rev !stages in
+ List.iter(fun mode->assert(trial raw mode=trial Prog.borrowed_bind mode))[0;1;2;3;4;5];
+ print_endline "native borrowed bind: direct-call owner Weak phases, payload/exception identity, synchronous throw, cancellation and context passed"

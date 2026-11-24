@@ -132,6 +132,11 @@ Inductive program : Type -> Type :=
 | Promise_pick {A} (pending : list (promise A)) : program (promise A)
 | Int64_of_int (value : PrimInt63.int) : program Word64.word64
 | Raise_invalid_argument {A} (message : string) : program A
+(** Keep the caller's consumed owner in the native call frame until the
+    provider returns. Native liveness may discard the dead owner earlier;
+    bytecode preserves its argument slot, as for a direct bind expression. *)
+| Promise_bind_borrowed {Owner A B} (owner : Owner) (body : unit -> promise A)
+    (next : A -> entry (promise B)) : program (promise B)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -182,6 +187,7 @@ Arguments Vector_map {A B} mapper items.
 Arguments Promise_both {A B} left right.
 Arguments Raise_failure {A} message.
 Arguments Raise_invalid_argument {A} message.
+Arguments Promise_bind_borrowed {Owner A B} owner body next.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

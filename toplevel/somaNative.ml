@@ -53,7 +53,7 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.new_callback2" "Soma_effect.new_callback6"
    "Soma_effect.promise_unit" "Soma_effect.promise_none"
    "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int"
-   "Soma_effect.raise_invalid_argument" ]
+   "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -101,6 +101,12 @@ let[@inline never] run_map body next = let pending = body () in Lwt.map next pen
 let promise_map (body, next) () = run_map body next
 let[@inline never] run_bind body next = let pending = body () in Lwt.bind pending next
 let promise_bind (body, next) () = run_bind body next
+(* Match a direct provider/bind call's argument frame. The owner has no
+   logical use: native liveness drops it, while bytecode keeps the incoming
+   argument slot through the provider call and releases it at the bind. *)
+let[@inline never] run_bind_borrowed _owner body next =
+  let pending = body () in Lwt.bind pending next
+let promise_bind_borrowed (owner, body, next) () = run_bind_borrowed owner body next
 let promise_catch (body, recover) () = Lwt.catch body recover
 let promise_finally (body, cleanup) () = Lwt.finalize body cleanup
 let promise_fold (step, initial, items) () = Lwt_list.fold_left_s step initial items
