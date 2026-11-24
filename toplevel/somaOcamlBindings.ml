@@ -202,8 +202,23 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
        | 0,[_] -> constructor
        | 1,[value] -> constructor ^ " " ^ value
        | _ -> constructor ^ " (" ^ String.concat ", " args ^ ")")
+    | SomaForeign.NativeInlineGet (path, field), [value] ->
+      let constructor = qualified_constructor path (List.hd n.arguments) in
+      Printf.sprintf "match %s with %s { %s = payload; _ } -> Some payload | _ -> None"
+        value constructor field
+    | SomaForeign.NativeInlineSet (path, field), [owner; value] ->
+      let constructor = qualified_constructor path (List.hd n.arguments) in
+      Printf.sprintf "match %s with %s record -> record.%s <- %s; true | _ -> false"
+        owner constructor field value
+    | SomaForeign.NativeInlineBuild (path, fields), _ ->
+      let constructor = qualified_constructor path n.result in
+      let fields = List.map2 (fun field value -> field ^ " = " ^ value) fields args in
+      constructor ^ " { " ^ String.concat "; " fields ^ " }"
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
+    | SomaForeign.NativeBuildEvaluating (names, evaluated), _ ->
+      let values = List.map2 (fun name value -> if List.mem name evaluated then value ^ " ()" else value) names args in
+      "({ " ^ assignments (record_prefix n.result) names values ^ " } : " ^ n.result ^ ")"
     | SomaForeign.NativeBuild names,_ ->
       "({ "^assignments(record_prefix n.result)names args^" } : "^n.result^")"
     | SomaForeign.NativeCopy names,record::values ->
@@ -523,6 +538,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
       | _->None)m.items)modules in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
+  (if algebraic_entries = [] then [] else ["native_algebraic.manifest"]) @
   List.map (fun (_, group) -> SomaForeign.native_algebraic_filename group) algebraic @ List.map(fun(_,r)->SomaForeign.native_record_filename r)owned @
   List.map(fun(_,_,v)->SomaForeign.native_variant_filename v)variants @
   List.map(fun(_,_,c)->SomaForeign.native_callable_filename c)callables @

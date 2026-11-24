@@ -682,7 +682,7 @@ type algebraic_member =
   | Record_fields of algebraic_fields
   | Variant_cases of (string * algebraic_case) list
 
-let native_algebraic name members =
+let native_algebraic ?(exceptions=[]) name members =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
   let namespace = native_namespace () in
@@ -743,11 +743,14 @@ let native_algebraic name members =
   let source = match !SomaImport.source_file with
     | Some file -> SomaImport.project_file file
     | None -> assert false in
+  let exceptions = List.map case exceptions in
+  distinct "algebraic exception names" (List.map fst exceptions);
   let group = {
     SomaForeign.algebraic_namespace = namespace;
     algebraic_name = Id.to_string name;
     algebraic_source = source;
     algebraic_members = List.map2 (fun name (_, form) -> name, body form) names members;
+    algebraic_exceptions = exceptions;
   } in
   List.iter2 (fun id member ->
     let handle = native_app (native_global "soma.native.handle") [native_string (namespace ^ "." ^ member)] in
@@ -757,6 +760,19 @@ let native_algebraic name members =
       CAst.make (Constrexpr.CLetIn (CAst.make Anonymous, dependency, None, rest))) handle !logical_dependencies in
     let constant = native_declare id body None in
     native_register id constant (SomaForeign.OCamlNativeAlgebraic (group, member))) ids names
+let native_owned_exception owner constructor =
+  let key, _, _ = native_context () in
+  match Nametab.locate (Libnames.qualid_of_ident owner) with
+  | GlobRef.ConstRef c ->
+    (match Cmap_env.find_opt c !bindings with
+     | Some { item = SomaForeign.OCamlNativeAlgebraic (group, _); key = binding_key; _ }
+       when key = binding_key ->
+       if not (List.mem_assoc constructor group.SomaForeign.algebraic_exceptions) then
+         native_error "the algebraic group does not declare this exception";
+       SomaForeign.native_algebraic_module group ^ "." ^ constructor
+     | _ -> native_error "an owned exception needs an algebraic member declared in this definition")
+  | _ -> native_error "an owned exception needs an algebraic member"
+
 let primitive_symbol symbol =
   let first = function 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false in
   let rest = function '0'..'9' -> true | c -> first c in
@@ -781,9 +797,10 @@ let native_callback name typ operation =
     |_->env,vars,parameters,typ in
   let env,type_vars,type_parameters,typ=enter env [] [] typ in
   let fixed_arity = match operation with
-    | SomaForeign.NativeGet _ | SomaForeign.NativeCallableWrap _ -> Some 1
-    | SomaForeign.NativeSet _ -> Some 2
-    | SomaForeign.NativeBuild fields -> Some(List.length fields)
+    | SomaForeign.NativeGet _ | SomaForeign.NativeInlineGet _ | SomaForeign.NativeCallableWrap _ -> Some 1
+    | SomaForeign.NativeSet _ | SomaForeign.NativeInlineSet _ -> Some 2
+    | SomaForeign.NativeBuild fields | SomaForeign.NativeInlineBuild (_, fields)
+    | SomaForeign.NativeBuildEvaluating (fields, _) -> Some (List.length fields)
     | SomaForeign.NativeConstructorBuild(_,arity) -> Some (max 1 arity)
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
     | SomaForeign.NativeCallableApply _ ->
@@ -872,10 +889,11 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
-   | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
+   | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
+   | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
      constructor_type (List.hd args_types)
-   | SomaForeign.NativeConstructorBuild _ -> constructor_type result
-   | SomaForeign.NativeBuild _ -> record_type result
+   | SomaForeign.NativeConstructorBuild _ | SomaForeign.NativeInlineBuild _ -> constructor_type result
+   | SomaForeign.NativeBuild _ | SomaForeign.NativeBuildEvaluating _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
   let operation = match operation with
@@ -972,12 +990,40 @@ let native_callback name typ operation =
       end else if List.length args<>arity then
         native_error "constructor arity and argument count differ";
       SomaForeign.NativeConstructorBuild(native_constructor_path path,arity)
+    | SomaForeign.NativeInlineGet (path, label) ->
+      let head, args = EConstr.decompose_app sigma (Reductionops.whd_all env sigma result) in
+      if Array.length args <> 1 || not (EConstr.isRefX env sigma (Rocqlib.lib_ref "core.option.type") head) then
+        native_error "Inline Get result must be option";
+      SomaForeign.NativeInlineGet (native_constructor_path path, field label)
+    | SomaForeign.NativeInlineSet (path, label) ->
+      if result_name <> "bool" then native_error "Inline Set result must be bool";
+      SomaForeign.NativeInlineSet (native_constructor_path path, field label)
+    | SomaForeign.NativeInlineBuild (path, fields) ->
+      if List.length args <> List.length fields then
+        native_error "inline record field and argument counts differ";
+      if List.length (List.sort_uniq String.compare fields) <> List.length fields then
+        native_error "inline record fields must be distinct";
+      SomaForeign.NativeInlineBuild (native_constructor_path path, List.map field fields)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)
     | SomaForeign.NativeSet f ->
       if List.length args<>2 || result_name<>"unit" then native_error "Set needs record -> value -> unit";
       SomaForeign.NativeSet(field f)
+    | SomaForeign.NativeBuildEvaluating (fields, evaluated) ->
+      if List.length args <> List.length fields then
+        native_error "record field and argument counts differ";
+      if List.length (List.sort_uniq String.compare fields) <> List.length fields ||
+         List.length (List.sort_uniq String.compare evaluated) <> List.length evaluated then
+        native_error "record fields must be distinct";
+      List.iter (fun name ->
+        if not (List.mem name fields) then native_error "an evaluated field must be part of the record") evaluated;
+      List.iter2 (fun name typ ->
+        if List.mem name evaluated then
+          match EConstr.kind sigma (Reductionops.whd_all env sigma typ) with
+          | Prod (_, argument, _) when EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") argument -> ()
+          | _ -> native_error "an evaluated field needs a unit thunk") fields args_types;
+      SomaForeign.NativeBuildEvaluating (List.map field fields, evaluated)
     | SomaForeign.NativeBuild fields | SomaForeign.NativeCopy fields as op ->
       let expected = List.length fields + (match op with SomaForeign.NativeCopy _ -> 1 | _ -> 0) in
       if List.length args<>expected then native_error "record field and argument counts differ";

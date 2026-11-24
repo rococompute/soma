@@ -72,6 +72,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeGet field) }
 | [ "OCaml" "Native" "Set" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeSet field) }
+| [ "OCaml" "Native" "Build" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) "Evaluating" ne_string_list(evaluated) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuildEvaluating (fields, evaluated)) }
 | [ "OCaml" "Native" "Build" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuild fields) }
 | [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
@@ -143,6 +145,9 @@ VERNAC ARGUMENT EXTEND native_algebraic_member
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeAlgebraic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Algebraic" ident(name) ":=" "[" ne_native_algebraic_member_list_sep(members, ";") "]"
+    "Exceptions" "[" ne_native_algebraic_case_list_sep(exceptions, ";") "]" ] ->
+  { Soma_ocaml.native_algebraic ~exceptions name members }
 | [ "OCaml" "Native" "Algebraic" ident(name) ":=" "[" ne_native_algebraic_member_list_sep(members, ";") "]" ] ->
   { Soma_ocaml.native_algebraic name members }
 END
@@ -165,6 +170,18 @@ VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeConstructor CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Constructor" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) "In" ident(owner) ] ->
+  { let path = Soma_ocaml.native_owned_exception owner path in
+    Soma_ocaml.native_callback name typ (SomaForeign.NativeConstructorBuild(path,arity)) }
+| [ "OCaml" "Native" "Case" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) "In" ident(owner) ] ->
+  { let path = Soma_ocaml.native_owned_exception owner path in
+    Soma_ocaml.native_callback name typ (SomaForeign.NativeConstructorCase(path,arity)) }
+| [ "OCaml" "Native" "Inline" "Get" ident(name) ":" native_signature(typ) ":=" string(path) string(field) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeInlineGet(path,field)) }
+| [ "OCaml" "Native" "Inline" "Set" ident(name) ":" native_signature(typ) ":=" string(path) string(field) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeInlineSet(path,field)) }
+| [ "OCaml" "Native" "Inline" "Build" ident(name) ":" native_signature(typ) ":=" string(path) ne_string_list(fields) ] ->
+  { Soma_ocaml.native_callback name typ (SomaForeign.NativeInlineBuild(path,fields)) }
 | [ "OCaml" "Native" "Tag" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeConstructorTag(path,arity)) }
 | [ "OCaml" "Native" "Case" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) ] ->

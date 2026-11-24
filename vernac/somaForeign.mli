@@ -76,6 +76,7 @@ type native_operation =
   | NativeGet of string
   | NativeSet of string
   | NativeBuild of string list
+  | NativeBuildEvaluating of string list * string list
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
@@ -89,6 +90,9 @@ type native_operation =
   | NativeExternalLiteralConstant of string * string
   | NativeExternalException of string
   | NativeConstructorBuild of string * int
+  | NativeInlineGet of string * string
+  | NativeInlineSet of string * string
+  | NativeInlineBuild of string * string list
   | NativeExternalLiteralCallback of string * string * int
   | NativeExternalComposedValue of string * string * int * int
 
@@ -121,6 +125,7 @@ type native_algebraic = {
   algebraic_name : string;
   algebraic_source : string;
   algebraic_members : (string * native_algebraic_body) list;
+  algebraic_exceptions : (string * native_algebraic_payload) list;
 }
 
 type native_record = {
