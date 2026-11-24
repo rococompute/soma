@@ -670,6 +670,13 @@ let native_constructor_path path =
   native_error "a constructor path needs uppercase OCaml module/constructor names";
  path
 
+let primitive_symbol symbol =
+  let first = function 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false in
+  let rest = function '0'..'9' -> true | c -> first c in
+  if symbol = "" || not (first symbol.[0]) || not (String.for_all rest symbol) then
+    native_error "a primitive symbol must be a C identifier";
+  symbol
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -696,7 +703,8 @@ let native_callback name typ operation =
       (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
        | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma type_vars domain).SomaForeign.callable_arguments)
        | _->native_error "Apply needs a native callable argument")
-    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ -> None
+    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _
+    | SomaForeign.NativePrimitive _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
@@ -776,7 +784,7 @@ let native_callback name typ operation =
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
      constructor_type (List.hd args_types)
    | SomaForeign.NativeConstructorBuild _ -> constructor_type result
@@ -807,6 +815,14 @@ let native_callback name typ operation =
       SomaForeign.NativeCallableWrap (Some callable)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
     | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_external_path path)
+    | SomaForeign.NativePrimitive (byte, native, noalloc) ->
+      let name = ocaml_name ~definition:"native primitive" (Id.to_string name) in
+      if not (String.for_all (function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '\'' -> true | _ -> false) name) then
+        native_error "a primitive needs an OCaml value identifier";
+      if type_parameters <> [] then native_error "primitive signatures must be monomorphic";
+      if List.length args > 5 && (native = None || native = Some byte) then
+        native_error "a primitive with more than five arguments needs a separate native symbol";
+      SomaForeign.NativePrimitive (primitive_symbol byte, Option.map primitive_symbol native, noalloc)
     | SomaForeign.NativeExternalLiteralCallback (path, literal, after) ->
       if after < 0 || after > List.length args then
         native_error "literal insertion position must be between zero and the native argument count";

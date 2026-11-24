@@ -65,6 +65,7 @@ type native_operation =
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
   | NativeExternalValue of string
+  | NativePrimitive of string * string option * bool
   | NativeConstructorTag of string * int
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string
@@ -229,6 +230,9 @@ let native_identity = function
    let operation=match n.operation with
     | NativeValue p->"call "^Printf.sprintf "%S" p
     | NativeExternalValue p->"external-call "^Printf.sprintf "%S" p
+    | NativePrimitive (byte, native, noalloc) ->
+      Printf.sprintf "external-primitive %S native=%s noalloc=%b" byte
+        (match native with None -> "same" | Some symbol -> Printf.sprintf "%S" symbol) noalloc
     | NativeExternalConstant p->"external-value "^Printf.sprintf "%S" p
     | NativeExternalLiteralConstant (path, literal)->Printf.sprintf "external-literal-value %S %S" path literal
     | NativeExternalLiteralCallback (path, literal, after)->

@@ -80,6 +80,15 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeExternalLiteralCallback (path, literal, after)) }
 | [ "OCaml" "Native" "External" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeExternalValue path) }
+| [ "OCaml" "Native" "Primitive" ident(name) ":" native_signature(typ) ":=" string(byte) "Native" string(native) "Noalloc" ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativePrimitive (byte, Some native, true)) }
+| [ "OCaml" "Native" "Primitive" ident(name) ":" native_signature(typ) ":=" string(byte) "Native" string(native) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativePrimitive (byte, Some native, false)) }
+| [ "OCaml" "Native" "Primitive" ident(name) ":" native_signature(typ) ":=" string(byte) "Noalloc" ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativePrimitive (byte, None, true)) }
+| [ "OCaml" "Native" "Primitive" ident(name) ":" native_signature(typ) ":=" string(byte) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativePrimitive (byte, None, false)) }
+
 END
 
 VERNAC ARGUMENT EXTEND native_record_field
