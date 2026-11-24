@@ -955,3 +955,30 @@ let ()=
   start();collect();List.rev !phases,Weak.check watched 0 in
  assert(lifetime raw=lifetime Prog.called_callback6);
  print_endline "native saturated 6: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"
+
+let ()=
+ let scope=Lwt.new_key()and error=Fault "pure callback"in
+ let calls=ref 0 in let value=ref 17 in
+ let body x=incr calls;assert(Lwt.get scope=Some 17);if x then value else raise error in
+ let callback=Prog.pure_callback body in assert(callback==body&& !calls=0);
+ assert(Lwt.with_value scope(Some 17)(fun()->callback true)==value);
+ assert(try Lwt.with_value scope(Some 17)(fun()->ignore(callback false));false with e->e==error);
+ let body a b=incr calls;assert(Lwt.get scope=Some 23);if a then b else raise error in
+ let callback=Prog.pure_callback2 body in assert(callback==body);
+ let before= !calls in let partial=callback true in assert(!calls=before);
+ assert(Lwt.with_value scope(Some 23)(fun()->partial value)==value);
+ assert(try Lwt.with_value scope(Some 23)(fun()->ignore(callback false value));false with e->e==error);
+ let pending,_=Lwt.task()in let body _=pending in
+ assert(Prog.pure_callback body()==pending);
+ let body _ _=pending in assert(Prog.pure_callback2 body()()==pending);
+ let measure invoke=
+  let fn=invoke(fun value->value)in Gc.full_major();let before=Gc.allocated_bytes()in
+  for i=0 to 1000000 do ignore(Sys.opaque_identity(fn i))done;
+  Gc.allocated_bytes()-.before in
+ assert(measure Fun.id=measure Prog.pure_callback);
+ let measure2 invoke=
+  let fn=invoke(fun _ value->value)in Gc.full_major();let before=Gc.allocated_bytes()in
+  for i=0 to 1000000 do ignore(Sys.opaque_identity(fn i i))done;
+  Gc.allocated_bytes()-.before in
+ assert(measure2 Fun.id=measure2 Prog.pure_callback2);
+ print_endline "native pure callbacks: exact supplied function identity/curried arity, saturation timing, aliases/errors/promises/context and zero per-call bridge allocation passed"

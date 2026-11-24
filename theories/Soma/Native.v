@@ -166,6 +166,10 @@ Inductive program : Type -> Type :=
  (a0:A) (a1:B) (a2:C) (a3:D) (a4:E) : program R
 | Call_callback6 {A B C D E F R} (body : callback A (callback B (callback C (callback D (callback E (callback F (R)))))))
  (a0:A) (a1:B) (a2:C) (a3:D) (a4:E) (a5:F) : program R
+(** Pure functions need no per-call entry program. The handle remains opaque;
+    this creates no logical native callback evaluator. *)
+| Pure_callback {A B} (body:A->B) : program(callback A B)
+| Pure_callback2 {A B R} (body:A->B->R) : program(callback A(callback B R))
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -264,3 +268,6 @@ Arguments Call_callback3 {A B C R} body a0 a1 a2.
 Arguments Call_callback4 {A B C D R} body a0 a1 a2 a3.
 Arguments Call_callback5 {A B C D E R} body a0 a1 a2 a3 a4.
 Arguments Call_callback6 {A B C D E F R} body a0 a1 a2 a3 a4 a5.
+
+Arguments Pure_callback {A B} body.
+Arguments Pure_callback2 {A B R} body.

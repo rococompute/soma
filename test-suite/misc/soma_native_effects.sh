@@ -192,6 +192,10 @@ Import caller.
 Definition borrowed_pair {A:Type} (owner:string)(pending:promise A) :=
  Native.Promise_bind_borrowed owner (fun _=>pending)(fun value=>Native.Export(Native.Promise_return value)).
 Definition saturated_check (value:nat) : Native.program nat :=
+ Native.Bind (Native.Pure_callback (fun value:nat=>value)) (fun unary =>
+ Native.Bind (Native.Call_callback unary value) (fun value =>
+ Native.Bind (Native.Pure_callback2 (fun (value:nat) (_:unit)=>value)) (fun binary =>
+ Native.Bind (Native.Call_callback2 binary value tt) (fun value =>
  Native.Bind (Native.New_callback2 (fun _ a b1 => Native.Return a)) (fun callback =>
  Native.Bind (Native.Call_callback2 callback value tt) (fun value =>
  Native.Bind (Native.New_callback3 (fun _ a b1 b2 => Native.Return a)) (fun callback =>
@@ -202,7 +206,7 @@ Definition saturated_check (value:nat) : Native.program nat :=
  Native.Bind (Native.Call_callback5 callback value tt tt tt tt) (fun value =>
  Native.Bind (Native.New_callback6 (fun _ a b1 b2 b3 b4 b5 => Native.Return a)) (fun callback =>
  Native.Bind (Native.Call_callback6 callback value tt tt tt tt tt) (fun value =>
- Native.Return value)))))))))).
+ Native.Return value)))))))))))))).
 Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
  Native.Bind (Native.Call_callback pair value) (fun second =>

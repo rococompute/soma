@@ -2844,3 +2844,10 @@ two- and six-argument constructors with one native curried closure.
 full arity in a single native call frame; unary `Call_callback` remains
 available for explicit partial application. Bodies execute only on saturation,
 with no intermediate program evaluation or fresh closure between arguments.
+
+`Native.Pure_callback` and `Native.Pure_callback2` expose an ordinary pure
+Soma function as an opaque native callback handle. They preserve the supplied
+native function itself, including its curried arity, rather than creating an
+entry program on every invocation. Native calls remain explicit effects;
+there is no callback evaluator in the logic. This avoids per-element bridge
+allocations when a native array/list traversal calls pure Soma policy.
