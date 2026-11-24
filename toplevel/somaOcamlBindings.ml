@@ -158,6 +158,12 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | (SomaForeign.NativeExternalConstant path | SomaForeign.NativeExternalException path),[_] -> path
     | SomaForeign.NativeExternalLiteralConstant (path, literal),[_] ->
       Printf.sprintf "%s %S" path literal
+    | SomaForeign.NativeExternalComposedValue (outer, inner, after, arity),[_] ->
+      let parameters = List.init arity (fun i -> "p" ^ string_of_int i) in
+      let before,inner_args = CList.chop after parameters in
+      let inner_call = "(" ^ String.concat " " (inner :: inner_args) ^ ")" in
+      "(fun " ^ String.concat " " parameters ^ " -> " ^
+        String.concat " " (outer :: (before @ [inner_call])) ^ ")"
     | SomaForeign.NativeExternalValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
