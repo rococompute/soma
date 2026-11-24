@@ -76,6 +76,10 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuildEvaluating (fields, evaluated)) }
 | [ "OCaml" "Native" "Build" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeBuild fields) }
+| [ "OCaml" "Native" "Record" "Factory" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) "Reading" ne_string_list(reading) ] ->
+  { Soma_ocaml.native_record_factory name typ fields reading }
+| [ "OCaml" "Native" "Record" "Factory" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
+  { Soma_ocaml.native_record_factory name typ fields [] }
 | [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END

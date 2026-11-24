@@ -216,6 +216,12 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
+    | SomaForeign.NativeRecordFactory (names, reading, owner), [_] ->
+      let parameters = List.mapi (fun index _ -> "p" ^ string_of_int index) names in
+      let values = List.map2 (fun name parameter ->
+          if List.mem name reading then "!" ^ parameter else parameter) names parameters in
+      "(fun " ^ String.concat " " parameters ^ " -> ({ " ^
+      assignments (record_prefix owner) names values ^ " } : " ^ owner ^ "))"
     | SomaForeign.NativeBuildEvaluating (names, evaluated), _ ->
       let values = List.map2 (fun name value -> if List.mem name evaluated then value ^ " ()" else value) names args in
       "({ " ^ assignments (record_prefix n.result) names values ^ " } : " ^ n.result ^ ")"

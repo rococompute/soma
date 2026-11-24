@@ -19,6 +19,9 @@ OCaml Native Set set_data : node -> data -> unit := "content".
 OCaml Native Build make : data -> Native.table string node -> node := "content" "peers".
 OCaml Native Build make_lazily : (unit -> data) -> Native.table string node -> node :=
   "content" "peers" Evaluating "content".
+OCaml Native Record Factory make_from_reference :
+  Soma.Handles.reference data -> Native.table string node -> node :=
+  "content" "peers" Reading "content".
 OCaml Native Constructor empty : unit -> data := "Empty" 0.
 OCaml Native Constructor paired : (PrimInt63.int * string)%type -> data := "Paired" 1.
 OCaml Native Constructor fields : PrimInt63.int -> string -> data := "Fields" 2.
@@ -35,6 +38,7 @@ Definition get node := Native.Export (Native.Call_callback get_data node).
 Definition set node value := Native.Export (Native.Call_callback set_data (node,value)).
 Definition create value peers := Native.Export (Native.Call_callback make (value,peers)).
 Definition create_lazily value peers := Native.Export (Native.Call_callback make_lazily (value,peers)).
+Definition create_from_reference := Native.Export (Native.Call_callback make_from_reference tt).
 Definition make_empty (_ : unit) := Native.Export (Native.Call_callback empty tt).
 Definition make_pair pair := Native.Export (Native.Call_callback paired pair).
 Definition make_fields count message := Native.Export (Native.Call_callback fields (count,message)).
@@ -43,7 +47,7 @@ Definition read_inline owner := Native.Export (Native.Call_callback inline_paylo
 Definition write_inline owner message := Native.Export (Native.Call_callback set_payload (owner,message)).
 Definition missing message := Native.Export (Native.Call_callback make_missing message).
 Definition missing_message error := Native.Export (Native.Call_callback read_missing error).
-Definition main := (get,set,create,create_lazily,make_empty,make_pair,make_fields,
+Definition main := (get,set,create,create_lazily,create_from_reference,make_empty,make_pair,make_fields,
   make_inline,read_inline,write_inline,missing,missing_message).
 SOMA
 "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/extract.log" 2>&1
@@ -78,6 +82,13 @@ let () =
   check "evaluate exactly once while building" (!evaluations = 1);
   check "evaluate leaves borrowed field and peers" (deferred.Storage.peers == peers &&
     match Prog.get deferred with Storage.Paired stored -> stored == pair | _ -> false);
+  let live_content = ref Storage.Empty in
+  let factory = Prog.create_from_reference live_content in
+  live_content := Storage.Paired pair;
+  let borrowed = factory peers in
+  check "factory reads a live reference at full application"
+    (borrowed.Storage.peers == peers &&
+     match Prog.get borrowed with Storage.Paired stored -> stored == pair | _ -> false);
   let node = Prog.create (Prog.make_empty ()) peers in
   Hashtbl.add peers "root" node;
   check "native table alias and nullary tag" (node.Storage.peers == peers && Prog.get node == Storage.Empty);
@@ -123,6 +134,8 @@ negative badtag '"Paired"/"Bad.Name"' 'constructor is a single name'
 negative field 'mutable payload : string/mutable payload : forall (A : Type), A -> A' 'must be monomorphic'
 negative unknown_exception '"Missing" 1 In node/"Unlisted" 1 In node' 'does not declare this exception'
 negative unknown_evaluated 'Evaluating "content"/Evaluating "absent"' 'evaluated field must be part'
+negative unknown_reference 'Reading "content"/Reading "absent"' 'a reference read must name a factory record field'
+negative non_reference 'Soma.Handles.reference data -> Native.table string node/data -> Native.table string node' 'a record factory read needs a reference argument'
 negative non_thunk 'make_lazily : (unit -> data)/make_lazily : data' 'evaluated field needs a unit thunk'
 negative return_option 'inline_payload : data -> option string/inline_payload : data -> string' 'Inline Get result must be option'
 negative return_bool 'set_payload : data -> string -> bool/set_payload : data -> string -> unit' 'Inline Set result must be bool'

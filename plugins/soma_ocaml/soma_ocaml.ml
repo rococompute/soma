@@ -811,6 +811,7 @@ let native_callback name typ operation =
     | SomaForeign.NativePrimitive _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
+    | SomaForeign.NativeRecordFactory _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalException _ -> Some 1 in
   let rec arguments previous remaining t =
@@ -886,6 +887,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
+   | SomaForeign.NativeRecordFactory _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
@@ -1024,6 +1026,30 @@ let native_callback name typ operation =
           | Prod (_, argument, _) when EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") argument -> ()
           | _ -> native_error "an evaluated field needs a unit thunk") fields args_types;
       SomaForeign.NativeBuildEvaluating (List.map field fields, evaluated)
+    | SomaForeign.NativeRecordFactory (fields, reading, _) ->
+      if argument_names <> ["unit"] then native_error "a record factory getter takes unit";
+      let distinct names = List.length (List.sort_uniq String.compare names) = List.length names in
+      if not (distinct fields && distinct reading) then native_error "record factory fields must be distinct";
+      if not (List.for_all (fun name -> List.mem name fields) reading) then
+        native_error "a reference read must name a factory record field";
+      let rec check parameters typ =
+        match parameters, EConstr.kind sigma (Reductionops.whd_all env sigma typ) with
+        | name :: tail, Prod (binder, domain, codomain) ->
+          if binder.Context.binder_name <> Anonymous || is_sort env sigma domain ||
+             not (EConstr.Vars.noccurn sigma 1 codomain) then
+            native_error "a record factory returns a positional non-dependent function";
+          if List.mem name reading then begin
+            let head, args = EConstr.decompose_app sigma (Reductionops.whd_all env sigma domain) in
+            if Array.length args <> 1 ||
+               not (EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.reference.type") head) then
+              native_error "a record factory read needs a reference argument"
+          end;
+          check tail (EConstr.Vars.subst1 (EConstr.mkProp) codomain)
+        | [], Prod _ -> native_error "record factory field and argument counts differ"
+        | [], _ -> record_type typ; ocaml_type env sigma type_vars typ
+        | _ -> native_error "record factory field and argument counts differ" in
+      let owner = check fields result in
+      SomaForeign.NativeRecordFactory (List.map field fields, reading, owner)
     | SomaForeign.NativeBuild fields | SomaForeign.NativeCopy fields as op ->
       let expected = List.length fields + (match op with SomaForeign.NativeCopy _ -> 1 | _ -> 0) in
       if List.length args<>expected then native_error "record field and argument counts differ";
@@ -1064,6 +1090,9 @@ let native_getter name result operation =
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
   native_callback name (insert_unit result) operation
+
+let native_record_factory name result fields reading =
+  native_getter name result (SomaForeign.NativeRecordFactory (fields, reading, ""))
 
 let native_external_constant ?literal name result path =
   let operation = match literal with

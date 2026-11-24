@@ -61,6 +61,7 @@ type native_operation =
   | NativeSet of string
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
+  | NativeRecordFactory of string list * string list * string
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
@@ -309,6 +310,9 @@ let native_identity = function
     | NativeBuildEvaluating (fields, evaluated) ->
       let names fields = String.concat " " (List.map (Printf.sprintf "%S") fields) in
       "build-evaluating " ^ names fields ^ " evaluating " ^ names evaluated
+    | NativeRecordFactory (fields, reading, owner) ->
+      let names fields = String.concat " " (List.map (Printf.sprintf "%S") fields) in
+      "record-factory " ^ names fields ^ " reading " ^ names reading ^ " for " ^ owner
     | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCallableApply(Some c)->"apply "^native_callable_identity c
     | NativeCallableWrap(Some c)->"wrap "^native_callable_identity c

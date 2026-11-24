@@ -77,6 +77,7 @@ type native_operation =
   | NativeSet of string
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
+  | NativeRecordFactory of string list * string list * string
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
