@@ -2823,3 +2823,14 @@ declares a checked `Native.callback unit (Native.vector string)` getter.
 Calling it returns the named native value directly, with no copying or extra
 application. This also exposes existing reference cells and native function
 values, whose reads and later calls remain separate explicit Soma operations.
+
+`Native.List_map mapper items` uses the native `List.map` with an opaque
+native callback, preserving element order, native tail-modulo-cons behavior,
+exception identity, callback scope and consumed-input ownership. It introduces
+no traversal bound or logical effect evaluator.
+
+`Native.Promise_map_borrowed owner body next` preserves the direct native
+provider/map call's consumed-owner frame, matching `Promise_bind_borrowed`.
+Native liveness can release dead owners before the provider, while bytecode
+keeps its incoming argument slot until the map. Exceptions, cancellation and
+saved context follow the actual `Lwt.map` boundary.

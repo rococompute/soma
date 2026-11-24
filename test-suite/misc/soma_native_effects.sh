@@ -213,14 +213,14 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Bind (Native.Promise_settled unit_pending) (fun ready =>
  Native.Bind (Native.Promise_pick (left::nil)) (fun winner =>
  Native.Bind (Native.Bind (Native.Promise_both winner right) (borrowed_pair original)) (fun combined =>
- Native.Promise_map (fun _ => combined) (fun result => Native.Export (
+ Native.Promise_map_borrowed original (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
  Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>
  curried_check (fst result))))))))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>
- Native.Bind (Native.Bind (Native.Vector_map mapper items) (fun mapped =>
+ Native.Bind (Native.Bind (Native.Bind (Native.List_map mapper ("payload"::nil)) (fun _=>Native.Vector_map mapper items)) (fun mapped =>
   if andb (Nat.eqb (Native.vector_size mapped) 1) (PrimInt63.eqb (Native.vector_word_size mapped) 1%uint63)
   then Native.Return mapped else Native.Raise_failure "readonly size mismatch")) (fun mapped_items =>
  Native.Bind (Native.New_text_buffer 0%uint63) (fun buffer =>

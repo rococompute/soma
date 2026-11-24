@@ -144,6 +144,9 @@ Inductive program : Type -> Type :=
     bytecode preserves its argument slot, as for a direct bind expression. *)
 | Promise_bind_borrowed {Owner A B} (owner : Owner) (body : unit -> promise A)
     (next : A -> entry (promise B)) : program (promise B)
+| List_map {A B}(mapper:callback A B)(items:list A) : program(list B)
+| Promise_map_borrowed {Owner A B}(owner:Owner)(body:unit->promise A)
+ (next:A->entry B) : program(promise B)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -195,6 +198,8 @@ Arguments Promise_both {A B} left right.
 Arguments Raise_failure {A} message.
 Arguments Raise_invalid_argument {A} message.
 Arguments Promise_bind_borrowed {Owner A B} owner body next.
+Arguments List_map {A B} mapper items.
+Arguments Promise_map_borrowed {Owner A B} owner body next.
 Arguments Export {A} body.
 
 Register program as soma.native.program.

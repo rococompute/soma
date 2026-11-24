@@ -54,7 +54,7 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.new_callback2" "Soma_effect.new_callback6"
    "Soma_effect.promise_unit" "Soma_effect.promise_none"
    "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int"
-   "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" ]
+   "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" "Soma_effect.list_map" "Soma_effect.promise_map_borrowed" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -106,6 +106,9 @@ let export body = body ()
 let promise_return value () = Lwt.return value
 let[@inline never] run_map body next = let pending = body () in Lwt.map next pending
 let promise_map (body, next) () = run_map body next
+let[@inline never] run_map_borrowed _owner body next =
+  let pending = body () in Lwt.map next pending
+let promise_map_borrowed (owner, body, next) () = run_map_borrowed owner body next
 let[@inline never] run_bind body next = let pending = body () in Lwt.bind pending next
 let promise_bind (body, next) () = run_bind body next
 (* Match a direct provider/bind call's argument frame. The owner has no
@@ -131,6 +134,8 @@ let assert_failure diagnostic () = raise (Assert_failure diagnostic)
    input spine is not pinned while the primitive consumes it. *)
 let[@inline never] run_filter predicate items = List.filter predicate items
 let filter (predicate, items) () = run_filter predicate items
+let[@inline never] run_list_map mapper items = List.map mapper items
+let list_map (mapper, items) () = run_list_map mapper items
 let promise_unit () = Lwt.return_unit
 let promise_none () = Lwt.return_none
 let promise_settled pending () =

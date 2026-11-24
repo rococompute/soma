@@ -714,3 +714,45 @@ let ()=
  let x,(y,(z,w))=Prog.quadruple_parts tuple in assert(x==a&&y==b&&z==c&&w==d);
  assert(Obj.size(Obj.repr tuple)=4);
  print_endline "native readonly array sizes and flat quadruples: empty/large/float arrays, element updates, exact four-field layout and borrowed payload identities passed"
+
+let ()=
+ let key=Lwt.new_key()and error=Fault "native list map"in
+ let trial invoke fault=
+  let trace=ref[]and count=ref 0 in let payloads=List.init 23(fun i->Bytes.to_string(Bytes.make(i+1)'x'))in
+  let mapper payload=incr count;trace:=(Lwt.get key,payload==List.nth payloads(!count-1))::!trace;
+   if !count=fault then raise error else payload in
+  let result=try let values=Lwt.with_value key(Some 17)(fun()->invoke mapper payloads)in
+   `Return(List.for_all2(==)values payloads)with e->`Throw(e==error)in result,List.rev !trace in
+ for fault=0 to 24 do assert(trial List.map fault=trial Prog.native_mapped_list fault)done;
+ let lifetime invoke=
+  let watched=ref[||]and phases=ref[]in
+  let sample()=Gc.full_major();Gc.full_major();phases:=Array.to_list(Array.map(fun w->Weak.check w 0)!watched)::!phases in
+  let[@inline never] input()=
+   let values=List.init 17(fun i->Bytes.to_string(Bytes.make(1001+i)'a'))in
+   let weak value=let w=Weak.create 1 in Weak.set w 0(Some(Obj.repr value));w in
+   watched:=[|weak values;weak(List.tl values);weak(List.hd values)|];values in
+  let result=invoke(fun value->sample();value)(input())in sample();ignore(Sys.opaque_identity result);List.rev !phases in
+ assert(lifetime List.map=lifetime Prog.native_mapped_list);
+ let count=1000001 in let values=List.init count Fun.id in
+ let result=Prog.native_mapped_list Fun.id values in assert(List.length result=count&&List.hd result=0);
+ print_endline"native list map: native ordering/aliases, exact fault identity and context, consumed-spine Weak phases and 1000001-element traversal passed"
+
+let ()=
+ let[@inline never] raw _owner body next=let pending=body()in Lwt.map next pending in
+ let trial invoke mode=
+  let weak=Weak.create 1 and stages=ref[]in
+  let sample label=Gc.full_major();Gc.full_major();stages:=(label,Weak.check weak 0)::!stages in
+  let payload=Bytes.to_string(Bytes.make 1001 'x')and error=Fault "borrowed map"in let key=Lwt.new_key()and trace=ref[]in
+  let pending,wake=Lwt.task()in Lwt.on_cancel pending(fun()->trace:=("cancel",Lwt.get key)::!trace);
+  let provider()=sample "provider";trace:=("provider",Lwt.get key)::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let next value=sample "next";assert(value==payload);trace:=("next",Lwt.get key)::!trace;value in
+  let[@inline never] start()=let owner=Bytes.to_string(Bytes.make 1009 'o')in Weak.set weak 0(Some owner);invoke owner provider next in
+  let answer=try `Promise(Lwt.with_value key(Some 17)start)with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return text->`Return(text==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  sample "pending";let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  sample "returned";before,state(),List.rev !trace,List.rev !stages in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.borrowed_map mode)done;
+ print_endline"native borrowed map: direct provider/map frame Weak phases, aliases, exact synchronous/asynchronous errors, cancellation and dynamic context passed"
