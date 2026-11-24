@@ -17,16 +17,21 @@ OCaml Native External Value later : real -> real -> real -> real :=
   "Stdlib.( +. )" Composing "Stdlib.( *. )" After 1.
 OCaml Native External Value ordered : PrimInt63.int -> PrimInt63.int -> PrimInt63.int -> PrimInt63.int :=
   "Fixture.outer" Composing "Fixture.inner" After 1.
+OCaml Native External Value sequence : real -> PrimInt63.int -> real -> real :=
+  "Stdlib.( +. )" Composing "Stdlib.( *. )" After 1 Transforming "float_of_int" At 1.
+OCaml Native External Value transformed_order : PrimInt63.int -> PrimInt63.int -> PrimInt63.int -> PrimInt63.int :=
+  "Fixture.outer" Composing "Fixture.inner" After 1 Transforming "Fixture.transform" At 1.
 SOMA
 cat > "$work/main.soma" <<'SOMA'
 From Soma Require Native.
 Import math.
-Definition main := (quotient, (earlier, (later, ordered))).
+Definition main := (quotient, (earlier, (later, (ordered, (sequence, transformed_order))))).
 SOMA
 "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/extract.log" 2>&1
 grep -q 'external-composed-value .* after 1 arity 3' "$work/native/native_abi.manifest"
 cat > "$work/native/fixture.ml" <<'ML'
 let phases = ref []
+let transform value = phases := "transform" :: !phases; value + 3
 let inner a b = phases := "inner" :: !phases; a - b
 let outer a b = phases := "outer" :: !phases; a + b
 ML
@@ -35,13 +40,17 @@ let check label ok = if not ok then failwith label
 let[@inline never] direct_quotient a b = int_of_float (a /. b)
 let[@inline never] direct_relative ago now value scale =
   if ago then now -. (value *. scale) else now +. (value *. scale)
+let[@inline never] direct_sequence first counter increment = first +. (float_of_int counter *. increment)
 let bits = Int64.bits_of_float
 
 let () =
-  let quotient,(earlier,(later,ordered)) = Prog.soma_main () in
+  let quotient,(earlier,(later,(ordered,(sequence,transformed_order)))) = Prog.soma_main () in
   let quotient = quotient () and earlier = earlier () and later = later () in
-  let ordered = ordered () in
+  let ordered = ordered () and sequence = sequence () and transformed_order = transformed_order () in
   check "native order" (ordered 20 3 11 = 12 && !(Fixture.phases) = ["outer";"inner"]);
+  Fixture.phases := [];
+  check "transform then inner then outer"
+    (transformed_order 20 3 11 = 15 && !(Fixture.phases) = ["outer";"inner";"transform"]);
   let values = List.map Int64.float_of_bits
       [0L; Int64.min_int; 0x3ff0000000000000L; 0xbff0000000000000L;
        0x7ff0000000000000L; 0xfff0000000000000L; 0x7ff8000000000001L;
@@ -61,6 +70,17 @@ let () =
     for _ = 1 to 10000 do ignore (Sys.opaque_identity (call a b)) done;
     Gc.allocated_bytes () -. start in
   check "no intermediate float allocation" (allocated quotient = allocated direct_quotient);
+  List.iter (fun first -> List.iter (fun increment -> List.iter (fun counter ->
+    check "native converted sequence bits"
+      (bits (sequence first counter increment) = bits (direct_sequence first counter increment)))
+    [min_int;-1;0;1;10_000_000;max_int]) values) values;
+  let allocated_sequence call =
+    let value = Sys.opaque_identity 1.25 and word = Sys.opaque_identity 7 in
+    let start = Gc.allocated_bytes () in
+    for _ = 1 to 10000 do ignore (Sys.opaque_identity (call value word value)) done;
+    Gc.allocated_bytes () -. start in
+  check "no extra converted sequence allocation"
+    (allocated_sequence sequence = allocated_sequence direct_sequence);
   print_endline "PASS: composed native expressions preserve arithmetic bits, order and allocation"
 ML
 configure() {
@@ -103,3 +123,26 @@ if (cd "$work/native" && host dune build --profile release -j2) > "$work/bad-bui
 fi
 grep -q 'soma_bindings.ml' "$work/bad-build.log"
 echo 'PASS: invalid composition positions, paths and incompatible native return types rejected'
+
+for position in -1 3; do
+  sed "s/At 1/At $position/" "$work/original.definition" > "$work/math.definition"
+  if "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/transform-$position.log" 2>&1; then
+    echo "accepted invalid transform position $position" >&2
+    exit 1
+  fi
+done
+grep -q 'composition transform position' "$work/transform-3.log"
+sed 's/"float_of_int" At/"float_of_int; exit 1" At/' "$work/original.definition" > "$work/math.definition"
+if "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/transform-path.log" 2>&1; then
+  echo "accepted invalid transform path" >&2
+  exit 1
+fi
+sed 's/"float_of_int" At/"string_of_int" At/' "$work/original.definition" > "$work/math.definition"
+"$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/bad-transform-extract.log" 2>&1
+configure
+if (cd "$work/native" && host dune build --profile release -j2) > "$work/bad-transform-build.log" 2>&1; then
+  echo "accepted a composition transform with the wrong result type" >&2
+  exit 1
+fi
+grep -q 'soma_bindings.ml' "$work/bad-transform-build.log"
+echo 'PASS: invalid transform positions, paths and types rejected'

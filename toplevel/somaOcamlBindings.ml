@@ -165,6 +165,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     match module_prefix ty with
     | None -> path
     | Some prefix -> prefix ^ "." ^ path in
+  let composed_value outer inner after arity transform =
+    let parameters = List.init arity (fun i -> "p" ^ string_of_int i) in
+    let arguments = List.mapi transform parameters in
+    let before, inner_args = CList.chop after arguments in
+    let inner_call = "(" ^ String.concat " " (inner :: inner_args) ^ ")" in
+    "(fun " ^ String.concat " " parameters ^ " -> " ^
+      String.concat " " (outer :: (before @ [inner_call])) ^ ")" in
   let body = match n.operation,args with
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
@@ -173,11 +180,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeExternalLiteralConstant (path, literal),[_] ->
       Printf.sprintf "%s %S" path literal
     | SomaForeign.NativeExternalComposedValue (outer, inner, after, arity),[_] ->
-      let parameters = List.init arity (fun i -> "p" ^ string_of_int i) in
-      let before,inner_args = CList.chop after parameters in
-      let inner_call = "(" ^ String.concat " " (inner :: inner_args) ^ ")" in
-      "(fun " ^ String.concat " " parameters ^ " -> " ^
-        String.concat " " (outer :: (before @ [inner_call])) ^ ")"
+      composed_value outer inner after arity (fun _ parameter -> parameter)
+    | SomaForeign.NativeExternalTransformedComposition (outer, inner, after, arity, transform, position),[_] ->
+      composed_value outer inner after arity (fun index parameter ->
+        if index = position then "(" ^ transform ^ " " ^ parameter ^ ")" else parameter)
     | SomaForeign.NativePrimitive _,_ ->
       m.top ^ "." ^ n.name ^ " " ^ String.concat " " args
     | SomaForeign.NativeExternalValue path,_ ->

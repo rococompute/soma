@@ -813,6 +813,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
     | SomaForeign.NativeRecordFactory _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
+    | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
@@ -889,6 +890,7 @@ let native_callback name typ operation =
   (match operation with
    | SomaForeign.NativeRecordFactory _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
+   | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
@@ -940,7 +942,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalLiteralConstant (path, literal) ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
       SomaForeign.NativeExternalLiteralConstant(native_external_path path, literal)
-    | SomaForeign.NativeExternalComposedValue (outer, inner, after, _) ->
+    | (SomaForeign.NativeExternalComposedValue (outer, inner, after, _)
+      | SomaForeign.NativeExternalTransformedComposition (outer, inner, after, _, _, _)) as composition ->
       if argument_names <> ["unit"] then native_error "a composed external value getter takes unit";
       let rec arity typ =
         match EConstr.kind sigma (Reductionops.whd_all env sigma typ) with
@@ -953,8 +956,14 @@ let native_callback name typ operation =
       let count = arity result in
       if after < 0 || after >= count then
         native_error "composition split must leave at least one inner argument";
-      SomaForeign.NativeExternalComposedValue
-        (native_external_path outer, native_external_path inner, after, count)
+      let outer = native_external_path outer and inner = native_external_path inner in
+      (match composition with
+       | SomaForeign.NativeExternalTransformedComposition (_, _, _, _, transform, position) ->
+         if position < 0 || position >= count then
+           native_error "composition transform position must select an argument";
+         SomaForeign.NativeExternalTransformedComposition
+           (outer, inner, after, count, native_external_path transform, position)
+       | _ -> SomaForeign.NativeExternalComposedValue (outer, inner, after, count))
     | SomaForeign.NativeExternalException path ->
       if argument_names<>["unit"] ||
          not (EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") result) then
@@ -1102,6 +1111,10 @@ let native_external_constant ?literal name result path =
 
 let native_composed_value name result outer inner after =
   native_getter name result (SomaForeign.NativeExternalComposedValue (outer, inner, after, 0))
+
+let native_transformed_composition name result outer inner after transform position =
+  native_getter name result
+    (SomaForeign.NativeExternalTransformedComposition (outer, inner, after, 0, transform, position))
 
 let native_external_exception name path =
   native_getter name (native_global "soma.exception_value.type")
