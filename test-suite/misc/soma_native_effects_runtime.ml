@@ -756,3 +756,202 @@ let ()=
   sample "returned";before,state(),List.rev !trace,List.rev !stages in
  for mode=0 to 5 do assert(trial raw mode=trial Prog.borrowed_map mode)done;
  print_endline"native borrowed map: direct provider/map frame Weak phases, aliases, exact synchronous/asynchronous errors, cancellation and dynamic context passed"
+
+let ()=
+ let scope=Lwt.new_key()and calls=ref 0 in
+ let a=ref 1 and b=Bytes.create 1009 and c=[|17|] in
+ let f=Prog.owned_callback3(fun a b c->incr calls;Lwt.return((a,b,c),Lwt.get scope))in
+ let partial=f a b in assert(!calls=0);
+ let (xa,xb,xc),context=curried_returned(Lwt.with_value scope(Some 17)(fun()->partial c))in
+ assert(xa==a&&xb==b&&xc==c&&context=Some 17&& !calls=1);
+ ignore(curried_returned(f a b c));assert(!calls=2);
+ let error=Fault "curried 3"in
+ let f=Prog.owned_callback3(fun _ _ _->raise error)in
+ let partial=f () ()in
+ assert(try ignore(partial());false with e->e==error);
+ let pending,wake=Lwt.task()in
+ let f=Prog.owned_callback3(fun _ _ _->pending)in
+ let result=f () () ()in assert(Lwt.state result=Lwt.Sleep);Lwt.wakeup wake a;
+ assert(match Lwt.state result with Lwt.Return value->value==a|_->false);
+ let pending,_=Lwt.task()in
+ let f=Prog.owned_callback3(fun _ _ _->pending)in
+ let result=f () () ()in Lwt.cancel result;assert(Lwt.state pending=Lwt.Fail Lwt.Canceled);
+ let make cancel=
+  let marker=Bytes.create 2048 in let watched=weak marker in let pending,wake=Lwt.task()in
+  let[@inline never] start()=let f=Prog.owned_callback3(fun _ _ _->ignore(Sys.opaque_identity marker);pending)in
+   f () () ()in
+  let result=start()in collect();assert(Weak.check watched 0);
+  if cancel then Lwt.cancel result else Lwt.wakeup wake();result,watched in
+ List.iter(fun cancel->let result,watched=make cancel in collect();assert(not(Weak.check watched 0));ignore(Sys.opaque_identity result))[false;true];
+ print_endline "native curried 3: saturation, stored partials, alias/context/exception/promise/cancellation and pending-owner release passed"
+
+let ()=
+ let scope=Lwt.new_key()and calls=ref 0 in
+ let a=ref 1 and b=Bytes.create 1009 and c=[|17|] and d=ref "fourth" in
+ let f=Prog.owned_callback4(fun a b c d->incr calls;Lwt.return((a,b,c,d),Lwt.get scope))in
+ let partial=f a b c in assert(!calls=0);
+ let (xa,xb,xc,xd),context=curried_returned(Lwt.with_value scope(Some 17)(fun()->partial d))in
+ assert(xa==a&&xb==b&&xc==c&&xd==d&&context=Some 17&& !calls=1);
+ ignore(curried_returned(f a b c d));assert(!calls=2);
+ let error=Fault "curried 4"in
+ let f=Prog.owned_callback4(fun _ _ _ _->raise error)in
+ let partial=f () () ()in
+ assert(try ignore(partial());false with e->e==error);
+ let pending,wake=Lwt.task()in
+ let f=Prog.owned_callback4(fun _ _ _ _->pending)in
+ let result=f () () () ()in assert(Lwt.state result=Lwt.Sleep);Lwt.wakeup wake a;
+ assert(match Lwt.state result with Lwt.Return value->value==a|_->false);
+ let pending,_=Lwt.task()in
+ let f=Prog.owned_callback4(fun _ _ _ _->pending)in
+ let result=f () () () ()in Lwt.cancel result;assert(Lwt.state pending=Lwt.Fail Lwt.Canceled);
+ let make cancel=
+  let marker=Bytes.create 2048 in let watched=weak marker in let pending,wake=Lwt.task()in
+  let[@inline never] start()=let f=Prog.owned_callback4(fun _ _ _ _->ignore(Sys.opaque_identity marker);pending)in
+   f () () () ()in
+  let result=start()in collect();assert(Weak.check watched 0);
+  if cancel then Lwt.cancel result else Lwt.wakeup wake();result,watched in
+ List.iter(fun cancel->let result,watched=make cancel in collect();assert(not(Weak.check watched 0));ignore(Sys.opaque_identity result))[false;true];
+ print_endline "native curried 4: saturation, stored partials, alias/context/exception/promise/cancellation and pending-owner release passed"
+
+let ()=
+ let scope=Lwt.new_key()and calls=ref 0 in
+ let a=ref 1 and b=Bytes.create 1009 and c=[|17|] and d=ref "fourth" and e=Bytes.create 1013 in
+ let f=Prog.owned_callback5(fun a b c d e->incr calls;Lwt.return((a,b,c,d,e),Lwt.get scope))in
+ let partial=f a b c d in assert(!calls=0);
+ let (xa,xb,xc,xd,xe),context=curried_returned(Lwt.with_value scope(Some 17)(fun()->partial e))in
+ assert(xa==a&&xb==b&&xc==c&&xd==d&&xe==e&&context=Some 17&& !calls=1);
+ ignore(curried_returned(f a b c d e));assert(!calls=2);
+ let error=Fault "curried 5"in
+ let f=Prog.owned_callback5(fun _ _ _ _ _->raise error)in
+ let partial=f () () () ()in
+ assert(try ignore(partial());false with e->e==error);
+ let pending,wake=Lwt.task()in
+ let f=Prog.owned_callback5(fun _ _ _ _ _->pending)in
+ let result=f () () () () ()in assert(Lwt.state result=Lwt.Sleep);Lwt.wakeup wake a;
+ assert(match Lwt.state result with Lwt.Return value->value==a|_->false);
+ let pending,_=Lwt.task()in
+ let f=Prog.owned_callback5(fun _ _ _ _ _->pending)in
+ let result=f () () () () ()in Lwt.cancel result;assert(Lwt.state pending=Lwt.Fail Lwt.Canceled);
+ let make cancel=
+  let marker=Bytes.create 2048 in let watched=weak marker in let pending,wake=Lwt.task()in
+  let[@inline never] start()=let f=Prog.owned_callback5(fun _ _ _ _ _->ignore(Sys.opaque_identity marker);pending)in
+   f () () () () ()in
+  let result=start()in collect();assert(Weak.check watched 0);
+  if cancel then Lwt.cancel result else Lwt.wakeup wake();result,watched in
+ List.iter(fun cancel->let result,watched=make cancel in collect();assert(not(Weak.check watched 0));ignore(Sys.opaque_identity result))[false;true];
+ print_endline "native curried 5: saturation, stored partials, alias/context/exception/promise/cancellation and pending-owner release passed"
+
+let ()=
+ let[@inline never] raw body a b=body a b in
+ let trial invoke mode=
+  let key=Lwt.new_key()and error=Fault "saturated 2"in let trace=ref[]in
+  let owner=ref 17 and payload=Bytes.create 1009 in let pending,wake=Lwt.task()in
+  let body xa xb=
+   assert(xa==owner&&xb==owner);trace:=Lwt.get key::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let answer=try `Promise(Lwt.with_value key(Some 17)(fun()->invoke body owner owner))with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  before,state(),List.rev !trace in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.called_callback2 mode)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let[@inline never] start()=let owner=Bytes.create 1009 in Weak.set watched 0(Some owner);
+   invoke(fun _ _->collect();phases:=Weak.check watched 0::!phases;()) owner owner in
+  start();collect();List.rev !phases,Weak.check watched 0 in
+ assert(lifetime raw=lifetime Prog.called_callback2);
+ print_endline "native saturated 2: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"
+
+let ()=
+ let[@inline never] raw body a b c=body a b c in
+ let trial invoke mode=
+  let key=Lwt.new_key()and error=Fault "saturated 3"in let trace=ref[]in
+  let owner=ref 17 and payload=Bytes.create 1009 in let pending,wake=Lwt.task()in
+  let body xa xb xc=
+   assert(xa==owner&&xb==owner&&xc==owner);trace:=Lwt.get key::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let answer=try `Promise(Lwt.with_value key(Some 17)(fun()->invoke body owner owner owner))with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  before,state(),List.rev !trace in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.called_callback3 mode)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let[@inline never] start()=let owner=Bytes.create 1009 in Weak.set watched 0(Some owner);
+   invoke(fun _ _ _->collect();phases:=Weak.check watched 0::!phases;()) owner owner owner in
+  start();collect();List.rev !phases,Weak.check watched 0 in
+ assert(lifetime raw=lifetime Prog.called_callback3);
+ print_endline "native saturated 3: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"
+
+let ()=
+ let[@inline never] raw body a b c d=body a b c d in
+ let trial invoke mode=
+  let key=Lwt.new_key()and error=Fault "saturated 4"in let trace=ref[]in
+  let owner=ref 17 and payload=Bytes.create 1009 in let pending,wake=Lwt.task()in
+  let body xa xb xc xd=
+   assert(xa==owner&&xb==owner&&xc==owner&&xd==owner);trace:=Lwt.get key::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let answer=try `Promise(Lwt.with_value key(Some 17)(fun()->invoke body owner owner owner owner))with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  before,state(),List.rev !trace in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.called_callback4 mode)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let[@inline never] start()=let owner=Bytes.create 1009 in Weak.set watched 0(Some owner);
+   invoke(fun _ _ _ _->collect();phases:=Weak.check watched 0::!phases;()) owner owner owner owner in
+  start();collect();List.rev !phases,Weak.check watched 0 in
+ assert(lifetime raw=lifetime Prog.called_callback4);
+ print_endline "native saturated 4: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"
+
+let ()=
+ let[@inline never] raw body a b c d e=body a b c d e in
+ let trial invoke mode=
+  let key=Lwt.new_key()and error=Fault "saturated 5"in let trace=ref[]in
+  let owner=ref 17 and payload=Bytes.create 1009 in let pending,wake=Lwt.task()in
+  let body xa xb xc xd xe=
+   assert(xa==owner&&xb==owner&&xc==owner&&xd==owner&&xe==owner);trace:=Lwt.get key::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let answer=try `Promise(Lwt.with_value key(Some 17)(fun()->invoke body owner owner owner owner owner))with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  before,state(),List.rev !trace in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.called_callback5 mode)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let[@inline never] start()=let owner=Bytes.create 1009 in Weak.set watched 0(Some owner);
+   invoke(fun _ _ _ _ _->collect();phases:=Weak.check watched 0::!phases;()) owner owner owner owner owner in
+  start();collect();List.rev !phases,Weak.check watched 0 in
+ assert(lifetime raw=lifetime Prog.called_callback5);
+ print_endline "native saturated 5: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"
+
+let ()=
+ let[@inline never] raw body a b c d e f=body a b c d e f in
+ let trial invoke mode=
+  let key=Lwt.new_key()and error=Fault "saturated 6"in let trace=ref[]in
+  let owner=ref 17 and payload=Bytes.create 1009 in let pending,wake=Lwt.task()in
+  let body xa xb xc xd xe xf=
+   assert(xa==owner&&xb==owner&&xc==owner&&xd==owner&&xe==owner&&xf==owner);trace:=Lwt.get key::!trace;
+   match mode with 0->Lwt.return payload|1->Lwt.fail error|2|3|4->pending|_->raise error in
+  let answer=try `Promise(Lwt.with_value key(Some 17)(fun()->invoke body owner owner owner owner owner owner))with e->`Throw(e==error)in
+  let state()=match answer with `Throw same->`Throw same|`Promise p->match Lwt.state p with
+   |Lwt.Sleep->`Sleep|Lwt.Return value->`Return(value==payload)|Lwt.Fail e->`Fail(e==error,Printexc.to_string e)in
+  let before=state()in
+  Lwt.with_value key(Some 99)(fun()->match mode,answer with 2,_->Lwt.wakeup wake payload|3,_->Lwt.wakeup_exn wake error|4,`Promise p->Lwt.cancel p|_->());
+  before,state(),List.rev !trace in
+ for mode=0 to 5 do assert(trial raw mode=trial Prog.called_callback6 mode)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let[@inline never] start()=let owner=Bytes.create 1009 in Weak.set watched 0(Some owner);
+   invoke(fun _ _ _ _ _ _->collect();phases:=Weak.check watched 0::!phases;()) owner owner owner owner owner owner in
+  start();collect();List.rev !phases,Weak.check watched 0 in
+ assert(lifetime raw=lifetime Prog.called_callback6);
+ print_endline "native saturated 6: full native call frame, aliases, exact errors, pending/wakeup/cancel, saved context and consumed-argument Weak phases passed"

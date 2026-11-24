@@ -147,6 +147,25 @@ Inductive program : Type -> Type :=
 | List_map {A B}(mapper:callback A B)(items:list A) : program(list B)
 | Promise_map_borrowed {Owner A B}(owner:Owner)(body:unit->promise A)
  (next:A->entry B) : program(promise B)
+| New_callback3 {A B C R}
+ (body : (callback A (callback B (callback C (R)))) -> A -> B -> C -> program R)
+ : program (callback A (callback B (callback C (R))))
+| New_callback4 {A B C D R}
+ (body : (callback A (callback B (callback C (callback D (R))))) -> A -> B -> C -> D -> program R)
+ : program (callback A (callback B (callback C (callback D (R)))))
+| New_callback5 {A B C D E R}
+ (body : (callback A (callback B (callback C (callback D (callback E (R)))))) -> A -> B -> C -> D -> E -> program R)
+ : program (callback A (callback B (callback C (callback D (callback E (R))))))
+| Call_callback2 {A B R} (body : callback A (callback B (R)))
+ (a0:A) (a1:B) : program R
+| Call_callback3 {A B C R} (body : callback A (callback B (callback C (R))))
+ (a0:A) (a1:B) (a2:C) : program R
+| Call_callback4 {A B C D R} (body : callback A (callback B (callback C (callback D (R)))))
+ (a0:A) (a1:B) (a2:C) (a3:D) : program R
+| Call_callback5 {A B C D E R} (body : callback A (callback B (callback C (callback D (callback E (R))))))
+ (a0:A) (a1:B) (a2:C) (a3:D) (a4:E) : program R
+| Call_callback6 {A B C D E F R} (body : callback A (callback B (callback C (callback D (callback E (callback F (R)))))))
+ (a0:A) (a1:B) (a2:C) (a3:D) (a4:E) (a5:F) : program R
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -236,3 +255,12 @@ Definition vector_size {A}(items:vector A) : nat :=
  match items with Vector _ size=>size end.
 Definition vector_word_size {A}(items:vector A) : PrimInt63.int :=
  Soma.Word64.Int63Bits.of_N(BinNat.N.of_nat(vector_size items)).
+
+Arguments New_callback3 {A B C R} body.
+Arguments New_callback4 {A B C D R} body.
+Arguments New_callback5 {A B C D E R} body.
+Arguments Call_callback2 {A B R} body a0 a1.
+Arguments Call_callback3 {A B C R} body a0 a1 a2.
+Arguments Call_callback4 {A B C D R} body a0 a1 a2 a3.
+Arguments Call_callback5 {A B C D E R} body a0 a1 a2 a3 a4.
+Arguments Call_callback6 {A B C D E F R} body a0 a1 a2 a3 a4 a5.

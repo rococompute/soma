@@ -2834,3 +2834,10 @@ provider/map call's consumed-owner frame, matching `Promise_bind_borrowed`.
 Native liveness can release dead owners before the provider, while bytecode
 keeps its incoming argument slot until the map. Exceptions, cancellation and
 saved context follow the actual `Lwt.map` boundary.
+
+`Native.New_callback3`, `New_callback4` and `New_callback5` complement the
+two- and six-argument constructors with one native curried closure.
+`Native.Call_callback2` through `Call_callback6` apply a callback at its
+full arity in a single native call frame; unary `Call_callback` remains
+available for explicit partial application. Bodies execute only on saturation,
+with no intermediate program evaluation or fresh closure between arguments.

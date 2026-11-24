@@ -191,6 +191,18 @@ From Corelib Require Import PrimInt63.
 Import caller.
 Definition borrowed_pair {A:Type} (owner:string)(pending:promise A) :=
  Native.Promise_bind_borrowed owner (fun _=>pending)(fun value=>Native.Export(Native.Promise_return value)).
+Definition saturated_check (value:nat) : Native.program nat :=
+ Native.Bind (Native.New_callback2 (fun _ a b1 => Native.Return a)) (fun callback =>
+ Native.Bind (Native.Call_callback2 callback value tt) (fun value =>
+ Native.Bind (Native.New_callback3 (fun _ a b1 b2 => Native.Return a)) (fun callback =>
+ Native.Bind (Native.Call_callback3 callback value tt tt) (fun value =>
+ Native.Bind (Native.New_callback4 (fun _ a b1 b2 b3 => Native.Return a)) (fun callback =>
+ Native.Bind (Native.Call_callback4 callback value tt tt tt) (fun value =>
+ Native.Bind (Native.New_callback5 (fun _ a b1 b2 b3 b4 => Native.Return a)) (fun callback =>
+ Native.Bind (Native.Call_callback5 callback value tt tt tt tt) (fun value =>
+ Native.Bind (Native.New_callback6 (fun _ a b1 b2 b3 b4 b5 => Native.Return a)) (fun callback =>
+ Native.Bind (Native.Call_callback6 callback value tt tt tt tt tt) (fun value =>
+ Native.Return value)))))))))).
 Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
  Native.Bind (Native.Call_callback pair value) (fun second =>
@@ -216,7 +228,7 @@ Definition paired_check (original copied : string) : Native.program (promise nat
  Native.Promise_map_borrowed original (fun _ => combined) (fun result => Native.Export (
  Native.Protect (Native.Raise_failure "native image failure") (fun _ =>
  Native.Protect (Native.Assert_failure "native image assertion" 7 9) (fun _ =>
- curried_check (fst result))))))))))))).
+ Native.Bind (curried_check (fst result)) saturated_check)))))))))))).
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>

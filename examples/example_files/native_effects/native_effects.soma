@@ -180,5 +180,22 @@ Definition quadruple_parts {A B C D:Type}(value:quadruple A B C D):=Export
  (Return(match value with Quadruple a b c d=>(a,(b,(c,d)))end)).
 Definition native_mapped_list {A B}(mapper:callback A B)(items:list A):=Export(List_map mapper items).
 Definition borrowed_map {Owner A B:Type}(owner:Owner)(body:unit->promise A)(next:A->entry B):=Export(Promise_map_borrowed owner body next).
+Definition owned_callback3 {A B C R} (body : A -> B -> C -> promise R) := Export
+ (New_callback3 (fun self a b c => Invoke (fun _ => body a b c)
+   (fun pending => Promise_map (fun _ => pending) (fun result => Export
+    (Invoke (fun _ => opaque self) (fun _ => Return result)))))).
+Definition owned_callback4 {A B C D R} (body : A -> B -> C -> D -> promise R) := Export
+ (New_callback4 (fun self a b c d => Invoke (fun _ => body a b c d)
+   (fun pending => Promise_map (fun _ => pending) (fun result => Export
+    (Invoke (fun _ => opaque self) (fun _ => Return result)))))).
+Definition owned_callback5 {A B C D E R} (body : A -> B -> C -> D -> E -> promise R) := Export
+ (New_callback5 (fun self a b c d e => Invoke (fun _ => body a b c d e)
+   (fun pending => Promise_map (fun _ => pending) (fun result => Export
+    (Invoke (fun _ => opaque self) (fun _ => Return result)))))).
+Definition called_callback2 {A B R} (body : callback A (callback B (R))) (a:A) (b:B) := Export (Call_callback2 body a b).
+Definition called_callback3 {A B C R} (body : callback A (callback B (callback C (R)))) (a:A) (b:B) (c:C) := Export (Call_callback3 body a b c).
+Definition called_callback4 {A B C D R} (body : callback A (callback B (callback C (callback D (R))))) (a:A) (b:B) (c:C) (d:D) := Export (Call_callback4 body a b c d).
+Definition called_callback5 {A B C D E R} (body : callback A (callback B (callback C (callback D (callback E (R)))))) (a:A) (b:B) (c:C) (d:D) (e:E) := Export (Call_callback5 body a b c d e).
+Definition called_callback6 {A B C D E F R} (body : callback A (callback B (callback C (callback D (callback E (callback F (R))))))) (a:A) (b:B) (c:C) (d:D) (e:E) (f:F) := Export (Call_callback6 body a b c d e f).
 Definition main := (update,sequenced,promised,result_alias,result_length,count,protected,rethrow,mapped,bound,caught,finalized,folded,
- mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,literal_asserted,@family_run,@triple_value,@triple_parts,@owned_callback2,@owned_callback6,@promise_ready,@promise_race,native_unit,@native_none,signed_timer,literal_timer,@invalid_value,@borrowed_bind,@tail_called,@tail_record,word_size,@readonly_vector_size,@readonly_vector_word_size,@quadruple_value,@quadruple_parts,@native_mapped_list,@borrowed_map).
+ mapped_list,failed,make_reference,change_reference,asserted,ordinary_entry,filtered,owned_callback,called_callback,make_vector,vector_snapshot,vector_size,get_vector,set_vector,make_builder,append_builder,char_builder,contents_builder,make_table,has_table,find_table,lookup_table,put_table,remove_table,mapped_text,get_byte,get_byte_nat,format_word,format_nat,basename,dirname,concat_path,applied,mapped_callback,bound_callback,deferred_read,deferred_force,substring,missing_value,text_size,@mapped_vector,owned_mapped_vector,consumed_list,consumed_list_after,@finished_loop,@paired_promises,@started_pair,@started_nested_pair,@failure_value,literal_failure_value,literal_asserted,@family_run,@triple_value,@triple_parts,@owned_callback2,@owned_callback6,@promise_ready,@promise_race,native_unit,@native_none,signed_timer,literal_timer,@invalid_value,@borrowed_bind,@tail_called,@tail_record,word_size,@readonly_vector_size,@readonly_vector_word_size,@quadruple_value,@quadruple_parts,@native_mapped_list,@borrowed_map,@owned_callback3,@owned_callback4,@owned_callback5,@called_callback2,@called_callback3,@called_callback4,@called_callback5,@called_callback6).

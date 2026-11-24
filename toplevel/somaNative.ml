@@ -54,7 +54,8 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.new_callback2" "Soma_effect.new_callback6"
    "Soma_effect.promise_unit" "Soma_effect.promise_none"
    "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int"
-   "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" "Soma_effect.list_map" "Soma_effect.promise_map_borrowed" ]
+   "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" "Soma_effect.list_map" "Soma_effect.promise_map_borrowed"
+   "Soma_effect.new_callback3" "Soma_effect.new_callback4" "Soma_effect.new_callback5" "Soma_effect.call_callback2" "Soma_effect.call_callback3" "Soma_effect.call_callback4" "Soma_effect.call_callback5" "Soma_effect.call_callback6" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
@@ -151,6 +152,22 @@ let new_callback6 body () =
   let rec self a b c d e f = export (body self a b c d e f) in self
 let[@inline never] run_callback body argument = body argument
 let call_callback (body, argument) () = run_callback body argument
+let new_callback3 body () =
+  let rec self a b c = export (body self a b c) in self
+let new_callback4 body () =
+  let rec self a b c d = export (body self a b c d) in self
+let new_callback5 body () =
+  let rec self a b c d e = export (body self a b c d e) in self
+let[@inline never] run_callback2 body a b = body a b
+let call_callback2 (body, a, b) () = run_callback2 body a b
+let[@inline never] run_callback3 body a b c = body a b c
+let call_callback3 (body, a, b, c) () = run_callback3 body a b c
+let[@inline never] run_callback4 body a b c d = body a b c d
+let call_callback4 (body, a, b, c, d) () = run_callback4 body a b c d
+let[@inline never] run_callback5 body a b c d e = body a b c d e
+let call_callback5 (body, a, b, c, d, e) () = run_callback5 body a b c d e
+let[@inline never] run_callback6 body a b c d e f = body a b c d e f
+let call_callback6 (body, a, b, c, d, e, f) () = run_callback6 body a b c d e f
 let vector_of_list items () = Array.of_list items
 let vector_to_list items () = Array.to_list items
 let vector_length items () = Array.length items
