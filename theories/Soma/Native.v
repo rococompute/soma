@@ -278,3 +278,8 @@ Arguments Pure_callback {A B} body.
 Arguments Pure_callback2 {A B R} body.
 
 Arguments Borrowed_scope {Owner A B} owner before next.
+
+(** A native callback followed immediately by its continuation needs no
+    intermediate callback program or tuple of nested programs. *)
+Definition call_then {A B R}(body:callback A B)(argument:A)
+ (next:B->program R) : program R := Bind(Call_callback body argument)next.

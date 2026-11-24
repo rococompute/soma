@@ -63,6 +63,7 @@ Extract Inductive Soma.Native.entry => "Soma_effect.entry"
 Extract Constant Soma.Native.opaque => "Sys.opaque_identity".
 Extract Constant Soma.Native.ordinary => "Fun.id".
 Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".
+Extract Constant Soma.Native.call_then => "Soma_effect.call_then".
 Extract Constant Soma.Native.tail_invoke => "Soma_effect.tail_invoke".
 Extract Constant Soma.Native.word_length => "String.length".
 Extract Constant Soma.Native.vector_size => "Array.length".
@@ -91,6 +92,9 @@ let bind (before, next) () = let value = before () in next value ()
 let[@inline never] run_borrowed_scope _owner before next =
   let value = before () in next value ()
 let borrowed_scope (owner, before, next) () = run_borrowed_scope owner before next
+let[@inline never] run_call_then body argument next =
+  let value = body argument in next value ()
+let call_then body argument next () = run_call_then body argument next
 let loop (step, initial) () =
   let rec advance state = match step state () with
     | Continue state -> advance state

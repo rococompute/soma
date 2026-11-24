@@ -2861,3 +2861,9 @@ caller's incoming argument frame through `before`, then releases the frame
 before tail-entering `next`. The owner is not artificially pinned: native
 liveness may release it sooner while bytecode retains its incoming slot.
 Body and continuation exceptions retain their ordinary synchronous scopes.
+
+`Native.call_then callback argument next` is defined as `Bind` after
+`Call_callback`, with a fused native boundary. It avoids an intermediate
+callback program and nested program tuples while preserving direct callback
+argument/continuation frames, exceptions and context. It adds no evaluator or
+logical assumption.

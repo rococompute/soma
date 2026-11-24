@@ -193,7 +193,7 @@ Definition borrowed_pair {A:Type} (owner:string)(pending:promise A) :=
  Native.Promise_bind_borrowed owner (fun _=>pending)(fun value=>Native.Export(Native.Promise_return value)).
 Definition saturated_check (value:nat) : Native.program nat :=
  Native.Bind (Native.Pure_callback (fun value:nat=>value)) (fun unary =>
- Native.Bind (Native.Call_callback unary value) (fun value =>
+ Native.call_then unary value (fun value =>
  Native.Bind (Native.Pure_callback2 (fun (value:nat) (_:unit)=>value)) (fun binary =>
  Native.Bind (Native.Call_callback2 binary value tt) (fun value =>
  Native.Bind (Native.New_callback2 (fun _ a b1 => Native.Return a)) (fun callback =>

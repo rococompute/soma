@@ -999,3 +999,23 @@ let ()=
  let body()=Lwt.return(Bytes.create 1009)in let next promise=promise in
  let pending=body()in assert(Prog.borrowed_scope()(fun()->pending)next==pending);
  print_endline "native borrowed synchronous scope: incoming owner Weak phases, release before tail continuation, aliases, exact body/next exceptions and dynamic scope passed"
+
+let ()=
+ let[@inline never] raw body argument next=let value=body argument in next value in
+ let trial invoke fault=
+  let key=Lwt.new_key()and error=Fault "fused callback"and events=ref[]in
+  let argument=Bytes.create 1009 in let reply=ref 17 in
+  let body value=events:=("body",Lwt.get key)::!events;assert(value==argument);if fault=1 then raise error else reply in
+  let next value=events:=("next",Lwt.get key)::!events;assert(value==reply);if fault=2 then raise error else value in
+  let result=try `Return(Lwt.with_value key(Some 17)(fun()->invoke body argument next)==reply)with e->`Throw(e==error)in
+  result,List.rev !events in
+ for fault=0 to 2 do assert(trial raw fault=trial Prog.fused_callback fault)done;
+ let lifetime invoke=
+  let watched=Weak.create 1 and phases=ref[]in
+  let sample label=collect();phases:=(label,Weak.check watched 0)::!phases in
+  let[@inline never] start()=let argument=Bytes.create 1013 in Weak.set watched 0(Some argument);
+   invoke(fun _->sample "body";())argument(fun _->sample "next";())in
+  start();sample "after";List.rev !phases in
+ assert(lifetime raw=lifetime Prog.fused_callback);
+ let pending,_=Lwt.task()in assert(Prog.fused_callback(fun _->pending)()(fun value->value)==pending);
+ print_endline "native fused callback continuation: direct argument/continuation Weak phases, aliases, exact exception identity and dynamic scope passed"
