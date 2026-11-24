@@ -551,7 +551,9 @@ let native_callback name typ operation =
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
-     (match EConstr.kind sigma(List.hd args_types)with
+     (let input=List.hd args_types in
+      if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") input then () else
+      match EConstr.kind sigma input with
       |Const(c,_)->(match Cmap_env.find_opt c !bindings with
         |Some{item=SomaForeign.OCamlNativeType _;_}->()
         |_->native_error "constructor operations need a declared native type")

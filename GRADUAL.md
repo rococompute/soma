@@ -2797,7 +2797,10 @@ named constructor. `OCaml Native Case builtin : kind -> option string :=
 "Vfs.Builtin" 1.` borrows its payload when matched. The explicit arity is
 checked by OCaml patterns; zero-argument cases return `option unit`, and
 multiargument cases return right-nested products in argument order. Tags
-can ignore inline-record payloads. Input types must be declared native types;
+can ignore inline-record payloads. Inputs may be declared native types or
+Soma's built-in `exception_value`; the latter permits typed filtering of caught
+native exceptions without a handwritten conversion adapter. Use qualified
+constructor paths for built-in exceptions;
 constructor paths, arities and signatures are hashed. Generated typed matches
 use no casts or runtime layout offsets, and incorrect ABI declarations fail
 OCaml compilation. Unqualified constructor names use the input type's module.

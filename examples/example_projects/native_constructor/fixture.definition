@@ -1,4 +1,5 @@
 From Soma Require Native.
+From Corelib Require Import PrimInt63.
 OCaml Native Type kind := "kind".
 OCaml Native Type table := "table".
 OCaml Native Tag is_empty : kind -> bool := "Empty" 0.
@@ -14,3 +15,8 @@ OCaml Native Callback make : unit -> kind := "make".
 OCaml Native External Type native_error := "exn".
 OCaml Native Tag is_missing : native_error -> bool := "Not_found" 0.
 OCaml Native Case failure : native_error -> option string := "Stdlib.Failure" 1.
+
+OCaml Native Tag builtin_missing : exception_value -> bool := "Stdlib.Not_found" 0.
+OCaml Native Case builtin_failure : exception_value -> option string := "Stdlib.Failure" 1.
+OCaml Native Case builtin_fault : exception_value -> option PrimInt63.int := "Fixture.Fault" 1.
+OCaml Native Callback make_fault : unit -> exception_value := "make_fault".

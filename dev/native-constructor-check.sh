@@ -40,6 +40,12 @@ let ()=
  )values;
  ensure"global unqualified nullary constructor"(Prog.missing_tag Not_found&&not(Prog.missing_tag(Failure a)));
  ensure"qualified exception payload alias"(match Prog.failure_text(Failure a)with Some text->text==a|_->false);
+ ensure"builtin exception tag"(Prog.core_missing Not_found&&not(Prog.core_missing(Failure a)));
+ ensure"builtin exception payload alias"(match Prog.core_failure(Failure a)with Some text->text==a|_->false);
+ let error=Fixture.Fault 71 and unrelated=Failure a in let key=Lwt.new_key()in
+ ensure"Protect exception enters typed native Case"(Lwt.with_value key(Some 17)(fun()->Prog.core_recover(fun()->ensure"provider context"(Lwt.get key=Some 17);raise error))=Some 71);
+ ensure"unmatched exception identity"(try ignore(Prog.core_recover(fun()->raise unrelated));false with e->e==unrelated);
+ ensure"successful body remains successful"(Prog.core_recover(fun()->())=None);
  let payload=Option.get(Prog.name_value(Name a))in Bytes.set(Bytes.unsafe_of_string a)0 '?';ensure"mutable payload alias"(payload.[0]='?');
  let found=Option.get(Prog.directory_value(Directory table))in Hashtbl.replace found "key" b;ensure"mutable table alias"(Hashtbl.find table "key"==b);
  let consume project make=
@@ -98,17 +104,21 @@ if [ "${SOMA_TEST_HVF:-0}" = 1 ];then
  mkdir "$WORK/image"
  cp "$HERE"/examples/example_projects/native_constructor/fixture.* "$WORK/image/"
  printf '[project]\nname="native_constructor_image"\nversion="0.1.0"\n' > "$WORK/image/soma.toml"
- printf 'From Soma Require Native.\ninvoke : (unit -> Native.entry string) -> string.\n' > "$WORK/image/caller.definition"
- printf 'let invoke f = f ()\n' > "$WORK/image/caller.ml"
+ printf 'From Soma Require Native.\nFrom Corelib Require Import PrimInt63.\ninvoke : (unit -> Native.entry string) -> string.\ninvoke_code : (unit -> Native.entry (option PrimInt63.int)) -> option PrimInt63.int.\n' > "$WORK/image/caller.definition"
+ printf 'let invoke f = f ()\nlet invoke_code f = f ()\n' > "$WORK/image/caller.ml"
  cat > "$WORK/image/main.soma" <<'SOMA'
 Require Import Sandbox.
+From Corelib Require Import PrimInt63.
 From Soma Require Native.
 Import fixture caller.
 Definition probe:=Native.Export(Native.Bind(Native.Call_callback make tt)(fun value=>
  Native.Bind(Native.Call_callback name value)(fun result=>Native.Return(match result with Some text=>text|None=>"missing"end)))).
+Definition caught:=Native.Export(Native.Bind(Native.Call_callback make_fault tt)(fun error=>
+ Native.Protect (Native.Throw error) (fun reason=>Native.Call_callback builtin_fault reason))).
 Definition main:io unit:=
+ code<-call(fun _=>invoke_code(fun _=>caught));;
  text<-call(fun _=>invoke(fun _=>probe));;
- if String.eqb text "native constructor"then print "native constructor bindings in Solo5 verified"else exit 1.
+ if andb (match code with Some value=>PrimInt63.eqb value 17%uint63|None=>false end) (String.eqb text "native constructor")then print "native constructor bindings in Solo5 verified"else exit 1.
 SOMA
  SOMA_MIRAGE_SWITCH=${SOMA_MIRAGE_SWITCH:-kykeon} SOMA_MIRAGE_DIR="$WORK/image-project" \
  SOMA_OCAML_BINDINGS_MODULE=Constructor_image_bindings "$SOMA" build "$WORK/image/main.soma" > "$WORK/image-build.log" 2>&1

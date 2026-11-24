@@ -11,4 +11,10 @@ Definition triple_value value:=Native.Export(Native.Call_callback triple value).
 Definition directory_value value:=Native.Export(Native.Call_callback directory value).
 Definition missing_tag value:=Native.Export(Native.Call_callback is_missing value).
 Definition failure_text value:=Native.Export(Native.Call_callback failure value).
-Definition main:=(empty_tag,name_tag,pair_tag,inline_tag,empty_value,name_value,pair_value,triple_value,directory_value,missing_tag,failure_text).
+Definition core_missing value:=Native.Export(Native.Call_callback builtin_missing value).
+Definition core_failure value:=Native.Export(Native.Call_callback builtin_failure value).
+Definition core_recover (body:unit->unit):=Native.Export
+ (Native.Protect (Native.Invoke body (fun _=>Native.Return None)) (fun error=>
+  Native.Bind (Native.Call_callback builtin_fault error) (fun matched=>match matched with
+   Some value=>Native.Return(Some value)|None=>Native.Throw error end))).
+Definition main:=(empty_tag,name_tag,pair_tag,inline_tag,empty_value,name_value,pair_value,triple_value,directory_value,missing_tag,failure_text,core_missing,core_failure,core_recover).
