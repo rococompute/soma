@@ -186,7 +186,7 @@ let rec ocaml_type env sigma vars t =
     else if is "soma.native.entry" then arg (List.hd args) ^ " Soma_effect.entry"
     else if is "soma.native.callback" then
       "(" ^ String.concat ", " (List.map arg args) ^ ") Soma_effect.callback"
-    else if is "soma.native.triple" then
+    else if is "soma.native.triple" || is "soma.native.quadruple" then
       "(" ^ String.concat " * " (List.map arg args) ^ ")"
     else if is "soma.native.vector" then arg (List.hd args) ^ " Soma_effect.vector"
     else if is "soma.native.text_buffer" then "Soma_effect.text_buffer"

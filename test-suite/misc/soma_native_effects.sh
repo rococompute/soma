@@ -101,6 +101,36 @@ if (cd triple/native && dune build --profile release) >> bad-triple-signature.lo
  echo 'accepted a nested pair at the flat native triple boundary' >&2; exit 1
 fi
 grep -q 'expected of type\|but an expression was expected' bad-triple-signature.log
+# Four-component native tuples must stay flat across a real FFI signature.
+mkdir quadruple
+cat > quadruple/caller.definition <<'SOMA'
+From Soma Require Native.
+OCaml Native Callback check : Native.quadruple nat unit bool string -> nat := "check".
+SOMA
+printf 'let check (value, (), flag, text) = if flag && text = "payload" then value else 0\n' > quadruple/caller.ml
+cat > quadruple/main.soma <<'SOMA'
+From Soma Require Native.
+Import caller.
+Definition main:=Native.Export(Native.Call_callback check(Native.Quadruple 42 tt true "payload")).
+SOMA
+(cd quadruple && soma extract main.soma -o native && cd native && dune build --profile release) > quadruple-signature.log 2>&1
+printf 'let check (value, ((), (flag, text))) = if flag && text = "payload" then value else 0\n' > quadruple/caller.ml
+(cd quadruple && soma extract main.soma -o native) > bad-quadruple-signature.log 2>&1
+if (cd quadruple/native && dune build --profile release) >> bad-quadruple-signature.log 2>&1;then
+ echo 'accepted a nested tuple at the flat quadruple boundary' >&2;exit 1
+fi
+grep -q 'Error:' bad-quadruple-signature.log
+cat > inspect_vector_custom.soma <<'SOMA'
+From Corelib Require Extraction.
+From Soma Require Native.
+Definition forbidden (value:Native.vector nat):nat:=match value with Native.Vector id size=>size end.
+Extract Constant forbidden => "Array.length".
+Definition main:=forbidden.
+SOMA
+if soma extract inspect_vector_custom.soma -o inspected_vector_custom > inspect_vector_custom.log 2>&1;then
+ echo 'accepted a consumer vector eliminator with a custom extraction mapping' >&2;exit 1
+fi
+grep -q 'Native programs and entry points cannot be inspected' inspect_vector_custom.log
 # Native storage handles carry their actual Stdlib types across definitions.
 mkdir storage
 printf '[project]\nname = "native_storage_signature"\nversion = "0.1.0"\n' > storage/soma.toml
@@ -130,7 +160,7 @@ fi
 grep -q 'vector\|array' bad-storage-signature.log
 for handle in vector buffer table; do
  case "$handle" in
-  vector) handle_type='vector nat'; handle_pattern='Vector id' ;;
+  vector) handle_type='vector nat'; handle_pattern='Vector id size' ;;
   buffer) handle_type='text_buffer'; handle_pattern='Text_buffer id' ;;
   table) handle_type='table nat nat'; handle_pattern='Table id' ;;
  esac
@@ -151,8 +181,9 @@ cat > image/caller.definition <<'SOMA'
 Require Import Soma.Native.
 invoke : (unit -> entry (promise nat)) -> promise nat.
 OCaml Native Callback check_triple : triple nat unit bool -> nat := "check_triple".
+OCaml Native Callback check_quadruple : quadruple nat unit bool string -> nat := "check_quadruple".
 SOMA
-printf 'let invoke f = f ()\nlet check_triple (value, (), flag) = if flag then value else 0\n' > image/caller.ml
+printf 'let invoke f = f ()\nlet check_triple (value, (), flag) = if flag then value else 0\nlet check_quadruple (value, (), flag, text) = if flag && text = "quadruple" then value else 0\n' > image/caller.ml
 cat > image/main.soma <<'SOMA'
 Require Import Sandbox.
 Require Import Soma.Native.
@@ -165,7 +196,8 @@ Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.Call_callback pair value) (fun second =>
  Native.Bind (Native.Call_callback second tt) (fun pair =>
  Native.Bind (Native.New_callback6 (fun _ (a : nat) (b : unit) (c : bool) (d e f : unit) =>
-   Native.Call_callback check_triple (Native.Triple a b c))) (fun callback =>
+   Native.Bind (Native.Call_callback check_triple (Native.Triple a b c)) (fun checked =>
+   Native.Call_callback check_quadruple (Native.Quadruple checked b c "quadruple")))) (fun callback =>
  Native.Bind (Native.Call_callback callback (fst pair)) (fun next =>
  Native.Bind (Native.Call_callback next (snd pair)) (fun next =>
  Native.Bind (Native.Call_callback next true) (fun next =>
@@ -188,7 +220,9 @@ Definition paired_check (original copied : string) : Native.program (promise nat
 Definition native_probe : Native.entry (promise nat) := Native.Export
  (Native.Bind (Native.Vector_of_list ("payload"::nil)) (fun items =>
  Native.Bind (Native.New_callback (fun _ value => Native.Return value)) (fun mapper =>
- Native.Bind (Native.Vector_map mapper items) (fun mapped_items =>
+ Native.Bind (Native.Bind (Native.Vector_map mapper items) (fun mapped =>
+  if andb (Nat.eqb (Native.vector_size mapped) 1) (PrimInt63.eqb (Native.vector_word_size mapped) 1%uint63)
+  then Native.Return mapped else Native.Raise_failure "readonly size mismatch")) (fun mapped_items =>
  Native.Bind (Native.New_text_buffer 0%uint63) (fun buffer =>
  Native.Bind (Native.Text_buffer_append buffer "payload") (fun _ =>
  Native.Bind (Native.Text_buffer_contents buffer) (fun text =>

@@ -2801,3 +2801,12 @@ can ignore inline-record payloads. Input types must be declared native types;
 constructor paths, arities and signatures are hashed. Generated typed matches
 use no casts or runtime layout offsets, and incorrect ABI declarations fail
 OCaml compilation. Unqualified constructor names use the input type's module.
+
+`Native.vector_size` observes a native array's readonly header as a natural;
+`Native.vector_word_size` gives its low 63 bits for machine-word policies.
+The vector model records that immutable size alongside its opaque identity.
+Extraction uses `Array.length` directly, preserving ordinary native caller
+expressions and allocation behavior. Mutable element operations stay native
+effects; extracted code still cannot construct or inspect opaque vectors.
+`Native.quadruple` represents a native flat four-tuple with borrowed components,
+complementing `Native.triple` for typed native interfaces.

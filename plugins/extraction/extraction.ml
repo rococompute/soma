@@ -1742,6 +1742,15 @@ let extract_constant table access env kn inst cb =
         (match cb.const_body with
           | Symbol _ -> add_symbol (Common.State.get_table table) r.glob; mk_ax ()
           | Primitive _ | Undef _ -> warn_info (); mk_ax ()
+          | Def _ when is_custom r &&
+              List.mem (Constant.to_string kn)
+                ["Soma.Native.vector_size"; "Soma.Native.vector_word_size"] ->
+            (* These checked readonly specifications match the logical vector's
+               ghost header. Their native implementations are Array.length;
+               do not generate a forbidden native-vector eliminator for the
+               discarded specification body. Every consumer-defined vector
+               match still passes through extract_case's inspection guard. *)
+            mk_ax ()
           | Def c ->
              (match Structures.PrimitiveProjections.find_opt kn with
               | None -> mk_def (qmono cb.const_universes inst c)

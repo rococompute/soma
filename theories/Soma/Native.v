@@ -34,10 +34,12 @@ Register native_handle as soma.native.handle.
     type, preserving negative values and native bounds errors at the ABI. This
     reuses [PrimInt63.int], the existing kernel primitive type; no storage
     axiom or logical evaluator is introduced. *)
-Inductive vector (A : Type) : Type := Vector (id : nat).
+(** The logical size is readonly, as is a native array's header. Elements
+    remain native mutable storage; no logical array evaluator is introduced. *)
+Inductive vector (A : Type) : Type := Vector (id size : nat).
 Inductive text_buffer : Type := Text_buffer (id : nat).
 Inductive table (K V : Type) : Type := Table (id : nat).
-Arguments Vector {A} id. Arguments Table {K V} id.
+Arguments Vector {A} id size. Arguments Table {K V} id.
 Register vector as soma.native.vector.
 Register text_buffer as soma.native.text_buffer.
 Register table as soma.native.table.
@@ -54,6 +56,11 @@ Register result as soma.native.result.
 Inductive triple (A B C : Type) := Triple (first : A) (second : B) (third : C).
 Arguments Triple {A B C} first second third.
 Register triple as soma.native.triple.
+
+Inductive quadruple (A B C D:Type) := Quadruple (first:A)(second:B)(third:C)(fourth:D).
+Arguments Quadruple {A B C D} first second third fourth.
+Register quadruple as soma.native.quadruple.
+
 
 Inductive progress (S A : Type) := Continue (state : S) | Finish (value : A).
 Arguments Continue {S A} state.
@@ -217,3 +224,10 @@ Definition tail_invoke {A} (primitive:unit->A) : program A := Invoke primitive R
     definition takes its low 63 bits; native OCaml strings fit in that range. *)
 Definition word_length (text:string) : PrimInt63.int :=
  Soma.Word64.Int63Bits.of_N (BinNat.N.of_nat (String.length text)).
+
+(** Pure readonly observations preserve native caller expression shapes. The
+    ghost size describes the array header, which element updates preserve. *)
+Definition vector_size {A}(items:vector A) : nat :=
+ match items with Vector _ size=>size end.
+Definition vector_word_size {A}(items:vector A) : PrimInt63.int :=
+ Soma.Word64.Int63Bits.of_N(BinNat.N.of_nat(vector_size items)).

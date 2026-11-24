@@ -699,3 +699,18 @@ let ()=
 let ()=
  List.iter(fun size->let text=String.init size(fun i->Char.chr(i land 255))in assert(Prog.word_size text=String.length text))[0;1;2;255;256;4096;1000000];
  print_endline "native word length: exact byte count, embedded NUL/high bytes, empty and large strings passed"
+
+let ()=
+ List.iter(fun size->
+  let items=Array.init size(fun i->string_of_int i)in
+  assert(Prog.readonly_vector_size items=Array.length items&&Prog.readonly_vector_word_size items=Array.length items);
+  if size>0 then items.(size-1)<-"changed";
+  assert(Prog.readonly_vector_size items=Array.length items&&Prog.readonly_vector_word_size items=Array.length items)
+ )[0;1;2;4096;1000000];
+ let doubles=[|0.;1.;nan|]in assert(Prog.readonly_vector_size doubles=3&&Prog.readonly_vector_word_size doubles=3);
+ let a=Bytes.to_string(Bytes.make 1001 'a')and b=ref 17 and c=[|19|]and d=Bytes.create 31 in
+ let tuple=Prog.quadruple_value a b c d in
+ let x,y,z,w=tuple in assert(x==a&&y==b&&z==c&&w==d);
+ let x,(y,(z,w))=Prog.quadruple_parts tuple in assert(x==a&&y==b&&z==c&&w==d);
+ assert(Obj.size(Obj.repr tuple)=4);
+ print_endline "native readonly array sizes and flat quadruples: empty/large/float arrays, element updates, exact four-field layout and borrowed payload identities passed"
