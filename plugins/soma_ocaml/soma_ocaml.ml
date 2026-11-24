@@ -811,7 +811,7 @@ let native_callback name typ operation =
     | SomaForeign.NativePrimitive _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
-    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _
+    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ -> Some 1 in
@@ -888,7 +888,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
-   | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _
+   | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
@@ -900,6 +900,19 @@ let native_callback name typ operation =
    | SomaForeign.NativeBuild _ | SomaForeign.NativeBuildEvaluating _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
+  (* References within the owned schema use local type names; checked
+     handler types name the same members through their generated module. *)
+  let local_record_type prefix annotation =
+    let buffer = Buffer.create (String.length annotation) in
+    let rec copy start =
+      match CString.string_index_from annotation start prefix with
+      | stop ->
+        Buffer.add_substring buffer annotation start (stop - start);
+        copy (stop + String.length prefix)
+      | exception Not_found ->
+        Buffer.add_substring buffer annotation start (String.length annotation - start) in
+    copy 0;
+    Buffer.contents buffer in
   let operation = match operation with
     | SomaForeign.NativeCallableApply _ ->
       let c=native_callable_type env sigma type_vars(List.hd args_types)in
@@ -1027,6 +1040,33 @@ let native_callback name typ operation =
       if List.length (List.sort_uniq String.compare fields) <> List.length fields then
         native_error "inline record fields must be distinct";
       SomaForeign.NativeInlineBuild (native_constructor_path path, List.map field fields)
+    | SomaForeign.NativeGetFunction (name, _) ->
+      if argument_names <> ["unit"] then native_error "a record getter takes unit";
+      let parameters, value = arguments [] (Some 1) result in
+      let receiver = match parameters with
+        | [receiver, None] -> receiver
+        | _ -> native_error "a record getter returns a positional selector" in
+      let head, type_args = EConstr.decompose_app sigma receiver in
+      let fields, local = match EConstr.kind sigma head with
+        | Const (c, _) when Array.length type_args = 0 ->
+          (match Cmap_env.find_opt c !bindings with
+          | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ } ->
+            (match List.assoc member group.SomaForeign.algebraic_members with
+            | SomaForeign.Algebraic_record fields ->
+              fields, local_record_type (SomaForeign.native_algebraic_module group ^ ".")
+            | _ -> native_error "record getter needs a native record")
+          | Some { item = (SomaForeign.OCamlNativeOwnedRecord record
+                        | SomaForeign.OCamlNativeImmutableRecord (record, _)); _ } ->
+            record.SomaForeign.record_fields, Fun.id
+          | _ -> native_error "record getter needs an owned native record")
+        | _ -> native_error "record getter needs an owned native record" in
+      let name = field name in
+      let declaration = match List.find_opt (fun f -> f.SomaForeign.field_name = name) fields with
+        | Some declaration -> declaration
+        | None -> native_error "record getter field is absent from its schema" in
+      if local (ocaml_type env sigma type_vars value) <> declaration.SomaForeign.field_type then
+        native_error "record getter result disagrees with its field type";
+      SomaForeign.NativeGetFunction (name, ocaml_type env sigma type_vars receiver)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)
@@ -1071,13 +1111,17 @@ let native_callback name typ operation =
         | _ -> native_error "record factory field and argument counts differ" in
       let owner = check fields result in
       SomaForeign.NativeRecordFactory (List.map field fields, reading, owner)
-    | SomaForeign.NativeVariantDispatch (cases, _) ->
+    | SomaForeign.NativeVariantDispatch (cases, _, with_context) ->
       if argument_names <> ["unit"] then native_error "a variant dispatch getter takes unit";
-      let parameters, terminal = arguments [] (Some (List.length cases + 1)) result in
-      let receiver, handlers = match List.rev parameters with
-        | (receiver, None) :: handlers when List.length handlers = List.length cases ->
-          receiver, List.rev handlers
-        | _ -> native_error "variant dispatch takes one handler per case and a variant value" in
+      let arity = List.length cases + if with_context then 2 else 1 in
+      let parameters, terminal = arguments [] (Some arity) result in
+      let receiver, context, handlers = match with_context, List.rev parameters with
+        | true, (receiver, None) :: (context, None) :: handlers
+          when List.length handlers = List.length cases ->
+          receiver, Some (ocaml_type env sigma type_vars context), List.rev handlers
+        | false, (receiver, None) :: handlers when List.length handlers = List.length cases ->
+          receiver, None, List.rev handlers
+        | _ -> native_error "variant dispatch takes one handler per case, then its context (if declared) and variant value" in
       let head, type_args = EConstr.decompose_app sigma receiver in
       let group, member = match EConstr.kind sigma head with
         | Const (c, _) ->
@@ -1095,20 +1139,7 @@ let native_callback name typ operation =
          sorted (List.map fst constructors) then
         native_error "variant dispatch must cover every constructor once";
       let owner = ocaml_type env sigma type_vars receiver in
-      (* References within the owned schema use local type names; checked
-         handler types name the same members through their generated module. *)
-      let prefix = SomaForeign.native_algebraic_module group ^ "." in
-      let local annotation =
-        let buffer = Buffer.create (String.length annotation) in
-        let rec copy start =
-          match CString.string_index_from annotation start prefix with
-          | stop ->
-            Buffer.add_substring buffer annotation start (stop - start);
-            copy (stop + String.length prefix)
-          | exception Not_found ->
-            Buffer.add_substring buffer annotation start (String.length annotation - start) in
-        copy 0;
-        Buffer.contents buffer in
+      let local = local_record_type (SomaForeign.native_algebraic_module group ^ ".") in
       let result = ocaml_type env sigma type_vars terminal in
       let validate (constructor, pattern, keep_receiver) (handler, label) =
         if Option.has_some label then native_error "variant dispatch handlers are positional";
@@ -1129,6 +1160,7 @@ let native_callback name typ operation =
           | _ -> native_error "variant dispatch pattern disagrees with the declared constructor" in
         let expected = if keep_receiver then owner :: expected else expected in
         let expected = if expected = [] then ["unit"] else expected in
+        let expected = match context with Some typ -> typ :: expected | None -> expected in
         let parameters, answer = arguments [] (Some (List.length expected)) handler in
         let types = List.map (fun (typ, label) ->
             if Option.has_some label then native_error "variant dispatch callback parameters are positional";
@@ -1137,7 +1169,7 @@ let native_callback name typ operation =
            ocaml_type env sigma type_vars answer <> result then
           native_error ("variant dispatch handler disagrees with its payload or result: " ^ constructor);
         constructor, pattern, keep_receiver in
-      SomaForeign.NativeVariantDispatch (List.map2 validate cases handlers, owner)
+      SomaForeign.NativeVariantDispatch (List.map2 validate cases handlers, owner, with_context)
     | SomaForeign.NativeBuild fields | SomaForeign.NativeCopy fields as op ->
       let expected = List.length fields + (match op with SomaForeign.NativeCopy _ -> 1 | _ -> 0) in
       if List.length args<>expected then native_error "record field and argument counts differ";
@@ -1179,8 +1211,11 @@ let native_getter name result operation =
   in
   native_callback name (insert_unit result) operation
 
-let native_variant_dispatch name result cases =
-  native_getter name result (SomaForeign.NativeVariantDispatch (cases, ""))
+let native_get_function name result field =
+  native_getter name result (SomaForeign.NativeGetFunction (field, ""))
+
+let native_variant_dispatch name result cases with_context =
+  native_getter name result (SomaForeign.NativeVariantDispatch (cases, "", with_context))
 
 let native_record_factory name result fields reading =
   native_getter name result (SomaForeign.NativeRecordFactory (fields, reading, ""))

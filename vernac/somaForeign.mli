@@ -79,11 +79,12 @@ type native_dispatch_pattern =
 type native_operation =
   | NativeValue of string
   | NativeGet of string
+  | NativeGetFunction of string * string
   | NativeSet of string
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
   | NativeRecordFactory of string list * string list * string
-  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string
+  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string * bool
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option

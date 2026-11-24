@@ -95,6 +95,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeValue path) }
 | [ "OCaml" "Native" "Get" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeGet field) }
+| [ "OCaml" "Native" "Get" "AsFunction" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
+  { Soma_ocaml.native_get_function name typ field }
 | [ "OCaml" "Native" "Set" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeSet field) }
 | [ "OCaml" "Native" "Build" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) "Evaluating" ne_string_list(evaluated) ] ->
@@ -107,7 +109,10 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_record_factory name typ fields [] }
 | [ "OCaml" "Native" "Variant" "Dispatch" ident(name) ":" native_signature(typ) ":="
     "[" ne_native_dispatch_case_list_sep(cases, ";") "]" ] ->
-  { Soma_ocaml.native_variant_dispatch name typ cases }
+  { Soma_ocaml.native_variant_dispatch name typ cases false }
+| [ "OCaml" "Native" "Variant" "Dispatch" ident(name) ":" native_signature(typ) ":="
+    "[" ne_native_dispatch_case_list_sep(cases, ";") "]" "WithContext" ] ->
+  { Soma_ocaml.native_variant_dispatch name typ cases true }
 | [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END

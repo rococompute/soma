@@ -220,9 +220,11 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let constructor = qualified_constructor path n.result in
       let fields = List.map2 (fun field value -> field ^ " = " ^ value) fields args in
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
+    | SomaForeign.NativeGetFunction (name, owner), [_] ->
+      "(fun (record : " ^ owner ^ ") -> record." ^ field (record_prefix owner) name ^ ")"
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
-    | SomaForeign.NativeVariantDispatch (cases, owner), [_] ->
+    | SomaForeign.NativeVariantDispatch (cases, owner, with_context), [_] ->
       let handler index = "handler" ^ string_of_int index in
       let variables count = List.init count (fun i -> "payload" ^ string_of_int i) in
       let case index (name, pattern, keep_receiver) =
@@ -242,8 +244,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
             " { " ^ String.concat "; " (bindings @ ["_"]) ^ " }", payload in
         let args = if keep_receiver then "value" :: args else args in
         let args = if args = [] then ["()"] else args in
+        let args = if with_context then "context" :: args else args in
         "| " ^ constructor ^ suffix ^ " -> " ^ String.concat " " (handler index :: args) in
-      let parameters = List.mapi (fun index _ -> handler index) cases @ ["value"] in
+      let inputs = if with_context then ["context"; "value"] else ["value"] in
+      let parameters = List.mapi (fun index _ -> handler index) cases @ inputs in
       "(fun " ^ String.concat " " parameters ^ " -> match value with " ^
       String.concat " " (List.mapi case cases) ^ ")"
     | SomaForeign.NativeRecordFactory (names, reading, owner), [_] ->

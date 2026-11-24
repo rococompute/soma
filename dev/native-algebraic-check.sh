@@ -15,6 +15,7 @@ OCaml Native Algebraic graph := [
   node := { mutable content : data; peers : Native.table string node }
 ] Exceptions ["Missing" Of [string]].
 OCaml Native Get get_data : node -> data := "content".
+OCaml Native Get AsFunction acquire_data : node -> data := "content".
 OCaml Native Set set_data : node -> data -> unit := "content".
 OCaml Native Build make : data -> Native.table string node -> node := "content" "peers".
 OCaml Native Build make_lazily : (unit -> data) -> Native.table string node -> node :=
@@ -26,6 +27,10 @@ OCaml Native Variant Dispatch project :
   forall (R : Type), (unit -> R) -> (data -> (PrimInt63.int * string) -> R) ->
     (PrimInt63.int -> string -> R) -> (string -> option node -> R) -> data -> R :=
   ["Empty" DiscardPayload; "Paired" KeepReceiver; "Fields"; "Inline" ReadFields ["payload"; "owner"]].
+OCaml Native Variant Dispatch project_context :
+  forall (R : Type), (node -> unit -> R) -> (node -> data -> (PrimInt63.int * string) -> R) ->
+    (node -> PrimInt63.int -> string -> R) -> (node -> string -> option node -> R) -> node -> data -> R :=
+  ["Empty" DiscardPayload; "Paired" KeepReceiver; "Fields"; "Inline" ReadFields ["payload"; "owner"]] WithContext.
 OCaml Native Constructor empty : unit -> data := "Empty" 0.
 OCaml Native Constructor paired : (PrimInt63.int * string)%type -> data := "Paired" 1.
 OCaml Native Constructor fields : PrimInt63.int -> string -> data := "Fields" 2.
@@ -44,6 +49,8 @@ Definition create value peers := Native.Export (Native.Call_callback make (value
 Definition create_lazily value peers := Native.Export (Native.Call_callback make_lazily (value,peers)).
 Definition create_from_reference := Native.Export (Native.Call_callback make_from_reference tt).
 Definition dispatch := Native.Export (Native.Call_callback (project string) tt).
+Definition dispatch_context := Native.Export (Native.Call_callback (project_context string) tt).
+Definition raw_data := Native.Export (Native.Call_callback acquire_data tt).
 Definition make_empty (_ : unit) := Native.Export (Native.Call_callback empty tt).
 Definition make_pair pair := Native.Export (Native.Call_callback paired pair).
 Definition make_fields count message := Native.Export (Native.Call_callback fields (count,message)).
@@ -52,7 +59,7 @@ Definition read_inline owner := Native.Export (Native.Call_callback inline_paylo
 Definition write_inline owner message := Native.Export (Native.Call_callback set_payload (owner,message)).
 Definition missing message := Native.Export (Native.Call_callback make_missing message).
 Definition missing_message error := Native.Export (Native.Call_callback read_missing error).
-Definition main := (get,set,create,create_lazily,create_from_reference,dispatch,make_empty,make_pair,make_fields,
+Definition main := (get,set,create,create_lazily,create_from_reference,dispatch,dispatch_context,raw_data,make_empty,make_pair,make_fields,
   make_inline,read_inline,write_inline,missing,missing_message).
 SOMA
 "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/extract.log" 2>&1
@@ -121,7 +128,23 @@ let () =
     (print (Storage.Fields (92,text)) == text);
   let inline = Prog.make_inline text (Some node) in
   check "dispatch borrows an inline record field" (print inline == text);
+  let print_with_context = Prog.dispatch_context
+      (fun context () -> check "nullary dispatch context" (context == borrowed); "empty")
+      (fun context source ((_, value) as tuple) ->
+        check "borrowed dispatch context, receiver, and tuple" (context == borrowed && source == paired && tuple == pair);
+        value)
+      (fun context count value -> check "field dispatch context" (context == borrowed && count = 92); value)
+      (fun context value owner ->
+        check "inline dispatch context and recursive owner" (context == borrowed && Option.get owner == node);
+        value) in
+  check "the raw record selector reads each live receiver"
+    (Prog.raw_data node == node.content && Prog.raw_data borrowed == borrowed.content);
+  check "context dispatch keeps nullary payload arity" (print_with_context borrowed Storage.Empty = "empty");
+  check "context dispatch borrows tagged payloads and inline fields"
+    (print_with_context borrowed paired == text && print_with_context borrowed inline == text &&
+     print_with_context borrowed (Storage.Fields (92,text)) == text);
   Prog.set node inline;
+  check "raw record selector rereads the mutable field" (Prog.raw_data node == inline);
   (match Prog.get node with
    | Storage.Inline record ->
        check "inline record block" (Prog.get node == inline && record.payload == text);
@@ -159,6 +182,9 @@ negative unknown_evaluated 'Evaluating "content"/Evaluating "absent"' 'evaluated
 negative dispatch_duplicate '"Paired" KeepReceiver; "Fields"; "Inline" ReadFields/"Paired" KeepReceiver; "Paired"; "Inline" ReadFields' 'variant dispatch must cover every constructor once'
 negative dispatch_unknown_field 'ReadFields \["payload"; "owner"\]/ReadFields ["absent"; "owner"]' 'variant dispatch field is absent'
 negative dispatch_wrong_handler '(string -> option node -> R) -> data -> R/(bool -> option node -> R) -> data -> R' 'variant dispatch handler disagrees'
+negative getter_unknown_field 'acquire_data : node -> data := "content"/acquire_data : node -> data := "missing"' 'record getter field is absent'
+negative getter_wrong_result 'acquire_data : node -> data/acquire_data : node -> string' 'record getter result disagrees'
+negative dispatch_wrong_context '(node -> unit -> R) -> (node/(bool -> unit -> R) -> (node' 'variant dispatch handler disagrees'
 negative unknown_reference 'Reading "content"/Reading "absent"' 'a reference read must name a factory record field'
 negative non_reference 'Soma.Handles.reference data -> Native.table string node/data -> Native.table string node' 'a record factory read needs a reference argument'
 negative non_thunk 'make_lazily : (unit -> data)/make_lazily : data' 'evaluated field needs a unit thunk'

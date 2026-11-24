@@ -63,11 +63,12 @@ type native_dispatch_pattern =
 type native_operation =
   | NativeValue of string
   | NativeGet of string
+  | NativeGetFunction of string * string
   | NativeSet of string
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
   | NativeRecordFactory of string list * string list * string
-  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string
+  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string * bool
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
@@ -315,6 +316,7 @@ let native_identity = function
     | NativeInlineSet (p,f) -> Printf.sprintf "inline-set %S %S" p f
     | NativeInlineBuild (p,fields) ->
       "inline-build " ^ String.concat " " (List.map (Printf.sprintf "%S") (p :: fields))
+    | NativeGetFunction (field, owner) -> Printf.sprintf "get-function %S for %s" field owner
     | NativeGet p->"get "^Printf.sprintf "%S" p
     | NativeSet p->"set "^Printf.sprintf "%S" p
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
@@ -324,7 +326,7 @@ let native_identity = function
     | NativeRecordFactory (fields, reading, owner) ->
       let names fields = String.concat " " (List.map (Printf.sprintf "%S") fields) in
       "record-factory " ^ names fields ^ " reading " ^ names reading ^ " for " ^ owner
-    | NativeVariantDispatch (cases, owner) ->
+    | NativeVariantDispatch (cases, owner, with_context) ->
       let describe (constructor, pattern, keep_receiver) =
         let payload = match pattern with
           | Dispatch_arguments arity -> Printf.sprintf "arguments %d" arity
@@ -332,7 +334,8 @@ let native_identity = function
             String.concat "; " (List.map (Printf.sprintf "%S") names) ^ "]"
           | Dispatch_ignore with_payload -> Printf.sprintf "ignore %b" with_payload in
         Printf.sprintf "%S %s keep_receiver=%b" constructor payload keep_receiver in
-      "variant-dispatch " ^ owner ^ " [" ^ String.concat "; " (List.map describe cases) ^ "]"
+      let context = if with_context then " with context" else "" in
+      "variant-dispatch " ^ owner ^ context ^ " [" ^ String.concat "; " (List.map describe cases) ^ "]"
     | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCallableApply(Some c)->"apply "^native_callable_identity c
     | NativeCallableWrap(Some c)->"wrap "^native_callable_identity c
