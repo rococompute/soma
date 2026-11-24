@@ -2771,3 +2771,14 @@ or retained by the continuation. Native liveness can release a dead owner
 before the provider; bytecode retains its argument slot until the tailcall to
 `Lwt.bind`. The provider, bind semantics, exceptions, cancellation and dynamic
 context are otherwise those of `Native.Promise_bind`.
+
+`Native.tail_invoke primitive` fuses a final `Invoke primitive Return` into a
+native tailcall. It returns the provider's exact value or promise, preserves
+synchronous exceptions, and drops the extra invocation frame before entering
+the provider. Use it when the original native control flow tailcalls a final
+primitive rather than invoking it before further dispatch.
+
+`Native.word_length text` gives a byte length in `PrimInt63.int` for existing
+pure machine-word policies. Its logical definition takes the low 63 bits of
+`String.length`; extraction uses OCaml's `String.length` directly. Native
+strings fit in that range, with no traversal, wrapper, or added assumption.

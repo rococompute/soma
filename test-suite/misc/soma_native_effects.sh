@@ -199,8 +199,10 @@ Definition native_probe : Native.entry (promise nat) := Native.Export
  Native.loop_then (fun remaining => Native.Return (match remaining with
    0 => Native.Finish tt | S next => Native.Continue next end)) 3
    (fun _ => paired_check original copied)))))))))))).
+Definition native_tail_probe : Native.entry(promise nat) := Native.Export
+ (Native.tail_invoke(fun _=>invoke(fun _=>native_probe))).
 Definition main : io unit :=
- pending <- call (fun _ => invoke (fun _ => native_probe)) ;;
+ pending <- call (fun _ => invoke (fun _ => native_tail_probe)) ;;
  value <- await_promise pending ;;
  if Nat.eqb value 42 then print "native library boundary in Solo5 verified" else exit 1.
 SOMA

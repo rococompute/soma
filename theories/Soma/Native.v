@@ -207,3 +207,13 @@ Definition ordinary {A} (value : entry A) : entry A := value.
     evaluator: the symbolic computation is ordinary [Bind] after [Loop]. *)
 Definition loop_then {S A B} (step : S -> program (progress S A)) (initial : S)
     (next : A -> program B) : program B := Bind (Loop step initial) next.
+
+(** Final primitive calls must tailcall their provider. An [Invoke] followed
+    by [Return] has the same symbolic result but retains an extra caller frame
+    around the primitive on bytecode. This fused native boundary drops it. *)
+Definition tail_invoke {A} (primitive:unit->A) : program A := Invoke primitive Return.
+
+(** The native string's byte count as a primitive machine word. The logical
+    definition takes its low 63 bits; native OCaml strings fit in that range. *)
+Definition word_length (text:string) : PrimInt63.int :=
+ Soma.Word64.Int63Bits.of_N (BinNat.N.of_nat (String.length text)).

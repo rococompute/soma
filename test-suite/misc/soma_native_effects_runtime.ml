@@ -672,3 +672,30 @@ let ()=
   sample "returned";before,state(),List.rev !events,List.rev !stages in
  List.iter(fun mode->assert(trial raw mode=trial Prog.borrowed_bind mode))[0;1;2;3;4;5];
  print_endline "native borrowed bind: direct-call owner Weak phases, payload/exception identity, synchronous throw, cancellation and context passed"
+
+let ()=
+ let[@inline never] raw ops argument=ops.Prog.tail_function argument in
+ let trial invoke mode=
+  let weak=Weak.create 3 and stages=ref[]in
+  let sample phase=Gc.full_major();Gc.full_major();stages:=(phase,List.init 3(fun i->Weak.check weak i))::!stages in
+  let error=Fault "tail invoke"and pending,_=Lwt.task()in
+  let function_ _=sample "provider";if mode=1 then raise error else pending in
+  let[@inline never] start ()=
+   let marker=Bytes.to_string(Bytes.make 1001 'm')and argument=Bytes.to_string(Bytes.make 1009 'a')in
+   let ops={Prog.tail_function=function_;tail_marker=marker}in
+   Weak.set weak 0(Some(Obj.repr marker));Weak.set weak 1(Some(Obj.repr argument));Weak.set weak 2(Some(Obj.repr ops));
+   invoke ops argument in
+  let outcome=try let p=start()in assert(p==pending);`Promise with e->assert(e==error);`Throw in
+  sample "returned";outcome,List.rev !stages in
+ List.iter(fun mode->assert(trial raw mode=trial Prog.tail_record mode))[0;1];
+ let key=Lwt.new_key()and reason=Fault "tail context"in
+ let pending,_=Lwt.task()in
+ let provider()=assert(Lwt.get key=Some 17);pending in
+ assert(Lwt.with_value key(Some 17)(fun()->Prog.tail_called provider)==pending);
+ assert(try ignore(Prog.tail_called(fun()->raise reason));false with e->e==reason);
+ Lwt.cancel(Prog.tail_called(fun()->pending));assert(match Lwt.state pending with Lwt.Fail Lwt.Canceled->true|_->false);
+ print_endline "native tail invoke: raw tailcall frames, record/argument Weak phases, exact promise/exception identity, context and cancellation passed"
+
+let ()=
+ List.iter(fun size->let text=String.init size(fun i->Char.chr(i land 255))in assert(Prog.word_size text=String.length text))[0;1;2;255;256;4096;1000000];
+ print_endline "native word length: exact byte count, embedded NUL/high bytes, empty and large strings passed"
