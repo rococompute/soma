@@ -1,0 +1,10 @@
+From Soma Require Native.
+From Stdlib Require Import Strings.String.
+
+OCaml Native External Type timestamp := "Float.t".
+OCaml Native External Value raw_time : timestamp -> string :=
+  "Printf.sprintf" With "%.10f".
+OCaml Native External Value padded : nat -> string :=
+  "Printf.sprintf" With "%02d".
+OCaml Native External Value specialize : string -> string :=
+  "Fixture.specialize" With "a""; failwith ""literal""; (* \payload".

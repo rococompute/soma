@@ -1,0 +1,10 @@
+From Soma Require Native.
+Import functions.
+
+Definition raw_time (_ : unit) :=
+  Native.Export (Native.Call_callback functions.raw_time tt).
+Definition padded (_ : unit) :=
+  Native.Export (Native.Call_callback functions.padded tt).
+Definition specialize (_ : unit) :=
+  Native.Export (Native.Call_callback functions.specialize tt).
+Definition main := (raw_time, padded, specialize).

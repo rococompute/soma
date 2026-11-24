@@ -59,6 +59,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
+ { Soma_ocaml.native_external_constant ~literal name typ path }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
  { Soma_ocaml.native_external_constant name typ path }
 | [ "OCaml" "Native" "External" "Type" ident(name) ":=" string(path) ] ->

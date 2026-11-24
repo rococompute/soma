@@ -2856,6 +2856,18 @@ A polymorphic external value declares named type parameters before its value
 signature. Supply those parameters to the checked getter and then call it with
 unit to obtain the native value at that instance.
 
+An external value can apply the named function to one checked OCaml string
+literal. For example:
+
+```coq
+OCaml Native External Value padded : nat -> string :=
+  "Printf.sprintf" With "%02d".
+```
+
+The generated getter applies the literal when called and returns the resulting
+native function. The OCaml compiler checks the format and result signature.
+Literal characters are escaped as string data in the generated binding.
+
 `Native.loop_values step finish initial` runs an unbounded native loop over
 ordinary state functions. It calls `finish` before each step, and stops as soon
 as the observer returns a result in `Some`. On `None`, it calls `step` once and
