@@ -17,6 +17,7 @@ OCaml Native Algebraic graph := [
 OCaml Native Get get_data : node -> data := "content".
 OCaml Native Get AsFunction acquire_data : node -> data := "content".
 OCaml Native Set set_data : node -> data -> unit := "content".
+OCaml Native Set AsFunction assign_data : node -> data -> unit := "content".
 OCaml Native Build make : data -> Native.table string node -> node := "content" "peers".
 OCaml Native Build make_lazily : (unit -> data) -> Native.table string node -> node :=
   "content" "peers" Evaluating "content".
@@ -51,6 +52,7 @@ Definition create_from_reference := Native.Export (Native.Call_callback make_fro
 Definition dispatch := Native.Export (Native.Call_callback (project string) tt).
 Definition dispatch_context := Native.Export (Native.Call_callback (project_context string) tt).
 Definition raw_data := Native.Export (Native.Call_callback acquire_data tt).
+Definition raw_set := Native.Export (Native.Call_callback assign_data tt).
 Definition make_empty (_ : unit) := Native.Export (Native.Call_callback empty tt).
 Definition make_pair pair := Native.Export (Native.Call_callback paired pair).
 Definition make_fields count message := Native.Export (Native.Call_callback fields (count,message)).
@@ -59,7 +61,7 @@ Definition read_inline owner := Native.Export (Native.Call_callback inline_paylo
 Definition write_inline owner message := Native.Export (Native.Call_callback set_payload (owner,message)).
 Definition missing message := Native.Export (Native.Call_callback make_missing message).
 Definition missing_message error := Native.Export (Native.Call_callback read_missing error).
-Definition main := (get,set,create,create_lazily,create_from_reference,dispatch,dispatch_context,raw_data,make_empty,make_pair,make_fields,
+Definition main := (get,set,create,create_lazily,create_from_reference,dispatch,dispatch_context,raw_data,raw_set,make_empty,make_pair,make_fields,
   make_inline,read_inline,write_inline,missing,missing_message).
 SOMA
 "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/extract.log" 2>&1
@@ -143,8 +145,20 @@ let () =
   check "context dispatch borrows tagged payloads and inline fields"
     (print_with_context borrowed paired == text && print_with_context borrowed inline == text &&
      print_with_context borrowed (Storage.Fields (92,text)) == text);
-  Prog.set node inline;
-  check "raw record selector rereads the mutable field" (Prog.raw_data node == inline);
+  let write = Prog.raw_set node in
+  check "partial setter leaves the record unchanged" (Prog.raw_data node != inline);
+  write inline;
+  check "raw record setter and selector borrow the live value" (Prog.raw_data node == inline);
+  Prog.raw_set borrowed paired;
+  check "raw record setter acts on the supplied receiver" (borrowed.content == paired && node.content == inline);
+  let bytes setter =
+    Gc.full_major ();
+    let before = Gc.allocated_bytes () in
+    for _ = 1 to 200_000 do setter node inline done;
+    Gc.allocated_bytes () -. before in
+  let expected = bytes (fun node value -> node.Storage.content <- value)
+  and actual = bytes Prog.raw_set in
+  check "raw setter avoids intermediate effects and tuple allocation" (actual <= expected +. 256.);
   (match Prog.get node with
    | Storage.Inline record ->
        check "inline record block" (Prog.get node == inline && record.payload == text);
@@ -184,6 +198,10 @@ negative dispatch_unknown_field 'ReadFields \["payload"; "owner"\]/ReadFields ["
 negative dispatch_wrong_handler '(string -> option node -> R) -> data -> R/(bool -> option node -> R) -> data -> R' 'variant dispatch handler disagrees'
 negative getter_unknown_field 'acquire_data : node -> data := "content"/acquire_data : node -> data := "missing"' 'record getter field is absent'
 negative getter_wrong_result 'acquire_data : node -> data/acquire_data : node -> string' 'record getter result disagrees'
+negative setter_missing 'assign_data : node -> data -> unit := "content"/assign_data : node -> data -> unit := "absent"' 'record setter field is absent'
+negative setter_wrong_value 'assign_data : node -> data/assign_data : node -> string' 'record setter argument disagrees'
+negative setter_wrong_result 'assign_data : node -> data -> unit/assign_data : node -> data -> bool' 'a record setter must return unit'
+negative setter_immutable 'assign_data : node -> data -> unit := "content"/assign_data : node -> Native.table string node -> unit := "peers"' 'a record setter requires a mutable field'
 negative dispatch_wrong_context '(node -> unit -> R) -> (node/(bool -> unit -> R) -> (node' 'variant dispatch handler disagrees'
 negative unknown_reference 'Reading "content"/Reading "absent"' 'a reference read must name a factory record field'
 negative non_reference 'Soma.Handles.reference data -> Native.table string node/data -> Native.table string node' 'a record factory read needs a reference argument'

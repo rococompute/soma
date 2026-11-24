@@ -811,7 +811,7 @@ let native_callback name typ operation =
     | SomaForeign.NativePrimitive _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
-    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _
+    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ -> Some 1 in
@@ -888,7 +888,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
-   | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _
+   | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
@@ -913,6 +913,26 @@ let native_callback name typ operation =
         Buffer.add_substring buffer annotation start (String.length annotation - start) in
     copy 0;
     Buffer.contents buffer in
+  let owned_record_field operation receiver name =
+    let head, type_args = EConstr.decompose_app sigma receiver in
+    let fields, local = match EConstr.kind sigma head with
+        | Const (c, _) when Array.length type_args = 0 ->
+          (match Cmap_env.find_opt c !bindings with
+          | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ } ->
+            (match List.assoc member group.SomaForeign.algebraic_members with
+            | SomaForeign.Algebraic_record fields ->
+              fields, local_record_type (SomaForeign.native_algebraic_module group ^ ".")
+            | _ -> native_error (operation ^ " needs a native record"))
+          | Some { item = (SomaForeign.OCamlNativeOwnedRecord record
+                        | SomaForeign.OCamlNativeImmutableRecord (record, _)); _ } ->
+            record.SomaForeign.record_fields, Fun.id
+          | _ -> native_error (operation ^ " needs an owned native record"))
+        | _ -> native_error (operation ^ " needs an owned native record") in
+    let name = field name in
+    let declaration = match List.find_opt (fun f -> f.SomaForeign.field_name = name) fields with
+        | Some declaration -> declaration
+        | None -> native_error (operation ^ " field is absent from its schema") in
+    name, declaration, local in
   let operation = match operation with
     | SomaForeign.NativeCallableApply _ ->
       let c=native_callable_type env sigma type_vars(List.hd args_types)in
@@ -1046,27 +1066,24 @@ let native_callback name typ operation =
       let receiver = match parameters with
         | [receiver, None] -> receiver
         | _ -> native_error "a record getter returns a positional selector" in
-      let head, type_args = EConstr.decompose_app sigma receiver in
-      let fields, local = match EConstr.kind sigma head with
-        | Const (c, _) when Array.length type_args = 0 ->
-          (match Cmap_env.find_opt c !bindings with
-          | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ } ->
-            (match List.assoc member group.SomaForeign.algebraic_members with
-            | SomaForeign.Algebraic_record fields ->
-              fields, local_record_type (SomaForeign.native_algebraic_module group ^ ".")
-            | _ -> native_error "record getter needs a native record")
-          | Some { item = (SomaForeign.OCamlNativeOwnedRecord record
-                        | SomaForeign.OCamlNativeImmutableRecord (record, _)); _ } ->
-            record.SomaForeign.record_fields, Fun.id
-          | _ -> native_error "record getter needs an owned native record")
-        | _ -> native_error "record getter needs an owned native record" in
-      let name = field name in
-      let declaration = match List.find_opt (fun f -> f.SomaForeign.field_name = name) fields with
-        | Some declaration -> declaration
-        | None -> native_error "record getter field is absent from its schema" in
+      let name, declaration, local = owned_record_field "record getter" receiver name in
       if local (ocaml_type env sigma type_vars value) <> declaration.SomaForeign.field_type then
         native_error "record getter result disagrees with its field type";
       SomaForeign.NativeGetFunction (name, ocaml_type env sigma type_vars receiver)
+    | SomaForeign.NativeSetFunction (name, _) ->
+      if argument_names <> ["unit"] then native_error "a record setter takes unit";
+      let parameters, completion = arguments [] (Some 2) result in
+      let receiver, value = match parameters with
+        | [receiver, None; value, None] -> receiver, value
+        | _ -> native_error "a record setter returns a positional record -> value -> unit function" in
+      if not (EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") completion) then
+        native_error "a record setter must return unit";
+      let name, declaration, local = owned_record_field "record setter" receiver name in
+      if not declaration.SomaForeign.field_mutable then
+        native_error "a record setter requires a mutable field";
+      if local (ocaml_type env sigma type_vars value) <> declaration.SomaForeign.field_type then
+        native_error "record setter argument disagrees with its field type";
+      SomaForeign.NativeSetFunction (name, ocaml_type env sigma type_vars receiver)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)
@@ -1213,6 +1230,9 @@ let native_getter name result operation =
 
 let native_get_function name result field =
   native_getter name result (SomaForeign.NativeGetFunction (field, ""))
+
+let native_set_function name result field =
+  native_getter name result (SomaForeign.NativeSetFunction (field, ""))
 
 let native_variant_dispatch name result cases with_context =
   native_getter name result (SomaForeign.NativeVariantDispatch (cases, "", with_context))

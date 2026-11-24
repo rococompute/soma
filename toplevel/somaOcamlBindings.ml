@@ -222,6 +222,9 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
     | SomaForeign.NativeGetFunction (name, owner), [_] ->
       "(fun (record : " ^ owner ^ ") -> record." ^ field (record_prefix owner) name ^ ")"
+    | SomaForeign.NativeSetFunction (name, owner), [_] ->
+      "(fun (record : " ^ owner ^ ") value -> record." ^
+      field (record_prefix owner) name ^ " <- value)"
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
     | SomaForeign.NativeVariantDispatch (cases, owner, with_context), [_] ->

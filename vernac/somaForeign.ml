@@ -89,6 +89,7 @@ type native_operation =
   | NativeExternalLiteralCallback of string * string * int
   | NativeExternalComposedValue of string * string * int * int
   | NativeExternalTransformedComposition of string * string * int * int * string * int
+  | NativeSetFunction of string * string
 
 type native_callback = {
   namespace : string;
@@ -317,6 +318,7 @@ let native_identity = function
     | NativeInlineBuild (p,fields) ->
       "inline-build " ^ String.concat " " (List.map (Printf.sprintf "%S") (p :: fields))
     | NativeGetFunction (field, owner) -> Printf.sprintf "get-function %S for %s" field owner
+    | NativeSetFunction (field, owner) -> Printf.sprintf "set-function %S for %s" field owner
     | NativeGet p->"get "^Printf.sprintf "%S" p
     | NativeSet p->"set "^Printf.sprintf "%S" p
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
