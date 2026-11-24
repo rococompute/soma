@@ -134,6 +134,10 @@ let rec ocaml_type env sigma vars t =
       | _ -> None)
     | App(head,args) -> (match EConstr.kind sigma head with
       |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+        | Some {item=SomaForeign.OCamlNativeExternalFamily (params, path); _}
+          when List.length params = Array.length args ->
+          let args = Array.to_list (Array.map (ocaml_type env sigma vars) args) in
+          Some ("(" ^ String.concat ", " args ^ ") " ^ path)
         |Some{item=SomaForeign.OCamlNativeParametricCallable(params,c);_} when List.length params=Array.length args ->
           let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
@@ -394,6 +398,32 @@ let native_register name c item =
   let path = "__native__." ^ native_namespace () ^ "." ^ Id.to_string name in
   Lib.add_leaf (in_binding (c, {key; top; path; item}));
   Lib.add_leaf (in_module (key, (ml_file, top, !pending)))
+let native_external_family name parameters path =
+  ignore (native_context ());
+  if not (Rocqlib.has_ref "soma.native.family") then native_error "import Soma.Native first";
+  let path = native_path path in
+  let ids = List.map fst parameters in
+  if List.length (List.sort_uniq Id.compare ids) <> List.length ids then
+    native_error "native type parameters must be distinct";
+  let env = Global.env () in
+  let binders = List.map (fun (id, typ) ->
+    let sigma, checked = Constrintern.interp_type_evars env (Evd.from_env env) typ in
+    (match EConstr.kind sigma checked with
+     | Sort sort when not (EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort) -> ()
+     | _ -> native_error "native type parameters must have sort Type or Set");
+    Constrexpr.CLocalAssum
+      ([CAst.make (Name id)], None, Constrexpr.Default Glob_term.Explicit, typ)) parameters in
+  let names = List.rev (List.fold_left (fun used id -> type_variable used (Name id) :: used) [] ids) in
+  let symbol = native_string (native_namespace () ^ "." ^ Id.to_string name) in
+  let args = List.map (fun id -> CAst.make (Constrexpr.CRef (Libnames.qualid_of_ident id, None))) ids in
+  let rec pack = function
+    | [] -> assert false
+    | [arg] -> arg
+    | arg :: rest -> native_app (native_global "core.prod.type") [arg; pack rest] in
+  let family = native_app (native_global "soma.native.family") [symbol; pack args] in
+  let c = native_declare name (CAst.make (Constrexpr.CLambdaN (binders, family))) None in
+  native_register name c (SomaForeign.OCamlNativeExternalFamily (names, path))
+
 let native_type ?(external_=false) name path =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
@@ -695,11 +725,22 @@ let native_callback name typ operation =
   let field name =
     if String.contains name '.' then native_error "a field is a single name";
     native_path name in
-  let record_type t = match EConstr.kind sigma t with
-    | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _);_}->()
-      | _->native_error "a record operation needs a declared native type")
-    | _->native_error "a record operation needs a declared native type" in
+  let external_shape t =
+    let head, args = EConstr.decompose_app sigma t in
+    match EConstr.kind sigma head with
+    | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
+      | Some {item=SomaForeign.OCamlNativeExternalFamily (params, _); _}
+        when Array.length args = List.length params -> Some `External
+      | Some {item=SomaForeign.OCamlNativeType _; _}
+        when Array.length args = 0 -> Some `External
+      | Some {item=(SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _); _}
+        when Array.length args = 0 -> Some `Record
+      | _ -> None)
+    | _ -> None in
+  let record_type t =
+    match external_shape t with
+    | Some _ -> ()
+    | None -> native_error "a record operation needs a declared native type" in
   let variant_type t =
     let head,args=EConstr.decompose_app sigma t in
     match EConstr.kind sigma head with
@@ -729,12 +770,9 @@ let native_callback name typ operation =
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   let constructor_type t =
-    if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") t then () else
-    match EConstr.kind sigma t with
-    | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=SomaForeign.OCamlNativeType _;_} -> ()
-      | _ -> native_error "constructor operations need a declared native type")
-    | _ -> native_error "constructor operations need a declared native type" in
+    if not (EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") t ||
+            external_shape t = Some `External)
+    then native_error "constructor operations need a declared native type" in
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
    | SomaForeign.NativeExternalException _
@@ -900,7 +938,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -951,6 +989,8 @@ let describe c =
           str "immutable native record " ++ str(SomaForeign.native_record_type r) ++ str ", with a structural logical model"
         | SomaForeign.OCamlNativeOwnedRecord r ->
           str "owned native record " ++ str(SomaForeign.native_record_type r) ++ str ", opaque to Soma"
+        | SomaForeign.OCamlNativeExternalFamily (_, path) ->
+          str "native opaque type family " ++ str path ++ str ", with no logical evaluator"
         | SomaForeign.OCamlNativeType path ->
           str "native opaque type " ++ str path ++ str ", with no logical evaluator"
         | SomaForeign.OCamlNativeCallback n ->

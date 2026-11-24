@@ -126,6 +126,7 @@ type ocaml_item =
   | OCamlNativeOwnedVariant of native_variant
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
+  | OCamlNativeExternalFamily of string list * string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
   | OCamlNativeParametricVariant of string list * native_variant

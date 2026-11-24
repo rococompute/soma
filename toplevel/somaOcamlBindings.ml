@@ -142,15 +142,21 @@ let rec native_pattern = function
 let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
   let args = List.mapi(fun i _->"a"^string_of_int i)n.arguments in
   let signature = native_product(List.map(fun t->"("^t^")")n.arguments)^" -> ("^n.result^")" in
-  let record_prefix ty = try String.sub ty 0 (String.rindex ty '.') with Not_found ->
-    error Pp.(str "a native record needs a declared native type") in
+  let module_prefix ty =
+    let start = match String.rindex_opt ty ' ' with None -> 0 | Some space -> space + 1 in
+    match String.rindex_opt ty '.' with
+    | Some dot when start < dot -> Some (String.sub ty start (dot - start))
+    | _ -> None in
+  let record_prefix ty = match module_prefix ty with
+    | Some prefix -> prefix
+    | None -> error Pp.(str "a native record needs a declared native type") in
   let field prefix name = prefix ^ "." ^ name in
   let assignments prefix names values = String.concat "; " (List.map2(fun n a->field prefix n^" = "^a)names values) in
   let qualified_constructor path ty =
     if String.contains path '.' then path else
-    match String.rindex_opt ty '.' with
+    match module_prefix ty with
     | None -> path
-    | Some dot -> String.sub ty 0 dot ^ "." ^ path in
+    | Some prefix -> prefix ^ "." ^ path in
   let body = match n.operation,args with
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
@@ -241,7 +247,7 @@ let bindings_ml modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
+          | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             let signature,body=native_binding m n in
             let vars=type_variables signature in
@@ -303,6 +309,10 @@ let extraction_lines modules =
               (prefix^".soma_get_"^f.SomaForeign.field_name))info.logical_projections r.record_fields)
           | SomaForeign.OCamlNativeOwnedRecord r ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_record_type r)
+          | SomaForeign.OCamlNativeExternalFamily (params, path) ->
+            let applied = match params with [p] -> p | _ -> "(" ^ String.concat ", " params ^ ")" in
+            Printf.sprintf "Extract Constant %s %s => %S.\n" soma
+              (String.concat " " (List.map (Printf.sprintf "%S") params)) (applied ^ " " ^ path)
           | SomaForeign.OCamlNativeType target ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma target
           | SomaForeign.OCamlNativeCallback n ->
@@ -436,7 +446,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
   file "native_callables.manifest" ("soma-native-callables-v1\n"^String.concat ""(List.sort String.compare callable_entries));
   let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
     List.filter_map(fun(c,path,item)->match item with
-      | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+      | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
         let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
         let source=match item with
           | SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_) -> SomaMerkle.string(read_file(SomaImport.resolve_project_file r.record_source))

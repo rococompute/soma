@@ -58,6 +58,11 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END
 
+VERNAC ARGUMENT EXTEND native_type_parameter
+ PRINTED BY { fun(name,typ)->Pp.(Names.Id.print name ++ str " : " ++ pr_native_signature typ) }
+| [ ident(name) ":" native_signature(typ) ] -> { name,typ }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
  { Soma_ocaml.native_external_constant ~literal name typ path }
@@ -65,6 +70,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_external_constant name typ path }
 | [ "OCaml" "Native" "External" "Exception" ident(name) ":=" string(path) ] ->
  { Soma_ocaml.native_external_exception name path }
+| [ "OCaml" "Native" "External" "Type" ident(name) "(" ne_native_type_parameter_list_sep(params, ";") ")" ":=" string(path) ] ->
+ { Soma_ocaml.native_external_family name params path }
 | [ "OCaml" "Native" "External" "Type" ident(name) ":=" string(path) ] ->
  { Soma_ocaml.native_type ~external_:true name path }
 | [ "OCaml" "Native" "External" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) "After" natural(after) ] ->
@@ -90,11 +97,6 @@ VERNAC ARGUMENT EXTEND native_variant_case
  PRINTED BY { fun (case_name,typ) -> Pp.(qstring case_name ++ (match typ with None -> mt () | Some t -> str " : " ++ pr_native_signature t)) }
 | [ string(tag) ] -> { tag,None }
 | [ string(tag) ":" native_signature(typ) ] -> { tag,Some typ }
-END
-
-VERNAC ARGUMENT EXTEND native_type_parameter
- PRINTED BY { fun(name,typ)->Pp.(Names.Id.print name ++ str " : " ++ pr_native_signature typ) }
-| [ ident(name) ":" native_signature(typ) ] -> { name,typ }
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
