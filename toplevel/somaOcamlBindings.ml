@@ -222,6 +222,30 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
+    | SomaForeign.NativeVariantDispatch (cases, owner), [_] ->
+      let handler index = "handler" ^ string_of_int index in
+      let variables count = List.init count (fun i -> "payload" ^ string_of_int i) in
+      let case index (name, pattern, keep_receiver) =
+        let constructor = qualified_constructor name owner in
+        let suffix, args = match pattern with
+          | SomaForeign.Dispatch_arguments count ->
+            let payload = variables count in
+            (match payload with
+             | [] -> "", []
+             | [value] -> " " ^ value, payload
+             | _ -> " (" ^ String.concat ", " payload ^ ")", payload)
+          | SomaForeign.Dispatch_fields [] | SomaForeign.Dispatch_ignore true -> " _", []
+          | SomaForeign.Dispatch_ignore false -> "", []
+          | SomaForeign.Dispatch_fields fields ->
+            let payload = variables (List.length fields) in
+            let bindings = List.map2 (fun field value -> field ^ " = " ^ value) fields payload in
+            " { " ^ String.concat "; " (bindings @ ["_"]) ^ " }", payload in
+        let args = if keep_receiver then "value" :: args else args in
+        let args = if args = [] then ["()"] else args in
+        "| " ^ constructor ^ suffix ^ " -> " ^ String.concat " " (handler index :: args) in
+      let parameters = List.mapi (fun index _ -> handler index) cases @ ["value"] in
+      "(fun " ^ String.concat " " parameters ^ " -> match value with " ^
+      String.concat " " (List.mapi case cases) ^ ")"
     | SomaForeign.NativeRecordFactory (names, reading, owner), [_] ->
       let parameters = List.mapi (fun index _ -> "p" ^ string_of_int index) names in
       let values = List.map2 (fun name parameter ->
@@ -241,6 +265,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         | Some label when String.starts_with ~prefix:"?" label->label^":"^value
         | Some label->"~"^label^":"^value)values c.callable_labels in
       body ^ " " ^ String.concat " "given
+    | SomaForeign.NativeCallableWrapFull (Some c), [body] ->
+      let values = List.mapi (fun index _ -> "value" ^ string_of_int index) c.callable_labels in
+      let parameters = List.map2 (fun value -> function
+          | None -> value
+          | Some label when String.starts_with ~prefix:"?" label -> label ^ ":" ^ value
+          | Some label -> "~" ^ label ^ ":" ^ value) values c.callable_labels in
+      "(fun " ^ String.concat " " parameters ^ " -> " ^ String.concat " " (body :: values) ^ ")"
     | SomaForeign.NativeCallableWrap(Some c),[body] ->
       (* Apply a prefix one argument at a time so effects in a borrowed
          curried callback remain at their original partial-application stage.

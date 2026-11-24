@@ -55,6 +55,11 @@ type native_callable = {
   callable_result : string;
 }
 
+type native_dispatch_pattern =
+  | Dispatch_arguments of int
+  | Dispatch_fields of string list
+  | Dispatch_ignore of bool
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
@@ -62,6 +67,7 @@ type native_operation =
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
   | NativeRecordFactory of string list * string list * string
+  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
@@ -72,6 +78,7 @@ type native_operation =
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string
   | NativeCallableWrap of native_callable option
+  | NativeCallableWrapFull of native_callable option
   | NativeExternalLiteralConstant of string * string
   | NativeExternalException of string
   | NativeConstructorBuild of string * int
@@ -317,10 +324,20 @@ let native_identity = function
     | NativeRecordFactory (fields, reading, owner) ->
       let names fields = String.concat " " (List.map (Printf.sprintf "%S") fields) in
       "record-factory " ^ names fields ^ " reading " ^ names reading ^ " for " ^ owner
+    | NativeVariantDispatch (cases, owner) ->
+      let describe (constructor, pattern, keep_receiver) =
+        let payload = match pattern with
+          | Dispatch_arguments arity -> Printf.sprintf "arguments %d" arity
+          | Dispatch_fields names -> "fields [" ^
+            String.concat "; " (List.map (Printf.sprintf "%S") names) ^ "]"
+          | Dispatch_ignore with_payload -> Printf.sprintf "ignore %b" with_payload in
+        Printf.sprintf "%S %s keep_receiver=%b" constructor payload keep_receiver in
+      "variant-dispatch " ^ owner ^ " [" ^ String.concat "; " (List.map describe cases) ^ "]"
     | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCallableApply(Some c)->"apply "^native_callable_identity c
     | NativeCallableWrap(Some c)->"wrap "^native_callable_identity c
-    | NativeCallableApply None | NativeCallableWrap None->invalid_arg "unvalidated native callable descriptor"
+    | NativeCallableWrapFull (Some c) -> "wrap-full " ^ native_callable_identity c
+    | NativeCallableApply None | NativeCallableWrap None | NativeCallableWrapFull None -> invalid_arg "unvalidated native callable descriptor"
     | NativeVariantView(Some v)->"variant-view "^native_variant_identity v
     | NativeVariantBuild(tag,Some v)->"variant-build "^Printf.sprintf "%S" tag^" "^native_variant_identity v
     | NativeVariantView None | NativeVariantBuild(_,None)->invalid_arg "unvalidated native variant descriptor" in

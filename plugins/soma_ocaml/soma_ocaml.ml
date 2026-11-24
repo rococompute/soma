@@ -797,7 +797,7 @@ let native_callback name typ operation =
     |_->env,vars,parameters,typ in
   let env,type_vars,type_parameters,typ=enter env [] [] typ in
   let fixed_arity = match operation with
-    | SomaForeign.NativeGet _ | SomaForeign.NativeInlineGet _ | SomaForeign.NativeCallableWrap _ -> Some 1
+    | SomaForeign.NativeGet _ | SomaForeign.NativeInlineGet _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ -> Some 1
     | SomaForeign.NativeSet _ | SomaForeign.NativeInlineSet _ -> Some 2
     | SomaForeign.NativeBuild fields | SomaForeign.NativeInlineBuild (_, fields)
     | SomaForeign.NativeBuildEvaluating (fields, _) -> Some (List.length fields)
@@ -811,7 +811,7 @@ let native_callback name typ operation =
     | SomaForeign.NativePrimitive _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
-    | SomaForeign.NativeRecordFactory _
+    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ -> Some 1 in
@@ -888,11 +888,11 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
-   | SomaForeign.NativeRecordFactory _
+   | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
      constructor_type (List.hd args_types)
@@ -906,6 +906,18 @@ let native_callback name typ operation =
       if List.tl argument_names<>c.SomaForeign.callable_arguments || result_name<>c.callable_result then
         native_error "Apply signature differs from the declared callable";
       SomaForeign.NativeCallableApply(Some c)
+    | SomaForeign.NativeCallableWrapFull _ ->
+      let callable = native_callable_type ~required:"Wrap AtFullApplication needs a declared native callable as its result"
+          env sigma type_vars result in
+      let parameters, answer =
+        arguments [] (Some (List.length callable.SomaForeign.callable_arguments)) (List.hd args_types) in
+      let types = List.map (fun (typ, label) ->
+          if Option.has_some label then native_error "Wrap AtFullApplication takes a positional function";
+          ocaml_type env sigma type_vars typ) parameters in
+      if types <> callable.callable_arguments ||
+         ocaml_type env sigma type_vars answer <> callable.callable_result then
+        native_error "Wrap AtFullApplication input disagrees with the callable signature";
+      SomaForeign.NativeCallableWrapFull (Some callable)
     | SomaForeign.NativeCallableWrap _ ->
       let callable = native_callable_type ~required:"Wrap needs a declared native callable as its result"
           env sigma type_vars result in
@@ -1059,6 +1071,73 @@ let native_callback name typ operation =
         | _ -> native_error "record factory field and argument counts differ" in
       let owner = check fields result in
       SomaForeign.NativeRecordFactory (List.map field fields, reading, owner)
+    | SomaForeign.NativeVariantDispatch (cases, _) ->
+      if argument_names <> ["unit"] then native_error "a variant dispatch getter takes unit";
+      let parameters, terminal = arguments [] (Some (List.length cases + 1)) result in
+      let receiver, handlers = match List.rev parameters with
+        | (receiver, None) :: handlers when List.length handlers = List.length cases ->
+          receiver, List.rev handlers
+        | _ -> native_error "variant dispatch takes one handler per case and a variant value" in
+      let head, type_args = EConstr.decompose_app sigma receiver in
+      let group, member = match EConstr.kind sigma head with
+        | Const (c, _) ->
+          (match Cmap_env.find_opt c !bindings with
+           | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ }
+             when Array.length type_args = 0 -> group, member
+           | _ -> native_error "variant dispatch needs a declared native algebraic variant")
+        | _ -> native_error "variant dispatch needs a declared native algebraic variant" in
+      let constructors = match List.assoc member group.SomaForeign.algebraic_members with
+        | SomaForeign.Algebraic_variant constructors -> constructors
+        | SomaForeign.Algebraic_record _ ->
+          native_error "variant dispatch needs a declared native algebraic variant" in
+      let sorted = List.sort String.compare in
+      if sorted (List.map (fun (constructor, _, _) -> constructor) cases) <>
+         sorted (List.map fst constructors) then
+        native_error "variant dispatch must cover every constructor once";
+      let owner = ocaml_type env sigma type_vars receiver in
+      (* References within the owned schema use local type names; checked
+         handler types name the same members through their generated module. *)
+      let prefix = SomaForeign.native_algebraic_module group ^ "." in
+      let local annotation =
+        let buffer = Buffer.create (String.length annotation) in
+        let rec copy start =
+          match CString.string_index_from annotation start prefix with
+          | stop ->
+            Buffer.add_substring buffer annotation start (stop - start);
+            copy (stop + String.length prefix)
+          | exception Not_found ->
+            Buffer.add_substring buffer annotation start (String.length annotation - start) in
+        copy 0;
+        Buffer.contents buffer in
+      let result = ocaml_type env sigma type_vars terminal in
+      let validate (constructor, pattern, keep_receiver) (handler, label) =
+        if Option.has_some label then native_error "variant dispatch handlers are positional";
+        let expected, pattern = match pattern, List.assoc constructor constructors with
+          | SomaForeign.Dispatch_arguments _, SomaForeign.Constructor_arguments arguments ->
+            arguments, SomaForeign.Dispatch_arguments (List.length arguments)
+          | SomaForeign.Dispatch_fields names, SomaForeign.Constructor_record fields ->
+            if List.length (List.sort_uniq String.compare names) <> List.length names then
+              native_error "variant dispatch fields must be distinct";
+            let field_type name = match List.find_opt (fun f -> f.SomaForeign.field_name = name) fields with
+              | Some field -> field.SomaForeign.field_type
+              | None -> native_error "variant dispatch field is absent from its constructor" in
+            List.map field_type names, SomaForeign.Dispatch_fields names
+          | SomaForeign.Dispatch_ignore _, SomaForeign.Constructor_arguments arguments ->
+            [], SomaForeign.Dispatch_ignore (arguments <> [])
+          | SomaForeign.Dispatch_ignore _, SomaForeign.Constructor_record _ ->
+            [], SomaForeign.Dispatch_ignore true
+          | _ -> native_error "variant dispatch pattern disagrees with the declared constructor" in
+        let expected = if keep_receiver then owner :: expected else expected in
+        let expected = if expected = [] then ["unit"] else expected in
+        let parameters, answer = arguments [] (Some (List.length expected)) handler in
+        let types = List.map (fun (typ, label) ->
+            if Option.has_some label then native_error "variant dispatch callback parameters are positional";
+            ocaml_type env sigma type_vars typ) parameters in
+        if List.map local types <> List.map local expected ||
+           ocaml_type env sigma type_vars answer <> result then
+          native_error ("variant dispatch handler disagrees with its payload or result: " ^ constructor);
+        constructor, pattern, keep_receiver in
+      SomaForeign.NativeVariantDispatch (List.map2 validate cases handlers, owner)
     | SomaForeign.NativeBuild fields | SomaForeign.NativeCopy fields as op ->
       let expected = List.length fields + (match op with SomaForeign.NativeCopy _ -> 1 | _ -> 0) in
       if List.length args<>expected then native_error "record field and argument counts differ";
@@ -1099,6 +1178,9 @@ let native_getter name result operation =
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
   native_callback name (insert_unit result) operation
+
+let native_variant_dispatch name result cases =
+  native_getter name result (SomaForeign.NativeVariantDispatch (cases, ""))
 
 let native_record_factory name result fields reading =
   native_getter name result (SomaForeign.NativeRecordFactory (fields, reading, ""))

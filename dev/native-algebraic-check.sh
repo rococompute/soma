@@ -22,6 +22,10 @@ OCaml Native Build make_lazily : (unit -> data) -> Native.table string node -> n
 OCaml Native Record Factory make_from_reference :
   Soma.Handles.reference data -> Native.table string node -> node :=
   "content" "peers" Reading "content".
+OCaml Native Variant Dispatch project :
+  forall (R : Type), (unit -> R) -> (data -> (PrimInt63.int * string) -> R) ->
+    (PrimInt63.int -> string -> R) -> (string -> option node -> R) -> data -> R :=
+  ["Empty" DiscardPayload; "Paired" KeepReceiver; "Fields"; "Inline" ReadFields ["payload"; "owner"]].
 OCaml Native Constructor empty : unit -> data := "Empty" 0.
 OCaml Native Constructor paired : (PrimInt63.int * string)%type -> data := "Paired" 1.
 OCaml Native Constructor fields : PrimInt63.int -> string -> data := "Fields" 2.
@@ -39,6 +43,7 @@ Definition set node value := Native.Export (Native.Call_callback set_data (node,
 Definition create value peers := Native.Export (Native.Call_callback make (value,peers)).
 Definition create_lazily value peers := Native.Export (Native.Call_callback make_lazily (value,peers)).
 Definition create_from_reference := Native.Export (Native.Call_callback make_from_reference tt).
+Definition dispatch := Native.Export (Native.Call_callback (project string) tt).
 Definition make_empty (_ : unit) := Native.Export (Native.Call_callback empty tt).
 Definition make_pair pair := Native.Export (Native.Call_callback paired pair).
 Definition make_fields count message := Native.Export (Native.Call_callback fields (count,message)).
@@ -47,7 +52,7 @@ Definition read_inline owner := Native.Export (Native.Call_callback inline_paylo
 Definition write_inline owner message := Native.Export (Native.Call_callback set_payload (owner,message)).
 Definition missing message := Native.Export (Native.Call_callback make_missing message).
 Definition missing_message error := Native.Export (Native.Call_callback read_missing error).
-Definition main := (get,set,create,create_lazily,create_from_reference,make_empty,make_pair,make_fields,
+Definition main := (get,set,create,create_lazily,create_from_reference,dispatch,make_empty,make_pair,make_fields,
   make_inline,read_inline,write_inline,missing,missing_message).
 SOMA
 "$SOMA" extract "$work/main.soma" -o "$work/native" > "$work/extract.log" 2>&1
@@ -98,7 +103,24 @@ let () =
   check "two fields" (match node.content with Storage.Fields(92,value) -> value == text | _ -> false);
   check "wrong constructor get" (Prog.read_inline (Prog.make_empty ()) = None);
   check "wrong constructor set" (not (Prog.write_inline (Prog.make_empty ()) text));
+  let observed_pair = ref None in
+  let paired = Storage.Paired pair in
+  let print = Prog.dispatch
+      (fun () -> "empty")
+      (fun source ((_, value) as pair) ->
+        check "dispatch keeps the original receiver on request" (source == paired);
+        observed_pair := Some pair; value)
+      (fun count value -> check "direct constructor count" (count = 92); value)
+      (fun value owner ->
+        check "dispatch borrows the recursive receiver's field" (Option.get owner == node);
+        value) in
+  check "dispatch a nullary constructor" (print Storage.Empty = "empty");
+  check "dispatch preserves the borrowed tuple and text"
+    (print paired == text && Option.get !observed_pair == pair);
+  check "dispatch separates the raw constructor payloads"
+    (print (Storage.Fields (92,text)) == text);
   let inline = Prog.make_inline text (Some node) in
+  check "dispatch borrows an inline record field" (print inline == text);
   Prog.set node inline;
   (match Prog.get node with
    | Storage.Inline record ->
@@ -134,6 +156,9 @@ negative badtag '"Paired"/"Bad.Name"' 'constructor is a single name'
 negative field 'mutable payload : string/mutable payload : forall (A : Type), A -> A' 'must be monomorphic'
 negative unknown_exception '"Missing" 1 In node/"Unlisted" 1 In node' 'does not declare this exception'
 negative unknown_evaluated 'Evaluating "content"/Evaluating "absent"' 'evaluated field must be part'
+negative dispatch_duplicate '"Paired" KeepReceiver; "Fields"; "Inline" ReadFields/"Paired" KeepReceiver; "Paired"; "Inline" ReadFields' 'variant dispatch must cover every constructor once'
+negative dispatch_unknown_field 'ReadFields \["payload"; "owner"\]/ReadFields ["absent"; "owner"]' 'variant dispatch field is absent'
+negative dispatch_wrong_handler '(string -> option node -> R) -> data -> R/(bool -> option node -> R) -> data -> R' 'variant dispatch handler disagrees'
 negative unknown_reference 'Reading "content"/Reading "absent"' 'a reference read must name a factory record field'
 negative non_reference 'Soma.Handles.reference data -> Native.table string node/data -> Native.table string node' 'a record factory read needs a reference argument'
 negative non_thunk 'make_lazily : (unit -> data)/make_lazily : data' 'evaluated field needs a unit thunk'

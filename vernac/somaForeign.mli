@@ -71,6 +71,11 @@ type native_callable = {
   callable_result : string;
 }
 
+type native_dispatch_pattern =
+  | Dispatch_arguments of int
+  | Dispatch_fields of string list
+  | Dispatch_ignore of bool
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
@@ -78,6 +83,7 @@ type native_operation =
   | NativeBuild of string list
   | NativeBuildEvaluating of string list * string list
   | NativeRecordFactory of string list * string list * string
+  | NativeVariantDispatch of (string * native_dispatch_pattern * bool) list * string
   | NativeCopy of string list
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
@@ -88,6 +94,7 @@ type native_operation =
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string
   | NativeCallableWrap of native_callable option
+  | NativeCallableWrapFull of native_callable option
   | NativeExternalLiteralConstant of string * string
   | NativeExternalException of string
   | NativeConstructorBuild of string * int

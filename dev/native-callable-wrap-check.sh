@@ -10,6 +10,13 @@ host_ocaml() {
 }
 
 cp -r "$HERE/examples/example_projects/native_callable_wrap" "$WORK/app"
+cat >> "$WORK/app/functions.definition" <<'SOMA'
+
+OCaml Native Wrap AtFullApplication wrap_full :
+  forall (A B : Type), (option bool -> string -> A -> B) -> staged A B.
+SOMA
+sed -i '/^Definition main/c\Definition wrap_at_full target := Native.Export (Native.Call_callback (functions.wrap_full string Soma.Handles.buffer) target).\nDefinition main := (@wrap, wrap_function, wrap_plain, wrap_at_full).' "$WORK/app/main.soma"
+
 "$SOMA" extract "$WORK/app/main.soma" -o "$WORK/native" > "$WORK/extract.log" 2>&1
 "$SOMA" hash "$WORK/app/main.soma" > "$WORK/hash"
 assumptions=$(sed -n 's/^.* assumes //p' "$WORK/hash" | sort -u)
@@ -65,6 +72,15 @@ let () =
 
   let plain _ = true in
   require "all-positional callable keeps original identity" (Prog.wrap_plain plain == plain);
+  events := [];
+  let full = Prog.wrap_at_full target in
+  let apply_tag = Lwt.with_value key (Some 1) (fun () -> full ?flag:(Some false)) in
+  let apply_input = Lwt.with_value key (Some 2) (fun () -> apply_tag ~tag:borrowed_tag) in
+  require "full-application wrapper does not enter at partial stages" (!events = []);
+  require "full-application wrapper borrows the result"
+    (Lwt.with_value key (Some 3) (fun () -> apply_input borrowed_input) == result);
+  require "full-application wrapper uses the final caller context"
+    (!events = ["tail", Some 3; "label", Some 3; "supplied", Some 3]);
   print_endline "PASS: borrowed values, exact partial stages, optional labels, throw identity and saved native contexts"
 ML
 python3 - "$WORK/native" <<'PY'
@@ -95,4 +111,5 @@ reject() {
 reject wrong_argument 'OCaml Native Wrap bad : Native.callback bool bool -> positional.' 'positional callback chain'
 reject wrong_result 'OCaml Native Wrap bad : Native.callback string string -> positional.' 'positional callback chain'
 reject not_callable 'OCaml Native Wrap bad : Native.callback string bool -> bool.' 'declared native callable as its result'
+reject wrong_full 'OCaml Native Wrap AtFullApplication bad : (bool -> bool) -> positional.' 'input disagrees with the callable signature'
 echo 'PASS: callable wrapper signatures reject incorrect input chains and results'

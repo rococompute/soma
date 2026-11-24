@@ -37,6 +37,13 @@ let pr_native_algebraic_case (name,payload) =
       str " Of [" ++ prlist_with_sep (fun () -> str "; ") pr_native_signature args ++ str "]"
     | Soma_ocaml.Inline_record fields -> spc () ++ pr_native_record_fields fields)
 
+let pr_native_dispatch_payload (name,pattern) =
+  Pp.(qstring name ++ match pattern with
+    | SomaForeign.Dispatch_arguments _ -> mt ()
+    | SomaForeign.Dispatch_fields fields ->
+      str " ReadFields [" ++ prlist_with_sep (fun () -> str "; ") qstring fields ++ str "]"
+    | SomaForeign.Dispatch_ignore _ -> str " DiscardPayload")
+
 let pr_native_algebraic_member (name,body) =
   Pp.(Names.Id.print name ++ str " := " ++ match body with
     | Soma_ocaml.Record_fields fields -> pr_native_record_fields fields
@@ -65,6 +72,24 @@ VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
 
+VERNAC ARGUMENT EXTEND native_dispatch_payload
+ PRINTED BY { pr_native_dispatch_payload }
+| [ string(name) "ReadFields" "[" ne_string_list_sep(fields, ";") "]" ] ->
+  { name, SomaForeign.Dispatch_fields fields }
+| [ string(name) "DiscardPayload" ] -> { name, SomaForeign.Dispatch_ignore false }
+| [ string(name) ] -> { name, SomaForeign.Dispatch_arguments 0 }
+END
+
+VERNAC ARGUMENT EXTEND native_dispatch_case
+ PRINTED BY { fun (name,pattern,keep_receiver) ->
+   let payload = pr_native_dispatch_payload (name,pattern) in
+   if keep_receiver then Pp.(payload ++ str " KeepReceiver") else payload }
+| [ native_dispatch_payload(payload) "KeepReceiver" ] ->
+  { let name, pattern = payload in name, pattern, true }
+| [ native_dispatch_payload(payload) ] ->
+  { let name, pattern = payload in name, pattern, false }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeValue path) }
@@ -80,6 +105,9 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_record_factory name typ fields reading }
 | [ "OCaml" "Native" "Record" "Factory" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_record_factory name typ fields [] }
+| [ "OCaml" "Native" "Variant" "Dispatch" ident(name) ":" native_signature(typ) ":="
+    "[" ne_native_dispatch_case_list_sep(cases, ";") "]" ] ->
+  { Soma_ocaml.native_variant_dispatch name typ cases }
 | [ "OCaml" "Native" "Copy" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END
@@ -203,6 +231,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallable CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_callable name typ }
 | [ "OCaml" "Native" "Apply" ident(name) ":" native_signature(typ) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeCallableApply None) }
+| [ "OCaml" "Native" "Wrap" "AtFullApplication" ident(name) ":" native_signature(typ) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeCallableWrapFull None) }
 | [ "OCaml" "Native" "Wrap" ident(name) ":" native_signature(typ) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeCallableWrap None) }
 END
