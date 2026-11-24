@@ -2851,3 +2851,7 @@ native function itself, including its curried arity, rather than creating an
 entry program on every invocation. Native calls remain explicit effects;
 there is no callback evaluator in the logic. This avoids per-element bridge
 allocations when a native array/list traversal calls pure Soma policy.
+
+Immutable record projections use named generated schema getters. Pure field
+reads retain their expression order and allocate no temporary projection
+closures per access, including bytecode execution.

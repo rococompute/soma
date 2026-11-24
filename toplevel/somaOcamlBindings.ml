@@ -251,7 +251,7 @@ let extraction_lines modules =
              soma target info.logical_type target constructor eliminate^
             String.concat ""(List.map2(fun projection f->
              Printf.sprintf "Extract Inlined Constant %s => %S.\n" projection
-              ("(fun value -> value."^prefix^"."^f.SomaForeign.field_name^")"))info.logical_projections r.record_fields)
+              (prefix^".soma_get_"^f.SomaForeign.field_name))info.logical_projections r.record_fields)
           | SomaForeign.OCamlNativeOwnedRecord r ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_record_type r)
           | SomaForeign.OCamlNativeType target ->

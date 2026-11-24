@@ -45,6 +45,11 @@ let ()=
  let l,(a,(m,t))=Prog.fields file in ensure"pattern projection aliases"(l==label&&a==lines&&m&&t=17.);
  List.iter(fun index->List.iter(fun mutation->ensure"native/bytecode immutable field load timing"(observe raw index mutation=observe Prog.key_fields index mutation))[false;true])[min_int;-1;0;1;2;max_int];
  let value=Prog.make_point 3.5in ensure"single-field float record"(Prog.point_value value=3.5&&Obj.tag(Obj.repr value)=Obj.double_array_tag);
+ let allocation invoke=Gc.full_major();let before=Gc.allocated_bytes()in
+  for index=0 to 1000000 do ignore(Sys.opaque_identity(invoke file index))done;
+  Gc.allocated_bytes()-.before in
+ ensure"pure field reads add no per-call allocation"(allocation(fun file _->file.R.label)=allocation(fun file _->Prog.file_label file));
+ ensure"mixed field reads add no per-call allocation"(allocation(raw Array.length)=allocation(Prog.key_fields Array.length));
  print_endline"PASS: immutable logical records: shared native ABI, constructors/projections/patterns, aliases, flat mixed/all-float layouts and backend field-load timing"
 ML
 python3 - "$WORK/native" <<'PY'
