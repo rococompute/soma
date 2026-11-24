@@ -106,6 +106,22 @@ type native_record_field = {
   field_mutable : bool;
 }
 
+
+type native_algebraic_payload =
+  | Constructor_arguments of string list
+  | Constructor_record of native_record_field list
+
+type native_algebraic_body =
+  | Algebraic_record of native_record_field list
+  | Algebraic_variant of (string * native_algebraic_payload) list
+
+type native_algebraic = {
+  algebraic_namespace : string;
+  algebraic_name : string;
+  algebraic_source : string;
+  algebraic_members : (string * native_algebraic_body) list;
+}
+
 type native_record = {
   record_namespace : string;
   record_name : string;
@@ -127,6 +143,7 @@ type ocaml_item =
   | OCamlNativeOwnedVariant of native_variant
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
+  | OCamlNativeAlgebraic of native_algebraic * string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
   | OCamlNativeParametricVariant of string list * native_variant
@@ -145,6 +162,11 @@ val ocaml_modules : (unit -> ocaml_module list) ref
 
 (** Canonical native declaration metadata, included in hashes and manifests. *)
 val native_identity : ocaml_item -> string
+val native_algebraic_module : native_algebraic -> string
+val native_algebraic_filename : native_algebraic -> string
+val native_algebraic_type : native_algebraic -> string -> string
+val native_algebraic_ml : native_algebraic -> string
+
 
 (** Collision-free standalone record modules; fields retain declaration order. *)
 val native_record_module : native_record -> string

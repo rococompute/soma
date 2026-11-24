@@ -23,6 +23,26 @@ let pr_native_signature typ =
   let env = Global.env () in
   Ppconstr.pr_constr_expr ~flags:(Ppconstr.current_flags ()) env (Evd.from_env env) typ
 
+
+let pr_native_record_field (name,mutable_,typ) =
+  Pp.(str (if mutable_ then "mutable " else "") ++ Names.Id.print name ++ str " : " ++ pr_native_signature typ)
+
+let pr_native_record_fields fields =
+  Pp.(str "{" ++ prlist_with_sep (fun () -> str "; ") pr_native_record_field fields ++ str "}")
+
+let pr_native_algebraic_case (name,payload) =
+  Pp.(qstring name ++ match payload with
+    | Soma_ocaml.Arguments [] -> mt ()
+    | Soma_ocaml.Arguments args ->
+      str " Of [" ++ prlist_with_sep (fun () -> str "; ") pr_native_signature args ++ str "]"
+    | Soma_ocaml.Inline_record fields -> spc () ++ pr_native_record_fields fields)
+
+let pr_native_algebraic_member (name,body) =
+  Pp.(Names.Id.print name ++ str " := " ++ match body with
+    | Soma_ocaml.Record_fields fields -> pr_native_record_fields fields
+    | Soma_ocaml.Variant_cases cases ->
+      str "[" ++ prlist_with_sep (fun () -> str "; ") pr_native_algebraic_case cases ++ str "]")
+
 }
 
 DECLARE PLUGIN "soma-runtime.plugins.soma_ocaml"
@@ -86,6 +106,29 @@ VERNAC COMMAND EXTEND SomaOCamlNativeRecord CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_record ~logical:true name fields }
 | [ "OCaml" "Native" "Record" ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
  { Soma_ocaml.native_record name fields }
+END
+
+VERNAC ARGUMENT EXTEND native_algebraic_case
+ PRINTED BY { pr_native_algebraic_case }
+| [ string(name) "Of" "[" ne_native_signature_list_sep(args, ";") "]" ] ->
+  { name, Soma_ocaml.Arguments args }
+| [ string(name) "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
+  { name, Soma_ocaml.Inline_record fields }
+| [ string(name) ] ->
+  { name, Soma_ocaml.Arguments [] }
+END
+
+VERNAC ARGUMENT EXTEND native_algebraic_member
+ PRINTED BY { pr_native_algebraic_member }
+| [ ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
+  { name, Soma_ocaml.Record_fields fields }
+| [ ident(name) ":=" "[" ne_native_algebraic_case_list_sep(cases, ";") "]" ] ->
+  { name, Soma_ocaml.Variant_cases cases }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeAlgebraic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Algebraic" ident(name) ":=" "[" ne_native_algebraic_member_list_sep(members, ";") "]" ] ->
+  { Soma_ocaml.native_algebraic name members }
 END
 
 VERNAC ARGUMENT EXTEND native_variant_case

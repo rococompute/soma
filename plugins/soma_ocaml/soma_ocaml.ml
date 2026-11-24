@@ -128,6 +128,8 @@ let rec ocaml_type env sigma vars t =
   let native = match EConstr.kind sigma t with
     | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
       | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
+      | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ } ->
+        Some (SomaForeign.native_algebraic_type group member)
       | Some { item = (SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_)); _ } -> Some(SomaForeign.native_record_type r)
       | Some { item = SomaForeign.OCamlNativeOwnedVariant v; _ } -> Some(SomaForeign.native_variant_type v)
       | Some { item = SomaForeign.OCamlNativeCallableType c; _ } -> Some(SomaForeign.native_callable_type c)
@@ -640,6 +642,92 @@ let native_constructor_path path =
   native_error "a constructor path needs uppercase OCaml module/constructor names";
  path
 
+type algebraic_fields = (Id.t * bool * Constrexpr.constr_expr) list
+
+type algebraic_case =
+  | Arguments of Constrexpr.constr_expr list
+  | Inline_record of algebraic_fields
+
+type algebraic_member =
+  | Record_fields of algebraic_fields
+  | Variant_cases of (string * algebraic_case) list
+
+let native_algebraic name members =
+  ignore (native_context ());
+  if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
+  let namespace = native_namespace () in
+  let checked_name id = native_path (Id.to_string id) in
+  let ids = List.map fst members in
+  let names = List.map checked_name ids in
+  let distinct category names =
+    if List.length (List.sort_uniq String.compare names) <> List.length names then
+      native_error (category ^ " must be distinct") in
+  distinct "algebraic type names" names;
+  let formals = List.map (fun name -> CAst.make (Name name)) ids in
+  let sort = CAst.make (Constrexpr.CSort Constrexpr_ops.expr_Type_sort) in
+  let binders = [Constrexpr.CLocalAssum (formals, None, Constrexpr.Default Glob_term.Explicit, sort)] in
+  let scope syntax = CAst.make (Constrexpr.CProdN (binders, syntax)) in
+  let logical_dependencies = ref [] in
+  let checked_type syntax =
+    let scoped = scope syntax in
+    logical_dependencies := scoped :: !logical_dependencies;
+    let env = Global.env () in
+    let sigma, typ = Constrintern.interp_type_evars env (Evd.from_env env) scoped in
+    let rec enter env vars typ = function
+      | [] -> env, vars, typ
+      | name :: rest ->
+        match EConstr.kind sigma typ with
+        | Prod (binder, dom, cod) ->
+          let env = EConstr.push_rel (Context.Rel.Declaration.LocalAssum (binder, dom)) env in
+          enter env (Some name :: vars) cod rest
+        | _ -> assert false in
+    let env, vars, typ = enter env [] typ names in
+    let rec monomorphic typ =
+      (match EConstr.kind sigma typ with
+       | Prod (_, domain, _) when is_sort env sigma domain ->
+         native_error "algebraic fields and constructor arguments must be monomorphic"
+       | _ -> ());
+      EConstr.iter sigma monomorphic typ in
+    monomorphic typ;
+    try ocaml_type env sigma vars typ with Not_ocaml why ->
+      CErrors.user_err (str "OCaml Native algebraic member: " ++ why) in
+  let fields declarations =
+    let result = List.map (fun (id, mutable_, syntax) ->
+      { SomaForeign.field_name = checked_name id;
+        field_type = checked_type syntax; field_mutable = mutable_ }) declarations in
+    distinct "algebraic record field names" (List.map (fun f -> f.SomaForeign.field_name) result);
+    result in
+  let case (name, body) =
+    if String.contains name '.' then native_error "an algebraic constructor is a single name";
+    let name = native_constructor_path name in
+    let body = match body with
+      | Arguments args -> SomaForeign.Constructor_arguments (List.map checked_type args)
+      | Inline_record form -> SomaForeign.Constructor_record (fields form) in
+    name, body in
+  let body = function
+    | Record_fields declarations -> SomaForeign.Algebraic_record (fields declarations)
+    | Variant_cases declarations ->
+      let cases = List.map case declarations in
+      distinct "algebraic constructor names" (List.map fst cases);
+      SomaForeign.Algebraic_variant cases in
+  let source = match !SomaImport.source_file with
+    | Some file -> SomaImport.project_file file
+    | None -> assert false in
+  let group = {
+    SomaForeign.algebraic_namespace = namespace;
+    algebraic_name = Id.to_string name;
+    algebraic_source = source;
+    algebraic_members = List.map2 (fun name (_, form) -> name, body form) names members;
+  } in
+  List.iter2 (fun id member ->
+    let handle = native_app (native_global "soma.native.handle") [native_string (namespace ^ "." ^ member)] in
+    (* Every member carries the group's actual field-type dependencies. The
+       bound type names stand for local members only while checking schemas. *)
+    let body = List.fold_left (fun rest dependency ->
+      CAst.make (Constrexpr.CLetIn (CAst.make Anonymous, dependency, None, rest))) handle !logical_dependencies in
+    let constant = native_declare id body None in
+    native_register id constant (SomaForeign.OCamlNativeAlgebraic (group, member))) ids names
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -697,7 +785,7 @@ let native_callback name typ operation =
     native_path name in
   let record_type t = match EConstr.kind sigma t with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _);_}->()
+      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeAlgebraic _|SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _);_}->()
       | _->native_error "a record operation needs a declared native type")
     | _->native_error "a record operation needs a declared native type" in
   let variant_type t =
@@ -732,7 +820,7 @@ let native_callback name typ operation =
     if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") t then () else
     match EConstr.kind sigma t with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=SomaForeign.OCamlNativeType _;_} -> ()
+      | Some {item=(SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _);_} -> ()
       | _ -> native_error "constructor operations need a declared native type")
     | _ -> native_error "constructor operations need a declared native type" in
   (match operation with
@@ -918,7 +1006,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -969,6 +1057,8 @@ let describe c =
           str "immutable native record " ++ str(SomaForeign.native_record_type r) ++ str ", with a structural logical model"
         | SomaForeign.OCamlNativeOwnedRecord r ->
           str "owned native record " ++ str(SomaForeign.native_record_type r) ++ str ", opaque to Soma"
+        | SomaForeign.OCamlNativeAlgebraic (group, member) ->
+          str "native algebraic type " ++ str (SomaForeign.native_algebraic_type group member)
         | SomaForeign.OCamlNativeType path ->
           str "native opaque type " ++ str path ++ str ", with no logical evaluator"
         | SomaForeign.OCamlNativeCallback n ->

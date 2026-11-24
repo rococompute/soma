@@ -122,6 +122,14 @@ let owned_records modules = List.concat_map(fun(m:SomaForeign.ocaml_module)->
     | SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_) -> Some(c,r)
     | _->None)m.items)modules
 
+let owned_algebraic_groups modules =
+  List.concat_map (fun (m : SomaForeign.ocaml_module) ->
+    List.filter_map (fun (constant, _, item) ->
+      match item with
+      | SomaForeign.OCamlNativeAlgebraic (group, member)
+        when member = fst (List.hd group.algebraic_members) -> Some (constant, group)
+      | _ -> None) m.items) modules
+
 let owned_variants modules = List.concat_map(fun(m:SomaForeign.ocaml_module)->
   List.filter_map(fun(c,_,item)->match item with
     | SomaForeign.OCamlNativeOwnedVariant v -> Some(c,[],v)
@@ -247,7 +255,7 @@ let bindings_ml modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
+          | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             let signature,body=native_binding m n in
             let vars=type_variables signature in
@@ -309,6 +317,9 @@ let extraction_lines modules =
               (prefix^".soma_get_"^f.SomaForeign.field_name))info.logical_projections r.record_fields)
           | SomaForeign.OCamlNativeOwnedRecord r ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_record_type r)
+          | SomaForeign.OCamlNativeAlgebraic (group, member) ->
+            Printf.sprintf "Extract Constant %s => %S.\n" soma
+              (SomaForeign.native_algebraic_type group member)
           | SomaForeign.OCamlNativeType target ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma target
           | SomaForeign.OCamlNativeCallback n ->
@@ -347,7 +358,10 @@ let checked_modules ?(reserved = []) () =
     List.map(fun(_,_,v)->SomaForeign.native_variant_module v,
       (v.SomaForeign.variant_namespace,v.variant_name))(owned_variants modules) @
     List.map(fun(_,_,c)->SomaForeign.native_callable_module c,
-      (c.SomaForeign.callable_namespace,c.callable_name))(owned_callables modules)in
+      (c.SomaForeign.callable_namespace,c.callable_name))(owned_callables modules) @
+    List.map (fun (_, group) -> SomaForeign.native_algebraic_module group,
+      (group.SomaForeign.algebraic_namespace, group.algebraic_name))
+      (owned_algebraic_groups modules) in
   check_owned_module_names owned_names;
   let generated=List.map fst owned_names in
   if List.exists(fun(m:SomaForeign.ocaml_module)->same_name(bindings_module())m.top)modules then
@@ -410,6 +424,18 @@ let c_stub_names made =
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
   file (bindings_filename()) (bindings_ml modules);
+  let algebraic = owned_algebraic_groups modules in
+  let algebraic_entries = List.map (fun (constant, group) ->
+    let filename = SomaForeign.native_algebraic_filename group in
+    let contents = SomaForeign.native_algebraic_ml group in
+    file filename contents;
+    let symbol = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef constant)) in
+    let source = group.SomaForeign.algebraic_source in
+    Printf.sprintf "%S %S %S %S %S\n" symbol source
+      (SomaMerkle.string (read_file (SomaImport.resolve_project_file source)))
+      filename (SomaMerkle.string contents)) algebraic in
+  if algebraic_entries <> [] then file "native_algebraic.manifest"
+    ("soma-native-algebraic-v1\n" ^ String.concat "" (List.sort String.compare algebraic_entries));
   let owned=owned_records modules in
   let owned_entries=List.map(fun(c,r)->
     let filename=SomaForeign.native_record_filename r in
@@ -442,9 +468,11 @@ let write_files ~file ?c_file ~read_file ~directives modules =
   file "native_callables.manifest" ("soma-native-callables-v1\n"^String.concat ""(List.sort String.compare callable_entries));
   let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
     List.filter_map(fun(c,path,item)->match item with
-      | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+      | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
         let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
         let source=match item with
+          | SomaForeign.OCamlNativeAlgebraic (group, _) ->
+            SomaMerkle.string (read_file (SomaImport.resolve_project_file group.algebraic_source))
           | SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_) -> SomaMerkle.string(read_file(SomaImport.resolve_project_file r.record_source))
           | SomaForeign.OCamlNativeOwnedVariant v | SomaForeign.OCamlNativeParametricVariant(_,v) -> SomaMerkle.string(read_file(SomaImport.resolve_project_file v.variant_source))
           | SomaForeign.OCamlNativeCallableType c | SomaForeign.OCamlNativeParametricCallable(_,c) -> SomaMerkle.string(read_file(SomaImport.resolve_project_file c.callable_source))
@@ -452,7 +480,8 @@ let write_files ~file ?c_file ~read_file ~directives modules =
         Some(Printf.sprintf "%S %S %S %S\n" symbol m.top source (SomaForeign.native_identity item))
       | _->None)m.items)modules in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
-  ["soma_nat.ml"; bindings_filename()] @ List.map(fun(_,r)->SomaForeign.native_record_filename r)owned @
+  ["soma_nat.ml"; bindings_filename()] @
+  List.map (fun (_, group) -> SomaForeign.native_algebraic_filename group) algebraic @ List.map(fun(_,r)->SomaForeign.native_record_filename r)owned @
   List.map(fun(_,_,v)->SomaForeign.native_variant_filename v)variants @
   List.map(fun(_,_,c)->SomaForeign.native_callable_filename c)callables @
   List.concat_map (fun (m : SomaForeign.ocaml_module) ->
