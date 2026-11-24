@@ -88,6 +88,7 @@ type native_operation =
   | NativeExternalLiteralConstant of string * string
   | NativeExternalException of string
   | NativeConstructorBuild of string * int
+  | NativeExternalLiteralCallback of string * string * int
 
 type native_callback = {
   namespace : string;

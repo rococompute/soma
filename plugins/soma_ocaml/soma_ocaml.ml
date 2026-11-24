@@ -666,7 +666,7 @@ let native_callback name typ operation =
       (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
        | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma type_vars domain).SomaForeign.callable_arguments)
        | _->native_error "Apply needs a native callable argument")
-    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
+    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
@@ -738,7 +738,7 @@ let native_callback name typ operation =
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
      constructor_type (List.hd args_types)
    | SomaForeign.NativeConstructorBuild _ -> constructor_type result
@@ -769,6 +769,10 @@ let native_callback name typ operation =
       SomaForeign.NativeCallableWrap (Some callable)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
     | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_external_path path)
+    | SomaForeign.NativeExternalLiteralCallback (path, literal, after) ->
+      if after < 0 || after > List.length args then
+        native_error "literal insertion position must be between zero and the native argument count";
+      SomaForeign.NativeExternalLiteralCallback (native_external_path path, literal, after)
     | SomaForeign.NativeExternalConstant path ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
       SomaForeign.NativeExternalConstant(native_external_path path)
@@ -823,7 +827,8 @@ let native_callback name typ operation =
       if List.length args<>expected then native_error "record field and argument counts differ";
       if List.length(List.sort_uniq String.compare fields)<>List.length fields then native_error "record fields must be distinct";
       List.iter(fun f->ignore(field f))fields;op in
-  (match operation with SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> () | _ ->
+  (match operation with
+    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ -> () | _ ->
     if List.exists Option.has_some labels then native_error "native data callback arguments are positional");
   let ast t = Constrextern.extern_constr ~flags:(PrintingFlags.current ()) env sigma t in
   let rec product = function

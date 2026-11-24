@@ -161,6 +161,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeExternalValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
+    | SomaForeign.NativeExternalLiteralCallback (path, literal, after),_ ->
+      let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
+      let before,rest = CList.chop after given in
+      path ^ " " ^ String.concat " " (before @ (Printf.sprintf "%S" literal :: rest))
     | (SomaForeign.NativeConstructorTag(path,arity) | SomaForeign.NativeConstructorCase(path,arity)),[value] ->
       let constructor=qualified_constructor path (List.hd n.arguments) in
       let payloads=List.init arity(fun i->"p"^string_of_int i)in

@@ -67,6 +67,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_external_exception name path }
 | [ "OCaml" "Native" "External" "Type" ident(name) ":=" string(path) ] ->
  { Soma_ocaml.native_type ~external_:true name path }
+| [ "OCaml" "Native" "External" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) "After" natural(after) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeExternalLiteralCallback (path, literal, after)) }
 | [ "OCaml" "Native" "External" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeExternalValue path) }
 END
