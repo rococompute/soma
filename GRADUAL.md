@@ -541,6 +541,24 @@ Soma depends on no TOML library), without dates and times. Every project
 under `examples/example_projects` has one; `test-suite/misc/soma_project.sh`
 tests it.
 
+A project that provides its own Mirage entry functor can generate the
+configuration for `mirage configure` with `soma mirage-config DIRECTORY`.
+The command prints `config.ml` using the project's checked image layout
+and its ordered list of devices.
+
+```toml
+[mirage]
+name = "my_image"
+main = "Unikernel.Main"
+packages = ["lwt", "cstruct"]
+local_libs = ["support"]
+devices = [{ block_file = "rootfs" }, "default_network"]
+```
+
+Here the job takes a file-backed block device followed by the default
+dual-stack network. The entry functor's arguments follow the device
+list. Packages, local libraries, and devices default to empty lists.
+
 ### Dependencies: other projects, by their git tags
 
 A project depends on other Soma projects as a Go module does: by the path

@@ -2873,15 +2873,35 @@ let image_build_inputs ~switch ~dir sources =
 
 (* Forward layout to Mirage/Solo5, whose linker understands text_start.
    Never rewrite the installed linker script: its format is not an API. *)
-let image_config (image : SomaProject.image) text =
+let image_options (image : SomaProject.image) =
   let regions = List.map (fun (m : SomaProject.user_memory) ->
       Printf.sprintf "user_memory%s ~size:0x%x %S"
         (match m.address with None -> "" | Some a -> Printf.sprintf " ~address:0x%x" a) m.size m.name)
       image.user_memory in
-  let options =
-    (match image.text_start with None -> "" | Some a -> Printf.sprintf " ~text_start:0x%x" a) ^
-    (if regions = [] then "" else " ~user_memory:[" ^ String.concat "; " regions ^ "]") in
-  replace_text text "register \"soma\"" ("register \"soma\"" ^ options)
+  (match image.text_start with None -> "" | Some a -> Printf.sprintf " ~text_start:0x%x" a) ^
+  (if regions = [] then "" else " ~user_memory:[" ^ String.concat "; " regions ^ "]")
+
+let image_config image text =
+  replace_text text "register \"soma\"" ("register \"soma\"" ^ image_options image)
+
+let project_config config_path =
+  let directory = CUnix.canonical_path_name config_path in
+  let project = SomaProject.load directory in
+  let config = match project.mirage with
+    | Some config -> config
+    | None -> CErrors.user_err Pp.(str (Filename.concat directory SomaProject.file_name) ++ str ": missing [mirage]") in
+  let device = function
+    | SomaProject.Block_file name -> "block", Printf.sprintf "block_of_file %S" name
+    | SomaProject.Default_network -> "stackv4v6", "generic_stackv4v6 default_network" in
+  let types, devices = List.split (List.map device config.devices) in
+  let list f items = "[" ^ String.concat "; " (List.map f items) ^ "]" in
+  let packages = list (Printf.sprintf "package %S") config.packages in
+  let local_libs = list (Printf.sprintf "%S") config.local_libs in
+  let signature = String.concat " @-> " (types @ ["job"]) in
+  let applied = String.concat " $ " ("main" :: devices) in
+  Printf.sprintf "%sopen Mirage\n\nlet main =\n  main ~packages:%s ~local_libs:%s %S (%s)\n\nlet () =\n  register %S%s [ %s ]\n"
+    header packages local_libs config.main_module signature config.job_name
+    (image_options project.image) applied
 
 let build ~state ~source ~vo_file =
   if getenv_default "SOMA_MIRAGE_BUILD" "1" <> "0" && requires_mirage () then with_build_lock (fun () ->

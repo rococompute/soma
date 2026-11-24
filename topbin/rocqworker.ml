@@ -23,6 +23,7 @@ type kind =
   | Get
   | Diff
   | Search
+  | Mirage_config
 
 let reporting_errors f =
   try f ()
@@ -42,6 +43,10 @@ let start kind args = match kind with
   | Get -> get args
   | Diff -> reporting_errors (fun () -> SomaDiff.run args)
   | Search -> reporting_errors (fun () -> SomaSearch.run args)
+  | Mirage_config -> reporting_errors (fun () ->
+      match args with
+      | [directory] -> print_string (SomaMirage.project_config directory)
+      | _ -> CErrors.user_err Pp.(str "Usage: soma mirage-config DIRECTORY"))
   | Worker { init; loop } -> WorkerLoop.start ~init ~loop args
   | Compile -> Coqc.main args
   | Repl -> Coqtop.(start_coq coqtop_toplevel args)
@@ -60,6 +65,7 @@ let () =
       | "--kind=get" -> Get
       | "--kind=diff" -> Diff
       | "--kind=search" -> Search
+      | "--kind=mirage-config" -> Mirage_config
       | "--kind=proof" -> Worker { init = WProof.init_stdout; loop = WProof.main_loop }
       | "--kind=query" -> Worker { init = WQuery.init_stdout; loop = WQuery.main_loop }
       | "--kind=tactic" -> Worker { init = WTactic.init_stdout; loop = WTactic.main_loop }

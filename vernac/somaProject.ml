@@ -286,6 +286,16 @@ type image = {
 
 let no_image = { memory = None; text_start = None; user_memory = [] }
 
+type mirage_device = Block_file of string | Default_network
+
+type mirage = {
+  job_name : string;
+  main_module : string;
+  packages : string list;
+  local_libs : string list;
+  devices : mirage_device list;
+}
+
 type t = {
   root : string;
   name : string;
@@ -294,6 +304,7 @@ type t = {
   dependencies : dependency list;
   opam : (string * string) list;
   image : image;
+  mirage : mirage option;
 }
 
 let rec find_root dir =
@@ -359,12 +370,12 @@ let load_uncached ?display root =
   let known = "soma.toml has [project]: " ^
               String.concat ", " (List.map (fun (k, what) -> k ^ " (" ^ what ^ ")") keys) ^
               ", [dependencies] (" ^ example_line ^ "), [opam] (" ^ opam_example ^ ")" ^
-              ", and [image] (" ^ image_example ^ ")" in
+              ", [image] (" ^ image_example ^ "), and [mirage]" in
   List.iter (fun (k, { SomaToml.line; _ }) ->
       if List.mem_assoc k keys then
         error line "%s is a key of [project]: it goes under the line [project], which begins soma.toml:\n\n%s"
           k (example root)
-      else if not (List.mem k ["project"; "dependencies"; "opam"; "image"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+      else if not (List.mem k ["project"; "dependencies"; "opam"; "image"; "mirage"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
   let project, pline = match List.assoc_opt "project" toml with
     | Some { SomaToml.value = Table t; line } -> t, line
     | Some { SomaToml.line; value } -> error line "project is %s; it is a table:\n\n%s" (SomaToml.describe value) (example root)
@@ -536,7 +547,48 @@ let load_uncached ?display root =
       { memory; text_start; user_memory }
     | Some { SomaToml.line; value } ->
       error line "image is %s; it is a table: [image], then %s" (SomaToml.describe value) image_example in
-  { root; name; description; version; dependencies; opam; image }
+  let mirage = match List.assoc_opt "mirage" toml with
+    | None -> None
+    | Some { SomaToml.value = Table fields; line = section } ->
+      List.iter (fun (key, { SomaToml.line; _ }) ->
+          if not (List.mem key ["name"; "main"; "packages"; "local_libs"; "devices"]) then
+            error line "%s is not a key of [mirage]" key) fields;
+      let required key valid = match List.assoc_opt key fields with
+        | Some { SomaToml.value = String value; line } ->
+          if valid value then value else error line "invalid Mirage %s: %S" key value
+        | Some { SomaToml.line; _ } -> error line "Mirage %s must be a string" key
+        | None -> error section "[mirage] requires %s" key in
+      let array key convert = match List.assoc_opt key fields with
+        | None -> []
+        | Some { SomaToml.value = Array entries; line } -> List.map (convert line) entries
+        | Some { SomaToml.line; _ } -> error line "Mirage %s must be an array" key in
+      let entries key valid = array key (fun line -> function
+          | SomaToml.String value when valid value -> value
+          | _ -> error line "invalid entry in Mirage %s" key) in
+      let module_name value =
+        List.for_all (fun part ->
+            String.length part > 0 &&
+            (match part.[0] with 'A'..'Z' -> true | _ -> false) &&
+            String.for_all (function
+                | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' -> true | _ -> false) part)
+          (String.split_on_char '.' value) in
+      let device line = function
+        | SomaToml.Table ["block_file", { value = String name; line }] ->
+          if not (opam_name name) then error line "invalid Mirage block device name: %S" name;
+          Block_file name
+        | SomaToml.String "default_network" -> Default_network
+        | _ ->
+          error line "a Mirage device is { block_file = \"name\" } or \"default_network\"" in
+      Some {
+        job_name = required "name" opam_name;
+        main_module = required "main" module_name;
+        packages = entries "packages" opam_name;
+        local_libs = entries "local_libs" (fun value ->
+            List.for_all opam_name (String.split_on_char '.' value));
+        devices = array "devices" device;
+      }
+    | Some { SomaToml.line; _ } -> error line "mirage must be a table: [mirage]" in
+  { root; name; description; version; dependencies; opam; image; mirage }
 
 let loaded = Hashtbl.create 1
 

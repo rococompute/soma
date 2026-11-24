@@ -75,6 +75,16 @@ type image = {
 
 val no_image : image
 
+type mirage_device = Block_file of string | Default_network
+
+type mirage = {
+  job_name : string;
+  main_module : string;
+  packages : string list;
+  local_libs : string list;
+  devices : mirage_device list;
+}
+
 type t = {
   root : string;                 (** the folder of soma.toml, canonical *)
   name : string;                 (** lowercase letters, digits and _, beginning with a letter *)
@@ -83,6 +93,7 @@ type t = {
   dependencies : dependency list; (** its [dependencies] table *)
   opam : (string * string) list;  (** its [opam] table: opam packages, each at its version *)
   image : image;
+  mirage : mirage option;
 }
 
 (** The folder of the nearest soma.toml, from [dir] up *)

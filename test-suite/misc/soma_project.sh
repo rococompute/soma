@@ -138,6 +138,32 @@ soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 printf '[project]\nname = "shop"\nversion = "1.0.0-rc.1+build.5"\n' > soma.toml
 soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }
 
+# A native entry functor uses the checked image and device configuration.
+manifest '[image]
+memory = 4096
+text_start = "0xc0000000"
+user_memory = [{ name = "guest", address = "0x200000", size = "0xbfd00000" }]
+[mirage]
+name = "runner"
+main = "Unikernel.Main"
+packages = ["lwt", "cstruct"]
+local_libs = ["local.support"]
+devices = [{ block_file = "rootfs" }, "default_network"]'
+soma mirage-config . > config.ml
+grep -Fq 'main ~packages:[package "lwt"; package "cstruct"] ~local_libs:["local.support"] "Unikernel.Main" (block @-> stackv4v6 @-> job)' config.ml
+grep -Fq 'register "runner" ~text_start:0xc0000000 ~user_memory:[user_memory ~address:0x200000 ~size:0xbfd00000 "guest"] [ main $ block_of_file "rootfs" $ generic_stackv4v6 default_network ]' config.ml
+sed 's/default_network/unknown_device/' soma.toml > invalid.toml
+mv invalid.toml soma.toml
+if soma mirage-config . > config.ml 2> out.log; then exit 1; fi
+test ! -s config.ml
+grep -Fq 'a Mirage device is' out.log
+manifest '[mirage]
+name = "runner"
+main = "Unikernel..Main"'
+if soma mirage-config . > config.ml 2> out.log; then exit 1; fi
+test ! -s config.ml
+grep -Fq 'invalid Mirage main' out.log
+
 # without soma.toml, the root is the program's folder, as before
 rm soma.toml
 soma run main.soma > out.log 2>&1 || { cat out.log; exit 1; }

@@ -70,6 +70,7 @@ Commands:
                               lists them without building. soma test --help has details.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
+  mirage-config DIRECTORY     Print config.ml from a project's [mirage] and [image] tables.
   insert PATH                 Translate an OCaml file or directory into checked Soma
                               source. --out DIR, --partial, --report FILE, --json.
                               soma insert --help describes the supported subset.
@@ -1814,7 +1815,7 @@ let () =
   | ("build" | "compile" | "run" as command) :: rest when List.exists is_help (before_image_args rest) ->
     options_help command
   | "repl" :: args -> repl args
-  | ("get" | "diff" | "search" as command) :: args ->
+  | ("get" | "diff" | "search" | "mirage-config" as command) :: args ->
     let opts, _ = parse_opts [] in
     let () = init opts [] in
     let prog = get_worker_path { package = "soma-runtime"; basename = "rocqworker" } in
