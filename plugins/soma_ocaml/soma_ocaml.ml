@@ -339,11 +339,11 @@ let native_register name c item =
   let path = "__native__." ^ native_namespace () ^ "." ^ Id.to_string name in
   Lib.add_leaf (in_binding (c, {key; top; path; item}));
   Lib.add_leaf (in_module (key, (ml_file, top, !pending)))
-let native_type name path =
+let native_type ?(external_=false) name path =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
   let _, _, top = native_context () in
-  let path = top ^ "." ^ native_path path in
+  let path = if external_ then native_path path else top ^ "." ^ native_path path in
   let symbol = native_namespace () ^ "." ^ Id.to_string name in
   let body = native_app (native_global "soma.native.handle") [native_string symbol] in
   let c = native_declare name body None in
@@ -471,7 +471,7 @@ let native_callback name typ operation =
       (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
        | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma domain).SomaForeign.callable_arguments)
        | _->native_error "Apply needs a native callable argument")
-    | SomaForeign.NativeValue _ -> None
+    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
@@ -507,7 +507,7 @@ let native_callback name typ operation =
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
-   | SomaForeign.NativeValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeBuild _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
@@ -518,6 +518,7 @@ let native_callback name typ operation =
         native_error "Apply signature differs from the declared callable";
       SomaForeign.NativeCallableApply(Some c)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
+    | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_path path)
     | SomaForeign.NativeVariantView _ ->
       if List.length args<>1 then native_error "View needs one native variant argument";
       let v=variant_type(List.hd args_types)in
@@ -544,7 +545,7 @@ let native_callback name typ operation =
       if List.length args<>expected then native_error "record field and argument counts differ";
       if List.length(List.sort_uniq String.compare fields)<>List.length fields then native_error "record fields must be distinct";
       List.iter(fun f->ignore(field f))fields;op in
-  (match operation with SomaForeign.NativeValue _ -> () | _ ->
+  (match operation with SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> () | _ ->
     if List.exists Option.has_some labels then native_error "native data callback arguments are positional");
   let ast t = Constrextern.extern_constr ~flags:(PrintingFlags.current ()) env sigma t in
   let rec product = function

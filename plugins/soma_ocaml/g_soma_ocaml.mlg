@@ -58,6 +58,13 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeCopy fields) }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "External" "Type" ident(name) ":=" string(path) ] ->
+ { Soma_ocaml.native_type ~external_:true name path }
+| [ "OCaml" "Native" "External" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeExternalValue path) }
+END
+
 VERNAC ARGUMENT EXTEND native_record_field
  PRINTED BY { fun (name,mutable_,typ) -> Pp.(str(if mutable_ then "mutable " else "") ++ Names.Id.print name ++ str " : " ++ pr_native_signature typ) }
 | [ ident(name) ":" native_signature(typ) ] -> { name,false,typ }

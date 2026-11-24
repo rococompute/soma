@@ -1,0 +1,12 @@
+From Soma Require Native.
+From Corelib Require Import PrimInt63.
+Import api.
+Definition make text:=Native.Export
+ (Native.Bind(Native.Call_callback create 0%uint63)(fun buffer=>
+  Native.Bind(Native.Call_callback append(buffer,text))(fun _=>Native.Return buffer))).
+Definition append_text buffer text:=Native.Export(Native.Call_callback append(buffer,text)).
+Definition read buffer:=Native.Export(Native.Call_callback contents buffer).
+Definition pass text:=Native.Export(Native.Call_callback identity text).
+Definition then_text (pending:promise string) (next:Native.callback string (promise string)) :=
+ Native.Export(Native.Call_callback api.bind(pending,next)).
+Definition main:=(make,append_text,read,pass,then_text).

@@ -80,6 +80,7 @@ type native_operation =
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
+  | NativeExternalValue of string
 
 type native_callback = {
   namespace : string;

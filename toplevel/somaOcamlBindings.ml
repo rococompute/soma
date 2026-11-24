@@ -146,6 +146,9 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       m.top^"."^path^" "^String.concat " "given
+    | SomaForeign.NativeExternalValue path,_ ->
+      let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
+      path^" "^String.concat " "given
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
     | SomaForeign.NativeBuild names,_ ->

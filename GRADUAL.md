@@ -2782,3 +2782,12 @@ primitive rather than invoking it before further dispatch.
 pure machine-word policies. Its logical definition takes the low 63 bits of
 `String.length`; extraction uses OCaml's `String.length` directly. Native
 strings fit in that range, with no traversal, wrapper, or added assumption.
+
+`OCaml Native External Type buffer := "Buffer.t".` and
+`OCaml Native External Callback create : PrimInt63.int -> buffer := "Buffer.create".`
+name existing OCaml types and values by absolute paths. Ordinary native
+`Type`/`Callback` declarations remain relative to their companion module.
+External declarations need no handwritten forwarding module: generated typed
+bindings call the named native module directly. Native path, signature and
+labels participate in declaration identity and the native ABI manifest;
+the OCaml compiler checks that the actual external type/value matches.

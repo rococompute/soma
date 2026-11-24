@@ -1,0 +1,7 @@
+From Soma Require Native.
+OCaml Native External Type buffer := "Buffer.t".
+OCaml Native External Callback create : PrimInt63.int -> buffer := "Buffer.create".
+OCaml Native External Callback append : buffer -> string -> unit := "Buffer.add_string".
+OCaml Native External Callback contents : buffer -> string := "Buffer.contents".
+OCaml Native External Callback identity : string -> string := "Sys.opaque_identity".
+OCaml Native External Callback bind : promise string -> (Native.callback string (promise string)) -> promise string := "Lwt.bind".

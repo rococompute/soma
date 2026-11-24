@@ -64,6 +64,7 @@ type native_operation =
   | NativeCallableApply of native_callable option
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
+  | NativeExternalValue of string
 
 type native_callback = {
   namespace : string;
@@ -168,6 +169,7 @@ let native_identity = function
  | OCamlNativeCallback n ->
    let operation=match n.operation with
     | NativeValue p->"call "^Printf.sprintf "%S" p
+    | NativeExternalValue p->"external-call "^Printf.sprintf "%S" p
     | NativeGet p->"get "^Printf.sprintf "%S" p
     | NativeSet p->"set "^Printf.sprintf "%S" p
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
