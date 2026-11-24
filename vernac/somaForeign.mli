@@ -81,6 +81,7 @@ type native_operation =
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
   | NativeExternalValue of string
+  | NativePrimitive of string * string option * bool
   | NativeConstructorTag of string * int
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string

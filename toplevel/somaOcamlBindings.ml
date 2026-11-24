@@ -178,6 +178,8 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let inner_call = "(" ^ String.concat " " (inner :: inner_args) ^ ")" in
       "(fun " ^ String.concat " " parameters ^ " -> " ^
         String.concat " " (outer :: (before @ [inner_call])) ^ ")"
+    | SomaForeign.NativePrimitive _,_ ->
+      m.top ^ "." ^ n.name ^ " " ^ String.concat " " args
     | SomaForeign.NativeExternalValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
@@ -254,20 +256,41 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
    with: so a library's labels need not be declared (Deferred.bind's ~f,
    given in its place), and its optional arguments are left out, as OCaml
    allows of an application of all its arguments. *)
-let bindings_ml modules =
+let primitive_declarations ~interface (m : SomaForeign.ocaml_module) =
+  let declarations = List.filter_map (fun (_, _, item) -> match item with
+    | SomaForeign.OCamlNativeCallback {
+        operation = SomaForeign.NativePrimitive (byte, native, noalloc);
+        name; arguments; result; _
+      } ->
+      let signature = String.concat " -> " (List.map (Printf.sprintf "(%s)") (arguments @ [result])) in
+      let symbols = match native with
+        | None -> Printf.sprintf "%S" byte
+        | Some symbol -> Printf.sprintf "%S %S" byte symbol in
+      let attributes = if noalloc then " [@@noalloc]" else "" in
+      Some (Printf.sprintf "  external %s : %s = %s%s\n" name signature symbols attributes)
+    | _ -> None) m.items in
+  match declarations with
+  | [] -> ""
+  | _ ->
+    let body = if interface then ": sig" else "= struct" in
+    Printf.sprintf "\nmodule %s %s\n%send\n" m.top body (String.concat "" declarations)
+
+let bindings_ml ?(interface=false) modules =
   header ^ "(* Each value that a .definition declares, at its declared type. *)\n" ^
   String.concat "" (List.concat_map (fun (m : SomaForeign.ocaml_module) ->
       let definition = match m.ml_file with
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
-      List.filter_map (fun (_, path, item) -> match item with
+      let primitives = primitive_declarations ~interface m in
+      let wrappers = List.filter_map (fun (_, path, item) -> match item with
           | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             let signature,body=native_binding m n in
             let vars=type_variables signature in
             let poly=if vars=[]then ""else String.concat " "vars^". "in
-            Some(Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s%s =\n  %s\n"
-              n.namespace n.name (native_binding_name n) poly signature body)
+            Some (if interface then Printf.sprintf "val %s : %s\n" (native_binding_name n) signature
+              else Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s%s =\n  %s\n"
+                n.namespace n.name (native_binding_name n) poly signature body)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -279,9 +302,11 @@ let bindings_ml modules =
             let value = m.top ^ "." ^ path in
             let body = if args = [] then value
               else Printf.sprintf "fun %s -> %s %s" (String.concat " " args) value (String.concat " " given) in
-            Some (Printf.sprintf "\n(* %s: %s *)\nlet %s : %s%s =\n  %s\n"
-                    definition path (binding_name m path) poly ty body))
-        m.items) modules)
+            Some (if interface then Printf.sprintf "val %s : %s\n" (binding_name m path) ty
+              else Printf.sprintf "\n(* %s: %s *)\nlet %s : %s%s =\n  %s\n"
+                definition path (binding_name m path) poly ty body))
+        m.items in
+      (if primitives = "" then wrappers else primitives :: wrappers)) modules)
 
 (* soma_nat.ml: nat as extraction makes it in prog.ml, OCaml's int (as in
    an image: ExtrOcamlNatInt), named for a declared type's nat *)
@@ -433,7 +458,14 @@ let c_stub_names made =
    then not among those returned *)
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
-  file (bindings_filename()) (bindings_ml modules);
+  let bindings = bindings_filename () in
+  file bindings (bindings_ml modules);
+  let interfaces =
+    if List.exists (fun m -> primitive_declarations ~interface:true m <> "") modules then begin
+      let interface = bindings ^ "i" in
+      file interface (bindings_ml ~interface:true modules);
+      [interface]
+    end else [] in
   let algebraic = owned_algebraic_groups modules in
   let algebraic_entries = List.map (fun (constant, group) ->
     let filename = SomaForeign.native_algebraic_filename group in
@@ -490,7 +522,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
         Some(Printf.sprintf "%S %S %S %S\n" symbol m.top source (SomaForeign.native_identity item))
       | _->None)m.items)modules in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
-  ["soma_nat.ml"; bindings_filename()] @
+  ["soma_nat.ml"; bindings] @ interfaces @
   List.map (fun (_, group) -> SomaForeign.native_algebraic_filename group) algebraic @ List.map(fun(_,r)->SomaForeign.native_record_filename r)owned @
   List.map(fun(_,_,v)->SomaForeign.native_variant_filename v)variants @
   List.map(fun(_,_,c)->SomaForeign.native_callable_filename c)callables @
