@@ -203,7 +203,7 @@ let foreign_identity c =
     match ocaml with
     | Some (m, path, item) ->
       let shown = match item with
-        | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ -> SomaForeign.native_identity item
+        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ -> SomaForeign.native_identity item
         | SomaForeign.OCamlType n -> "type " ^ string_of_int n
         | SomaForeign.OCamlValue (ty, labels) ->
           ty ^ " " ^ String.concat "," (List.map (Option.default "") labels) in

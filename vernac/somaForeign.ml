@@ -108,6 +108,7 @@ type ocaml_item =
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
   | OCamlNativeParametricVariant of string list * native_variant
+  | OCamlNativeParametricCallable of string list * native_callable
 
 type ocaml_module = {
   ml_file : string option;
@@ -184,6 +185,17 @@ let native_callable_identity c =
   String.concat "\n" (["native-callable-type";c.callable_namespace;c.callable_name;native_callable_type c;c.callable_result] @
     List.map2(fun typ label->Printf.sprintf "%S %S" typ(Option.default "" label))c.callable_arguments c.callable_labels)
 
+let native_parametric_callable_ml params c =
+  let head=match params with [p]->p|_->"("^String.concat ", "params^")"in
+  let ordinary=native_callable_ml c in
+  let prefix="type t ="in
+  let offset=String.index ordinary '\n'+1 in
+  assert(String.sub ordinary offset(String.length prefix)=prefix);
+  String.sub ordinary 0 offset ^ "type " ^head^" t =" ^
+  String.sub ordinary (offset+String.length prefix)(String.length ordinary-offset-String.length prefix)
+let native_parametric_callable_identity params c =
+  "native-parametric-callable\n"^String.concat " "params^"\n"^native_callable_identity c
+
 let native_identity = function
  | OCamlNativeOwnedRecord r ->
    String.concat "\n" (["native-owned-record";r.record_namespace;r.record_name;native_record_type r] @
@@ -196,6 +208,7 @@ let native_identity = function
  | OCamlNativeOwnedVariant v -> native_variant_identity v
  | OCamlNativeParametricVariant(params,v) -> native_parametric_variant_identity params v
  | OCamlNativeCallableType c -> native_callable_identity c
+ | OCamlNativeParametricCallable(params,c) -> native_parametric_callable_identity params c
  | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path
  | OCamlNativeCallback n ->
    let operation=match n.operation with

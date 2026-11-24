@@ -1,0 +1,15 @@
+From Soma Require Native.
+Import functions.
+Definition pass{A B:Type}(target:transform A B):=target.
+Definition invoke{A B:Type}target label value:=Native.Export(Native.Call_callback(apply A B)(target,(label,value))).
+Definition invoke_function target label value:=Native.Export(Native.Call_callback apply_function(target,(label,value))).
+Definition invoke_curried_function target label value:=Native.Export(Native.Call_callback apply_curried_function(target,(label,value))).
+Definition invoke_bool target label value:=Native.Export(Native.Call_callback(apply bool bool)(target,(label,value))).
+Definition invoke_arrow target label value:=Native.Export(Native.Call_callback(apply (string->string)(string->string))(target,(label,value))).
+Definition invoke_pair target label value:=Native.Export(Native.Call_callback(apply (string*bool)(string*bool))(target,(label,value))).
+Definition invoke_schema target label value:=Native.Export(Native.Call_callback(apply (tail string bool)(tail string bool))(target,(label,value))).
+Definition partial{A B:Type}target label:=Native.Export(Native.Call_callback(stage A B)(target,label)).
+Definition resume{A B:Type}target value:=Native.Export(Native.Call_callback(tail_apply A B)(target,value)).
+Definition redirect_with{T Q:Type}target persist delimiter items context callback:=
+ Native.Export(Native.Call_callback(redirect_apply T Q)(target,(persist,(delimiter,(items,(context,callback)))))).
+Definition main:=(@pass,@invoke,invoke_bool,invoke_function,invoke_curried_function,invoke_arrow,invoke_pair,invoke_schema,@partial,@resume,@redirect_with).

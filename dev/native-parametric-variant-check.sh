@@ -83,7 +83,7 @@ p=Path(sys.argv[1]);f=p/'probe.ml';f.write_text(f.read_text().replace('EVENT_MOD
 mods=sorted(f.stem for f in p.glob('*.ml')if f.stem!='soma_main')
 (p/'dune').write_text('(executable (name probe) (modes exe byte) (modules '+' '.join(mods)+') (libraries lwt) (flags (:standard -w -a)))\n')
 PY
-ocaml dune build --root "$WORK/native" --profile release probe.exe probe.bc > "$WORK/build.log" 2>&1
+ocaml dune build --root "$WORK/native" --profile release -j2 probe.exe probe.bc > "$WORK/build.log" 2>&1
 ocaml "$WORK/native/_build/default/probe.exe"
 ocaml ocamlrun "$WORK/native/_build/default/probe.bc"
 # Identical source schemas in different consumers must keep byte-identical ABI.
@@ -129,7 +129,7 @@ cp "$HERE"/examples/example_projects/native_parametric_variants/* "$WORK/monomor
 printf 'From Soma Require Native.\nImport protocol.\nOCaml Native External Callback bad : forall(A:Type), event A -> event A := "Protocol.echo_bool".\n' > "$WORK/monomorphic/bad.definition"
 printf 'From Soma Require Native.\nImport protocol bad.\nDefinition main:=@bad.bad.\n' > "$WORK/monomorphic/main.soma"
 "$SOMA" extract "$WORK/monomorphic/main.soma" -o "$WORK/monomorphic/native" > "$WORK/monomorphic.log" 2>&1
-if ocaml dune build --root "$WORK/monomorphic/native" --profile release >> "$WORK/monomorphic.log" 2>&1;then echo 'accepted a monomorphic native implementation for forall descriptor' >&2;exit 1;fi
+if ocaml dune build --root "$WORK/monomorphic/native" --profile release -j2 >> "$WORK/monomorphic.log" 2>&1;then echo 'accepted a monomorphic native implementation for forall descriptor' >&2;exit 1;fi
 grep -q 'less general\|not as general\|polymorphic' "$WORK/monomorphic.log"
 echo 'PASS: parameter/namespace ABI provenance, source hashes, logical parameter separation, typed view/build rejection and opaque family inspection guard'
 if [ "${SOMA_TEST_HVF:-0}" = 1 ];then

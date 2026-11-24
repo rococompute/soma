@@ -1,0 +1,13 @@
+From Soma Require Native.
+From Corelib Require Import PrimInt63.
+From Stdlib Require Import Strings.Ascii.
+OCaml Native Callable transform:=forall(A B:Type),forall(label:string),A->B.
+OCaml Native Apply apply:forall(A B:Type),transform A B->string->A->B.
+OCaml Native Apply apply_function:transform bool(string->bool)->string->bool->(string->bool).
+OCaml Native Apply apply_curried_function:transform bool(string->bool->string)->string->bool->(string->bool->string).
+OCaml Native Callable tail:=forall(A B:Type),A->B.
+OCaml Native Apply tail_apply:forall(A B:Type),tail A B->A->B.
+OCaml Native Callable staged:=forall(A B:Type),forall(label:string),tail A B.
+OCaml Native Apply stage:forall(A B:Type),staged A B->string->tail A B.
+OCaml Native Callable redirect:=forall(T Q:Type),forall(persist:bool)(delimiter:option ascii),list T->Q->Native.callback Q(promise PrimInt63.int)->promise PrimInt63.int.
+OCaml Native Apply redirect_apply:forall(T Q:Type),redirect T Q->bool->option ascii->list T->Q->Native.callback Q(promise PrimInt63.int)->promise PrimInt63.int.

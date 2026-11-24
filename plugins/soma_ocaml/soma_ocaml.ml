@@ -134,6 +134,10 @@ let rec ocaml_type env sigma vars t =
       | _ -> None)
     | App(head,args) -> (match EConstr.kind sigma head with
       |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+        |Some{item=SomaForeign.OCamlNativeParametricCallable(params,c);_} when List.length params=Array.length args ->
+          let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
+          let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
+          Some(applied^" "^SomaForeign.native_callable_type c)
         |Some{item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when List.length params=Array.length args ->
           let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
@@ -175,6 +179,7 @@ let rec ocaml_type env sigma vars t =
     if GradualTyping.is_unknown_type env sigma t then
       not_ocaml (str "Any has no OCaml type: an OCaml value has one type")
     else if is "core.string.type" then "string"
+    else if is "core.ascii.type" then "char"
     else if is "core.bool.type" then "bool"
     else if is "core.unit.type" then "unit"
     else if is "num.float.type" then "float"
@@ -490,36 +495,91 @@ let native_variant ?(parameters=[]) name cases =
   let params=List.rev(fst(List.fold_left(fun(names,used)(id,_)->let name=type_variable used(Name id)in name::names,name::used)([],[])parameters))in
   native_register name c (if params=[]then SomaForeign.OCamlNativeOwnedVariant variant else SomaForeign.OCamlNativeParametricVariant(params,variant))
 
+(* Leading type parameters form an opaque native family. Keep the checked
+   signature in a type-valued let so Apply instantiates logical types rather
+   than replacing generated OCaml strings. Existing monomorphic metadata stays
+   byte-for-byte unchanged. *)
 let native_callable name syntax =
   ignore(native_context());
   if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
   let env=Global.env()in
   let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)syntax in
+  let rec enter env vars parameters ids typ=match EConstr.kind sigma typ with
+    |Prod(binder,domain,codomain)when is_sort env sigma domain->
+      (match EConstr.kind sigma domain,binder.Context.binder_name with
+       |Sort sort,Name _ when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+       |_->native_error "native callable type parameters must be named Type or Set");
+      let id=match binder.Context.binder_name with Name id->id|_->assert false in
+      if List.mem id ids then native_error "native callable type parameters must be distinct";
+      let variable=type_variable(List.filter_map Fun.id vars)binder.Context.binder_name in
+      let ast=Constrextern.extern_constr ~flags:(PrintingFlags.current())env sigma domain in
+      let parameter=Constrexpr.CLocalAssum([CAst.make binder.Context.binder_name],None,Constrexpr.Default Glob_term.Explicit,ast)in
+      enter(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(binder,domain))env)(Some variable::vars)
+        (parameters@[parameter])(ids@[id])codomain
+    |_->env,vars,parameters,ids,typ in
+  let env,vars,parameters,ids,typ=enter env [] [] [] typ in
+  let rec monomorphic t=
+    (match EConstr.kind sigma t with
+     |Prod(_,domain,_)when is_sort env sigma domain->native_error "native callable arguments must be monomorphic"
+     |_->());EConstr.iter sigma monomorphic t in
   let rec signature args labels t =
     match EConstr.kind sigma(Reductionops.whd_all env sigma t)with
     | Prod(binder,domain,codomain)->
-      if is_sort env sigma domain then native_error "native callable schemas must be monomorphic";
+      if is_sort env sigma domain then native_error "native callable type parameters must precede values";
       if not(EConstr.Vars.noccurn sigma 1 codomain)then native_error "native callable result depends on a value";
+      monomorphic domain;
       let label=match binder.Context.binder_name with
         | Anonymous->None|Name id->Some(ocaml_name ~definition:"native callable"(Id.to_string id))in
-      let arg=try ocaml_type env sigma [] domain with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
+      let arg=try ocaml_type env sigma vars domain with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
       signature(arg::args)(label::labels)(EConstr.Vars.subst1(EConstr.mkProp)codomain)
     | _->
-      let result=try ocaml_type env sigma [] t with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
+      monomorphic t;
+      let result=try ocaml_type env sigma vars t with Not_ocaml why->CErrors.user_err(str "OCaml Native callable: "++why)in
       List.rev args,List.rev labels,result in
   let args,labels,result=signature[][]typ in
   if args=[]then native_error "a native callable needs at least one argument";
   let namespace=native_namespace()in
-  let handle=native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]in
-  let body=CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,syntax,None,handle))in
+  let type_args=List.map(fun id->CAst.make(Constrexpr.CRef(Libnames.qualid_of_ident id,None)))ids in
+  let rec pack=function []->native_global "core.unit.type"|[arg]->arg|arg::rest->native_app(native_global "core.prod.type")[arg;pack rest]in
+  let handle=if parameters=[]then native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]
+    else native_app(native_global "soma.native.family")[native_string(namespace^"."^Id.to_string name);pack type_args]in
+  let checked=if parameters=[]then syntax else Constrextern.extern_constr ~flags:(PrintingFlags.current())env sigma typ in
+  let body=CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,checked,None,handle))in
+  let body=if parameters=[]then body else CAst.make(Constrexpr.CLambdaN(parameters,body))in
   let c=native_declare name body None in
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
-  native_register name c(SomaForeign.OCamlNativeCallableType{
-    callable_namespace=namespace;callable_name=Id.to_string name;callable_source=source;
-    callable_arguments=args;callable_labels=labels;callable_result=result})
-let native_callable_type env sigma typ = match EConstr.kind sigma typ with
+  let info={SomaForeign.callable_namespace=namespace;callable_name=Id.to_string name;callable_source=source;
+    callable_arguments=args;callable_labels=labels;callable_result=result}in
+  let params=List.rev(List.filter_map Fun.id vars)in
+  native_register name c(if params=[]then SomaForeign.OCamlNativeCallableType info
+    else SomaForeign.OCamlNativeParametricCallable(params,info))
+let native_callable_type env sigma type_vars typ =
+  let head,args=EConstr.decompose_app sigma typ in
+  match EConstr.kind sigma head with
   | Const(c,_)->(match Cmap_env.find_opt c !bindings with
-    | Some{item=SomaForeign.OCamlNativeCallableType c;_}->c
+    | Some{item=SomaForeign.OCamlNativeCallableType info;_}when Array.length args=0->info
+    | Some{item=SomaForeign.OCamlNativeParametricCallable(params,info);_}when List.length params=Array.length args->
+      let body=match(Environ.lookup_constant c env).Declarations.const_body with
+        |Declarations.Def body->EConstr.of_constr body
+        |_->native_error "a native callable must retain its checked signature"in
+      let body=Array.fold_left(fun body argument->match EConstr.kind sigma body with
+        |Lambda(_,_,rest)->EConstr.Vars.subst1 argument rest
+        |_->native_error "native callable parameter count differs from its definition")body args in
+      let signature=match EConstr.kind sigma body with
+        |LetIn(_,signature,_,_)->signature
+        |_->native_error "native callable differs from its checked signature"in
+      (* Only the schema's original value binders are callable inputs.
+         Instantiation may expose an arrow in its result parameter; preserve
+         that entire returned function and its partial-application boundary. *)
+      let rec instantiate remaining previous typ=
+        if remaining=0 then List.rev previous,ocaml_type env sigma type_vars typ else
+        match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+        |Prod(_,domain,codomain)->
+          instantiate(remaining-1)(ocaml_type env sigma type_vars domain::previous)
+            (EConstr.Vars.subst1(EConstr.mkProp)codomain)
+        |_->native_error "native callable has fewer value binders than its checked signature" in
+      let arguments,result=instantiate(List.length info.SomaForeign.callable_arguments)[] signature in
+      {info with SomaForeign.callable_arguments=arguments;callable_result=result}
     | _->native_error "Apply needs a declared native callable as its first argument")
   | _->native_error "Apply needs a declared native callable as its first argument"
 
@@ -551,7 +611,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
     | SomaForeign.NativeCallableApply _ ->
       (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
-       | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma domain).SomaForeign.callable_arguments)
+       | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma type_vars domain).SomaForeign.callable_arguments)
        | _->native_error "Apply needs a native callable argument")
     | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
@@ -628,7 +688,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
   let operation = match operation with
     | SomaForeign.NativeCallableApply _ ->
-      let c=native_callable_type env sigma(List.hd args_types)in
+      let c=native_callable_type env sigma type_vars(List.hd args_types)in
       if List.tl argument_names<>c.SomaForeign.callable_arguments || result_name<>c.callable_result then
         native_error "Apply signature differs from the declared callable";
       SomaForeign.NativeCallableApply(Some c)
@@ -724,7 +784,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -765,7 +825,7 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
-        | SomaForeign.OCamlNativeCallableType c ->
+        | SomaForeign.OCamlNativeCallableType c | SomaForeign.OCamlNativeParametricCallable(_,c) ->
           str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeParametricVariant(_,v) ->
           str "parameterized closed native variant " ++ str(SomaForeign.native_variant_type v)

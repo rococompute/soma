@@ -2895,3 +2895,20 @@ consumers cannot inspect its opaque placeholder representation. The native
 and bytecode ABI, logical type separation, borrowed payload/callback lifetimes,
 and an actual Solo5 consumer are checked by
 `dev/native-parametric-variant-check.sh`.
+
+Native callable schemas may begin with named `Type` or `Set` parameters,
+for example `OCaml Native Callable mapper:=forall(A B:Type),forall(label:string),A->B.`
+The leading parameters define an opaque native type family, preserving their
+logical order and identity. Remaining named binders describe OCaml labels.
+`OCaml Native Apply` accepts either universally quantified or concrete
+instances and checks its argument/result types against the instantiated logical
+signature. Generated schema modules, typed universal bindings, ABI manifests
+and Source hashes retain these parameters and labels. Values are borrowed
+unchanged; this declaration does not add a native evaluator.
+When a result parameter is instantiated with a function type, `Apply` consumes
+only the value binders of the original schema and returns that function
+unchanged. It preserves the callable's original partial-application boundary,
+including the timing of target effects and deferred effects in returned functions.
+`dev/native-callable-compatibility-check.py` retains independent cold-cache
+baseline/candidate projects, schema and program products, manifests, logical
+hash reports and a SHA256 receipt in the requested output directory.

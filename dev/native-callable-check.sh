@@ -58,7 +58,7 @@ import sys
 p=Path(sys.argv[1]);mods=sorted(f.stem for f in p.glob('*.ml')if f.stem!='soma_main')
 (p/'dune').write_text('(executable (name probe) (modes exe byte) (modules '+' '.join(mods)+') (libraries lwt) (flags (:standard -w -a)))\n')
 PY
-(cd "$WORK/native"&&ocaml dune build --profile release probe.exe probe.bc) > "$WORK/build.log" 2>&1
+(cd "$WORK/native"&&ocaml dune build --profile release -j2 probe.exe probe.bc) > "$WORK/build.log" 2>&1
 "$WORK/native/_build/default/probe.exe"
 ocaml ocamlrun "$WORK/native/_build/default/probe.bc"
 # Label metadata must invalidate the logical program even with equal domains.
@@ -79,7 +79,7 @@ negative() {
  if "$SOMA" extract "$WORK/$name/main.soma" -o "$WORK/$name/native" > "$WORK/$name.log" 2>&1;then echo "accepted $name" >&2;exit 1;fi
  grep -q "$expected" "$WORK/$name.log"
 }
-negative polymorphic 'OCaml Native Callable t:=forall A:Type,A->A.' 'must be monomorphic'
+negative higher_rank 'OCaml Native Callable t:=(forall A:Type,A->A)->string.' 'must be monomorphic'
 negative dependent 'OCaml Native Callable t:=forall n:nat,{m:nat | m=n}.' 'depends on a value'
 negative nonfunction 'OCaml Native Callable t:=string.' 'at least one argument'
 negative wrongresult 'OCaml Native Callable t:=string->string. OCaml Native Apply f:t->string->bool.' 'signature differs'
@@ -105,10 +105,10 @@ Import functions caller.
 Definition main:=Native.Export(Native.Bind(Native.Call_callback make tt)(fun target=>Native.Call_callback normalize(target,("/cwd","/file")))).
 SOMA
 "$SOMA" extract "$WORK/ffi/main.soma" -o "$WORK/ffi/native" > "$WORK/ffi.log" 2>&1
-(cd "$WORK/ffi/native"&&ocaml dune build --profile release) >> "$WORK/ffi.log" 2>&1
+(cd "$WORK/ffi/native"&&ocaml dune build --profile release -j2) >> "$WORK/ffi.log" 2>&1
 printf 'let make () = fun ~directory path -> directory ^ path\n' > "$WORK/ffi/caller.ml"
 "$SOMA" extract "$WORK/ffi/main.soma" -o "$WORK/ffi/bad" > "$WORK/ffi-negative.log" 2>&1
-if (cd "$WORK/ffi/bad"&&ocaml dune build --profile release) >> "$WORK/ffi-negative.log" 2>&1;then echo 'accepted wrong native callable label' >&2;exit 1;fi
+if (cd "$WORK/ffi/bad"&&ocaml dune build --profile release -j2) >> "$WORK/ffi-negative.log" 2>&1;then echo 'accepted wrong native callable label' >&2;exit 1;fi
 grep -q 'directory\|cwd' "$WORK/ffi-negative.log"
 echo 'PASS: actual native callable type checked across FFI; wrong label rejected'
 if [ "${SOMA_TEST_HVF:-0}" = 1 ];then
