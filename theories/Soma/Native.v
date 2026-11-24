@@ -244,6 +244,23 @@ Arguments Export {A} body.
 Register program as soma.native.program.
 Register entry as soma.native.entry.
 
+(** Create an ordinary nonrecursive callback with the lexical captures of
+    its body. The symbolic program uses a callback that ignores itself. *)
+Definition lexical_callback3 {A B C R}
+    (body : A -> B -> C -> program R) : program (callback A (callback B (callback C (R)))) :=
+  New_callback3 (fun _ a b c => body a b c).
+Register lexical_callback3 as soma.native.lexical_callback3.
+
+Definition lexical_callback5 {A B C D E R}
+    (body : A -> B -> C -> D -> E -> program R) : program (callback A (callback B (callback C (callback D (callback E (R)))))) :=
+  New_callback5 (fun _ a b c d e => body a b c d e).
+Register lexical_callback5 as soma.native.lexical_callback5.
+
+Definition lexical_callback6 {A B C D E F R}
+    (body : A -> B -> C -> D -> E -> F -> program R) : program (callback A (callback B (callback C (callback D (callback E (callback F (R))))))) :=
+  New_callback6 (fun _ a b c d e f => body a b c d e f).
+Register lexical_callback6 as soma.native.lexical_callback6.
+
 (** A value-preserving native barrier, for scopes that intentionally keep a
     borrowed resource alive through an observable callback. *)
 Definition opaque {A} (value : A) := value.
@@ -269,6 +286,12 @@ Definition loop_values {S A} (step : S -> S) (finish : S -> option A)
     | Some value => Finish value
     | None => Continue (step state)
     end)) initial.
+
+(** Continue after a consuming value loop without keeping its initial state
+    in an outer bind frame. Like [loop_then], this is a symbolic [Bind]. *)
+Definition loop_values_then {S A B} (step : S -> S) (finish : S -> option A)
+    (initial : S) (next : A -> program B) : program B :=
+  Bind (loop_values step finish initial) next.
 
 (** Final primitive calls must tailcall their provider. An [Invoke] followed
     by [Return] has the same symbolic result but retains an extra caller frame

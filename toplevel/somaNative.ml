@@ -64,6 +64,12 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
  "(fun _ _ -> failwith ""a native entry cannot be inspected"")".
+Extract Inlined Constant Soma.Native.lexical_callback3 =>
+ "(fun body () -> fun a b c -> body a b c ())".
+Extract Inlined Constant Soma.Native.lexical_callback5 =>
+ "(fun body () -> fun a b c d e -> body a b c d e ())".
+Extract Inlined Constant Soma.Native.lexical_callback6 =>
+ "(fun body () -> fun a b c d e f -> body a b c d e f ())".
 Extract Constant Soma.Native.opaque => "Sys.opaque_identity".
 Extract Constant Soma.Native.ordinary => "Fun.id".
 Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".
@@ -71,6 +77,13 @@ Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".
    shared runtime artifact and do not gain an unused loop helper. *)
 Extract Constant Soma.Native.loop_values =>
  "(fun step finish initial () -> let rec loop state = match finish state with None -> loop (step state) | Some result -> result in loop initial)".
+Extract Constant Soma.Native.loop_values_then =>
+ "(let[@inline never] run step finish next initial =
+     let rec loop state = match finish state with
+       | None -> loop (step state)
+       | Some result -> next result ()
+     in loop initial
+   in fun step finish initial next () -> run step finish next initial)".
 Extract Constant Soma.Native.call_then => "Soma_effect.call_then".
 Extract Constant Soma.Native.tail_invoke => "Soma_effect.tail_invoke".
 Extract Constant Soma.Native.word_length => "String.length".
