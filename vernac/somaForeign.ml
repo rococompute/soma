@@ -128,6 +128,7 @@ type ocaml_item =
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
   | OCamlNativeAlgebraic of native_algebraic * string
+  | OCamlNativeExternalFamily of string list * string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
   | OCamlNativeParametricVariant of string list * native_variant
@@ -271,6 +272,8 @@ let native_identity = function
  | OCamlNativeCallableType c -> native_callable_identity c
  | OCamlNativeParametricCallable(params,c) -> native_parametric_callable_identity params c
  | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path
+ | OCamlNativeExternalFamily (params, path) ->
+   Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let operation=match n.operation with
     | NativeValue p->"call "^Printf.sprintf "%S" p

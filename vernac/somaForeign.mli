@@ -144,6 +144,7 @@ type ocaml_item =
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
   | OCamlNativeAlgebraic of native_algebraic * string
+  | OCamlNativeExternalFamily of string list * string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
   | OCamlNativeParametricVariant of string list * native_variant
