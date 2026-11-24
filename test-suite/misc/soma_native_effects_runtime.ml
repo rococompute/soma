@@ -982,3 +982,20 @@ let ()=
   Gc.allocated_bytes()-.before in
  assert(measure2 Fun.id=measure2 Prog.pure_callback2);
  print_endline "native pure callbacks: exact supplied function identity/curried arity, saturation timing, aliases/errors/promises/context and zero per-call bridge allocation passed"
+
+let ()=
+ let[@inline never] raw _owner before next=let value=before()in next value in
+ let trial invoke fault=
+  let watched=Weak.create 1 and phases=ref[]in
+  let sample phase=collect();phases:=(phase,Weak.check watched 0)::!phases in
+  let key=Lwt.new_key()and error=Fault "borrowed synchronous scope"in
+  let payload=Bytes.create 1009 and trace=ref[]in
+  let before()=sample "before";trace:=("before",Lwt.get key)::!trace;if fault=1 then raise error else payload in
+  let next value=sample "next";trace:=("next",Lwt.get key)::!trace;assert(value==payload);if fault=2 then raise error else value in
+  let[@inline never] start()=let owner=Bytes.create 1013 in Weak.set watched 0(Some owner);invoke owner before next in
+  let result=try `Return(Lwt.with_value key(Some 17)start==payload)with e->`Throw(e==error)in
+  sample "after";result,List.rev !trace,List.rev !phases in
+ for fault=0 to 2 do assert(trial raw fault=trial Prog.borrowed_scope fault)done;
+ let body()=Lwt.return(Bytes.create 1009)in let next promise=promise in
+ let pending=body()in assert(Prog.borrowed_scope()(fun()->pending)next==pending);
+ print_endline "native borrowed synchronous scope: incoming owner Weak phases, release before tail continuation, aliases, exact body/next exceptions and dynamic scope passed"

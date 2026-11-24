@@ -2855,3 +2855,9 @@ allocations when a native array/list traversal calls pure Soma policy.
 Immutable record projections use named generated schema getters. Pure field
 reads retain their expression order and allocate no temporary projection
 closures per access, including bytecode execution.
+
+`Native.Borrowed_scope owner before next` preserves a direct synchronous
+caller's incoming argument frame through `before`, then releases the frame
+before tail-entering `next`. The owner is not artificially pinned: native
+liveness may release it sooner while bytecode retains its incoming slot.
+Body and continuation exceptions retain their ordinary synchronous scopes.

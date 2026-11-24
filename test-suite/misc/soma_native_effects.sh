@@ -206,7 +206,7 @@ Definition saturated_check (value:nat) : Native.program nat :=
  Native.Bind (Native.Call_callback5 callback value tt tt tt tt) (fun value =>
  Native.Bind (Native.New_callback6 (fun _ a b1 b2 b3 b4 b5 => Native.Return a)) (fun callback =>
  Native.Bind (Native.Call_callback6 callback value tt tt tt tt tt) (fun value =>
- Native.Return value)))))))))))))).
+ Native.Borrowed_scope value (Native.Return value) Native.Return)))))))))))))).
 Definition curried_check (value : nat) : Native.program nat :=
  Native.Bind (Native.New_callback2 (fun _ a b => Native.Return (a, b))) (fun pair =>
  Native.Bind (Native.Call_callback pair value) (fun second =>

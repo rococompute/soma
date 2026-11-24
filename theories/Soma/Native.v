@@ -170,6 +170,11 @@ Inductive program : Type -> Type :=
     this creates no logical native callback evaluator. *)
 | Pure_callback {A B} (body:A->B) : program(callback A B)
 | Pure_callback2 {A B R} (body:A->B->R) : program(callback A(callback B R))
+(** A consumed incoming argument remains in a direct synchronous caller's
+    bytecode frame through [before], then leaves before the tail continuation.
+    The native backend can release the unused argument sooner. *)
+| Borrowed_scope {Owner A B} (owner:Owner) (before:program A)
+ (next:A->program B) : program B
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -271,3 +276,5 @@ Arguments Call_callback6 {A B C D E F R} body a0 a1 a2 a3 a4 a5.
 
 Arguments Pure_callback {A B} body.
 Arguments Pure_callback2 {A B R} body.
+
+Arguments Borrowed_scope {Owner A B} owner before next.
