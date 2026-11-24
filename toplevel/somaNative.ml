@@ -71,6 +71,13 @@ Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".
    shared runtime artifact and do not gain an unused loop helper. *)
 Extract Constant Soma.Native.loop_values =>
  "(fun step finish initial () -> let rec loop state = match finish state with None -> loop (step state) | Some result -> result in loop initial)".
+Extract Constant Soma.Native.loop_values_then =>
+ "(let[@inline never] run step finish next initial =
+     let rec loop state = match finish state with
+       | None -> loop (step state)
+       | Some result -> next result ()
+     in loop initial
+   in fun step finish initial next () -> run step finish next initial)".
 Extract Constant Soma.Native.call_then => "Soma_effect.call_then".
 Extract Constant Soma.Native.tail_invoke => "Soma_effect.tail_invoke".
 Extract Constant Soma.Native.word_length => "String.length".

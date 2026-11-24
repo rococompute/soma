@@ -40,7 +40,16 @@ Definition finish (current : state) := match current with Done n => Some n | Ste
 Definition run n := Native.Export (Native.loop_values step finish (Step n)).
 Definition loop {S A} (step : S -> S) (finish : S -> option A) initial :=
   Native.Export (Native.loop_values step finish initial).
-Definition main := (@equal, @identical, @get, product, add_float, step, run, @loop).
+Definition then_loop {S A B} (step : S -> S) (finish : S -> option A) initial (next : A -> B) :=
+  Native.Export (Native.loop_values_then step finish initial (fun value => Native.Return (next value))).
+Definition main := (@equal, @identical, @get, product, add_float, step, run, @loop, @then_loop).
+SOMA
+cat > "$WORK/app/main.exp" <<'SOMA'
+Theorem fused_value_loop_is_symbolic_bind : forall S A B
+    (step : S -> S) (finish : S -> option A) initial (next : A -> Native.program B),
+  Native.loop_values_then step finish initial next =
+  Native.Bind (Native.loop_values step finish initial) next.
+Proof. reflexivity. Qed.
 SOMA
 "$SOMA" extract "$WORK/app/main.soma" -o "$WORK/native" > "$WORK/extract.log" 2>&1
 "$SOMA" hash "$WORK/app/main.soma" > "$WORK/hash"
@@ -65,6 +74,27 @@ let require message valid = if not valid then failwith message
 
 let capture f = try Ok (f ()) with e -> Error e
 
+type scope_state = Hold of unit ref | Observe of (unit -> bool) | Settled of bool
+
+let[@inline never] scoped run =
+  let slot = Weak.create 1 in
+  let[@inline never] initial () =
+    let owner = ref () in
+    Weak.set slot 0 (Some owner);
+    Hold owner in
+  let step = function
+    | Hold _ -> Observe (fun () -> Gc.full_major (); Gc.full_major (); Weak.check slot 0)
+    | Observe inspect -> Settled (inspect ())
+    | Settled _ -> assert false in
+  let finish = function Settled value -> Some value | _ -> None in
+  run step finish (initial ()) Fun.id
+
+let direct_scope step finish initial next =
+  let rec loop state = match finish state with
+    | Some result -> next result
+    | None -> loop (step state) in
+  loop initial
+
 let () =
   let a = Bytes.to_string (Bytes.of_string "repeated key") in
   let b = Bytes.to_string (Bytes.of_string "repeated key") in
@@ -85,6 +115,21 @@ let () =
     (List.rev !trace = ["finish", 0; "step", 0; "finish", 1; "step", 1; "finish", 2]);
   let error = Failure "loop provider" in
   let throws f = match capture f with Error got -> got == error | Ok _ -> false in
+  trace := [];
+  require "value loop continuation retains terminal alias"
+    (Prog.then_loop step finish 0 (fun result -> trace := ("next", !result) :: !trace; result) == value);
+  require "finish, step, and continuation order"
+    (List.rev !trace = ["finish", 0; "step", 0; "finish", 1; "step", 1; "finish", 2; "next", 37]);
+  require "value loop continuation exception from outside the loop"
+    (throws (fun () -> Prog.then_loop step finish 0 (fun _ -> raise error)));
+  require "fused terminal-provider exception identity"
+    (throws (fun () -> Prog.then_loop (fun _ -> assert false) (fun _ -> raise error) 0 Fun.id));
+  require "fused step exception identity"
+    (throws (fun () -> Prog.then_loop (fun _ -> raise error) (fun _ -> None) 0 Fun.id));
+  let old_scope = scoped direct_scope in
+  require "fused value loop has the caller's Weak scope" (scoped Prog.then_loop = old_scope);
+  if Sys.backend_type = Sys.Native then
+    require "ordinary native loop should release its consumed initial value" (not old_scope);
   require "terminal-provider exception identity"
     (throws (fun () -> Prog.loop (fun _ -> assert false) (fun _ -> raise error) 0));
   require "step-provider exception identity"
@@ -97,10 +142,17 @@ let () =
     let before = Gc.allocated_bytes () in
     let result = fn 200000 in
     Gc.allocated_bytes () -. before, result in
+  let fused n = Prog.then_loop Prog.step
+      (function Prog.Done value -> Some value | Prog.Step _ -> None)
+      (Prog.Step n) Fun.id in
   let old, expected = measure direct and fresh, actual = measure Prog.run in
+  let fused_bytes, result = measure fused in
+  require "fused value loop result" (result = expected);
+  require "fused value loop adds no per-transition allocation" (fused_bytes -. old < 4096.);
   require "unbounded loop result" (actual = expected);
   require "native loop adds no per-transition allocation" (fresh -. old < 4096.);
-  Printf.printf "PASS: exact qualified operators and native value loop (direct %.0f B, generated %.0f B)\n" old fresh
+  Printf.printf "PASS: exact qualified operators and native value loops (direct %.0f B, generated %.0f B, fused %.0f B)\n"
+    old fresh fused_bytes
 ML
 python3 - "$WORK/native" <<'PY'
 from pathlib import Path

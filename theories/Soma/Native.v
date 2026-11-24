@@ -270,6 +270,12 @@ Definition loop_values {S A} (step : S -> S) (finish : S -> option A)
     | None => Continue (step state)
     end)) initial.
 
+(** Continue after a consuming value loop without keeping its initial state
+    in an outer bind frame. Like [loop_then], this is a symbolic [Bind]. *)
+Definition loop_values_then {S A B} (step : S -> S) (finish : S -> option A)
+    (initial : S) (next : A -> program B) : program B :=
+  Bind (loop_values step finish initial) next.
+
 (** Final primitive calls must tailcall their provider. An [Invoke] followed
     by [Return] has the same symbolic result but retains an extra caller frame
     around the primitive on bytecode. This fused native boundary drops it. *)
