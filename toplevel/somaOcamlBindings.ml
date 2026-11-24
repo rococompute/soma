@@ -146,6 +146,11 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     error Pp.(str "a native record needs a declared native type") in
   let field prefix name = prefix ^ "." ^ name in
   let assignments prefix names values = String.concat "; " (List.map2(fun n a->field prefix n^" = "^a)names values) in
+  let qualified_constructor path ty =
+    if String.contains path '.' then path else
+    match String.rindex_opt ty '.' with
+    | None -> path
+    | Some dot -> String.sub ty 0 dot ^ "." ^ path in
   let body = match n.operation,args with
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
@@ -157,10 +162,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
     | (SomaForeign.NativeConstructorTag(path,arity) | SomaForeign.NativeConstructorCase(path,arity)),[value] ->
-      let constructor=if String.contains path '.'then path else
-       let input=List.hd n.arguments in
-       match String.rindex_opt input '.'with
-        |None->path|Some dot->String.sub input 0 dot^"."^path in
+      let constructor=qualified_constructor path (List.hd n.arguments) in
       let payloads=List.init arity(fun i->"p"^string_of_int i)in
       let tag=match n.operation with SomaForeign.NativeConstructorTag _->true|_->false in
       let pattern=constructor^(if arity=0 then ""else
@@ -168,6 +170,12 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       "match "^value^" with "^pattern^" -> "^
        (if tag then "true"else "Some ("^native_pattern payloads^")")^
        " | _ -> "^(if tag then "false"else "None")
+    | SomaForeign.NativeConstructorBuild(path,arity),_ ->
+      let constructor = qualified_constructor path n.result in
+      (match arity,args with
+       | 0,[_] -> constructor
+       | 1,[value] -> constructor ^ " " ^ value
+       | _ -> constructor ^ " (" ^ String.concat ", " args ^ ")")
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
     | SomaForeign.NativeBuild names,_ ->

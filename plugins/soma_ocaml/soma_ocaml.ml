@@ -660,6 +660,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeGet _ | SomaForeign.NativeCallableWrap _ -> Some 1
     | SomaForeign.NativeSet _ -> Some 2
     | SomaForeign.NativeBuild fields -> Some(List.length fields)
+    | SomaForeign.NativeConstructorBuild(_,arity) -> Some (max 1 arity)
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
     | SomaForeign.NativeCallableApply _ ->
       (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
@@ -727,18 +728,20 @@ let native_callback name typ operation =
         {v with SomaForeign.variant_cases=instantiate body v.SomaForeign.variant_cases}
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
+  let constructor_type t =
+    if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") t then () else
+    match EConstr.kind sigma t with
+    | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
+      | Some {item=SomaForeign.OCamlNativeType _;_} -> ()
+      | _ -> native_error "constructor operations need a declared native type")
+    | _ -> native_error "constructor operations need a declared native type" in
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
-     (let input=List.hd args_types in
-      if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") input then () else
-      match EConstr.kind sigma input with
-      |Const(c,_)->(match Cmap_env.find_opt c !bindings with
-        |Some{item=SomaForeign.OCamlNativeType _;_}->()
-        |_->native_error "constructor operations need a declared native type")
-      |_->native_error "constructor operations need a declared native type")
+     constructor_type (List.hd args_types)
+   | SomaForeign.NativeConstructorBuild _ -> constructor_type result
    | SomaForeign.NativeBuild _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
@@ -803,6 +806,12 @@ let native_callback name typ operation =
       if arity=0 && not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.unit.type")payload.(0))then
        native_error "a nullary Case payload must be unit";
       SomaForeign.NativeConstructorCase(native_constructor_path path,arity)
+    | SomaForeign.NativeConstructorBuild(path,arity) ->
+      if arity=0 then begin
+        if argument_names<>["unit"] then native_error "a nullary Constructor takes unit"
+      end else if List.length args<>arity then
+        native_error "constructor arity and argument count differ";
+      SomaForeign.NativeConstructorBuild(native_constructor_path path,arity)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)

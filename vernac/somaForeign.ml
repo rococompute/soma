@@ -71,6 +71,7 @@ type native_operation =
   | NativeCallableWrap of native_callable option
   | NativeExternalLiteralConstant of string * string
   | NativeExternalException of string
+  | NativeConstructorBuild of string * int
 
 type native_callback = {
   namespace : string;
@@ -228,6 +229,7 @@ let native_identity = function
     | NativeExternalException p->"external-exception "^Printf.sprintf "%S" p
     | NativeConstructorTag(p,n)->Printf.sprintf "constructor-tag %S %d" p n
     | NativeConstructorCase(p,n)->Printf.sprintf "constructor-case %S %d" p n
+    | NativeConstructorBuild(p,n)->Printf.sprintf "constructor-build %S %d" p n
     | NativeGet p->"get "^Printf.sprintf "%S" p
     | NativeSet p->"set "^Printf.sprintf "%S" p
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
