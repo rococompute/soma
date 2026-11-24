@@ -150,7 +150,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       m.top^"."^path^" "^String.concat " "given
-    | SomaForeign.NativeExternalConstant path,[_] -> path
+    | (SomaForeign.NativeExternalConstant path | SomaForeign.NativeExternalException path),[_] -> path
     | SomaForeign.NativeExternalLiteralConstant (path, literal),[_] ->
       Printf.sprintf "%s %S" path literal
     | SomaForeign.NativeExternalValue path,_ ->

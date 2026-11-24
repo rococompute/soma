@@ -2848,6 +2848,10 @@ are rejected. This preserves native caller expression shapes for readonly
 field observations, while mutable element storage remains explicit effects.
 
 `OCaml Native External Value args : Native.vector string := "Sys.argv".`
+declares a checked `Native.callback unit (Native.vector string)` getter.
+Calling it returns the named native value directly, with no copying or extra
+application. This also exposes existing reference cells and native function
+values, whose reads and later calls remain separate explicit Soma operations.
 
 External values and callbacks can also name qualified symbolic operators, for
 example `"Stdlib.(=)"` or `"Stdlib.(+.)"`. The generated binding still checks
@@ -2868,6 +2872,13 @@ The generated getter applies the literal when called and returns the resulting
 native function. The OCaml compiler checks the format and result signature.
 Literal characters are escaped as string data in the generated binding.
 
+`OCaml Native External Exception division_by_zero := "Stdlib.Division_by_zero".`
+declares a checked `Native.callback unit exception_value` getter for a
+nullary external OCaml exception constructor. The path uses uppercase module
+and constructor names. OCaml checks that the constructor expression has type
+`exn`. Calling the getter returns the original exception value; use
+`Native.Throw` or `Native.Promise_fail` to choose where it is raised.
+
 `Native.loop_values step finish initial` runs an unbounded native loop over
 ordinary state functions. It calls `finish` before each step, and stops as soon
 as the observer returns a result in `Some`. On `None`, it calls `step` once and
@@ -2875,11 +2886,6 @@ continues with that state. Use it when the state functions already expose all
 operations and the loop should avoid allocating an effect thunk or progress
 tag on every transition. Its logical definition describes an ordinary
 `Native.Loop` program.
-
-declares a checked `Native.callback unit (Native.vector string)` getter.
-Calling it returns the named native value directly, with no copying or extra
-application. This also exposes existing reference cells and native function
-values, whose reads and later calls remain separate explicit Soma operations.
 
 `Native.List_map mapper items` uses the native `List.map` with an opaque
 native callback, preserving element order, native tail-modulo-cons behavior,

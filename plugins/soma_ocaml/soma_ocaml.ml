@@ -668,7 +668,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
     | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
-    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ -> Some 1 in
+    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
+    | SomaForeign.NativeExternalException _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -728,6 +729,7 @@ let native_callback name typ operation =
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _
+   | SomaForeign.NativeExternalException _
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
      (let input=List.hd args_types in
@@ -770,6 +772,11 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalLiteralConstant (path, literal) ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
       SomaForeign.NativeExternalLiteralConstant(native_external_path path, literal)
+    | SomaForeign.NativeExternalException path ->
+      if argument_names<>["unit"] ||
+         not (EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") result) then
+        native_error "an external exception getter takes unit and returns an exception";
+      SomaForeign.NativeExternalException(native_constructor_path path)
     | SomaForeign.NativeVariantView _ ->
       if List.length args<>1 then native_error "View needs one native variant argument";
       let v=variant_type(List.hd args_types)in
@@ -825,7 +832,7 @@ let native_callback name typ operation =
   native_register name c (SomaForeign.OCamlNativeCallback {
     namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
 
-let native_external_constant ?literal name result path =
+let native_getter name result operation =
   let open Constrexpr in
   let unit_argument = CLocalAssum ([CAst.make Anonymous], None,
     Default Glob_term.Explicit, native_global "core.unit.type") in
@@ -840,10 +847,17 @@ let native_external_constant ?literal name result path =
       CAst.make (CProdN ([binder], insert_unit body))
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
+  native_callback name (insert_unit result) operation
+
+let native_external_constant ?literal name result path =
   let operation = match literal with
     | None -> SomaForeign.NativeExternalConstant path
     | Some literal -> SomaForeign.NativeExternalLiteralConstant (path, literal) in
-  native_callback name (insert_unit result) operation
+  native_getter name result operation
+
+let native_external_exception name path =
+  native_getter name (native_global "soma.exception_value.type")
+    (SomaForeign.NativeExternalException path)
 
 (* [OCaml Bind "FILE.ml"]: FILE.definition declares FILE.ml *)
 let bind file =

@@ -70,6 +70,7 @@ type native_operation =
   | NativeExternalConstant of string
   | NativeCallableWrap of native_callable option
   | NativeExternalLiteralConstant of string * string
+  | NativeExternalException of string
 
 type native_callback = {
   namespace : string;
@@ -224,6 +225,7 @@ let native_identity = function
     | NativeExternalValue p->"external-call "^Printf.sprintf "%S" p
     | NativeExternalConstant p->"external-value "^Printf.sprintf "%S" p
     | NativeExternalLiteralConstant (path, literal)->Printf.sprintf "external-literal-value %S %S" path literal
+    | NativeExternalException p->"external-exception "^Printf.sprintf "%S" p
     | NativeConstructorTag(p,n)->Printf.sprintf "constructor-tag %S %d" p n
     | NativeConstructorCase(p,n)->Printf.sprintf "constructor-case %S %d" p n
     | NativeGet p->"get "^Printf.sprintf "%S" p
