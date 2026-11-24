@@ -66,6 +66,10 @@ Extract Inductive Soma.Native.entry => "Soma_effect.entry"
 Extract Constant Soma.Native.opaque => "Sys.opaque_identity".
 Extract Constant Soma.Native.ordinary => "Fun.id".
 Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".
+(* Inline this lowering only in consumers. Existing consumers keep the same
+   shared runtime artifact and do not gain an unused loop helper. *)
+Extract Constant Soma.Native.loop_values =>
+ "(fun step finish initial () -> let rec loop state = match finish state with None -> loop (step state) | Some result -> result in loop initial)".
 Extract Constant Soma.Native.call_then => "Soma_effect.call_then".
 Extract Constant Soma.Native.tail_invoke => "Soma_effect.tail_invoke".
 Extract Constant Soma.Native.word_length => "String.length".

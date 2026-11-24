@@ -254,6 +254,17 @@ Definition ordinary {A} (value : entry A) : entry A := value.
 Definition loop_then {S A B} (step : S -> program (progress S A)) (initial : S)
     (next : A -> program B) : program B := Bind (Loop step initial) next.
 
+(** Run an unbounded state machine whose step and terminal observation are
+    ordinary functions. Native lowering avoids constructing a progress tag
+    and effect thunk for every transition. The logical program remains an
+    ordinary [Loop] with a returned progress value. *)
+Definition loop_values {S A} (step : S -> S) (finish : S -> option A)
+    (initial : S) : program A :=
+  Loop (fun state => Return (match finish state with
+    | Some value => Finish value
+    | None => Continue (step state)
+    end)) initial.
+
 (** Final primitive calls must tailcall their provider. An [Invoke] followed
     by [Return] has the same symbolic result but retains an extra caller frame
     around the primitive on bytecode. This fused native boundary drops it. *)

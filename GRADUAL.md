@@ -2848,6 +2848,22 @@ are rejected. This preserves native caller expression shapes for readonly
 field observations, while mutable element storage remains explicit effects.
 
 `OCaml Native External Value args : Native.vector string := "Sys.argv".`
+
+External values and callbacks can also name qualified symbolic operators, for
+example `"Stdlib.(=)"` or `"Stdlib.(+.)"`. The generated binding still checks
+the declared OCaml type. Type and record field references use identifier paths.
+A polymorphic external value declares named type parameters before its value
+signature. Supply those parameters to the checked getter and then call it with
+unit to obtain the native value at that instance.
+
+`Native.loop_values step finish initial` runs an unbounded native loop over
+ordinary state functions. It calls `finish` before each step, and stops as soon
+as the observer returns a result in `Some`. On `None`, it calls `step` once and
+continues with that state. Use it when the state functions already expose all
+operations and the loop should avoid allocating an effect thunk or progress
+tag on every transition. Its logical definition describes an ordinary
+`Native.Loop` program.
+
 declares a checked `Native.callback unit (Native.vector string)` getter.
 Calling it returns the named native value directly, with no copying or extra
 application. This also exposes existing reference cells and native function

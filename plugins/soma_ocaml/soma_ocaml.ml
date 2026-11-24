@@ -336,6 +336,38 @@ let native_path path =
     then native_error "an external path has an invalid module name";
     path
 
+(* A qualified symbolic reference is a value expression. Keep this grammar
+   separate from native type and field paths, which only admit identifiers. *)
+let native_external_path path =
+  match String.index_opt path '(' with
+  | None -> native_path path
+  | Some open_paren ->
+    let invalid () = native_error "an external operator needs a qualified OCaml operator path" in
+    if open_paren < 2 || path.[open_paren - 1] <> '.' ||
+       not (String.ends_with ~suffix:")" path)
+    then invalid ();
+    let qualification = String.sub path 0 (open_paren - 1) in
+    let modules = String.split_on_char '.' qualification in
+    if not (List.for_all (fun part ->
+      is_module_name part && part.[0] = Char.uppercase_ascii part.[0]) modules)
+    then invalid ();
+    let operator = String.trim
+      (String.sub path (open_paren + 1) (String.length path - open_paren - 2)) in
+    let symbol c = String.contains "!$%&*+-./:<=>?@^|~" c in
+    let valid_head =
+      String.length operator > 0 &&
+      match operator.[0] with
+      | '!' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | '<' | '=' | '>' | '@' | '^' | '|' -> true
+      | '~' | '?' -> String.length operator > 1
+      | ':' -> String.equal operator ":="
+      | _ -> false
+    in
+    if not (valid_head && String.for_all symbol operator) ||
+       List.mem operator ["->"; "<-"; "|"]
+    then invalid ();
+    (* Spaces prevent an adjacent star from opening an OCaml comment. *)
+    qualification ^ ".( " ^ operator ^ " )"
+
 let native_global name =
   CAst.make (Constrexpr.CRef (Libnames.qualid_of_path
     (Nametab.path_of_global (Rocqlib.lib_ref name)), None))
@@ -729,10 +761,10 @@ let native_callback name typ operation =
       check callable.SomaForeign.callable_arguments (List.hd args_types);
       SomaForeign.NativeCallableWrap (Some callable)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
-    | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_path path)
+    | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_external_path path)
     | SomaForeign.NativeExternalConstant path ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
-      SomaForeign.NativeExternalConstant(native_path path)
+      SomaForeign.NativeExternalConstant(native_external_path path)
     | SomaForeign.NativeVariantView _ ->
       if List.length args<>1 then native_error "View needs one native variant argument";
       let v=variant_type(List.hd args_types)in
@@ -789,9 +821,21 @@ let native_callback name typ operation =
     namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
 
 let native_external_constant name result path =
- let typ=CAst.make(Constrexpr.CProdN([Constrexpr.CLocalAssum([CAst.make Anonymous],None,
-   Constrexpr.Default Glob_term.Explicit,native_global "core.unit.type")],result))in
- native_callback name typ (SomaForeign.NativeExternalConstant path)
+  let open Constrexpr in
+  let unit_argument = CLocalAssum ([CAst.make Anonymous], None,
+    Default Glob_term.Explicit, native_global "core.unit.type") in
+  (* Type parameters belong to the descriptor, not to the returned value.
+     Keep the native unit getter below them so extraction erases those binders
+     at the call site, as for a polymorphic External Callback. *)
+  let rec insert_unit result =
+    match result.CAst.v with
+    | CProdN ((CLocalAssum (_, _, _, domain) as binder) :: rest, body)
+      when Constrexpr_ops.isCSort domain ->
+      let body = if rest = [] then body else CAst.make (CProdN (rest, body)) in
+      CAst.make (CProdN ([binder], insert_unit body))
+    | _ -> CAst.make (CProdN ([unit_argument], result))
+  in
+  native_callback name (insert_unit result) (SomaForeign.NativeExternalConstant path)
 
 (* [OCaml Bind "FILE.ml"]: FILE.definition declares FILE.ml *)
 let bind file =
