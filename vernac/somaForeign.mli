@@ -106,6 +106,13 @@ type native_record = {
   record_fields : native_record_field list;
 }
 
+type native_logical_record = {
+  logical_type : string;
+  logical_constructor : string;
+  logical_projections : string list;
+  logical_definitions : string list;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -114,6 +121,7 @@ type ocaml_item =
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
+  | OCamlNativeImmutableRecord of native_record * native_logical_record
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)

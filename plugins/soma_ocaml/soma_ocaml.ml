@@ -128,10 +128,15 @@ let rec ocaml_type env sigma vars t =
   let native = match EConstr.kind sigma t with
     | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
       | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
-      | Some { item = SomaForeign.OCamlNativeOwnedRecord r; _ } -> Some(SomaForeign.native_record_type r)
+      | Some { item = (SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_)); _ } -> Some(SomaForeign.native_record_type r)
       | Some { item = SomaForeign.OCamlNativeOwnedVariant v; _ } -> Some(SomaForeign.native_variant_type v)
       | Some { item = SomaForeign.OCamlNativeCallableType c; _ } -> Some(SomaForeign.native_callable_type c)
       | _ -> None)
+    | Ind((m,0),_) ->
+      let symbol=KerName.to_string(MutInd.canonical m)in
+      Cmap_env.fold(fun _ binding found->match found,binding.item with
+       |None,SomaForeign.OCamlNativeImmutableRecord(r,info)when info.logical_type=symbol->Some(SomaForeign.native_record_type r)
+       |_->found)!bindings None
     | _ -> None in
   match native with Some path -> path | None ->
   let t = Reductionops.whd_all env sigma t in
@@ -260,7 +265,12 @@ let bind_module ~key ~ml_file ~top ~definition =
       | Some subs -> (c, subs, cb) :: acc
       | None -> acc) env [] in
   let constants = List.sort (fun (a, _, _) (b, _, _) -> Constant.CanOrd.compare a b) constants in
-  let constants = List.filter (fun (c, _, _) -> not (Cmap_env.mem c !bindings)) constants in
+  let generated_logical c =
+    let path=KerName.to_string(Constant.canonical c)in
+    Cmap_env.exists(fun _ binding->match binding.item with
+     |SomaForeign.OCamlNativeImmutableRecord(_,info)->List.mem path info.logical_definitions
+     |_->false)!bindings in
+  let constants = List.filter (fun (c, _, _) -> not (Cmap_env.mem c !bindings) && not(generated_logical c)) constants in
   let constants = List.map (fun (c, subs, cb) ->
       let name = Id.to_string (Constant.label c) in
       (match cb.Declarations.const_body with
@@ -352,7 +362,7 @@ let native_type ?(external_=false) name path =
 (* The opaque handle has no pure mutable fields. Anonymous type-valued lets
    retain checked schema dependencies in the kernel term for module discovery
    and hashing, without exposing a projection or evaluating any native value. *)
-let native_record name fields =
+let native_record ?(logical=false) name fields =
   ignore(native_context());
   if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
   if fields=[]then native_error "an owned record must have fields";
@@ -371,15 +381,40 @@ let native_record name fields =
     let field_type=try ocaml_type env sigma [] typ with Not_ocaml why->
       CErrors.user_err(str "OCaml Native owned field: "++why)in
     syntax,{SomaForeign.field_name=Id.to_string id;field_type;field_mutable=mutable_})fields in
+  if logical && List.exists(fun(_,f)->f.SomaForeign.field_mutable)checked then
+    native_error "immutable record fields cannot be mutable";
   let namespace=native_namespace()in
+  let logical_info=if not logical then None else begin
+    let hidden=Id.of_string("SomaNativeRecord_"^Id.to_string name)in
+    let builder=Id.of_string("Build_"^Id.to_string name)in
+    let projection_flags=Record.Data.{pf_coercion=None;pf_instance=None;pf_canonical=false}in
+    let record=Record.Ast.{name=CAst.make hidden;is_coercion=Vernacexpr.NoCoercion;
+      binders=[];cfs=List.map2(fun(id,_,syntax)_ ->
+       Vernacexpr.AssumExpr(CAst.make(Name id),[],syntax),projection_flags,[])fields checked;
+      idbuild=CAst.make builder;sort=None;default_inhabitant_id=None}in
+    let flags=ComInductive.{poly=PolyFlags.default;template=None;finite=Declarations.BiFinite;
+      mode=None;schemes=DeclareInd.Default}in
+    let before=Environ.fold_constants(fun c _ set->Cset_env.add c set)(Global.env())Cset_env.empty in
+    ignore(Record.definition_structure ~flags None Vernacexpr.Record ~primitive_proj:false [record]);
+    let definitions=Environ.fold_constants(fun c _ all->if Cset_env.mem c before then all else
+      KerName.to_string(Constant.canonical c)::all)(Global.env())[]in
+    Some SomaForeign.{logical_type=namespace^"."^Id.to_string hidden;
+      logical_constructor=namespace^"."^Id.to_string builder;
+      logical_projections=List.map(fun(id,_,_)->namespace^"."^Id.to_string id)fields;
+      logical_definitions=List.sort String.compare definitions}
+  end in
   let symbol=namespace^"."^Id.to_string name in
   let handle=native_app(native_global "soma.native.handle")[native_string symbol]in
   let body=List.fold_right(fun(syntax,_)rest->
     CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,syntax,None,rest)))checked handle in
+  let body=match logical_info with None->body|Some info->
+    CAst.make(Constrexpr.CRef(Libnames.qualid_of_string info.logical_type,None))in
   let c=native_declare name body None in
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
-  native_register name c (SomaForeign.OCamlNativeOwnedRecord{
-    record_namespace=namespace;record_name=Id.to_string name;record_source=source;record_fields=List.map snd checked})
+  let record=SomaForeign.{record_namespace=namespace;record_name=Id.to_string name;
+    record_source=source;record_fields=List.map snd checked}in
+  native_register name c (match logical_info with None->SomaForeign.OCamlNativeOwnedRecord record
+   |Some info->SomaForeign.OCamlNativeImmutableRecord(record,info))
 
 (* Closed native tag schemas are checked types, not handwritten conversion
    callbacks. Type-valued lets retain every payload's logical dependencies. *)
@@ -505,7 +540,7 @@ let native_callback name typ operation =
     native_path name in
   let record_type t = match EConstr.kind sigma t with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _);_}->()
+      | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _);_}->()
       | _->native_error "a record operation needs a declared native type")
     | _->native_error "a record operation needs a declared native type" in
   let variant_type t = match EConstr.kind sigma t with
@@ -612,7 +647,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -657,6 +692,8 @@ let describe c =
           str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeOwnedVariant v ->
           str "closed native polymorphic variant " ++ str(SomaForeign.native_variant_type v) ++ str ", opaque to Soma"
+        | SomaForeign.OCamlNativeImmutableRecord(r,_) ->
+          str "immutable native record " ++ str(SomaForeign.native_record_type r) ++ str ", with a structural logical model"
         | SomaForeign.OCamlNativeOwnedRecord r ->
           str "owned native record " ++ str(SomaForeign.native_record_type r) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeType path ->

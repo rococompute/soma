@@ -1,0 +1,14 @@
+From Soma Require Native.
+From Corelib Require Import PrimInt63 PrimFloat.
+Import schema.
+Definition make label lines missing time:=Build_file label lines missing time.
+Definition file_label (value:file):=label value.
+Definition size (value:file):=Native.vector_word_size(lines value).
+Definition fields (value:file):=match value with Build_file label lines missing time=>(label,(lines,(missing,time)))end.
+Definition combine last missing:=andb last missing.
+Definition key_fields (length:Native.vector string->PrimInt63.int)(value:file)index:=
+ combine (PrimInt63.eqb index(PrimInt63.sub(length(lines value))1%uint63))(missing_nl value).
+Definition echo_file (value:file):=Native.Export(Native.Call_callback schema.echo value).
+Definition make_point value:=Build_point value.
+Definition point_value (value:point):=coordinate value.
+Definition main:=(make,file_label,size,fields,key_fields,echo_file,make_point,point_value).

@@ -72,6 +72,8 @@ VERNAC ARGUMENT EXTEND native_record_field
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeRecord CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Immutable" "Record" ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
+ { Soma_ocaml.native_record ~logical:true name fields }
 | [ "OCaml" "Native" "Record" ident(name) ":=" "{" ne_native_record_field_list_sep(fields, ";") "}" ] ->
  { Soma_ocaml.native_record name fields }
 END

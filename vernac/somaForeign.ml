@@ -90,6 +90,13 @@ type native_record = {
   record_fields : native_record_field list;
 }
 
+type native_logical_record = {
+  logical_type : string;
+  logical_constructor : string;
+  logical_projections : string list;
+  logical_definitions : string list;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -98,6 +105,7 @@ type ocaml_item =
   | OCamlNativeCallableType of native_callable
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
+  | OCamlNativeImmutableRecord of native_record * native_logical_record
 
 type ocaml_module = {
   ml_file : string option;
@@ -165,6 +173,10 @@ let native_identity = function
    String.concat "\n" (["native-owned-record";r.record_namespace;r.record_name;native_record_type r] @
      List.map(fun f->Printf.sprintf "%S %S %s" f.field_name f.field_type
        (if f.field_mutable then "mutable" else "immutable"))r.record_fields)
+ | OCamlNativeImmutableRecord(r,info) ->
+   String.concat "\n" (["native-immutable-record";r.record_namespace;r.record_name;
+    native_record_type r;info.logical_type;info.logical_constructor] @ info.logical_projections @ info.logical_definitions @
+    List.map(fun f->Printf.sprintf "%S %S" f.field_name f.field_type)r.record_fields)
  | OCamlNativeOwnedVariant v -> native_variant_identity v
  | OCamlNativeCallableType c -> native_callable_identity c
  | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path

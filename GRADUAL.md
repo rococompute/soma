@@ -2810,3 +2810,10 @@ expressions and allocation behavior. Mutable element operations stay native
 effects; extracted code still cannot construct or inspect opaque vectors.
 `Native.quadruple` represents a native flat four-tuple with borrowed components,
 complementing `Native.triple` for typed native interfaces.
+
+`OCaml Native Immutable Record file := { label:string; lines:Native.vector string }.`
+creates a structural logical record and a single shared native record module.
+Constructors, projections and pattern matches remain ordinary pure Soma;
+typed native extraction maps them to the shared record ABI. Mutable fields
+are rejected. This preserves native caller expression shapes for readonly
+field observations, while mutable element storage remains explicit effects.

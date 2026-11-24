@@ -1,0 +1,7 @@
+From Soma Require Native.
+From Corelib Require Import PrimFloat.
+OCaml Native Immutable Record file := {
+ label:string; lines:Native.vector string; missing_nl:bool; time:PrimFloat.float
+}.
+OCaml Native Immutable Record point := { coordinate:PrimFloat.float }.
+OCaml Native External Callback echo : file -> file := "Sys.opaque_identity".

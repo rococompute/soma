@@ -66,7 +66,9 @@ let used_modules () =
        declaration's checked dependencies too, including unused owned schemas. *)
     let rec expand pending selected =
       let newly_used,remaining=List.partition(fun(m:SomaForeign.ocaml_module)->
-        List.exists(fun(c,_,_)->Cset_env.mem c !used)m.items)pending in
+        List.exists(fun(c,_,item)->Cset_env.mem c !used || match item with
+         |SomaForeign.OCamlNativeImmutableRecord(_,info)->Hashtbl.mem minds info.logical_type
+         |_->false)m.items)pending in
       match newly_used with
       | [] -> List.rev selected
       | _ ->
@@ -117,7 +119,7 @@ let native_binding_name (n:SomaForeign.native_callback) =
 
 let owned_records modules = List.concat_map(fun(m:SomaForeign.ocaml_module)->
   List.filter_map(fun(c,_,item)->match item with
-    | SomaForeign.OCamlNativeOwnedRecord r -> Some(c,r)
+    | SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_) -> Some(c,r)
     | _->None)m.items)modules
 
 let owned_variants modules = List.concat_map(fun(m:SomaForeign.ocaml_module)->
@@ -199,7 +201,7 @@ let bindings_ml modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
+          | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             let signature,body=native_binding m n in
             Some(Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s =\n  %s\n"
@@ -235,6 +237,20 @@ let extraction_lines modules =
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_callable_type c)
           | SomaForeign.OCamlNativeOwnedVariant v ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_variant_type v)
+          | SomaForeign.OCamlNativeImmutableRecord(r,info) ->
+            let target=SomaForeign.native_record_type r and prefix=SomaForeign.native_record_module r in
+            let args=List.mapi(fun i _->"a"^string_of_int i)r.record_fields in
+            let pattern=match args with [arg]->arg|_->"("^String.concat ", "args^")"in
+            let constructor="(fun "^pattern^" -> ({ "^
+              String.concat "; "(List.map2(fun f a->prefix^"."^f.SomaForeign.field_name^" = "^a)r.record_fields args)^
+              " } : "^target^"))"in
+            let reads=List.map(fun f->"value."^prefix^"."^f.SomaForeign.field_name)r.record_fields in
+            let eliminate="(fun branch value -> branch "^String.concat " "reads^")"in
+            Printf.sprintf "Extract Constant %s => %S.\nExtract Inductive %s => %S [ %S ] %S.\n"
+             soma target info.logical_type target constructor eliminate^
+            String.concat ""(List.map2(fun projection f->
+             Printf.sprintf "Extract Inlined Constant %s => %S.\n" projection
+              ("(fun value -> value."^prefix^"."^f.SomaForeign.field_name^")"))info.logical_projections r.record_fields)
           | SomaForeign.OCamlNativeOwnedRecord r ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_record_type r)
           | SomaForeign.OCamlNativeType target ->
@@ -370,10 +386,10 @@ let write_files ~file ?c_file ~read_file ~directives modules =
   file "native_callables.manifest" ("soma-native-callables-v1\n"^String.concat ""(List.sort String.compare callable_entries));
   let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
     List.filter_map(fun(c,path,item)->match item with
-      | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+      | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
         let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
         let source=match item with
-          | SomaForeign.OCamlNativeOwnedRecord r -> SomaMerkle.string(read_file(SomaImport.resolve_project_file r.record_source))
+          | SomaForeign.OCamlNativeOwnedRecord r | SomaForeign.OCamlNativeImmutableRecord(r,_) -> SomaMerkle.string(read_file(SomaImport.resolve_project_file r.record_source))
           | SomaForeign.OCamlNativeOwnedVariant v -> SomaMerkle.string(read_file(SomaImport.resolve_project_file v.variant_source))
           | SomaForeign.OCamlNativeCallableType c -> SomaMerkle.string(read_file(SomaImport.resolve_project_file c.callable_source))
           | _->(match m.ml_file with None->"library"|Some f->SomaMerkle.file_hash f)in
