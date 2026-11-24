@@ -1,0 +1,16 @@
+From Soma Require Native.
+OCaml Native Type kind := "kind".
+OCaml Native Type table := "table".
+OCaml Native Tag is_empty : kind -> bool := "Empty" 0.
+OCaml Native Tag is_name : kind -> bool := "Name" 1.
+OCaml Native Tag is_pair : kind -> bool := "Fixture.Pair" 2.
+OCaml Native Tag is_inline : kind -> bool := "Inline" 1.
+OCaml Native Case empty : kind -> option unit := "Empty" 0.
+OCaml Native Case name : kind -> option string := "Name" 1.
+OCaml Native Case pair : kind -> option (string*string) := "Fixture.Pair" 2.
+OCaml Native Case triple : kind -> option (string*(string*string)) := "Triple" 3.
+OCaml Native Case directory : kind -> option table := "Directory" 1.
+OCaml Native Callback make : unit -> kind := "make".
+OCaml Native External Type native_error := "exn".
+OCaml Native Tag is_missing : native_error -> bool := "Not_found" 0.
+OCaml Native Case failure : native_error -> option string := "Stdlib.Failure" 1.

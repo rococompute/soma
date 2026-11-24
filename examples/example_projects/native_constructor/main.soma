@@ -1,0 +1,14 @@
+From Soma Require Native.
+Import fixture.
+Definition empty_tag value:=Native.Export(Native.Call_callback is_empty value).
+Definition name_tag value:=Native.Export(Native.Call_callback is_name value).
+Definition pair_tag value:=Native.Export(Native.Call_callback is_pair value).
+Definition inline_tag value:=Native.Export(Native.Call_callback is_inline value).
+Definition empty_value value:=Native.Export(Native.Call_callback empty value).
+Definition name_value value:=Native.Export(Native.Call_callback name value).
+Definition pair_value value:=Native.Export(Native.Call_callback pair value).
+Definition triple_value value:=Native.Export(Native.Call_callback triple value).
+Definition directory_value value:=Native.Export(Native.Call_callback directory value).
+Definition missing_tag value:=Native.Export(Native.Call_callback is_missing value).
+Definition failure_text value:=Native.Export(Native.Call_callback failure value).
+Definition main:=(empty_tag,name_tag,pair_tag,inline_tag,empty_value,name_value,pair_value,triple_value,directory_value,missing_tag,failure_text).

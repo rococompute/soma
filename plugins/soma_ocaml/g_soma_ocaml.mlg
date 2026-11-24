@@ -91,6 +91,13 @@ VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeVariantBuild(tag,None)) }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeConstructor CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Tag" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeConstructorTag(path,arity)) }
+| [ "OCaml" "Native" "Case" ident(name) ":" native_signature(typ) ":=" string(path) natural(arity) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeConstructorCase(path,arity)) }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeCallable CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Callable" ident(name) ":=" native_signature(typ) ] ->
  { Soma_ocaml.native_callable name typ }

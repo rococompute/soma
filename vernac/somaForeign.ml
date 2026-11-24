@@ -65,6 +65,8 @@ type native_operation =
   | NativeVariantView of native_variant option
   | NativeVariantBuild of string * native_variant option
   | NativeExternalValue of string
+  | NativeConstructorTag of string * int
+  | NativeConstructorCase of string * int
 
 type native_callback = {
   namespace : string;
@@ -170,6 +172,8 @@ let native_identity = function
    let operation=match n.operation with
     | NativeValue p->"call "^Printf.sprintf "%S" p
     | NativeExternalValue p->"external-call "^Printf.sprintf "%S" p
+    | NativeConstructorTag(p,n)->Printf.sprintf "constructor-tag %S %d" p n
+    | NativeConstructorCase(p,n)->Printf.sprintf "constructor-case %S %d" p n
     | NativeGet p->"get "^Printf.sprintf "%S" p
     | NativeSet p->"set "^Printf.sprintf "%S" p
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)

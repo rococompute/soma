@@ -2791,3 +2791,13 @@ External declarations need no handwritten forwarding module: generated typed
 bindings call the named native module directly. Native path, signature and
 labels participate in declaration identity and the native ABI manifest;
 the OCaml compiler checks that the actual external type/value matches.
+
+`OCaml Native Tag directory : kind -> bool := "Vfs.Dir" 1.` tests an existing
+named constructor. `OCaml Native Case builtin : kind -> option string :=
+"Vfs.Builtin" 1.` borrows its payload when matched. The explicit arity is
+checked by OCaml patterns; zero-argument cases return `option unit`, and
+multiargument cases return right-nested products in argument order. Tags
+can ignore inline-record payloads. Input types must be declared native types;
+constructor paths, arities and signatures are hashed. Generated typed matches
+use no casts or runtime layout offsets, and incorrect ABI declarations fail
+OCaml compilation. Unqualified constructor names use the input type's module.

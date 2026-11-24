@@ -458,6 +458,12 @@ let native_callable_type env sigma typ = match EConstr.kind sigma typ with
     | _->native_error "Apply needs a declared native callable as its first argument")
   | _->native_error "Apply needs a declared native callable as its first argument"
 
+let native_constructor_path path =
+ let parts=String.split_on_char '.' path in
+ if parts=[] || List.exists(fun part->not(is_module_name part) || part.[0]<>Char.uppercase_ascii part.[0])parts then
+  native_error "a constructor path needs uppercase OCaml module/constructor names";
+ path
+
 let native_callback name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
@@ -472,7 +478,8 @@ let native_callback name typ operation =
        | Prod(_,domain,_)->Some(1+List.length(native_callable_type env sigma domain).SomaForeign.callable_arguments)
        | _->native_error "Apply needs a native callable argument")
     | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
-    | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> Some 1 in
+    | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
+    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -508,6 +515,12 @@ let native_callback name typ operation =
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
    | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
+     (match EConstr.kind sigma(List.hd args_types)with
+      |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+        |Some{item=SomaForeign.OCamlNativeType _;_}->()
+        |_->native_error "constructor operations need a declared native type")
+      |_->native_error "constructor operations need a declared native type")
    | SomaForeign.NativeBuild _ -> record_type result
    | SomaForeign.NativeCopy _ -> record_type(List.hd args_types);record_type result
    | SomaForeign.NativeGet _ | SomaForeign.NativeSet _ -> record_type(List.hd args_types));
@@ -534,6 +547,17 @@ let native_callback name typ operation =
       if List.hd argument_names<>Option.default "unit" case.SomaForeign.case_payload then
         native_error "Construct argument differs from the declared payload (unit for a nullary tag)";
       SomaForeign.NativeVariantBuild(tag,Some v)
+    | SomaForeign.NativeConstructorTag(path,arity) ->
+      if not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.bool.type")result)then
+       native_error "Tag result must be bool";
+      SomaForeign.NativeConstructorTag(native_constructor_path path,arity)
+    | SomaForeign.NativeConstructorCase(path,arity) ->
+      let head,payload=EConstr.decompose_app sigma(Reductionops.whd_all env sigma result)in
+      if Array.length payload<>1 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.option.type")head)then
+       native_error "Case result must be option payload";
+      if arity=0 && not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.unit.type")payload.(0))then
+       native_error "a nullary Case payload must be unit";
+      SomaForeign.NativeConstructorCase(native_constructor_path path,arity)
     | SomaForeign.NativeGet f ->
       if List.length args<>1 then native_error "Get needs one record argument";
       SomaForeign.NativeGet(field f)

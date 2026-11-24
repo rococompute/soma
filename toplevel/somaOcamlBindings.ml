@@ -149,6 +149,18 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     | SomaForeign.NativeExternalValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
+    | (SomaForeign.NativeConstructorTag(path,arity) | SomaForeign.NativeConstructorCase(path,arity)),[value] ->
+      let constructor=if String.contains path '.'then path else
+       let input=List.hd n.arguments in
+       match String.rindex_opt input '.'with
+        |None->path|Some dot->String.sub input 0 dot^"."^path in
+      let payloads=List.init arity(fun i->"p"^string_of_int i)in
+      let tag=match n.operation with SomaForeign.NativeConstructorTag _->true|_->false in
+      let pattern=constructor^(if arity=0 then ""else
+       " "^(if arity=1 then List.hd payloads else "("^String.concat ", "payloads^")"))in
+      "match "^value^" with "^pattern^" -> "^
+       (if tag then "true"else "Some ("^native_pattern payloads^")")^
+       " | _ -> "^(if tag then "false"else "None")
     | SomaForeign.NativeGet name,[record] -> record^"."^field(record_prefix(List.hd n.arguments))name
     | SomaForeign.NativeSet name,[record;value] -> record^"."^field(record_prefix(List.hd n.arguments))name^" <- "^value
     | SomaForeign.NativeBuild names,_ ->
