@@ -2817,3 +2817,9 @@ Constructors, projections and pattern matches remain ordinary pure Soma;
 typed native extraction maps them to the shared record ABI. Mutable fields
 are rejected. This preserves native caller expression shapes for readonly
 field observations, while mutable element storage remains explicit effects.
+
+`OCaml Native External Value args : Native.vector string := "Sys.argv".`
+declares a checked `Native.callback unit (Native.vector string)` getter.
+Calling it returns the named native value directly, with no copying or extra
+application. This also exposes existing reference cells and native function
+values, whose reads and later calls remain separate explicit Soma operations.

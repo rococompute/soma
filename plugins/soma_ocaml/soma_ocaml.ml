@@ -514,7 +514,7 @@ let native_callback name typ operation =
        | _->native_error "Apply needs a native callable argument")
     | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ -> None
     | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _
-    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ -> Some 1 in
+    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ | SomaForeign.NativeExternalConstant _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -549,7 +549,7 @@ let native_callback name typ operation =
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
      (match EConstr.kind sigma(List.hd args_types)with
       |Const(c,_)->(match Cmap_env.find_opt c !bindings with
@@ -567,6 +567,9 @@ let native_callback name typ operation =
       SomaForeign.NativeCallableApply(Some c)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
     | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_path path)
+    | SomaForeign.NativeExternalConstant path ->
+      if argument_names<>["unit"]then native_error "an external value getter takes unit";
+      SomaForeign.NativeExternalConstant(native_path path)
     | SomaForeign.NativeVariantView _ ->
       if List.length args<>1 then native_error "View needs one native variant argument";
       let v=variant_type(List.hd args_types)in
@@ -619,6 +622,11 @@ let native_callback name typ operation =
   let c = native_declare name body (Some descriptor_type) in
   native_register name c (SomaForeign.OCamlNativeCallback {
     namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
+
+let native_external_constant name result path =
+ let typ=CAst.make(Constrexpr.CProdN([Constrexpr.CLocalAssum([CAst.make Anonymous],None,
+   Constrexpr.Default Glob_term.Explicit,native_global "core.unit.type")],result))in
+ native_callback name typ (SomaForeign.NativeExternalConstant path)
 
 (* [OCaml Bind "FILE.ml"]: FILE.definition declares FILE.ml *)
 let bind file =

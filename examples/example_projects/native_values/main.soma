@@ -1,0 +1,10 @@
+From Soma Require Native.
+From Corelib Require Import PrimFloat.
+Import fixture.
+Definition arguments (_:unit):=Native.Export(Native.Call_callback fixture.arguments tt).
+Definition clock (_:unit):=Native.Export(Native.Bind(Native.Call_callback clock_cell tt)(fun cell=>
+ Native.Bind(Native.Read_reference cell)(fun current=>Native.Call_callback current tt))).
+Definition function_value (_:unit):=Native.Export(Native.Call_callback counter_function tt).
+Definition call_function (_:unit):=Native.Export(Native.Bind(Native.Call_callback counter_function tt)(fun current=>Native.Call_callback current tt)).
+Definition cell (_:unit):=Native.Export(Native.Call_callback counter_cell tt).
+Definition main:=(arguments,clock,function_value,call_function,cell).

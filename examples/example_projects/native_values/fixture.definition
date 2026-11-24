@@ -1,0 +1,6 @@
+From Soma Require Native.
+From Corelib Require Import PrimFloat.
+OCaml Native External Value arguments : Native.vector string := "Sys.argv".
+OCaml Native External Value clock_cell : reference (Native.callback unit PrimFloat.float) := "Fixture.now".
+OCaml Native External Value counter_function : Native.callback unit nat := "Fixture.compute".
+OCaml Native External Value counter_cell : reference nat := "Fixture.calls".
