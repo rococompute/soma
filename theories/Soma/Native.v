@@ -29,6 +29,12 @@ Register callback as soma.native.callback.
 Inductive native_handle (name : string) : Type := Native_handle (id : nat).
 Arguments Native_handle {name} id.
 Register native_handle as soma.native.handle.
+(** Parameterized native schemas preserve their logical type arguments.
+    Distinct instantiations cannot be interchanged through a phantom alias. *)
+Inductive native_family (name:string)(arguments:Type):Type := Native_family(id:nat).
+Arguments Native_family {name arguments} id.
+Register native_family as soma.native.family.
+
 
 (** Native owned storage. Sizes and indices use the existing machine-word
     type, preserving negative values and native bounds errors at the ABI. This

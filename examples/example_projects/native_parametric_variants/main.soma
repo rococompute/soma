@@ -1,0 +1,19 @@
+From Soma Require Native.
+Import protocol.
+Definition inspect {A:Type}(value:event A):=Native.Export(Native.Call_callback (@protocol.inspect A)value).
+Definition inspect_bool value:=Native.Export(Native.Call_callback protocol.inspect_bool value).
+Definition inspect_function value:=Native.Export(Native.Call_callback protocol.inspect_function value).
+Definition value {A:Type}(payload:A):=Native.Export(Native.Call_callback (@protocol.value A)payload).
+Definition closed {A:Type}(_:unit):=Native.Export(Native.Call_callback (@protocol.closed A)tt).
+Definition interrupted {A:Type}(_:unit):=Native.Export(Native.Call_callback (@protocol.interrupted A)tt).
+Definition timeout {A:Type}(_:unit):=Native.Export(Native.Call_callback (@protocol.timeout A)tt).
+Definition channel_view {A B:Type}(value:channel A B):=Native.Export(Native.Call_callback (@protocol.channel_view A B)value).
+Definition left {A B:Type}(payload:A):=Native.Export(Native.Call_callback (@protocol.left A B)payload).
+Definition right {A B:Type}(payload:B):=Native.Export(Native.Call_callback (@protocol.right A B)payload).
+Definition apply {A B:Type}(payload:A->promise B):=Native.Export(Native.Call_callback (@protocol.apply A B)payload).
+Definition unit_case {A B:Type}(_:unit):=Native.Export(Native.Call_callback (@protocol.unit_case A B)tt).
+Definition empty {A B:Type}(_:unit):=Native.Export(Native.Call_callback (@protocol.empty A B)tt).
+Definition nest {A:Type}(value:event A):=Native.Export(Native.Call_callback (@protocol.nest A)value).
+Definition nested_view {A:Type}(value:nested A):=Native.Export(Native.Call_callback (@protocol.nested_view A)value).
+Definition echo {A:Type}(value:event A):=Native.Export(Native.Call_callback (@protocol.echo A)value).
+Definition main:=(@inspect,inspect_bool,inspect_function,@value,@closed,@interrupted,@timeout,@channel_view,@left,@right,@apply,@unit_case,@empty,@nest,@nested_view,@echo).

@@ -1,0 +1,21 @@
+From Soma Require Native.
+OCaml Native Polymorphic Variant event (A : Type) := ["Value":A;"Closed";"Interrupted";"Timeout"].
+OCaml Native View inspect : forall (A:Type), event A -> Native.result A (Native.result unit (Native.result unit unit)).
+OCaml Native View inspect_bool : event bool -> Native.result bool (Native.result unit (Native.result unit unit)).
+OCaml Native View inspect_function : event (unit->promise string) -> Native.result (unit->promise string) (Native.result unit (Native.result unit unit)).
+OCaml Native Construct value : forall(A:Type), A -> event A := "Value".
+OCaml Native Construct closed : forall(A:Type), unit -> event A := "Closed".
+OCaml Native Construct interrupted : forall(A:Type), unit -> event A := "Interrupted".
+OCaml Native Construct timeout : forall(A:Type), unit -> event A := "Timeout".
+OCaml Native Polymorphic Variant channel (A:Type;B:Type) := ["Left":A;"Right":B;"Apply":A->promise B;"Unit":unit;"Empty"].
+OCaml Native View channel_view : forall(A B:Type), channel A B -> Native.result A (Native.result B (Native.result (A->promise B) (Native.result unit unit))).
+OCaml Native Construct left : forall(A B:Type), A -> channel A B := "Left".
+OCaml Native Construct right : forall(A B:Type), B -> channel A B := "Right".
+OCaml Native Construct apply : forall(A B:Type), (A->promise B) -> channel A B := "Apply".
+OCaml Native Construct unit_case : forall(A B:Type), unit -> channel A B := "Unit".
+OCaml Native Construct empty : forall(A B:Type), unit -> channel A B := "Empty".
+OCaml Native Polymorphic Variant nested (A:Type) := ["Nested":event A;"Nothing"].
+OCaml Native View nested_view : forall(A:Type), nested A -> Native.result (event A) unit.
+OCaml Native Construct nest : forall(A:Type), event A -> nested A := "Nested".
+OCaml Native External Callback echo : forall(A:Type), event A -> event A := "Protocol.echo".
+OCaml Native External Callback make : unit -> event string := "Protocol.make".

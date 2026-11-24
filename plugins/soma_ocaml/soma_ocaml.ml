@@ -132,6 +132,14 @@ let rec ocaml_type env sigma vars t =
       | Some { item = SomaForeign.OCamlNativeOwnedVariant v; _ } -> Some(SomaForeign.native_variant_type v)
       | Some { item = SomaForeign.OCamlNativeCallableType c; _ } -> Some(SomaForeign.native_callable_type c)
       | _ -> None)
+    | App(head,args) -> (match EConstr.kind sigma head with
+      |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+        |Some{item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when List.length params=Array.length args ->
+          let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
+          let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
+          Some(applied^" "^SomaForeign.native_variant_type v)
+        |_->None)
+      |_->None)
     | Ind((m,0),_) ->
       let symbol=KerName.to_string(MutInd.canonical m)in
       Cmap_env.fold(fun _ binding found->match found,binding.item with
@@ -428,7 +436,7 @@ let native_variant_tag_hash tag =
   let h=String.fold_left(fun h c->Int64.logand 0x7fffffffL
     (Int64.add(Int64.mul 223L h)(Int64.of_int(Char.code c))))0L tag in
   Int64.to_int h
-let native_variant name cases =
+let native_variant ?(parameters=[]) name cases =
   ignore(native_context());
   if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
   if cases=[]then native_error "a polymorphic variant needs at least one tag";
@@ -439,26 +447,48 @@ let native_variant name cases =
   if List.length(List.sort_uniq Int.compare hashes)<>List.length hashes then
     native_error "polymorphic variant tag hash collision";
   let env=Global.env()in
+  let ids=List.map fst parameters in
+  if List.length(List.sort_uniq Id.compare ids)<>List.length ids then native_error "native type parameters must be distinct";
+  let binders=List.map(fun(id,typ)->
+    let sigma,checked=Constrintern.interp_type_evars env(Evd.from_env env)typ in
+    (match EConstr.kind sigma checked with
+     |Sort sort when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+     |_->native_error "native type parameters must have sort Type or Set");
+    Constrexpr.CLocalAssum([CAst.make(Name id)],None,Constrexpr.Default Glob_term.Explicit,typ))parameters in
+  let wrap_type typ=if binders=[]then typ else CAst.make(Constrexpr.CProdN(binders,typ))in
+  let rec enter env sigma vars =function
+    |0,t->env,vars,t
+    |n,t->match EConstr.kind sigma t with
+      |Prod(binder,domain,codomain)->
+        let variable=type_variable(List.filter_map Fun.id vars)binder.Context.binder_name in
+        enter(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(binder,domain))env)sigma(Some variable::vars)(n-1,codomain)
+      |_->assert false in
   let checked=List.map(fun(tag,syntax)->
     let payload=Option.map(fun syntax->
-      let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)syntax in
+      let sigma,typ=Constrintern.interp_type_evars env(Evd.from_env env)(wrap_type syntax)in
+      let env,vars,typ=enter env sigma [] (List.length parameters,typ)in
       let rec monomorphic t =
         (match EConstr.kind sigma t with
          | Prod(_,domain,_) when EConstr.isSort sigma domain -> native_error "polymorphic variant payloads must be monomorphic"
          | _->());EConstr.iter sigma monomorphic t in
       monomorphic typ;
-      try ocaml_type env sigma [] typ,EConstr.isProd sigma(Reductionops.whd_all env sigma typ) with Not_ocaml why->
+      try ocaml_type env sigma vars typ,EConstr.isProd sigma(Reductionops.whd_all env sigma typ) with Not_ocaml why->
         CErrors.user_err(str "OCaml Native variant payload: "++why))syntax in
     syntax,{SomaForeign.case_tag=tag;case_payload=Option.map fst payload;
       case_is_function=(match payload with None->false|Some(_,fn)->fn)})cases in
   let namespace=native_namespace()in
-  let handle=native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]in
+  let type_args=List.map(fun id->CAst.make(Constrexpr.CRef(Libnames.qualid_of_ident id,None)))ids in
+  let rec pack=function []->native_global "core.unit.type"|[arg]->arg|arg::rest->native_app(native_global "core.prod.type")[arg;pack rest]in
+  let handle=if binders=[]then native_app(native_global "soma.native.handle")[native_string(namespace^"."^Id.to_string name)]else
+    native_app(native_global "soma.native.family")[native_string(namespace^"."^Id.to_string name);pack type_args]in
   let body=List.fold_right(fun(syntax,_)rest->match syntax with None->rest|Some typ->
     CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,typ,None,rest)))checked handle in
+  let body=if binders=[]then body else CAst.make(Constrexpr.CLambdaN(binders,body))in
   let c=native_declare name body None in
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
-  native_register name c (SomaForeign.OCamlNativeOwnedVariant{
-    variant_namespace=namespace;variant_name=Id.to_string name;variant_source=source;variant_cases=List.map snd checked})
+  let variant={SomaForeign.variant_namespace=namespace;variant_name=Id.to_string name;variant_source=source;variant_cases=List.map snd checked}in
+  let params=List.rev(fst(List.fold_left(fun(names,used)(id,_)->let name=type_variable used(Name id)in name::names,name::used)([],[])parameters))in
+  native_register name c (if params=[]then SomaForeign.OCamlNativeOwnedVariant variant else SomaForeign.OCamlNativeParametricVariant(params,variant))
 
 let native_callable name syntax =
   ignore(native_context());
@@ -504,6 +534,17 @@ let native_callback name typ operation =
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
   let env = Global.env () in
   let sigma, typ = Constrintern.interp_type_evars env (Evd.from_env env) typ in
+  let rec enter env vars parameters typ=match EConstr.kind sigma typ with
+    |Prod(binder,domain,codomain)when is_sort env sigma domain->
+      (match EConstr.kind sigma domain,binder.Context.binder_name with
+       |Sort sort,Name _ when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+       |_->native_error "native descriptor type parameters must be named Type or Set");
+      let variable=type_variable(List.filter_map Fun.id vars)binder.Context.binder_name in
+      let ast=Constrextern.extern_constr ~flags:(PrintingFlags.current())env sigma domain in
+      let parameter=Constrexpr.CLocalAssum([CAst.make binder.Context.binder_name],None,Constrexpr.Default Glob_term.Explicit,ast)in
+      enter(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(binder,domain))env)(Some variable::vars)(parameters@[parameter])codomain
+    |_->env,vars,parameters,typ in
+  let env,type_vars,type_parameters,typ=enter env [] [] typ in
   let fixed_arity = match operation with
     | SomaForeign.NativeGet _ -> Some 1 | SomaForeign.NativeSet _ -> Some 2
     | SomaForeign.NativeBuild fields -> Some(List.length fields)
@@ -518,7 +559,8 @@ let native_callback name typ operation =
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
-    let known = match EConstr.kind sigma t with Const(c,_) -> Cmap_env.mem c !bindings | _ -> false in
+    let head,_=EConstr.decompose_app sigma t in
+    let known = match EConstr.kind sigma head with Const(c,_) -> Cmap_env.mem c !bindings | _ -> false in
     let t = if known then t else Reductionops.whd_all env sigma t in
     match EConstr.kind sigma t with
     | Prod (binder, domain, codomain) ->
@@ -532,7 +574,7 @@ let native_callback name typ operation =
   let args, result = arguments [] fixed_arity typ in
   if args=[] then native_error "a callback declaration needs at least one argument";
   let args_types, labels = List.split args in
-  let types = try List.map (ocaml_type env sigma []) args_types,ocaml_type env sigma [] result
+  let types = try List.map (ocaml_type env sigma type_vars) args_types,ocaml_type env sigma type_vars result
     with Not_ocaml why -> CErrors.user_err (str "OCaml Native: " ++ why) in
   let argument_names,result_name = types in
   let field name =
@@ -543,9 +585,32 @@ let native_callback name typ operation =
       | Some {item=(SomaForeign.OCamlNativeType _|SomaForeign.OCamlNativeOwnedRecord _|SomaForeign.OCamlNativeImmutableRecord _);_}->()
       | _->native_error "a record operation needs a declared native type")
     | _->native_error "a record operation needs a declared native type" in
-  let variant_type t = match EConstr.kind sigma t with
+  let variant_type t =
+    let head,args=EConstr.decompose_app sigma t in
+    match EConstr.kind sigma head with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
-      | Some {item=SomaForeign.OCamlNativeOwnedVariant v;_}->v
+      | Some {item=SomaForeign.OCamlNativeOwnedVariant v;_} when Array.length args=0->v
+      | Some {item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when Array.length args=List.length params->
+        (* Instantiate checked logical payload types, rather than substituting
+           OCaml strings: an argument may itself be an arrow/product/schema. *)
+        let body=match(Environ.lookup_constant c env).Declarations.const_body with
+          |Declarations.Def body->EConstr.of_constr body
+          |_->native_error "a native schema must retain its checked definition"in
+        let body=Array.fold_left(fun body argument->match EConstr.kind sigma body with
+          |Lambda(_,_,rest)->EConstr.Vars.subst1 argument rest
+          |_->native_error "native schema parameter count differs from its definition")body args in
+        let rec instantiate body=function
+          |[]->[]
+          |case::rest->match case.SomaForeign.case_payload with
+            |None->case::instantiate body rest
+            |Some _->match EConstr.kind sigma body with
+              |LetIn(_,payload,_,following)->
+                let spelling=ocaml_type env sigma type_vars payload in
+                let fn=EConstr.isProd sigma(Reductionops.whd_all env sigma payload)in
+                {case with SomaForeign.case_payload=Some spelling;case_is_function=fn}::
+                 instantiate(EConstr.Vars.subst1 payload following)rest
+              |_->native_error "native schema payload differs from its checked definition"in
+        {v with SomaForeign.variant_cases=instantiate body v.SomaForeign.variant_cases}
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
@@ -621,6 +686,8 @@ let native_callback name typ operation =
   let body = native_app
     (CAst.make(Constrexpr.CRef(Libnames.qualid_of_string "Soma.Native.Named_callback",None)))
     [native_string namespace;native_string(Id.to_string name)] in
+  let body=if type_parameters=[]then body else CAst.make(Constrexpr.CLambdaN(type_parameters,body))in
+  let descriptor_type=if type_parameters=[]then descriptor_type else CAst.make(Constrexpr.CProdN(type_parameters,descriptor_type))in
   let c = native_declare name body (Some descriptor_type) in
   native_register name c (SomaForeign.OCamlNativeCallback {
     namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
@@ -657,7 +724,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -700,6 +767,8 @@ let describe c =
     Some (match b.item with
         | SomaForeign.OCamlNativeCallableType c ->
           str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
+        | SomaForeign.OCamlNativeParametricVariant(_,v) ->
+          str "parameterized closed native variant " ++ str(SomaForeign.native_variant_type v)
         | SomaForeign.OCamlNativeOwnedVariant v ->
           str "closed native polymorphic variant " ++ str(SomaForeign.native_variant_type v) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeImmutableRecord(r,_) ->

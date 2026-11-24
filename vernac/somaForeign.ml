@@ -107,6 +107,7 @@ type ocaml_item =
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
+  | OCamlNativeParametricVariant of string list * native_variant
 
 type ocaml_module = {
   ml_file : string option;
@@ -156,6 +157,17 @@ let native_variant_identity v =
     List.map(fun c->Printf.sprintf "%S %b %s" c.case_tag c.case_is_function
       (match c.case_payload with None->"nullary"|Some t->Printf.sprintf "payload %S" t))v.variant_cases)
 
+let native_parametric_variant_ml params v =
+  let head=match params with [p]->p|_->"("^String.concat ", "params^")"in
+  let ordinary=native_variant_ml v in
+  let prefix="type t ="in
+  let offset=String.index ordinary '\n'+1 in
+  assert(String.sub ordinary offset(String.length prefix)=prefix);
+  String.sub ordinary 0 offset ^ "type " ^head^" t =" ^
+  String.sub ordinary (offset+String.length prefix)(String.length ordinary-offset-String.length prefix)
+let native_parametric_variant_identity params v =
+  "native-parametric-polyvariant\n"^String.concat " "params^"\n"^native_variant_identity v
+
 let native_callable_module c =
   let key=Printf.sprintf "soma-native-callable-module-v1:%d:%s:%d:%s"
     (String.length c.callable_namespace)c.callable_namespace
@@ -182,6 +194,7 @@ let native_identity = function
     native_record_type r;info.logical_type;info.logical_constructor] @ info.logical_projections @ info.logical_definitions @
     List.map(fun f->Printf.sprintf "%S %S" f.field_name f.field_type)r.record_fields)
  | OCamlNativeOwnedVariant v -> native_variant_identity v
+ | OCamlNativeParametricVariant(params,v) -> native_parametric_variant_identity params v
  | OCamlNativeCallableType c -> native_callable_identity c
  | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path
  | OCamlNativeCallback n ->

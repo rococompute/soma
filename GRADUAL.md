@@ -2867,3 +2867,31 @@ Body and continuation exceptions retain their ordinary synchronous scopes.
 callback program and nested program tuples while preserving direct callback
 argument/continuation frames, exceptions and context. It adds no evaluator or
 logical assumption.
+
+Native polymorphic variants may carry type parameters:
+
+```rocq
+OCaml Native Polymorphic Variant event (A : Type) := ["Value":A; "Closed"].
+OCaml Native View inspect : forall (A:Type), event A -> Native.result A unit.
+OCaml Native Construct value : forall (A:Type), A -> event A := "Value".
+```
+
+Multiple parameters use `(A:Type; B:Type)`. Parameters have sort `Type` or
+`Set`; schemas retain them in their logical opaque family, so `event string`
+and `event bool` remain distinct types. Payloads may refer to parameters,
+including inside functions, promises, products and other native schemas.
+`View` and `Construct` check the instantiated logical payload types and emit
+ordinary typed native matches/constructions; no casts or layout offsets are
+needed in their generated bindings. A descriptor can quantify over type
+parameters or select a concrete instance. Native callback descriptors also
+accept leading type parameters, for example a generic external identity.
+Generated universal annotations reject native implementations that are less
+general than the descriptor they implement.
+
+Each generated schema has one shared parameterized OCaml type. Its source,
+parameter list, tag order, payload types and generated product participate in
+native provenance. The logical family adds no evaluator or axiom; extracted
+consumers cannot inspect its opaque placeholder representation. The native
+and bytecode ABI, logical type separation, borrowed payload/callback lifetimes,
+and an actual Solo5 consumer are checked by
+`dev/native-parametric-variant-check.sh`.

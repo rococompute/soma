@@ -19,6 +19,9 @@ Extract Inductive Soma.Native.callback => "Soma_effect.callback"
 Extract Inductive Soma.Native.native_handle => "Soma_effect.native_handle"
  [ "(fun _ -> failwith ""a native handle requires a native declaration"")" ]
  "(fun _ _ -> failwith ""a native handle cannot be inspected"")".
+Extract Inductive Soma.Native.native_family => "Soma_effect.native_family"
+ [ "(fun _ -> failwith ""a native family requires a native declaration"")" ]
+ "(fun _ _ -> failwith ""a native family cannot be inspected"")".
 Extract Inductive Soma.Native.vector => "Soma_effect.vector"
  [ "(fun _ _ -> failwith ""a native vector is made by Vector_of_list"")" ]
  "(fun _ _ -> failwith ""a native vector cannot be inspected"")".
@@ -77,6 +80,7 @@ type ('a, 'b) callback = 'a -> 'b
 type ('a, 'b, 'c) triple = 'a * 'b * 'c
 type ('a, 'b, 'c, 'd) quadruple = 'a * 'b * 'c * 'd
 type native_handle = unit
+type 'a native_family = unit
 type 'a vector = 'a array
 type text_buffer = Buffer.t
 type ('k, 'v) table = ('k, 'v) Hashtbl.t

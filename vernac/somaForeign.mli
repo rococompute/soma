@@ -123,6 +123,7 @@ type ocaml_item =
   | OCamlNativeType of string
   | OCamlNativeCallback of native_callback
   | OCamlNativeImmutableRecord of native_record * native_logical_record
+  | OCamlNativeParametricVariant of string list * native_variant
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
@@ -151,6 +152,8 @@ val native_variant_filename : native_variant -> string
 val native_variant_ml : native_variant -> string
 val native_variant_view_type : native_variant -> string
 val native_variant_identity : native_variant -> string
+val native_parametric_variant_ml : string list -> native_variant -> string
+val native_parametric_variant_identity : string list -> native_variant -> string
 
 val native_callable_module : native_callable -> string
 val native_callable_type : native_callable -> string
