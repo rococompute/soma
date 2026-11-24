@@ -68,6 +68,7 @@ type native_operation =
   | NativeConstructorTag of string * int
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string
+  | NativeCallableWrap of native_callable option
 
 type native_callback = {
   namespace : string;
@@ -228,7 +229,8 @@ let native_identity = function
     | NativeBuild fs->"build "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCallableApply(Some c)->"apply "^native_callable_identity c
-    | NativeCallableApply None->invalid_arg "unvalidated native callable descriptor"
+    | NativeCallableWrap(Some c)->"wrap "^native_callable_identity c
+    | NativeCallableApply None | NativeCallableWrap None->invalid_arg "unvalidated native callable descriptor"
     | NativeVariantView(Some v)->"variant-view "^native_variant_identity v
     | NativeVariantBuild(tag,Some v)->"variant-build "^Printf.sprintf "%S" tag^" "^native_variant_identity v
     | NativeVariantView None | NativeVariantBuild(_,None)->invalid_arg "unvalidated native variant descriptor" in

@@ -1,0 +1,10 @@
+From Soma Require Native.
+From Stdlib Require Import Strings.String.
+
+OCaml Native Callable staged Optional flag :=
+  forall (A B : Type), forall (flag : option bool) (tag : string), A -> B.
+OCaml Native Wrap wrap_staged : forall (A B : Type),
+  Native.callback (option bool) (Native.callback string (Native.callback A B)) -> staged A B.
+
+OCaml Native Callable positional := string -> bool.
+OCaml Native Wrap wrap_positional : Native.callback string bool -> positional.

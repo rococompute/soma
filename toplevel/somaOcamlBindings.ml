@@ -178,6 +178,26 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         | Some label when String.starts_with ~prefix:"?" label->label^":"^value
         | Some label->"~"^label^":"^value)values c.callable_labels in
       body ^ " " ^ String.concat " "given
+    | SomaForeign.NativeCallableWrap(Some c),[body] ->
+      (* Apply a prefix one argument at a time so effects in a borrowed
+         curried callback remain at their original partial-application stage.
+         Its remaining positional tail can be returned unchanged. *)
+      let rec drop_positional_tail = function
+        | None :: rest -> drop_positional_tail rest
+        | rest -> rest in
+      let prefix = List.rev (drop_positional_tail (List.rev c.callable_labels)) in
+      let rec adapt index body = function
+        | [] -> body
+        | label :: rest ->
+          let argument = "value" ^ string_of_int index in
+          let binder = match label with
+            | None -> argument
+            | Some label when String.starts_with ~prefix:"?" label -> label ^ ":" ^ argument
+            | Some label -> "~" ^ label ^ ":" ^ argument in
+          let tail = "tail" ^ string_of_int index in
+          "(fun " ^ binder ^ " -> let " ^ tail ^ " = " ^ body ^ " " ^ argument ^
+            " in " ^ adapt (index+1) tail rest ^ ")" in
+      adapt 0 body prefix
     | SomaForeign.NativeVariantView(Some v),[value] ->
       let rec branches depth=function
         | []->assert false

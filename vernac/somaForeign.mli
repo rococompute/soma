@@ -84,6 +84,7 @@ type native_operation =
   | NativeConstructorTag of string * int
   | NativeConstructorCase of string * int
   | NativeExternalConstant of string
+  | NativeCallableWrap of native_callable option
 
 type native_callback = {
   namespace : string;

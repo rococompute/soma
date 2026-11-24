@@ -572,7 +572,7 @@ let native_callable ?(optional=[]) name syntax =
   let params=List.rev(List.filter_map Fun.id vars)in
   native_register name c(if params=[]then SomaForeign.OCamlNativeCallableType info
     else SomaForeign.OCamlNativeParametricCallable(params,info))
-let native_callable_type env sigma type_vars typ =
+let native_callable_type ?(required="Apply needs a declared native callable as its first argument") env sigma type_vars typ =
   let head,args=EConstr.decompose_app sigma typ in
   match EConstr.kind sigma head with
   | Const(c,_)->(match Cmap_env.find_opt c !bindings with
@@ -599,8 +599,8 @@ let native_callable_type env sigma type_vars typ =
         |_->native_error "native callable has fewer value binders than its checked signature" in
       let arguments,result=instantiate(List.length info.SomaForeign.callable_arguments)[] signature in
       {info with SomaForeign.callable_arguments=arguments;callable_result=result}
-    | _->native_error "Apply needs a declared native callable as its first argument")
-  | _->native_error "Apply needs a declared native callable as its first argument"
+    | _->native_error required)
+  | _->native_error required
 
 let native_constructor_path path =
  let parts=String.split_on_char '.' path in
@@ -625,7 +625,8 @@ let native_callback name typ operation =
     |_->env,vars,parameters,typ in
   let env,type_vars,type_parameters,typ=enter env [] [] typ in
   let fixed_arity = match operation with
-    | SomaForeign.NativeGet _ -> Some 1 | SomaForeign.NativeSet _ -> Some 2
+    | SomaForeign.NativeGet _ | SomaForeign.NativeCallableWrap _ -> Some 1
+    | SomaForeign.NativeSet _ -> Some 2
     | SomaForeign.NativeBuild fields -> Some(List.length fields)
     | SomaForeign.NativeCopy fields -> Some(1+List.length fields)
     | SomaForeign.NativeCallableApply _ ->
@@ -693,7 +694,7 @@ let native_callback name typ operation =
       | _->native_error "a variant operation needs a declared native polymorphic variant")
     | _->native_error "a variant operation needs a declared native polymorphic variant" in
   (match operation with
-   | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _ ->
      (let input=List.hd args_types in
       if EConstr.isRefX env sigma (Rocqlib.lib_ref "soma.exception_value.type") input then () else
@@ -711,6 +712,22 @@ let native_callback name typ operation =
       if List.tl argument_names<>c.SomaForeign.callable_arguments || result_name<>c.callable_result then
         native_error "Apply signature differs from the declared callable";
       SomaForeign.NativeCallableApply(Some c)
+    | SomaForeign.NativeCallableWrap _ ->
+      let callable = native_callable_type ~required:"Wrap needs a declared native callable as its result"
+          env sigma type_vars result in
+      let mismatch () = native_error "Wrap input must be a positional callback chain matching the declared callable" in
+      let rec check arguments callback =
+        match arguments with
+        | [] -> if ocaml_type env sigma type_vars callback <> callable.SomaForeign.callable_result then mismatch ()
+        | argument :: rest ->
+          let head, parts = EConstr.decompose_app sigma (Reductionops.whd_all env sigma callback) in
+          if Array.length parts <> 2 || not (EConstr.isRefX env sigma
+            (Rocqlib.lib_ref "soma.native.callback") head) ||
+            ocaml_type env sigma type_vars parts.(0) <> argument then mismatch ();
+          check rest parts.(1)
+      in
+      check callable.SomaForeign.callable_arguments (List.hd args_types);
+      SomaForeign.NativeCallableWrap (Some callable)
     | SomaForeign.NativeValue path -> SomaForeign.NativeValue (native_path path)
     | SomaForeign.NativeExternalValue path -> SomaForeign.NativeExternalValue (native_path path)
     | SomaForeign.NativeExternalConstant path ->

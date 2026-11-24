@@ -1,0 +1,14 @@
+From Soma Require Native.
+From Stdlib Require Import Strings.String.
+Import functions.
+
+Definition wrap {A B : Type} target :=
+  Native.Export (Native.Call_callback (functions.wrap_staged A B) target).
+
+Definition wrap_function target :=
+  Native.Export (Native.Call_callback (functions.wrap_staged bool (string -> bool)) target).
+
+Definition wrap_plain target :=
+  Native.Export (Native.Call_callback functions.wrap_positional target).
+
+Definition main := (@wrap, wrap_function, wrap_plain).

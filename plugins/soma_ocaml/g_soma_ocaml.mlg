@@ -116,4 +116,6 @@ VERNAC COMMAND EXTEND SomaOCamlNativeCallable CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_callable name typ }
 | [ "OCaml" "Native" "Apply" ident(name) ":" native_signature(typ) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeCallableApply None) }
+| [ "OCaml" "Native" "Wrap" ident(name) ":" native_signature(typ) ] ->
+ { Soma_ocaml.native_callback name typ (SomaForeign.NativeCallableWrap None) }
 END

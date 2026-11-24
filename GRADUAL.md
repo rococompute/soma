@@ -1093,6 +1093,19 @@ Pass `None` to omit the argument and use the native default, or pass
 `Some value` to supply it. The generated binding forwards the option with
 `?limit`, preserving the callable's argument order.
 
+`OCaml Native Wrap` builds a labelled callable from a positional
+`Native.callback` chain. The declared arguments and result must match the
+callable, including the option types for optional labels.
+
+```coq
+OCaml Native Wrap wrap_reader :
+  Native.callback (option string) (Native.callback string string) -> reader.
+```
+
+The generated wrapper applies each argument through the last labelled
+argument at its original stage. It returns any remaining positional tail
+directly, preserving that function's identity.
+
 Schemas retain checked type dependencies and have no logical evaluator or
 new axiom. `native_callables.manifest` records source and generated-module
 hashes; changing labels changes the logical declaration identity. The
