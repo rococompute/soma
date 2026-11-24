@@ -64,6 +64,12 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]
  "(fun _ _ -> failwith ""a native entry cannot be inspected"")".
+Extract Inlined Constant Soma.Native.lexical_callback3 =>
+ "(fun body () -> fun a b c -> body a b c ())".
+Extract Inlined Constant Soma.Native.lexical_callback5 =>
+ "(fun body () -> fun a b c d e -> body a b c d e ())".
+Extract Inlined Constant Soma.Native.lexical_callback6 =>
+ "(fun body () -> fun a b c d e f -> body a b c d e f ())".
 Extract Constant Soma.Native.opaque => "Sys.opaque_identity".
 Extract Constant Soma.Native.ordinary => "Fun.id".
 Extract Constant Soma.Native.loop_then => "Soma_effect.loop_then".

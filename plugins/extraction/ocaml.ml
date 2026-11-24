@@ -297,6 +297,15 @@ let native_nat_literal expression =
   if not (Rocqlib.has_ref "num.nat.O" && Rocqlib.has_ref "num.nat.S") then None
   else try count 0 expression with Not_found -> None
 
+(* Lower literal or global bodies lexically. For other expressions the
+   standard custom mapping evaluates the callback's body at creation time. *)
+let lexical_callback_arity r =
+  if not (is_inline_custom r) then None else
+  List.find_map (fun arity ->
+      let key = "soma.native.lexical_callback" ^ string_of_int arity in
+      if Rocqlib.has_ref key && Rocqlib.check_ref key r.glob then Some arity else None)
+    [3; 5; 6]
+
 let rec pp_expr table par env args =
   let apply st = pp_apply st par args
   and apply2 st = pp_apply2 st par args in
@@ -307,6 +316,31 @@ let rec pp_expr table par env args =
            TODO: we should get rid of this hack (cf. #592) *)
         let id = if Id.equal id dummy_name then Id.of_string "__" else id in
         apply (Id.print id)
+    | MLapp (((MLglob r | MLmagic (MLglob r)) as head), [body])
+        when Option.has_some (lexical_callback_arity r) ->
+        let arity = Option.get (lexical_callback_arity r) in
+        let thunk = str "fun () -> " in
+        let execute = str "()" in
+        let emit callback =
+          let program = thunk ++ callback in
+          match head with
+          | MLmagic _ -> apply2 (str "Obj.magic (" ++ program ++ str ")")
+          | _ -> apply2 program in
+        let fallback () =
+          pp_expr table par env (pp_expr table true env [] body :: args) head in
+        (match body with
+         | MLlam _ ->
+             let binders, residual = collect_lams body in
+             if List.length binders <> arity then fallback () else
+             let names, body_env = push_vars (List.map id_of_mlid binders) env in
+             emit (pp_abst (List.rev names) ++
+               pp_apply2 (pp_expr table false body_env [] residual) true [execute])
+         | (MLglob body_ref | MLmagic (MLglob body_ref)) when not (is_inline_custom body_ref) ->
+             let binders = List.init arity (fun i -> Id.of_string ("argument" ^ string_of_int i)) in
+             let names, body_env = push_vars binders env in
+             emit (pp_abst names ++
+               pp_expr table false body_env (List.map Id.print names @ [execute]) body)
+         | _ -> fallback ())
     | MLapp (f,args') ->
         let stl = List.map (pp_expr table true env []) args' in
         pp_expr table par env (stl @ args) f
