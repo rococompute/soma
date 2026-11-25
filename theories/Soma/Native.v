@@ -77,9 +77,6 @@ Inductive progress (S A : Type) := Continue (state : S) | Finish (value : A).
 Arguments Continue {S A} state.
 Arguments Finish {S A} value.
 
-Local Abbreviation callback4 A B C D R :=
-  (callback A (callback B (callback C (callback D R)))).
-
 Inductive program : Type -> Type :=
 | Return {A} (value : A) : program A
 | Invoke {A B} (primitive : unit -> A) (next : A -> program B) : program B
@@ -189,18 +186,6 @@ Inductive program : Type -> Type :=
     The native backend can release the unused argument sooner. *)
 | Borrowed_scope {Owner A B} (owner:Owner) (before:program A)
  (next:A->program B) : program B
-(** Allocate two mutually recursive native callbacks once. Each body
-    receives both original callback handles and retains its own argument and
-    result type. The compiler lowers the group to one native recursive binding. *)
-| New_callback_pair {A B C D}
- (left : callback A B -> callback C D -> A -> program B)
- (right : callback A B -> callback C D -> C -> program D)
- : program (callback A B * callback C D)
-(** A saturated group keeps the native argument slots separate. *)
-| New_callback_pair4 {A B C D R E F G H S}
- (left : callback4 A B C D R -> callback4 E F G H S -> A -> B -> C -> D -> program R)
- (right : callback4 A B C D R -> callback4 E F G H S -> E -> F -> G -> H -> program S)
- : program (callback4 A B C D R * callback4 E F G H S)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -254,12 +239,33 @@ Arguments Raise_invalid_argument {A} message.
 Arguments Promise_bind_borrowed {Owner A B} owner body next.
 Arguments List_map {A B} mapper items.
 Arguments Promise_map_borrowed {Owner A B} owner body next.
-Arguments New_callback_pair {A B C D} left right.
-Arguments New_callback_pair4 {A B C D R E F G H S} left right.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
 Register entry as soma.native.entry.
+
+(** A separate boundary for mutually recursive callbacks. Extending this
+    boundary leaves [program]'s representation and existing proof receipts
+    unchanged. Every callback body and the final continuation remain checked
+    programs; no logical evaluator is provided. *)
+Local Abbreviation callback4 A B C D R :=
+  (callback A (callback B (callback C (callback D R)))).
+Inductive callback_group : Type -> Type :=
+| Group_bind {State A} (before : program State)
+    (next : State -> callback_group A) : callback_group A
+| Export_callback_pair {A B C D R}
+    (left : callback A B -> callback C D -> A -> program B)
+    (right : callback A B -> callback C D -> C -> program D)
+    (next : callback A B -> callback C D -> program R) : callback_group R
+| Export_callback_pair4 {A B C D R E F G H S T}
+    (left : callback4 A B C D R -> callback4 E F G H S -> A -> B -> C -> D -> program R)
+    (right : callback4 A B C D R -> callback4 E F G H S -> E -> F -> G -> H -> program S)
+    (next : callback4 A B C D R -> callback4 E F G H S -> program T) : callback_group T.
+Arguments Group_bind {State A} before next.
+Arguments Export_callback_pair {A B C D R} left right next.
+Arguments Export_callback_pair4 {A B C D R E F G H S T} left right next.
+Register callback_group as soma.native.callback_group.
+
 
 (** Create an ordinary nonrecursive callback with the lexical captures of
     its body. The symbolic program uses a callback that ignores itself. *)

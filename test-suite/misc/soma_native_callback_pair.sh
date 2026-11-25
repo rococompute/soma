@@ -12,8 +12,8 @@ From Soma Require Import Native.
 From Corelib Require Import PrimInt63.
 From Stdlib Require Import Strings.String.
 
-Definition heterogeneous : entry (callback nat string * callback string nat) :=
-  Export (New_callback_pair
+Definition heterogeneous : callback_group (callback nat string * callback string nat) :=
+  Export_callback_pair
     (fun _ length n =>
       match n with
       | O => Return "zero"%string
@@ -23,28 +23,32 @@ Definition heterogeneous : entry (callback nat string * callback string nat) :=
     (fun first _ text =>
       Bind (Call_callback first O)
         (fun prefix => Return (if String.eqb text "borrowed"%string
-          then String.length prefix else String.length text)))).
+          then String.length prefix else String.length text)))
+    (fun first length => Return (first,length)).
 
-Fail Definition invalid : entry (callback nat string * callback string nat) :=
-  Export (New_callback_pair (fun _ _ (_ : nat) => Return true)
-                            (fun _ _ (_ : string) => Return O)).
+Fail Definition invalid : callback_group (callback nat string * callback string nat) :=
+  Export_callback_pair (fun _ _ (_ : nat) => Return true)
+                       (fun _ _ (_ : string) => Return O)
+                       (fun first length => Return (first,length)).
 
-Definition alternating : entry (callback PrimInt63.int bool * callback PrimInt63.int bool) :=
-  Export (New_callback_pair
+Definition alternating : callback_group (callback PrimInt63.int bool * callback PrimInt63.int bool) :=
+  Export_callback_pair
     (fun _ odd n => if PrimInt63.eqb n 0%uint63 then Return true
       else Call_callback odd (PrimInt63.sub n 1%uint63))
     (fun even _ n => if PrimInt63.eqb n 0%uint63 then Return false
-      else Call_callback even (PrimInt63.sub n 1%uint63))).
+      else Call_callback even (PrimInt63.sub n 1%uint63))
+    (fun even odd => Return (even,odd)).
 
 Definition saturated :=
-  Export (New_callback_pair4
-    (fun _ second (_ : unit) (value : string) (limit : nat) (prefix : string) =>
+  Group_bind (Return "prefix"%string) (fun prefix => Export_callback_pair4
+    (fun _ second (_ : unit) (value : string) (limit : nat) (preferred : string) =>
       Bind (Call_callback4 second true value limit tt)
-        (fun count => Return (if Nat.eqb count limit then prefix else value)))
+        (fun count => Return (if Nat.eqb count limit then (if String.eqb preferred "prefix"%string then prefix else preferred) else value)))
     (fun first _ (test : bool) (value : string) (limit : nat) (_ : unit) =>
       if test then Return (String.length value)
       else Bind (Call_callback4 first tt value limit ""%string)
-             (fun prefix => Return (String.length prefix)))).
+             (fun prefix => Return (String.length prefix)))
+    (fun first second => Return (first,second))).
 
 Definition main := (heterogeneous,alternating,saturated).
 SOMA
@@ -70,3 +74,18 @@ for compiler in ocamlc ocamlopt; do
     prog.mli prog.ml check.ml
   "./check-$compiler"
 done
+
+cat > inspect.soma <<'SOMA'
+Require Import Soma.Native.
+Definition inspect (value : callback_group nat) : nat :=
+  match value with
+  | Group_bind _ _ => O
+  | Export_callback_pair _ _ _ => O
+  | Export_callback_pair4 _ _ _ => O
+  end.
+Definition main := inspect.
+SOMA
+if soma extract inspect.soma -no-soma-prelude -o inspect > inspect.log 2>&1; then
+  echo 'accepted inspection of an executable callback group' >&2; exit 1
+fi
+grep -q 'cannot be inspected' inspect.log
