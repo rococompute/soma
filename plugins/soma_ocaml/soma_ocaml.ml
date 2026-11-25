@@ -537,15 +537,26 @@ let native_external_family name parameters path =
   let c = native_declare name (CAst.make (Constrexpr.CLambdaN (binders, family))) None in
   native_register name c (SomaForeign.OCamlNativeExternalFamily (names, path))
 
+let native_handle_type name path =
+  let symbol = native_namespace () ^ "." ^ Id.to_string name in
+  let body = native_app (native_global "soma.native.handle") [native_string symbol] in
+  let c = native_declare name body None in
+  native_register name c (SomaForeign.OCamlNativeType path)
+
 let native_type ?(external_=false) name path =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.handle") then native_error "import Soma.Native first";
   let _, _, top = native_context () in
   let path = if external_ then native_path path else top ^ "." ^ native_path path in
-  let symbol = native_namespace () ^ "." ^ Id.to_string name in
-  let body = native_app (native_global "soma.native.handle") [native_string symbol] in
-  let c = native_declare name body None in
-  native_register name c (SomaForeign.OCamlNativeType path)
+  native_handle_type name path
+
+let native_packed_module_type name path =
+  ignore(native_context());
+  if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
+  let valid part=is_module_name part && part.[0]>='A' && part.[0]<='Z' in
+  if not(List.for_all valid(String.split_on_char '.' path))then
+    native_error "a packed module type needs a named OCaml module signature path";
+  native_handle_type name("(module "^path^")")
 
 (* [OCaml Native Enum alias := checked.kind As "Module.kind"]. Reuse the
    logical constructors directly; the emitted type equation validates their

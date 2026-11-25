@@ -92,6 +92,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeModule CLASSIFIED AS SIDEFF
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Packed" "Module" "Type" ident(name) ":=" string(path) ] ->
+ { Soma_ocaml.native_packed_module_type name path }
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
 
