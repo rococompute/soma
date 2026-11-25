@@ -73,6 +73,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeEnum CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Variant" "Alias" ident(name) ":=" reference(source) "As" string(target) ] ->
+  { Soma_ocaml.native_enum ~variant:true name source target }
 | [ "OCaml" "Native" "Enum" ident(name) ":=" reference(source) "As" string(target) ] ->
   { Soma_ocaml.native_enum name source target }
 END

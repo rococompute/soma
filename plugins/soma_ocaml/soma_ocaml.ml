@@ -50,6 +50,13 @@ let in_native_enum =
     ~cache:(fun info -> native_enums := info :: !native_enums)
     ~subst:None
 let () = SomaForeign.native_enum_aliases := (fun () -> !native_enums)
+let native_variant_aliases = Summary.ref ~name:"soma-native-variant-aliases" []
+let in_native_variant_alias =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native variant alias"
+    ~cache:(fun info -> native_variant_aliases := info :: !native_variant_aliases)
+    ~subst:None
+let () = SomaForeign.native_variant_aliases := (fun () -> !native_variant_aliases)
+
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
    they use *)
@@ -450,7 +457,7 @@ let native_type ?(external_=false) name path =
 (* [OCaml Native Enum alias := checked.kind As "Module.kind"]. Reuse the
    logical constructors directly; the emitted type equation validates their
    exact order, arity and completeness even for identity-only native clients. *)
-let native_enum name source target =
+let native_enum ?(variant=false) name source target =
   ignore(native_context());
   let target=native_path target in
   let qualification=String.split_on_char '.' target in
@@ -461,13 +468,26 @@ let native_enum name source target =
     |_->native_error "an enum alias needs an existing inductive type" in
   let mib,mip=Inductive.lookup_mind_specif env ind in
   if Array.length mib.Declarations.mind_packets<>1 || mib.mind_nparams<>0 || mip.mind_nrealargs<>0 ||
-     Array.length mip.mind_consnames=0 || Array.exists((<>)0)mip.mind_consnrealdecls ||
+     Array.length mip.mind_consnames=0 || (not variant && Array.exists((<>)0)mip.mind_consnrealdecls) ||
      mib.mind_finite=Declarations.CoFinite then
     native_error "an enum alias needs a nonempty, unparameterized, unindexed type with nullary constructors";
   let sigma=Evd.from_env env in
   (match EConstr.kind sigma(EConstr.of_constr mip.mind_user_arity) with
    |Sort sort when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
    |_->native_error "a logical proof type cannot be a native enum");
+  let payloads = if not variant then None else begin
+    let rec fields typ =
+      let typ=Reductionops.whd_all env sigma typ in
+      match EConstr.kind sigma typ with
+      |Prod(_,domain,codomain)->
+        if not(EConstr.Vars.noccurn sigma 1 codomain) then
+          native_error "native variant payloads cannot depend on previous values";
+        let representation=try ocaml_type env sigma [] domain with Not_ocaml why->
+          CErrors.user_err(str "OCaml Native variant payload: " ++ why) in
+        representation :: fields(EConstr.Vars.subst1 domain codomain)
+      |_->[] in
+    Some(Array.to_list(Array.map(fun typ->fields(EConstr.of_constr typ))mip.mind_user_lc))
+  end in
   let prefix=String.concat "." (List.rev(List.tl(List.rev qualification))) in
   let constructors=Array.to_list(Array.map(fun id->
     let name=Id.to_string id in
@@ -482,7 +502,10 @@ let native_enum name source target =
   native_register name c (SomaForeign.OCamlNativeType target);
   let enum_source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   Lib.add_leaf(in_native_enum SomaForeign.{enum_constant=c;enum_logical_type=logical_type;
-    enum_target=target;enum_constructors=constructors;enum_source})
+    enum_target=target;enum_constructors=constructors;enum_source});
+  Option.iter(fun variant_alias_arguments ->
+    Lib.add_leaf(in_native_variant_alias SomaForeign.{variant_alias_constant=c;variant_alias_arguments}))payloads
+
 
 (* The opaque handle has no pure mutable fields. Anonymous type-valued lets
    retain checked schema dependencies in the kernel term for module discovery

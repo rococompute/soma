@@ -223,3 +223,12 @@ type native_enum_alias = {
   enum_source : string;
 }
 val native_enum_aliases : (unit -> native_enum_alias list) ref
+
+(** Constructor payload representations for a reused checked native variant.
+    Kept separate so existing enum metadata and serialized descriptors retain
+    their exact shape. No conversion function or logical evaluator is added. *)
+type native_variant_alias = {
+  variant_alias_constant : Names.Constant.t;
+  variant_alias_arguments : string list list;
+}
+val native_variant_aliases : (unit -> native_variant_alias list) ref
