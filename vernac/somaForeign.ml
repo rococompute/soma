@@ -201,6 +201,7 @@ type ocaml_item =
   | OCamlNativeOpenVariant of string * native_variant
   | OCamlNativeModuleAlias of native_module_alias
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
+  | OCamlNativeModuleInclude of native_module_alias
 
 type ocaml_module = {
   ml_file : string option;
@@ -356,6 +357,9 @@ let native_identity = function
    String.concat "\n" ["native-algebraic-reexport";info.reexport_namespace;
      info.reexport_name;info.reexport_owner;info.reexport_target;string_of_int info.reexport_order;
      native_algebraic_ml info.reexport_group]
+ | OCamlNativeModuleInclude info ->
+   String.concat "\n" ["native-module-include";info.module_alias_namespace;
+     info.module_alias_name;info.module_alias_target;string_of_int info.module_alias_order]
  | OCamlNativeModuleAlias alias ->
    String.concat "\n" ["native-module-alias";alias.module_alias_namespace;
      alias.module_alias_name;alias.module_alias_target;string_of_int alias.module_alias_order]

@@ -217,6 +217,7 @@ type ocaml_item =
   | OCamlNativeOpenVariant of string * native_variant
   | OCamlNativeModuleAlias of native_module_alias
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
+  | OCamlNativeModuleInclude of native_module_alias
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)

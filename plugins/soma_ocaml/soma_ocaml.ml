@@ -484,13 +484,32 @@ let native_module_alias name target =
     native_error "a module alias target needs a qualified OCaml module path";
   let namespace=native_namespace() in
   let order=Cmap_env.fold(fun _ binding count->match binding.item with
-    |SomaForeign.OCamlNativeModuleAlias info when info.module_alias_namespace=namespace->count+1
+    |SomaForeign.OCamlNativeModuleAlias info | SomaForeign.OCamlNativeModuleInclude info
+      when info.module_alias_namespace=namespace->count+1
     |_->count)!bindings 0 in
   let source=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
   let c=native_declare name (native_global "core.unit.tt") (Some(native_global "core.unit.type"))in
   native_register name c (SomaForeign.OCamlNativeModuleAlias {
     module_alias_namespace=namespace;module_alias_name=alias;module_alias_target=target;
     module_alias_source=source;module_alias_order=order})
+
+(* Include declarations share the original Source order with module aliases.
+   The marker is canonical unit; only a checked module path enters native ML. *)
+let native_module_include name target =
+  ignore(native_context());
+  let valid part=is_module_name part && part.[0]>='A' && part.[0]<='Z' in
+  if not(List.for_all valid(String.split_on_char '.' target))then
+    native_error "a module include target needs a qualified OCaml module path";
+  let namespace=native_namespace()in
+  let order=Cmap_env.fold(fun _ binding count->match binding.item with
+    |SomaForeign.OCamlNativeModuleAlias info | SomaForeign.OCamlNativeModuleInclude info
+      when info.module_alias_namespace=namespace->count+1
+    |_->count)!bindings 0 in
+  let source=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
+  let c=native_declare name(native_global "core.unit.tt")(Some(native_global "core.unit.type"))in
+  native_register name c(SomaForeign.OCamlNativeModuleInclude{
+    module_alias_namespace=namespace;module_alias_name=Id.to_string name;
+    module_alias_target=target;module_alias_source=source;module_alias_order=order})
 
 let native_external_family name parameters path =
   ignore (native_context ());
@@ -1956,7 +1975,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -1999,6 +2018,8 @@ let describe c =
     Some (match b.item with
         | SomaForeign.OCamlNativeAlgebraicReexport info ->
           str "native algebraic reexport " ++ str info.reexport_owner ++ str " as " ++ str info.reexport_target
+        | SomaForeign.OCamlNativeModuleInclude info ->
+          str "native module include " ++ str info.module_alias_target
         | SomaForeign.OCamlNativeModuleAlias info ->
           str "native module alias " ++ str info.module_alias_namespace ++ str "." ++
           str info.module_alias_name ++ str " = " ++ str info.module_alias_target
