@@ -1040,7 +1040,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
-    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
+    | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
     | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
@@ -1123,7 +1123,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
+   | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
    | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
@@ -1223,6 +1223,13 @@ let native_callback name typ operation =
       if ocaml_type env sigma type_vars payload<>Option.default "unit" case.SomaForeign.case_payload then
        native_error "factory argument differs from the declared payload (unit for a nullary tag)";
       SomaForeign.NativeVariantFactory(tag,Some v)
+    | SomaForeign.NativeAssertionFunction(line,column) ->
+      if argument_names<>["unit"] then native_error "an assertion function needs a unit getter";
+      if line<=0 || column<0 then native_error "an assertion location needs a positive line and a nonnegative column";
+      (match arguments [] None result with
+       | [(_,None)],_ -> ()
+       | _ -> native_error "an assertion function needs one positional input");
+      SomaForeign.NativeAssertionFunction(line,column)
     | SomaForeign.NativeAssertionFunctionFactory(line,column) ->
       if argument_names<>["unit"] then native_error "an assertion function factory needs a unit getter";
       if line<=0 || column<0 then native_error "an assertion location needs a positive line and a nonnegative column";
@@ -1271,20 +1278,37 @@ let native_callback name typ operation =
         | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalLiteralFunction _
         | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
         | SomaForeign.NativeExternalComposedValue _ | SomaForeign.NativeExternalTransformedComposition _
-        | SomaForeign.NativeVariantFunction(_,Some _) -> true
+        | SomaForeign.NativeVariantFunction(_,Some _) | SomaForeign.NativeAssertionFunction _ -> true
         | SomaForeign.NativeStaticFunction(_,_,_,Some(a,b,_,_,_)) -> closed a && closed b
         | SomaForeign.NativeStaticApplication(_,_,Some(fn,values,_,_)) -> closed fn && List.for_all closed values
         | SomaForeign.NativeStaticInvocation(_,Some(term,_)) -> closed_term term
         | _ -> false
       and closed_term = function
         | SomaForeign.NativeStaticArgument _ -> true
+        | SomaForeign.NativeStaticLambda(body,_) -> closed_term body
         | SomaForeign.NativeStaticValue operation -> closed operation
         | SomaForeign.NativeStaticCall(operation,values,_) -> closed operation && List.for_all closed_term values in
       let descriptor name =
         let operation,typ=static_descriptor name in
         if not(closed operation) then native_error "a static invocation needs closed native value/function getters";
         operation,typ in
-      let rec check = function
+      let callable name =
+        let c=match Nametab.locate(Libnames.qualid_of_string name)with
+          |GlobRef.ConstRef c->c|_->native_error "a static function needs a declared callable type" in
+        let count=match Cmap_env.find_opt c !bindings with
+          |Some{item=SomaForeign.OCamlNativeCallableType _;_}->0
+          |Some{item=SomaForeign.OCamlNativeParametricCallable(params,_);_}->List.length params
+          |_->native_error "a static function needs a declared callable type" in
+        if count>List.length type_vars then native_error "static function type parameters exceed the public parameters";
+        let typ=EConstr.mkApp(EConstr.of_constr(Constr.mkConstU(c,UVars.Instance.empty)),Array.init count(fun index->EConstr.mkRel(List.length type_vars-index)))in
+        typ,native_callable_type env sigma type_vars typ in
+      let rec check inputs = function
+        | SomaForeign.StaticLambda(name,body) ->
+          let typ,signature=callable name in
+          if signature.SomaForeign.callable_arguments=[] then native_error "a static function needs a callable argument";
+          let body,actual=check(inputs @ signature.callable_arguments)body in
+          if actual<>signature.callable_result then native_error "a static function result differs from its callable signature";
+          SomaForeign.NativeStaticLambda(body,signature),ocaml_type env sigma type_vars typ
         | SomaForeign.StaticArgument index ->
           if index<0 || index>=List.length inputs then native_error "a static argument index exceeds the public arity";
           SomaForeign.NativeStaticArgument index,List.nth inputs index
@@ -1309,11 +1333,11 @@ let native_callback name typ operation =
             | _ -> static_shape typ in
           if wanted=[] || List.length wanted<>List.length values then
             native_error "a static invocation call has the wrong arity";
-          let checked=List.map check values in
+          let checked=List.map(check inputs)values in
           List.iter2(fun expected(_,actual)->if expected<>actual then
             native_error "a static invocation argument differs from its target domain")wanted checked;
           SomaForeign.NativeStaticCall(operation,List.map fst checked,labels),answer in
-      let term,actual=check expression in
+      let term,actual=check inputs expression in
       if actual<>answer then native_error "a static invocation result differs from the public signature";
       SomaForeign.NativeStaticInvocation(expression,Some(term,labels))
     | SomaForeign.NativeStaticApplication(target,bound,_) ->

@@ -274,6 +274,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         |None,[value]->"(let () = "^value^" in `"^tag^")"
         |Some _,[value]->"(`"^tag^" "^value^")"
         |_->invalid_arg "unvalidated static constructor invocation")
+    |SomaForeign.NativeAssertionFunction(line,column)->
+      (match values with
+        |[value]->Printf.sprintf "(let _ = %s in Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" value line column
+        |_->invalid_arg "unvalidated static assertion invocation")
     |SomaForeign.NativeStaticInvocation(_,Some(term,_))->static_term values term
     |SomaForeign.NativeStaticApplication(_,_,Some(target,bound,target_labels,_))->
       static_apply ~labels:target_labels target(List.map static_value bound @ values)
@@ -284,6 +288,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     |_->invalid_arg "unvalidated static native expression"
   and static_term inputs = function
     |SomaForeign.NativeStaticArgument index->List.nth inputs index
+    |SomaForeign.NativeStaticLambda(body,signature)->
+      let labels=signature.SomaForeign.callable_labels in
+      let values=List.mapi(fun i _->"nested"^string_of_int(List.length inputs+i))labels in
+      let params=List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)values labels in
+      "(fun "^String.concat " "params^" -> "^static_term(inputs @ values)body^")"
     |SomaForeign.NativeStaticValue operation->static_value operation
     |SomaForeign.NativeStaticCall(operation,values,labels)->
       static_apply ~labels operation(List.map(static_term inputs)values)
@@ -305,6 +316,8 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     |SomaForeign.NativeStaticInvocation(_,Some(_,labels))
     |SomaForeign.NativeStaticFunction(_,_,_,Some(_,_,_,_,labels))
     |SomaForeign.NativeStaticApplication(_,_,Some(_,_,_,labels))->closure labels
+    |SomaForeign.NativeAssertionFunction(line,column)->
+      Printf.sprintf "(fun _ -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     |SomaForeign.NativeVariantFunction(tag,Some variant)->
       let case=List.find(fun c->c.SomaForeign.case_tag=tag)variant.SomaForeign.variant_cases in
       (match case.SomaForeign.case_payload with
@@ -312,7 +325,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         |Some _->"(fun payload -> `"^tag^" payload)")
     |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
-    | (SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
+    | (SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
       static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
       let parameters labels prefix=

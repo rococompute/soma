@@ -123,16 +123,19 @@ type native_operation =
   | NativeVariantFunction of string * native_variant option
   | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
   | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
+  | NativeAssertionFunction of int * int
 
 and native_static_expression =
   | StaticArgument of int
   | StaticValue of string
   | StaticCall of string * native_static_expression list
+  | StaticLambda of string * native_static_expression
 
 and native_static_term =
   | NativeStaticArgument of int
   | NativeStaticValue of native_operation
   | NativeStaticCall of native_operation * native_static_term list * string option list
+  | NativeStaticLambda of native_static_term * native_callable
 
 type native_callback = {
   namespace : string;

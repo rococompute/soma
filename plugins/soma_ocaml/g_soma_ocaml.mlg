@@ -27,6 +27,8 @@ let pr_native_signature typ =
 let rec pr_native_static_expression = function
   | SomaForeign.StaticArgument index -> Pp.(str "Argument " ++ int index)
   | SomaForeign.StaticValue name -> Pp.(str "Value " ++ str name)
+  | SomaForeign.StaticLambda(name,body) ->
+    Pp.(str "Function " ++ str name ++ str " [" ++ pr_native_static_expression body ++ str "]")
   | SomaForeign.StaticCall(name,values) ->
     Pp.(str "Call " ++ str name ++ str " [" ++
       prlist_with_sep(fun () -> str "; ")pr_native_static_expression values ++ str "]")
@@ -152,6 +154,8 @@ VERNAC ARGUMENT EXTEND native_static_expression
  PRINTED BY { pr_native_static_expression }
 | [ "Argument" natural(index) ] -> { SomaForeign.StaticArgument index }
 | [ "Value" ident(name) ] -> { SomaForeign.StaticValue(Names.Id.to_string name) }
+| [ "Function" ident(name) "[" native_static_expression(body) "]" ] ->
+ { SomaForeign.StaticLambda(Names.Id.to_string name,body) }
 | [ "Call" ident(name) "[" ne_native_static_expression_list_sep(values, ";") "]" ] ->
  { SomaForeign.StaticCall(Names.Id.to_string name,values) }
 END
@@ -176,6 +180,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_defaulted_function name typ path schema }
 | [ "OCaml" "Native" "External" "Thunk" "Factory" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
  { Soma_ocaml.native_external_thunk_factory name typ path literal }
+| [ "OCaml" "Native" "Assertion" "Function" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->
+ { Soma_ocaml.native_getter name typ (SomaForeign.NativeAssertionFunction(line,column)) }
 | [ "OCaml" "Native" "Assertion" "Function" "Factory" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->
  { Soma_ocaml.native_assertion_function_factory name typ line column }
 | [ "OCaml" "Native" "Assertion" "Factory" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->

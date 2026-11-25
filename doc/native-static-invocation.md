@@ -45,3 +45,43 @@ closed factory and full field/literal regression suites pass unchanged.
 Over 10,000 calls, before/after allocation is exactly 4,160,096 bytes natively
 and 4,080,144 bytes in bytecode; wrapper creation is 96 / 240,144 bytes in the
 respective backends.
+
+## Nested callable scopes
+
+An argument tree can contain a typed function literal:
+
+```soma
+OCaml Native Callable continuation := prepared -> status.
+OCaml Native Static Invoke entry : owner -> source -> status := prepare With
+ [Argument 1; Function continuation [Call resume [Argument 0; Argument 2]]]
+ AtFullApplication.
+```
+
+`Function` names a declared native callable schema. Its parameters are appended
+to the enclosing argument context, so the example's `Argument 2` is the
+continuation parameter while `Argument 0` retains the original owner. Nested
+and sibling functions have separate lexical scopes. Out-of-scope indices,
+non-callable schemas and wrong callback results are rejected. Leading generic
+parameters, required labels and optional parameters follow the callable schema.
+Both the callback body and its complete instantiated signature participate in
+ABI and semantic fingerprints, even when an argument is unused.
+
+The backend emits the native function literal directly at its original
+creation site. Captured owners, callback arity, delayed execution, tail-call
+frames and closed-function sharing retain the native behavior without a
+callback interpreter or tuple conversion. Use callable schemas explicitly for
+labelled native higher-order function arguments.
+
+`OCaml Native Assertion Function invalid : input -> answer := line column.`
+provides a typed closed function which raises the original assertion with
+`__FILE__` and the declared location. Unlike a factory, its getter returns the
+actual assertion callback. Static invocation can embed it as a function value
+or call it while preserving evaluation of the ignored argument. Invalid
+locations, multiple arguments and labelled inputs are rejected.
+
+`test-suite/misc/soma_native_static_lambda.sh` compares nested captures, live
+owners, generic bytes/functions, labels/optional callbacks, quiet partials,
+exact assertion locations, exceptions, promises/context/cancellation, exact
+allocation, and natural Weak lifetimes including a consumed owner inside a
+target tail continuation. It rejects scope escapes and checks fingerprint
+changes for both capture order and an unused callback argument's type.
