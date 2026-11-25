@@ -3090,3 +3090,39 @@ including the timing of target effects and deferred effects in returned function
 `dev/native-callable-compatibility-check.py` retains independent cold-cache
 baseline/candidate projects, schema and program products, manifests, logical
 hash reports and a SHA256 receipt in the requested output directory.
+
+### Closed full-application native field and literal functions
+
+`OCaml Native External Value run : owner -> arg -> answer := "Target.run"
+Reading "cell" "Target.payload" AtFullApplication.` prepares a closed native
+function equivalent to `fun owner arg -> Target.run owner.cell.Target.payload arg`.
+The signature has one or more positional arguments; its first argument is a
+declared native record type. The field path is nonempty and consists only of
+native identifiers. Leading type parameters and native type families are
+supported. The actual native compiler checks every field and the target's
+argument/result types, including opaque external records. Field lookup and
+all target calls wait until full application. A partial function retains the
+owner and rereads its current field chain when called; it does not capture an
+earlier field value. This form can preserve an original closed function's
+identity and sharing without allocating a wrapper around a prepared getter.
+
+`OCaml Native External Value run : first -> last -> answer := "Target.run"
+With "/" After 1 AtFullApplication.` prepares the closed native function
+`fun first last -> Target.run first "/" last`. `After` ranges from zero to the
+number of positional function arguments, inclusive. The literal can therefore
+appear at the beginning, middle or end. Partial application does not call the
+target. The existing `With literal AtFullApplication` syntax and its metadata
+representation are unchanged.
+
+Both forms use checked native metadata rather than an OCaml expression escape
+or a logical effect evaluator. They preserve borrowed native inputs/results,
+synchronous exceptions and native promises, and introduce no extra per-call
+tuple/effect bridge. Their two metadata variants are appended after existing
+variants, preserving existing cache tags. Target paths, field paths, owner
+types, literal contents, insertion positions and arity participate in semantic
+and native ABI identity. `test-suite/misc/soma_native_full_field_literal.sh`
+compares real generated output with original functions in native and bytecode,
+including unary/parametric fields, live mutation after partial application,
+closed sharing, exact allocation, exceptions, promise/context/cancellation,
+Weak ownership, native rejection of invalid fields/results, and independent
+field/literal/position hash invalidation.

@@ -100,6 +100,8 @@ type native_operation =
   | NativeDefaultedFunction of string * native_callable
   | NativeBoundBooleanFunction of string * native_callable * string * bool
   | NativeAssertionFunctionFactory of int * int
+  | NativeExternalInsertedLiteralFunction of string * string * int * int
+  | NativeExternalFieldsFunction of string * string list * string * int
 
 type native_callback = {
   namespace : string;
@@ -315,6 +317,10 @@ let native_identity = function
     | NativeAssertionFactory(line,column) ->
       Printf.sprintf "assertion-factory line %d column %d" line column
     | NativeFloatConstant literal -> "float-constant " ^ literal
+    | NativeExternalInsertedLiteralFunction(path,literal,after,arity) ->
+      Printf.sprintf "external-inserted-literal-function %S %S after %d arity %d" path literal after arity
+    | NativeExternalFieldsFunction(path,fields,owner,arity) ->
+      Printf.sprintf "external-fields-function %S for %s arity %d reading %s" path owner arity (String.concat " " (List.map(Printf.sprintf "%S")fields))
     | NativeExternalLiteralFunction(path,literal,arity) ->
       Printf.sprintf "external-literal-function %S %S arity %d" path literal arity
     | NativeValue p->"call "^Printf.sprintf "%S" p

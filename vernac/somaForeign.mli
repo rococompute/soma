@@ -116,6 +116,8 @@ type native_operation =
   | NativeDefaultedFunction of string * native_callable
   | NativeBoundBooleanFunction of string * native_callable * string * bool
   | NativeAssertionFunctionFactory of int * int
+  | NativeExternalInsertedLiteralFunction of string * string * int * int
+  | NativeExternalFieldsFunction of string * string list * string * int
 
 type native_callback = {
   namespace : string;

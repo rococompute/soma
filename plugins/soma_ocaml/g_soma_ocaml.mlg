@@ -158,6 +158,10 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
   { Soma_ocaml.native_transformed_composition name typ outer inner after transform position }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(outer) "Composing" string(inner) "After" natural(after) ] ->
  { Soma_ocaml.native_composed_value name typ outer inner after }
+| [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) "After" natural(after) "AtFullApplication" ] ->
+ { Soma_ocaml.native_inserted_literal_function name typ path literal after }
+| [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "Reading" ne_string_list(fields) "AtFullApplication" ] ->
+ { Soma_ocaml.native_fields_function name typ path fields }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) "AtFullApplication" ] ->
  { Soma_ocaml.native_literal_function name typ path literal }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->

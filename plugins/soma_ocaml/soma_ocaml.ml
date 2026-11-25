@@ -1030,6 +1030,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
+    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
     | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _ -> Some 1 in
@@ -1113,6 +1114,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
+   | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
@@ -1204,6 +1206,23 @@ let native_callback name typ operation =
         | _ -> native_error "an assertion factory has type unit -> unit -> answer" in
       unit_arguments 2 result;
       SomaForeign.NativeAssertionFactory(line,column)
+    | SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_) ->
+      if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
+      let parameters,_=arguments [] None result in
+      if parameters=[] || List.exists(fun(_,label)->Option.has_some label)parameters then
+        native_error "a full literal function needs positional function arguments";
+      if after<0 || after>List.length parameters then native_error "literal position exceeds the function arity";
+      SomaForeign.NativeExternalInsertedLiteralFunction(native_external_path path,literal,after,List.length parameters)
+    | SomaForeign.NativeExternalFieldsFunction(path,fields,_,_) ->
+      if argument_names<>["unit"] then native_error "a full field function needs a unit getter";
+      let parameters,_=arguments [] None result in
+      if parameters=[] || List.exists(fun(_,label)->Option.has_some label)parameters then
+        native_error "a full field function needs positional function arguments";
+      let receiver=fst(List.hd parameters) in
+      record_type receiver;
+      if fields=[] then native_error "a full field function needs a nonempty field path";
+      SomaForeign.NativeExternalFieldsFunction(native_external_path path,List.map native_path fields,
+        ocaml_type env sigma type_vars receiver,List.length parameters)
     | SomaForeign.NativeExternalLiteralFunction(path,literal,_) ->
       if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
       let parameters,_=arguments [] None result in
@@ -1575,6 +1594,12 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_inserted_literal_function name result path literal after =
+  native_getter name result (SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,0))
+
+let native_fields_function name result path fields =
+  native_getter name result (SomaForeign.NativeExternalFieldsFunction(path,fields,"",0))
 
 let native_literal_function name result path literal =
   native_getter name result (SomaForeign.NativeExternalLiteralFunction(path,literal,0))

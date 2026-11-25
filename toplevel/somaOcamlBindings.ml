@@ -364,6 +364,18 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       "({ "^assignments(record_prefix n.result)names args^" } : "^n.result^")"
     | SomaForeign.NativeCopy names,record::values ->
       "{ "^record^" with "^assignments(record_prefix(List.hd n.arguments))names values^" }"
+    | SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,arity),[_] ->
+      let values=List.init arity(fun i->"value"^string_of_int i)in
+      let before,rest=CList.chop after values in
+      "(fun "^String.concat " " values^" -> "^String.concat " "
+        (path::(before @ [Printf.sprintf "%S" literal] @ rest))^")"
+    | SomaForeign.NativeExternalFieldsFunction(target,names,owner,arity),[_] ->
+      let fields=match names with
+        |first::rest -> (if String.contains first '.' then first else field(record_prefix owner)first)::rest
+        |[] -> invalid_arg "unvalidated empty native field function" in
+      let values=List.init (arity-1)(fun i->"value"^string_of_int i)in
+      "(fun (record : "^owner^") "^String.concat " "values^" -> "^target^
+        " record."^String.concat "."fields^(if values=[]then ""else " "^String.concat " "values)^")"
     | SomaForeign.NativeExternalLiteralFunction(path,literal,arity),[_] ->
       let values=List.init arity(fun i->"value"^string_of_int i)in
       "(fun "^String.concat " " values^" -> "^path^" "^Printf.sprintf "%S" literal^
