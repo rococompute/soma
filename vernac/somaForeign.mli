@@ -191,6 +191,16 @@ type native_module_alias = {
   module_alias_order : int;
 }
 
+type native_algebraic_reexport = {
+  reexport_namespace : string;
+  reexport_name : string;
+  reexport_source : string;
+  reexport_owner : string;
+  reexport_target : string;
+  reexport_order : int;
+  reexport_group : native_algebraic;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -206,6 +216,7 @@ type ocaml_item =
   | OCamlNativeParametricCallable of string list * native_callable
   | OCamlNativeOpenVariant of string * native_variant
   | OCamlNativeModuleAlias of native_module_alias
+  | OCamlNativeAlgebraicReexport of native_algebraic_reexport
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
@@ -224,6 +235,7 @@ val native_algebraic_module : native_algebraic -> string
 val native_algebraic_filename : native_algebraic -> string
 val native_algebraic_type : native_algebraic -> string -> string
 val native_algebraic_ml : native_algebraic -> string
+val native_algebraic_reexport_ml : ?interface:bool -> native_algebraic_reexport -> string
 
 
 (** Collision-free standalone record modules; fields retain declaration order. *)
