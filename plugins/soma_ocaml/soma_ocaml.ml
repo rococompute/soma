@@ -1043,6 +1043,34 @@ let native_algebraic_reexport name source target =
     reexport_namespace=namespace;reexport_name=Id.to_string name;reexport_source=source;
     reexport_owner=owner_name;reexport_target=target;reexport_order=order;reexport_group=group})
 
+(* Publish a checked callable descriptor directly, preserving native closure
+   approximations that an opaque effect export would otherwise hide. *)
+let native_value_reexport name source =
+  ignore(native_context());
+  let label=ocaml_name ~definition:"native value reexport"(Id.to_string name)in
+  let owner=match Nametab.locate source with
+    |GlobRef.ConstRef c->c|_->native_error "a value reexport needs a checked native callable getter"in
+  let callback,owner_module=match Cmap_env.find_opt owner !bindings with
+    |Some{item=SomaForeign.OCamlNativeCallback info;top;_}->info,top
+    |_->native_error "a value reexport needs a checked native callable getter"in
+  if callback.SomaForeign.arguments<>["unit"]then native_error "a value reexport needs a unit getter";
+  (match callback.SomaForeign.operation with
+   |SomaForeign.NativeStaticInvocation(_,Some _)->()
+   |SomaForeign.NativeExternalConstant _ when String.contains callback.result '>' && String.contains callback.result '-'->()
+   |_->native_error "only a checked Static Invoke or borrowed function can be reexported");
+  let namespace=native_namespace()in
+  let order=Cmap_env.fold(fun _ binding count->match binding.item with
+    |SomaForeign.OCamlNativeValueReexport info when info.value_namespace=namespace->count+1
+    |_->count)!bindings 0 in
+  let file=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
+  let owner_name=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner))in
+  let owner_term=CAst.make(Constrexpr.CRef(Libnames.qualid_of_string owner_name,None))in
+  let body=CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,owner_term,None,native_global "core.unit.tt"))in
+  let c=native_declare name body(Some(native_global "core.unit.type"))in
+  native_register name c(SomaForeign.OCamlNativeValueReexport{
+    value_namespace=namespace;value_name=label;value_source=file;value_owner=owner_name;value_module=owner_module;
+    value_order=order;value_callback=callback})
+
 let native_owned_exception owner constructor =
   let key, _, _ = native_context () in
   match Nametab.locate (Libnames.qualid_of_ident owner) with
@@ -1975,7 +2003,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -2018,6 +2046,8 @@ let describe c =
     Some (match b.item with
         | SomaForeign.OCamlNativeAlgebraicReexport info ->
           str "native algebraic reexport " ++ str info.reexport_owner ++ str " as " ++ str info.reexport_target
+        | SomaForeign.OCamlNativeValueReexport info ->
+          str "native value reexport " ++ str info.value_owner ++ str " as " ++ str info.value_name
         | SomaForeign.OCamlNativeModuleInclude info ->
           str "native module include " ++ str info.module_alias_target
         | SomaForeign.OCamlNativeModuleAlias info ->

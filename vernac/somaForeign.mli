@@ -201,6 +201,16 @@ type native_algebraic_reexport = {
   reexport_group : native_algebraic;
 }
 
+type native_value_reexport = {
+  value_namespace : string;
+  value_name : string;
+  value_source : string;
+  value_owner : string;
+  value_module : string;
+  value_order : int;
+  value_callback : native_callback;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -218,6 +228,7 @@ type ocaml_item =
   | OCamlNativeModuleAlias of native_module_alias
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
   | OCamlNativeModuleInclude of native_module_alias
+  | OCamlNativeValueReexport of native_value_reexport
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)

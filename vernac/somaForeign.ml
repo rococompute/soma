@@ -185,6 +185,16 @@ type native_algebraic_reexport = {
   reexport_group : native_algebraic;
 }
 
+type native_value_reexport = {
+  value_namespace : string;
+  value_name : string;
+  value_source : string;
+  value_owner : string;
+  value_module : string;
+  value_order : int;
+  value_callback : native_callback;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -202,6 +212,7 @@ type ocaml_item =
   | OCamlNativeModuleAlias of native_module_alias
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
   | OCamlNativeModuleInclude of native_module_alias
+  | OCamlNativeValueReexport of native_value_reexport
 
 type ocaml_module = {
   ml_file : string option;
@@ -352,7 +363,10 @@ let native_algebraic_reexport_ml ?(interface=false) info =
   (if interface then "include module type of " else "include ")^witness^"\n"^
   native_algebraic_declarations ~target:info.reexport_target ~exceptions:false info.reexport_group
 
-let native_identity = function
+let rec native_identity = function
+ | OCamlNativeValueReexport info ->
+   String.concat "\n" ["native-value-reexport";info.value_namespace;info.value_name;
+     info.value_owner;info.value_module;string_of_int info.value_order;native_identity(OCamlNativeCallback info.value_callback)]
  | OCamlNativeAlgebraicReexport info ->
    String.concat "\n" ["native-algebraic-reexport";info.reexport_namespace;
      info.reexport_name;info.reexport_owner;info.reexport_target;string_of_int info.reexport_order;
