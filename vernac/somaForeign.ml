@@ -94,6 +94,8 @@ type native_operation =
   | NativeFloatConstant of string
   | NativeExternalLiteralFunction of string * string * int
   | NativeAssertionFactory of int * int
+  | NativeExternalThunkFactory of string * string
+  | NativeVariantFactory of string * native_variant option
 
 type native_callback = {
   namespace : string;
@@ -299,6 +301,11 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let operation=match n.operation with
+    | NativeExternalThunkFactory(path,literal) ->
+      Printf.sprintf "external-thunk-factory %S %S" path literal
+    | NativeVariantFactory(tag,Some variant) ->
+      "variant-factory " ^ Printf.sprintf "%S " tag ^ native_variant_identity variant
+    | NativeVariantFactory(_,None) -> invalid_arg "unvalidated native variant factory"
     | NativeAssertionFactory(line,column) ->
       Printf.sprintf "assertion-factory line %d column %d" line column
     | NativeFloatConstant literal -> "float-constant " ^ literal

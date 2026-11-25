@@ -342,6 +342,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let values=List.init arity(fun i->"value"^string_of_int i)in
       "(fun "^String.concat " " values^" -> "^path^" "^Printf.sprintf "%S" literal^
         " "^String.concat " " values^")"
+    | SomaForeign.NativeExternalThunkFactory(path,literal),[_] ->
+      Printf.sprintf "(fun () -> fun () -> %s %S)" path literal
+    | SomaForeign.NativeVariantFactory(tag,Some v),[_] ->
+      let case=List.find(fun case->case.SomaForeign.case_tag=tag)v.variant_cases in
+      (match case.SomaForeign.case_payload with
+       |None -> "(fun () -> fun () -> `" ^ tag ^ ")"
+       |Some _ -> "(fun () -> fun payload -> `" ^ tag ^ " payload)")
     | SomaForeign.NativeAssertionFactory(line,column),[_] ->
       Printf.sprintf "(fun () -> fun () -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     | SomaForeign.NativeFloatConstant literal,[_] -> "(" ^ literal ^ ")"

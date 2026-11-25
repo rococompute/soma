@@ -110,6 +110,8 @@ type native_operation =
   | NativeFloatConstant of string
   | NativeExternalLiteralFunction of string * string * int
   | NativeAssertionFactory of int * int
+  | NativeExternalThunkFactory of string * string
+  | NativeVariantFactory of string * native_variant option
 
 type native_callback = {
   namespace : string;

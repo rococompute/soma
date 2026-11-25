@@ -1031,7 +1031,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
-    | SomaForeign.NativeAssertionFactory _ -> Some 1 in
+    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeExternalThunkFactory _
+    | SomaForeign.NativeVariantFactory _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -1109,7 +1110,8 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeAssertionFactory _
+   | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeExternalThunkFactory _
+   | SomaForeign.NativeVariantFactory _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
@@ -1152,6 +1154,29 @@ let native_callback name typ operation =
         | None -> native_error (operation ^ " field is absent from its schema") in
     name, declaration, local in
   let operation = match operation with
+    | SomaForeign.NativeExternalThunkFactory(path,literal) ->
+      if argument_names<>["unit"] then native_error "a closed thunk factory needs a unit getter";
+      let parameters,_=arguments [] (Some 2) result in
+      (match parameters with
+       | [(first,None);(second,None)]
+         when EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") first &&
+              EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") second -> ()
+       | _ -> native_error "a closed thunk factory has type unit -> unit -> answer");
+      SomaForeign.NativeExternalThunkFactory(native_external_path path,literal)
+    | SomaForeign.NativeVariantFactory(tag,_) ->
+      if argument_names<>["unit"] then native_error "a variant factory needs a unit getter";
+      let parameters,answer=arguments [] (Some 2) result in
+      let payload=match parameters with
+       | [(first,None);(payload,None)]
+         when EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") first -> payload
+       | _ -> native_error "a variant factory has type unit -> payload -> variant" in
+      let v=variant_type answer in
+      let tag=native_variant_tag tag in
+      let case=match List.find_opt(fun c->c.SomaForeign.case_tag=tag)v.variant_cases with
+       |Some case->case|None->native_error "factory tag is absent from the native variant" in
+      if ocaml_type env sigma type_vars payload<>Option.default "unit" case.SomaForeign.case_payload then
+       native_error "factory argument differs from the declared payload (unit for a nullary tag)";
+      SomaForeign.NativeVariantFactory(tag,Some v)
     | SomaForeign.NativeAssertionFactory(line,column) ->
       if argument_names<>["unit"] then native_error "an assertion factory needs a unit getter";
       if line<=0 || column<0 then native_error "an assertion location needs a positive line and a nonnegative column";
@@ -1506,6 +1531,12 @@ let native_literal_function name result path literal =
    just as a source-level [fun () -> assert false] argument. *)
 let native_assertion_factory name result line column =
   native_getter name result (SomaForeign.NativeAssertionFactory(line,column))
+
+let native_external_thunk_factory name result path literal =
+  native_getter name result (SomaForeign.NativeExternalThunkFactory(path,literal))
+
+let native_variant_factory name result tag =
+  native_getter name result (SomaForeign.NativeVariantFactory(tag,None))
 
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)

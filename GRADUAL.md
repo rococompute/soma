@@ -2949,6 +2949,29 @@ native metadata identity; there is no arbitrary OCaml expression or logical
 effect evaluator. `test-suite/misc/soma_native_assertion_factory.sh` compares
 actual compiler output against original assertions in native and bytecode.
 
+`OCaml Native External Thunk Factory failure : unit -> unit -> A :=
+"Stdlib.invalid_arg" With "negative index".` prepares a factory for the closed
+callback `fun () -> invalid_arg "negative index"`. Reading the descriptor and
+creating a callback do not invoke the target. Only the final thunk call applies
+the existing native function to its static string argument. The target remains
+a validated native value path; the literal is escaped data. The two positional
+`unit` arguments and native answer type are checked, including leading type
+parameters. Generated universal annotations reject less general native targets.
+In-unit embedding retains original literal pooling, synchronous exceptions,
+promise identity and invocation-time native context.
+
+`OCaml Native Construct Factory number : unit -> word -> token := "N".`
+prepares a factory for a closed callback that constructs tag `N` with its input.
+The result must be a declared native polymorphic variant, the tag must exist, and the
+payload must match its checked type (`unit` for a nullary tag). Parametric
+variants and function-valued payloads retain their logical types and borrowed
+native values. The first argument creates the callback at its original phase;
+the next applies the constructor. Both factory forms retain native closed-code
+sharing and bytecode's fresh callback closures, with no per-invocation program
+or tuple bridge. Their target/literal/tag/schema data participates in native
+provenance. `test-suite/misc/soma_native_closed_factories.sh` checks both modes,
+original allocation/identity/ownership behavior and semantic-hash invalidation.
+
 Immutable record projections use named generated schema getters. Pure field
 reads retain their expression order and allocate no temporary projection
 closures per access, including bytecode execution.
