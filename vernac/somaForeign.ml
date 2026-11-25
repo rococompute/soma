@@ -376,3 +376,15 @@ type native_variant_alias = {
   variant_alias_arguments : string list list;
 }
 let native_variant_aliases : (unit -> native_variant_alias list) ref = ref (fun () -> [])
+
+(** A checked immutable record reusing an existing native record ABI. *)
+type native_record_alias = {
+  record_alias_constant : Names.Constant.t;
+  record_alias_logical_type : string;
+  record_alias_target : string;
+  record_alias_parameters : string list;
+  record_alias_fields : native_record_field list;
+  record_alias_projections : string list;
+  record_alias_source : string;
+}
+let native_record_aliases : (unit -> native_record_alias list) ref = ref (fun () -> [])

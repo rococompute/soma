@@ -56,6 +56,13 @@ let in_native_variant_alias =
     ~cache:(fun info -> native_variant_aliases := info :: !native_variant_aliases)
     ~subst:None
 let () = SomaForeign.native_variant_aliases := (fun () -> !native_variant_aliases)
+let native_record_aliases = Summary.ref ~name:"soma-native-record-aliases" []
+let in_native_record_alias =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native record alias"
+    ~cache:(fun info -> native_record_aliases := info :: !native_record_aliases)
+    ~subst:None
+let () = SomaForeign.native_record_aliases := (fun () -> !native_record_aliases)
+
 
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
@@ -141,7 +148,21 @@ let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t
    .definition declares, and type variables ([forall A, ...]), which
    extraction erases as arguments *)
 let rec ocaml_type env sigma vars t =
-  let native = match EConstr.kind sigma t with
+  let t=Reductionops.whd_betaiotazeta env sigma t in
+  let reused_record =
+    let head,args = EConstr.decompose_app sigma t in
+    match EConstr.kind sigma head with
+    | Ind((m,0),_) ->
+      let symbol=KerName.to_string(MutInd.canonical m) in
+      List.find_map(fun info->
+        if info.SomaForeign.record_alias_logical_type<>symbol ||
+           List.length info.record_alias_parameters<>Array.length args then None else
+        let parameters=Array.to_list(Array.map(ocaml_type env sigma vars)args) in
+        let applied=match parameters with []->"" |[p]->"("^p^") "
+          |ps->"("^String.concat ", "ps^") " in
+        Some(applied^info.record_alias_target))!native_record_aliases
+    |_->None in
+  let native = match reused_record with Some _ as result->result |None->match EConstr.kind sigma t with
     | Const (c, _) -> (match Cmap_env.find_opt c !bindings with
       | Some { item = SomaForeign.OCamlNativeType path; _ } -> Some path
       | Some { item = SomaForeign.OCamlNativeAlgebraic (group, member); _ } ->
@@ -175,6 +196,15 @@ let rec ocaml_type env sigma vars t =
        |_->found)!bindings None)
     | _ -> None in
   match native with Some path -> path | None ->
+  (* Unfold an ordinary type alias one constant at a time. Full reduction can
+     otherwise pass through its registered native type and lose that ABI. *)
+  let head,_=EConstr.decompose_app sigma t in
+  let alias=match EConstr.kind sigma head with
+    |Const(c,_)when not(Cmap_env.mem c !bindings)->
+      let unfolded=Reductionops.whd_const c env sigma t in
+      if EConstr.eq_constr sigma t unfolded then None else Some unfolded
+    |_->None in
+  match alias with Some typ->ocaml_type env sigma vars typ |None->
   let t = Reductionops.whd_all env sigma t in
   match EConstr.kind sigma t with
   | Prod (na, dom, cod) ->
@@ -315,7 +345,22 @@ let bind_module ~key ~ml_file ~top ~definition =
     Cmap_env.exists(fun _ binding->match binding.item with
      |SomaForeign.OCamlNativeImmutableRecord(_,info)->List.mem path info.logical_definitions
      |_->false)!bindings in
-  let constants = List.filter (fun (c, _, _) -> not (Cmap_env.mem c !bindings) && not(generated_logical c)) constants in
+  (* Checked type-only helpers may name existing representations or recover
+     a native signature. They supply no runtime implementation for a module:
+     leave them in the logical environment, outside the OCaml value bindings. *)
+  let type_definition cb = match cb.Declarations.const_body with
+    |Declarations.Def _ ->
+      let sigma=Evd.from_env env in
+      let rec result_is_sort env typ =
+        match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+        |Sort _->true
+        |Prod(na,domain,codomain)->
+          result_is_sort(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)codomain
+        |_->false in
+      result_is_sort env(EConstr.of_constr cb.Declarations.const_type)
+    |_->false in
+  let constants = List.filter (fun (c, _, cb) ->
+    not (Cmap_env.mem c !bindings) && not(generated_logical c) && not(type_definition cb)) constants in
   let constants = List.map (fun (c, subs, cb) ->
       let name = Id.to_string (Constant.label c) in
       (match cb.Declarations.const_body with
@@ -503,6 +548,8 @@ let native_enum ?(variant=false) name source target =
       native_error "native enum constructors need uppercase OCaml names";
     prefix^"."^name)mip.mind_consnames) in
   let logical_type=KerName.to_string(MutInd.canonical(fst ind)) in
+  if List.exists(fun info->info.SomaForeign.record_alias_logical_type=logical_type)!native_record_aliases then
+    native_error "one logical type cannot mix native record and variant aliases";
   if List.exists(fun info->info.SomaForeign.enum_logical_type=logical_type && info.enum_target<>target)!native_enums then
     native_error "one logical enum cannot use conflicting native types";
   let body=CAst.make(Constrexpr.CRef(source,None)) in
@@ -514,6 +561,95 @@ let native_enum ?(variant=false) name source target =
   Option.iter(fun variant_alias_arguments ->
     Lib.add_leaf(in_native_variant_alias SomaForeign.{variant_alias_constant=c;variant_alias_arguments}))payloads
 
+
+(* Reuse an existing checked immutable record, including ordinary Type
+   parameters. Only the ABI is named: no evaluator, shim or conversion is made. *)
+let native_record_alias name source target =
+  ignore(native_context());
+  let target=native_path target in
+  if List.length(String.split_on_char '.' target)<2 then
+    native_error "a record alias needs a qualified native type";
+  let env=Global.env() in
+  let ind=match Nametab.locate source with
+    |GlobRef.IndRef ind->ind
+    |_->native_error "a record alias needs an existing checked record" in
+  let mib,mip=Inductive.lookup_mind_specif env ind in
+  if Array.length mib.Declarations.mind_packets<>1 || mip.mind_nrealargs<>0 ||
+     Array.length mip.mind_consnames<>1 || mib.mind_finite=Declarations.CoFinite then
+    native_error "a native record alias must be a nonrecursive, unindexed record";
+  let structure=try Structures.Structure.find env ind with Not_found->
+    native_error "a native record alias needs an existing checked record" in
+  let sigma=Evd.from_env env in
+  let rec parameters count env vars used typ =
+    if count=0 then env,vars,List.rev used,typ else
+    match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+    |Prod(na,domain,codomain)->
+      (match EConstr.kind sigma(Reductionops.whd_all env sigma domain)with
+       |Sort sort when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+       |_->native_error "native record parameters must be types");
+      let param=type_variable used na.Context.binder_name in
+      let env=EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env in
+      parameters(count-1)env(Some param::vars)(param::used)codomain
+    |_->native_error "unsupported checked record parameter shape" in
+  let parameter_env,vars,params,arity=parameters mib.mind_nparams env [] []
+      (EConstr.of_constr mip.mind_user_arity)in
+  (match EConstr.kind sigma(Reductionops.whd_all parameter_env sigma arity)with
+   |Sort sort when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+   |_->native_error "logical proof records cannot be native records");
+  let rec strip count env typ =
+    if count=0 then typ else
+    match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+    |Prod(na,domain,codomain)->
+      strip(count-1)(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)codomain
+    |_->native_error "unsupported checked record constructor" in
+  let typ=strip mib.mind_nparams env(EConstr.of_constr mip.mind_user_lc.(0))in
+  let rec fields env vars typ projections = match projections with
+    |[]->(match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Prod _ |LetIn _->native_error "native record fields do not match their projections"
+      |_->[])
+    |projection::rest->
+      if not projection.Structures.Structure.proj_true then
+        native_error "defined record fields cannot be native ABI fields";
+      let name=match projection.proj_name with Name id->Id.to_string id
+        |Anonymous->native_error "native record fields must have names" in
+      ignore(ocaml_name ~definition:"native record field" name);
+      ignore(native_path name);
+      let projection=match projection.proj_body with Some c->
+        KerName.to_string(Constant.canonical c)
+        |None->native_error "native record fields need ordinary checked projections"in
+      match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Prod(na,domain,codomain)->
+        if not(EConstr.Vars.noccurn sigma 1 codomain)then
+          native_error "native record fields cannot depend on previous values";
+        let rec monomorphic env term =
+          (match EConstr.kind sigma term with
+           |Prod(_,domain,_)when is_sort env sigma domain->
+             native_error "polymorphic native record fields are not supported"
+           |_->());
+          EConstr.iter_with_full_binders env sigma EConstr.push_rel monomorphic env term in
+        monomorphic env domain;
+        let field_type=try ocaml_type env sigma vars domain with Not_ocaml why->
+          CErrors.user_err(str "OCaml Native record field: "++why)in
+        let env=EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env in
+        ({SomaForeign.field_name=name;field_type;field_mutable=false},projection)::
+          fields env(None::vars)codomain rest
+      |_->native_error "unsupported checked record field shape"in
+  let checked=fields parameter_env vars typ structure.projections in
+  if checked=[]then native_error "a native record alias needs at least one field";
+  let logical_type=KerName.to_string(MutInd.canonical(fst ind))in
+  if List.exists(fun info->info.SomaForeign.enum_logical_type=logical_type)!native_enums then
+    native_error "one logical type cannot mix native record and variant aliases";
+  if List.exists(fun info->info.SomaForeign.record_alias_logical_type=logical_type &&
+       info.record_alias_target<>target)!native_record_aliases then
+    native_error "one logical record cannot use conflicting native types";
+  let c=native_declare name(CAst.make(Constrexpr.CRef(source,None)))None in
+  native_register name c(if params=[]then SomaForeign.OCamlNativeType target else
+    SomaForeign.OCamlNativeExternalFamily(params,target));
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_record_alias SomaForeign.{record_alias_constant=c;
+    record_alias_logical_type=logical_type;record_alias_target=target;
+    record_alias_parameters=params;record_alias_fields=List.map fst checked;
+    record_alias_projections=List.map snd checked;record_alias_source=source})
 
 (* The opaque handle has no pure mutable fields. Anonymous type-valued lets
    retain checked schema dependencies in the kernel term for module discovery
