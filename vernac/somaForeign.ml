@@ -93,6 +93,7 @@ type native_operation =
   | NativeCallableApplyFunction of native_callable option
   | NativeFloatConstant of string
   | NativeExternalLiteralFunction of string * string * int
+  | NativeAssertionFactory of int * int
 
 type native_callback = {
   namespace : string;
@@ -298,6 +299,8 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let operation=match n.operation with
+    | NativeAssertionFactory(line,column) ->
+      Printf.sprintf "assertion-factory line %d column %d" line column
     | NativeFloatConstant literal -> "float-constant " ^ literal
     | NativeExternalLiteralFunction(path,literal,arity) ->
       Printf.sprintf "external-literal-function %S %S arity %d" path literal arity

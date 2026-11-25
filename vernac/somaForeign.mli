@@ -109,6 +109,7 @@ type native_operation =
   | NativeCallableApplyFunction of native_callable option
   | NativeFloatConstant of string
   | NativeExternalLiteralFunction of string * string * int
+  | NativeAssertionFactory of int * int
 
 type native_callback = {
   namespace : string;

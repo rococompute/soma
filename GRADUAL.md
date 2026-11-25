@@ -2930,6 +2930,25 @@ entry program on every invocation. Native calls remain explicit effects;
 there is no callback evaluator in the logic. This avoids per-element bridge
 allocations when a native array/list traversal calls pure Soma policy.
 
+`OCaml Native Assertion Factory unreachable : unit -> unit -> A := 123 8.`
+declares a checked native factory for a closed assertion callback. Reading the
+native descriptor prepares the factory; applying that factory to `tt` creates
+a thunk, and applying the thunk raises `Assert_failure`. The payload retains
+the supplied positive line and nonnegative column and the native compilation
+unit's `__FILE__`. A project can embed the authenticated output in the original
+unit to retain its filename and constant pool. The two function arguments must
+be positional, nondependent `unit` values; the answer must have a native
+representation. Leading type parameters are allowed.
+
+Keeping creation separate from invocation preserves the native compiler's
+closed-function sharing and bytecode's fresh closures at the original creation
+phase. No exception is raised or allocated while preparing the factory or its
+thunk. A failed invocation raises a fresh synchronous exception with the same
+allocation as the original closed assertion. Location data participates in
+native metadata identity; there is no arbitrary OCaml expression or logical
+effect evaluator. `test-suite/misc/soma_native_assertion_factory.sh` compares
+actual compiler output against original assertions in native and bytecode.
+
 Immutable record projections use named generated schema getters. Pure field
 reads retain their expression order and allocate no temporary projection
 closures per access, including bytecode execution.

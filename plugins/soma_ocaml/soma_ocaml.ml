@@ -1030,7 +1030,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _ -> Some 1 in
+    | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
+    | SomaForeign.NativeAssertionFactory _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -1108,6 +1109,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
+   | SomaForeign.NativeAssertionFactory _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
@@ -1150,6 +1152,22 @@ let native_callback name typ operation =
         | None -> native_error (operation ^ " field is absent from its schema") in
     name, declaration, local in
   let operation = match operation with
+    | SomaForeign.NativeAssertionFactory(line,column) ->
+      if argument_names<>["unit"] then native_error "an assertion factory needs a unit getter";
+      if line<=0 || column<0 then native_error "an assertion location needs a positive line and a nonnegative column";
+      (* The returned factory creates a closed unit thunk at each source
+         creation phase. Neither argument may affect its answer type. *)
+      let rec unit_arguments count typ =
+        if count=0 then () else
+        match EConstr.kind sigma (Reductionops.whd_all env sigma typ) with
+        | Prod(binder,domain,codomain)
+          when binder.Context.binder_name=Anonymous &&
+               EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") domain &&
+               EConstr.Vars.noccurn sigma 1 codomain ->
+          unit_arguments (count-1) (EConstr.Vars.subst1 EConstr.mkProp codomain)
+        | _ -> native_error "an assertion factory has type unit -> unit -> answer" in
+      unit_arguments 2 result;
+      SomaForeign.NativeAssertionFactory(line,column)
     | SomaForeign.NativeExternalLiteralFunction(path,literal,_) ->
       if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
       let parameters,_=arguments [] None result in
@@ -1482,6 +1500,12 @@ let native_float_constant name result literal =
 
 let native_literal_function name result path literal =
   native_getter name result (SomaForeign.NativeExternalLiteralFunction(path,literal,0))
+
+(* Keep the failure expression closed inside its original creation phase.
+   OCaml can therefore share it natively and allocate it freshly in bytecode,
+   just as a source-level [fun () -> assert false] argument. *)
+let native_assertion_factory name result line column =
+  native_getter name result (SomaForeign.NativeAssertionFactory(line,column))
 
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)

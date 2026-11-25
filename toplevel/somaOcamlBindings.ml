@@ -342,6 +342,8 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let values=List.init arity(fun i->"value"^string_of_int i)in
       "(fun "^String.concat " " values^" -> "^path^" "^Printf.sprintf "%S" literal^
         " "^String.concat " " values^")"
+    | SomaForeign.NativeAssertionFactory(line,column),[_] ->
+      Printf.sprintf "(fun () -> fun () -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     | SomaForeign.NativeFloatConstant literal,[_] -> "(" ^ literal ^ ")"
     | SomaForeign.NativeCallableApplyFunction(Some c),[_] ->
       let values=List.mapi(fun i _->"value"^string_of_int i)c.callable_arguments in
