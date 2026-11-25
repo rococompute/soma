@@ -59,7 +59,11 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "Soma_effect.promise_unit" "Soma_effect.promise_none"
    "Soma_effect.promise_settled" "Soma_effect.promise_pick" "Soma_effect.int64_of_int"
    "Soma_effect.raise_invalid_argument" "Soma_effect.promise_bind_borrowed" "Soma_effect.list_map" "Soma_effect.promise_map_borrowed"
-   "Soma_effect.new_callback3" "Soma_effect.new_callback4" "Soma_effect.new_callback5" "Soma_effect.call_callback2" "Soma_effect.call_callback3" "Soma_effect.call_callback4" "Soma_effect.call_callback5" "Soma_effect.call_callback6" "Soma_effect.pure_callback" "Soma_effect.pure_callback2" "Soma_effect.borrowed_scope" ]
+   "Soma_effect.new_callback3" "Soma_effect.new_callback4" "Soma_effect.new_callback5" "Soma_effect.call_callback2" "Soma_effect.call_callback3" "Soma_effect.call_callback4" "Soma_effect.call_callback5" "Soma_effect.call_callback6" "Soma_effect.pure_callback" "Soma_effect.pure_callback2" "Soma_effect.borrowed_scope"
+   "(fun (left, right) () ->
+       let rec first argument = left first second argument ()
+       and second argument = right first second argument () in
+       (first, second))" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"
  [ "Soma_effect.export" ]

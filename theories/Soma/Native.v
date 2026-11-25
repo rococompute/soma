@@ -186,6 +186,13 @@ Inductive program : Type -> Type :=
     The native backend can release the unused argument sooner. *)
 | Borrowed_scope {Owner A B} (owner:Owner) (before:program A)
  (next:A->program B) : program B
+(** Allocate two mutually recursive native callbacks once. Each body
+    receives both original callback handles and retains its own argument and
+    result type. The compiler lowers the group to one native recursive binding. *)
+| New_callback_pair {A B C D}
+ (left : callback A B -> callback C D -> A -> program B)
+ (right : callback A B -> callback C D -> C -> program D)
+ : program (callback A B * callback C D)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -239,6 +246,7 @@ Arguments Raise_invalid_argument {A} message.
 Arguments Promise_bind_borrowed {Owner A B} owner body next.
 Arguments List_map {A B} mapper items.
 Arguments Promise_map_borrowed {Owner A B} owner body next.
+Arguments New_callback_pair {A B C D} left right.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
