@@ -207,7 +207,7 @@ let rec ocaml_type env sigma vars t =
        entry/group-producing function. It adds no logical evaluator: values
        still cannot be run or inspected by a logical consumer. *)
     else if List.exists is ["soma.native.entry"; "soma.native.callback_group";
-                            "soma.native.function_group"; "soma.native.function_knot"] then
+                            "soma.native.function_group"; "soma.native.function_knot"; "soma.native.preparation"] then
       (match args with [result]->ocaml_type env sigma vars result
        |_->not_ocaml(str "a native result boundary needs one result type"))
     else if is "core.string.type" then "string"

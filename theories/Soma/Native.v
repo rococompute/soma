@@ -306,6 +306,15 @@ Arguments Export_function_knot5_4 {A1 B1 C1 D1 R1 A2 B2 C2 D2 R2 A3 B3 C3 D3 R3 
     prepare body1 body2 body3 body4 body5 next.
 Register function_knot as soma.native.function_knot.
 
+(** Prepare native capabilities once before exposing an executable consumer.
+    Its result may itself be an entry-producing function: keep the result's
+    universe independent of the program that prepares the capabilities. *)
+Polymorphic Inductive preparation : Type -> Type :=
+| Prepare {State Result} (before : program State) (next : State -> Result) : preparation Result.
+Arguments Prepare {State Result} before next.
+Register preparation as soma.native.preparation.
+
+
 
 
 

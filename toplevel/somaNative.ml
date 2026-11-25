@@ -82,6 +82,9 @@ Extract Inductive Soma.Native.function_group => "Soma_effect.entry"
        and second a b c = right first second a b c in
        next first second)" ]
  "(fun _ _ -> failwith ""a native function group cannot be inspected"")".
+Extract Inductive Soma.Native.preparation => "Soma_effect.entry"
+ [ "(fun (before, next) -> let value = before () in next value)" ]
+ "(fun _ _ -> failwith ""a native preparation cannot be inspected"")".
 Extract Inductive Soma.Native.function_knot => "Soma_effect.entry"
  [ "(fun (prepare, body1, body2, body3, body4, body5, next) ->
        let environment = ref None in
