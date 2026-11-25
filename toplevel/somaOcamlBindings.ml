@@ -244,7 +244,40 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     let inner_call = "(" ^ String.concat " " (inner :: inner_args) ^ ")" in
     "(fun " ^ String.concat " " parameters ^ " -> " ^
       String.concat " " (outer :: (before @ [inner_call])) ^ ")" in
+  let rec static_apply ?labels operation values =
+    let apply path values="("^String.concat " "(path::values)^")" in
+    match operation with
+    |SomaForeign.NativeExternalConstant path->
+      let given=match labels with None->values|Some labels->List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)values labels in
+      if given=[]then path else apply path given
+    |SomaForeign.NativeFloatConstant literal when values=[]->"("^literal^")"
+    |SomaForeign.NativeExternalLiteralFunction(path,literal,_)->apply path(Printf.sprintf "%S"literal::values)
+    |SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_)->
+      let before,rest=CList.chop after values in apply path(before @ [Printf.sprintf "%S"literal] @ rest)
+    |SomaForeign.NativeExternalFieldsFunction(path,names,owner,_)->
+      let fields=match names with
+        |first::rest->(if String.contains first '.'then first else field(record_prefix owner)first)::rest
+        |[]->invalid_arg "unvalidated static field path"in
+      apply path(("("^List.hd values^" : "^owner^")."^String.concat "."fields)::List.tl values)
+    |SomaForeign.NativeExternalComposedValue(outer,inner,after,_)->
+      let before,rest=CList.chop after values in apply outer(before @ [apply inner rest])
+    |SomaForeign.NativeExternalTransformedComposition(outer,inner,after,_,transform,position)->
+      let values=List.mapi(fun i value->if i=position then apply transform[value]else value)values in
+      let before,rest=CList.chop after values in apply outer(before @ [apply inner rest])
+    |SomaForeign.NativeStaticFunction(prefix,_,_,Some(left,right,left_labels,inner_labels,_))->
+      let first,tail=if prefix then static_apply right [],values else
+        let first,tail=CList.chop (List.length inner_labels) values in static_apply ~labels:inner_labels right first,tail in
+      static_apply ~labels:left_labels left(first::tail)
+    |_->invalid_arg "unvalidated static native expression" in
   let body = match n.operation,args with
+    | SomaForeign.NativeStaticFunction(_,_,_,Some(_,_,_,_,labels)) as operation,[_] ->
+      let values=List.mapi(fun i _->"value"^string_of_int i)labels in
+      let parameters=List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)values labels in
+      "(fun "^String.concat " "parameters^" -> "^static_apply operation values^")"
     | SomaForeign.NativeValue path,_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
       m.top^"."^path^" "^String.concat " "given

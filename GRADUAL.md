@@ -3126,3 +3126,44 @@ including unary/parametric fields, live mutation after partial application,
 closed sharing, exact allocation, exceptions, promise/context/cancellation,
 Weak ownership, native rejection of invalid fields/results, and independent
 field/literal/position hash invalidation.
+
+### Static native function composition
+
+`OCaml Native Static Compose run : public_call := outer With inner.` combines
+existing typed native getters into a closed function. `inner` supplies the
+first argument of `outer`; all inner arguments precede the remaining outer
+arguments. For example, an inner `owner -> effects` and outer
+`effects -> word -> string -> answer` produce `owner -> word -> string ->
+answer`. The result may instead be a declared native callable, retaining its
+required or optional labels. Target/inner labels are independent of the public
+labels and are supplied according to their own checked signatures.
+
+`OCaml Native Static Prefix run : public_call := target With config.` binds
+an existing native value getter to the first target argument. The prefix must
+be a direct native value or native float literal, so binding cannot move a
+creation-time native call into an invocation. Its object is borrowed; mutable
+contents remain live. Both commands check the complete argument/result types,
+including leading type parameters. A native descriptor with type parameters
+uses the corresponding leading parameters of the new descriptor. A mismatched
+signature or a callback whose creation may execute native code is rejected.
+
+The allowed function inputs are closed external value functions, the checked
+full-application literal/field functions, checked positional compositions and
+other static functions. This is typed native metadata, with no arbitrary OCaml
+expression, new axiom or logical effect evaluator. The backend emits the full
+closed call directly and supplies native labels. It does not allocate an inner
+wrapper at invocation or reintroduce a per-call program/tuple bridge. Inner and
+outer calls wait for full application. Native/bytecode function sharing, native
+argument/result identity, faults, promise/context/cancellation behavior and
+partial-callback ownership retain the original closed wrapper semantics.
+Nested metadata, labels and all referenced native operations participate in
+semantic/native ABI identity; changing an inner literal invalidates the
+composed descriptor and its consumers. The new metadata tag is appended,
+leaving existing tags and products unchanged.
+
+`test-suite/misc/soma_native_static_function.sh` checks actual generated native
+and bytecode functions against original wrappers: labelled/optional targets
+and public APIs, defaults, multi-argument/nested compositions, polymorphic
+bytes and returned functions, exact creation/call allocations, mutable prefix
+contents, full-call timing/faults, raw promises/cancellation, dynamic context,
+Weak ownership and transitive hash invalidation.

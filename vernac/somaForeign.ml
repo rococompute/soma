@@ -102,6 +102,7 @@ type native_operation =
   | NativeAssertionFunctionFactory of int * int
   | NativeExternalInsertedLiteralFunction of string * string * int * int
   | NativeExternalFieldsFunction of string * string list * string * int
+  | NativeStaticFunction of bool * string * string * (native_operation * native_operation * string option list * string option list * string option list) option
 
 type native_callback = {
   namespace : string;
@@ -306,7 +307,12 @@ let native_identity = function
  | OCamlNativeExternalFamily (params, path) ->
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
-   let operation=match n.operation with
+   let rec describe_operation = function
+    | NativeStaticFunction(prefix,outer,inner,Some(left,right,outer_labels,inner_labels,labels)) ->
+      String.concat "\n" ["static-function " ^ string_of_bool prefix ^ " " ^ outer ^ " " ^ inner;
+        describe_operation left;describe_operation right;
+        String.concat ";" (List.map(fun labels->String.concat " " (List.map(fun label->Printf.sprintf "%S"(Option.default ""label))labels))[outer_labels;inner_labels;labels])]
+    | NativeStaticFunction(_,_,_,None) -> invalid_arg "unvalidated static function"
     | NativeExternalThunkFactory(path,literal) ->
       Printf.sprintf "external-thunk-factory %S %S" path literal
     | NativeVariantFactory(tag,Some variant) ->
@@ -383,6 +389,7 @@ let native_identity = function
     | NativeVariantView(Some v)->"variant-view "^native_variant_identity v
     | NativeVariantBuild(tag,Some v)->"variant-build "^Printf.sprintf "%S" tag^" "^native_variant_identity v
     | NativeVariantView None | NativeVariantBuild(_,None)->invalid_arg "unvalidated native variant descriptor" in
+   let operation=describe_operation n.operation in
    String.concat "\n" (["native-callback";n.namespace;n.name;operation;n.result] @
     List.map2(fun t l->Printf.sprintf "%S %S" t (Option.default "" l))n.arguments n.labels)
  | _ -> invalid_arg "not a native declaration"

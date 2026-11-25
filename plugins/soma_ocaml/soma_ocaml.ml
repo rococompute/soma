@@ -1030,6 +1030,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
+    | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
@@ -1114,6 +1115,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
+   | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
@@ -1206,6 +1208,67 @@ let native_callback name typ operation =
         | _ -> native_error "an assertion factory has type unit -> unit -> answer" in
       unit_arguments 2 result;
       SomaForeign.NativeAssertionFactory(line,column)
+    | SomaForeign.NativeStaticFunction(prefix,outer,inner,_) ->
+      if argument_names<>["unit"] then native_error "a static function needs a unit getter";
+      let shape typ =
+        let head,_=EConstr.decompose_app sigma typ in
+        let callable=match EConstr.kind sigma head with
+          |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+            |Some {item=(SomaForeign.OCamlNativeCallableType _|SomaForeign.OCamlNativeParametricCallable _);_}->true
+            |_->false)|_->false in
+        if callable then let c=native_callable_type env sigma type_vars typ in
+          c.SomaForeign.callable_arguments,c.callable_labels,c.callable_result
+        else let params,answer=arguments [] None typ in
+          List.map(fun(t,_)->ocaml_type env sigma type_vars t)params,
+          List.map snd params,ocaml_type env sigma type_vars answer in
+      let descriptor name =
+        let c=match Nametab.locate(Libnames.qualid_of_string name)with
+          |GlobRef.ConstRef c->c|_->native_error "a static input needs a declared native getter" in
+        let n=match Cmap_env.find_opt c !bindings with
+          |Some {item=SomaForeign.OCamlNativeCallback n;_}->n
+          |_->native_error "a static input needs a declared native getter" in
+        if n.SomaForeign.arguments<>["unit"] || n.labels<>[None] then
+          native_error "a static input needs a unit native getter";
+        let typ=EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
+        let rec instantiate index typ =match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+          |Prod(_,domain,rest)when is_sort env sigma domain ->
+            if index>=List.length type_vars then native_error "static input type parameters exceed the result's parameters";
+            instantiate(index+1)(EConstr.Vars.subst1(EConstr.mkRel(List.length type_vars-index))rest)
+          |_->typ in
+        let typ=instantiate 0 typ in
+        let head,args=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
+        if Array.length args<>2 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "soma.native.callback")head)then
+          native_error "a static input needs a native callback type";
+        n.operation,args.(1) in
+      let rec static_operation = function
+        |SomaForeign.NativeExternalConstant _|SomaForeign.NativeExternalLiteralFunction _
+        |SomaForeign.NativeExternalInsertedLiteralFunction _|SomaForeign.NativeExternalFieldsFunction _
+        |SomaForeign.NativeExternalComposedValue _|SomaForeign.NativeExternalTransformedComposition _->true
+        |SomaForeign.NativeStaticFunction(_,_,_,Some(a,b,_,_,_))->static_operation a && static_operation b
+        |SomaForeign.NativeFloatConstant _->true
+        |_->false in
+      let left,left_type=descriptor outer and right,right_type=descriptor inner in
+      if not(static_operation left && static_operation right)then
+        native_error "a static function only combines closed native value/function getters";
+      let left_args,left_labels,left_result=shape left_type in
+      if left_args=[] then native_error "a static outer input needs a function";
+      let wanted,inner_labels = if prefix then begin
+        (match right with SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _->()
+          |_->native_error "a static prefix needs a native value, without creation-time calls");
+        if ocaml_type env sigma type_vars right_type<>List.hd left_args then
+          native_error "a static prefix differs from the first target argument";
+        List.tl left_args,[]
+      end else begin
+        let inner_args,inner_labels,inner_result=shape right_type in
+        if inner_args=[] then native_error "a static composition needs an inner function";
+        if inner_result<>List.hd left_args then native_error "static inner result differs from the first target argument";
+        inner_args @ List.tl left_args,inner_labels
+      end in
+      let output,labels,answer=shape result in
+      if wanted=[] || output<>wanted || answer<>left_result then
+        native_error "static function arguments/result differ from the declared signature";
+      SomaForeign.NativeStaticFunction(prefix,outer,inner,
+        Some(left,right,left_labels,inner_labels,labels))
     | SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_) ->
       if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
       let parameters,_=arguments [] None result in
@@ -1594,6 +1657,9 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_static_function name result prefix outer inner =
+  native_getter name result (SomaForeign.NativeStaticFunction(prefix,Id.to_string outer,Id.to_string inner,None))
 
 let native_inserted_literal_function name result path literal after =
   native_getter name result (SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,0))
