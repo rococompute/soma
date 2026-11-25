@@ -104,6 +104,8 @@ type native_operation =
   | NativeExternalFieldsFunction of string * string list * string * int
   | NativeStaticFunction of bool * string * string * (native_operation * native_operation * string option list * string option list * string option list) option
   | NativeStaticCompositionScope of string * string * (native_operation * native_operation * string option list * string option list * string option list) option
+  | NativeVariantFunction of string * native_variant option
+  | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
 
 type native_callback = {
   namespace : string;
@@ -318,6 +320,14 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let rec describe_operation = function
+    | NativeStaticApplication(target,bound,Some(operation,values,target_labels,labels)) ->
+      String.concat "\n" (["static-application "^target^" with "^String.concat " "bound;
+        describe_operation operation] @ List.map describe_operation values @
+        [String.concat ";"(List.map(fun labels->String.concat " "(List.map(fun label->Printf.sprintf "%S"(Option.default ""label))labels))[target_labels;labels])])
+    | NativeStaticApplication(_,_,None)->invalid_arg "unvalidated static application"
+    | NativeVariantFunction(tag,Some variant) ->
+      "variant-function " ^ Printf.sprintf "%S " tag ^ native_variant_identity variant
+    | NativeVariantFunction(_,None)->invalid_arg "unvalidated native variant function"
     | NativeStaticCompositionScope(outer,inner,Some(left,right,outer_labels,inner_labels,labels)) ->
       String.concat "\n" ["static-composition-scope "^outer^" "^inner;
         describe_operation left;describe_operation right;

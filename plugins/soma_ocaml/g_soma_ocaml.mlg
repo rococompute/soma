@@ -142,6 +142,8 @@ VERNAC ARGUMENT EXTEND native_fixed_boolean
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Apply" ident(name) ":" native_signature(typ) ":=" ident(target) "With" "[" ne_ident_list_sep(bound, ";") "]" "AtFullApplication" ] ->
+ { Soma_ocaml.native_static_application name typ target bound }
 | [ "OCaml" "Native" "Static" "Compose" "Scope" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->
  { Soma_ocaml.native_static_composition_scope name typ outer inner }
 | [ "OCaml" "Native" "Static" "Compose" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->
@@ -252,6 +254,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_variant name cases }
 | [ "OCaml" "Native" "View" ident(name) ":" native_signature(typ) ] ->
  { Soma_ocaml.native_callback name typ (SomaForeign.NativeVariantView None) }
+| [ "OCaml" "Native" "Construct" "Function" ident(name) ":" native_signature(typ) ":=" string(tag) ] ->
+ { Soma_ocaml.native_variant_function name typ tag }
 | [ "OCaml" "Native" "Construct" "Factory" ident(name) ":" native_signature(typ) ":=" string(tag) ] ->
  { Soma_ocaml.native_variant_factory name typ tag }
 | [ "OCaml" "Native" "Construct" ident(name) ":" native_signature(typ) ":=" string(tag) ] ->

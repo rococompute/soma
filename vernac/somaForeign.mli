@@ -120,6 +120,8 @@ type native_operation =
   | NativeExternalFieldsFunction of string * string list * string * int
   | NativeStaticFunction of bool * string * string * (native_operation * native_operation * string option list * string option list * string option list) option
   | NativeStaticCompositionScope of string * string * (native_operation * native_operation * string option list * string option list * string option list) option
+  | NativeVariantFunction of string * native_variant option
+  | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
 
 type native_callback = {
   namespace : string;

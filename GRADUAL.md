@@ -3233,3 +3233,50 @@ hash changes. Closed factories, variant aliases, callable functions, static
 functions/scopes and record aliases also pass. A separate cold-cache comparison
 with the preceding compiler keeps 22 older products and the complete
 contract/witness hash report byte-identical.
+
+### Full-application static arguments
+
+`OCaml Native Static Apply run : signature := target With [first; second]
+AtFullApplication.` binds a nonempty prefix of typed native getter values.
+It leaves at least one public argument. The generated wrapper creates those
+values and calls the target only when all public arguments are supplied:
+
+```soma
+OCaml Native Open Polymorphic Variant token (Row : Type) :=
+  ["N" : PrimInt63.int; "V" : string].
+OCaml Native Construct Function number : forall Row : Type,
+  PrimInt63.int -> token Row := "N".
+OCaml Native Construct Function variable : forall Row : Type,
+  string -> token Row := "V".
+(* consume: configuration -> (word -> token Row) ->
+   (string -> token Row) -> string -> list (token Row) *)
+OCaml Native Static Apply tokenize : forall Row : Type,
+  string -> list (token Row) := consume With [configuration; number; variable]
+  AtFullApplication.
+```
+
+`Construct Function` prepares a closed one-argument constructor function;
+nullary cases use a unit argument. When it is a static argument, its literal
+function body is created inside the wrapper's full-call scope. Native closed
+sharing and bytecode freshness follow the corresponding `fun payload ->
+\`Tag payload` expression. Use an ordinary external value getter to borrow an
+already public function; expanding its blueprint would create another function.
+
+Every target and supplied value must be a declared closed native getter. The
+checker compares complete instantiated argument/result types, retains generic
+parameters, and checks public required/optional labels independently of the
+target's labels. Literal and field function getters stay functions: their
+bodies are not invoked while preparing a callback argument. Nested static
+applications are supported. Function-valued literal getters are called at the
+full application point. There is no per-call native program or argument tuple
+bridge and no arbitrary expression, logical evaluator or additional axiom.
+
+The metadata cases are appended, and all supplied blueprints, their order and
+labels participate in the ABI and semantic hashes. Existing static compose,
+prefix and scope emission remains unchanged. The native/bytecode suite
+`test-suite/misc/soma_native_static_application.sh` checks quiet partials,
+constructor/literal alias matrices, live fields and bound configuration,
+labels/defaults, generic bytes/functions and wider variant rows, synchronous
+faults, exact promises, Lwt context/cancellation, exact allocation and natural
+Weak lifetimes, including consumed-owner collection inside the target tail
+continuation, plus invalid signatures and literal hash invalidation.

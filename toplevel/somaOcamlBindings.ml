@@ -253,6 +253,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
         |Some label->"~"^label^":"^value)values labels in
       if given=[]then path else apply path given
+    |SomaForeign.NativeExternalLiteralConstant(path,literal)->apply("("^path^" "^Printf.sprintf "%S"literal^")")values
     |SomaForeign.NativeFloatConstant literal when values=[]->"("^literal^")"
     |SomaForeign.NativeExternalLiteralFunction(path,literal,_)->apply path(Printf.sprintf "%S"literal::values)
     |SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_)->
@@ -267,12 +268,39 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     |SomaForeign.NativeExternalTransformedComposition(outer,inner,after,_,transform,position)->
       let values=List.mapi(fun i value->if i=position then apply transform[value]else value)values in
       let before,rest=CList.chop after values in apply outer(before @ [apply inner rest])
+    |SomaForeign.NativeStaticApplication(_,_,Some(target,bound,target_labels,_))->
+      static_apply ~labels:target_labels target(List.map static_value bound @ values)
     |SomaForeign.NativeStaticFunction(prefix,_,_,Some(left,right,left_labels,inner_labels,_))->
       let first,tail=if prefix then static_apply right [],values else
         let first,tail=CList.chop (List.length inner_labels) values in static_apply ~labels:inner_labels right first,tail in
       static_apply ~labels:left_labels left(first::tail)
-    |_->invalid_arg "unvalidated static native expression" in
+    |_->invalid_arg "unvalidated static native expression"
+  and static_value operation =
+    let closure labels =
+      let values=List.mapi(fun i _->"bound"^string_of_int i)labels in
+      let params=List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)values labels in
+      "(fun "^String.concat " "params^" -> "^static_apply operation values^")"in
+    match operation with
+    |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _->static_apply operation []
+    |SomaForeign.NativeExternalLiteralConstant(path,literal)->"("^path^" "^Printf.sprintf "%S"literal^")"
+    |SomaForeign.NativeExternalLiteralFunction(_,_,arity)
+    |SomaForeign.NativeExternalInsertedLiteralFunction(_,_,_,arity)
+    |SomaForeign.NativeExternalFieldsFunction(_,_,_,arity)
+    |SomaForeign.NativeExternalComposedValue(_,_,_,arity)
+    |SomaForeign.NativeExternalTransformedComposition(_,_,_,arity,_,_)->closure(List.init arity(fun _->None))
+    |SomaForeign.NativeStaticFunction(_,_,_,Some(_,_,_,_,labels))
+    |SomaForeign.NativeStaticApplication(_,_,Some(_,_,_,labels))->closure labels
+    |SomaForeign.NativeVariantFunction(tag,Some variant)->
+      let case=List.find(fun c->c.SomaForeign.case_tag=tag)variant.SomaForeign.variant_cases in
+      (match case.SomaForeign.case_payload with
+        |None->"(fun () -> `"^tag^")"
+        |Some _->"(fun payload -> `"^tag^" payload)")
+    |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
+    | (SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
+      static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
       let parameters labels prefix=
         let values=List.mapi(fun i _->prefix^string_of_int i)labels in
