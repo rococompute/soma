@@ -292,6 +292,19 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let constructor = qualified_constructor path n.result in
       let fields = List.map2 (fun field value -> field ^ " = " ^ value) fields args in
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
+    | SomaForeign.NativeBoundBooleanFunction (path, callable, bound, value), [_] ->
+      let index=ref 0 in
+      let parameters=ref [] in
+      let given=List.filter_map(function
+        |Some label when label=bound -> Some("~"^label^":"^string_of_bool value)
+        |Some label when String.starts_with ~prefix:"?" label -> None
+        |label ->
+          let name="value"^string_of_int !index in incr index;
+          parameters:=name:: !parameters;
+          Some(match label with None->name|Some label->"~"^label^":"^name))
+        callable.SomaForeign.callable_labels in
+      "(fun " ^ String.concat " " (List.rev !parameters) ^ " -> (" ^ path ^ " : " ^
+      SomaForeign.native_callable_type callable ^ ") " ^ String.concat " " given ^ ")"
     | SomaForeign.NativeDefaultedFunction (path, callable), [_] ->
       let labels=List.filter(function Some name->not(String.starts_with ~prefix:"?" name)|None->true)
         callable.SomaForeign.callable_labels in

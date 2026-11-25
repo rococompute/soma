@@ -2998,6 +2998,23 @@ to semantic and native ABI identities. See
 `test-suite/misc/soma_native_defaulted_function.sh` for both-backend allocation,
 identity, live-state, failure, promise/context/cancellation and Weak checks.
 
+`OCaml Native External Bound Function head : context -> list string -> result :=
+"Target.head_tail" Binding "tail" false Using head_tail_call.` prepares a
+closed positional function that fixes one required boolean label. The checked
+callable must contain that required `bool` label exactly once; optional labels
+keep the native function's defaults. The remaining required arguments and
+result must exactly match the declared positional function. The entire named
+implementation is checked against its native callable schema, including the
+bound label. Creation and partial application do not call the target or its
+defaults. The generated closure contains no captured callable/invoker and no
+per-call program or argument tuple. Native closed sharing and bytecode closure
+creation match a direct `fun context args -> Target.head_tail ~tail:false
+context args`. The symbol, full callable schema, bound label and boolean all
+contribute to semantic and native ABI identities. See
+`test-suite/misc/soma_native_bound_boolean_function.sh` for native/bytecode
+sharing, allocations, default/partial/failure timing, borrowed values/promises,
+context/cancellation, Weak lifetimes, native type rejection and invalidation.
+
 Immutable record projections use named generated schema getters. Pure field
 reads retain their expression order and allocate no temporary projection
 closures per access, including bytecode execution.

@@ -114,6 +114,7 @@ type native_operation =
   | NativeVariantFactory of string * native_variant option
   | NativeDeferredFields of string list * string
   | NativeDefaultedFunction of string * native_callable
+  | NativeBoundBooleanFunction of string * native_callable * string * bool
 
 type native_callback = {
   namespace : string;

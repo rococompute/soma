@@ -135,7 +135,15 @@ VERNAC ARGUMENT EXTEND native_type_parameter
 | [ ident(name) ":" native_signature(typ) ] -> { name,typ }
 END
 
+VERNAC ARGUMENT EXTEND native_fixed_boolean
+ PRINTED BY { fun value -> Pp.str (string_of_bool value) }
+| [ "true" ] -> { true }
+| [ "false" ] -> { false }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "External" "Bound" "Function" ident(name) ":" native_signature(typ) ":=" string(path) "Binding" string(label) native_fixed_boolean(value) "Using" native_signature(schema) ] ->
+ { Soma_ocaml.native_bound_boolean_function name typ path schema label value }
 | [ "OCaml" "Native" "External" "Defaulted" "Function" ident(name) ":" native_signature(typ) ":=" string(path) "Using" native_signature(schema) ] ->
  { Soma_ocaml.native_defaulted_function name typ path schema }
 | [ "OCaml" "Native" "External" "Thunk" "Factory" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->

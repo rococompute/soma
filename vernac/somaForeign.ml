@@ -98,6 +98,7 @@ type native_operation =
   | NativeVariantFactory of string * native_variant option
   | NativeDeferredFields of string list * string
   | NativeDefaultedFunction of string * native_callable
+  | NativeBoundBooleanFunction of string * native_callable * string * bool
 
 type native_callback = {
   namespace : string;
@@ -335,6 +336,10 @@ let native_identity = function
     | NativeInlineSet (p,f) -> Printf.sprintf "inline-set %S %S" p f
     | NativeInlineBuild (p,fields) ->
       "inline-build " ^ String.concat " " (List.map (Printf.sprintf "%S") (p :: fields))
+    | NativeBoundBooleanFunction (path, callable, label, value) ->
+      "bound-boolean-function " ^ Printf.sprintf "%S" path ^ " " ^
+      native_callable_identity callable ^ " at " ^ Printf.sprintf "%S" label ^
+      " = " ^ string_of_bool value
     | NativeDefaultedFunction (path, callable) ->
       "defaulted-function " ^ Printf.sprintf "%S" path ^ " " ^ native_callable_identity callable
     | NativeDeferredFields (fields, owner) ->

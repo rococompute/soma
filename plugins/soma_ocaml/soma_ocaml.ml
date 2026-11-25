@@ -1032,7 +1032,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeExternalThunkFactory _
-    | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ -> Some 1 in
+    | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -1106,7 +1106,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
-   | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _
+   | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _
    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
@@ -1343,6 +1343,24 @@ let native_callback name typ operation =
       if List.length (List.sort_uniq String.compare fields) <> List.length fields then
         native_error "inline record fields must be distinct";
       SomaForeign.NativeInlineBuild (native_constructor_path path, List.map field fields)
+    | SomaForeign.NativeBoundBooleanFunction (path, callable, label, value) ->
+      if argument_names<>["unit"] then native_error "a bound function takes a unit getter";
+      let bound=List.filter_map(fun(typ,name)->
+        if name=Some label then Some typ else None)
+        (List.combine callable.SomaForeign.callable_arguments callable.callable_labels)in
+      if bound<>["bool"] then
+        native_error "a bound boolean function needs one required bool label from its callable";
+      let required=List.filter_map(fun(typ,name)->match name with
+        |Some name when name=label || String.starts_with ~prefix:"?" name->None
+        |_->Some typ)
+        (List.combine callable.SomaForeign.callable_arguments callable.callable_labels)in
+      if required=[] then native_error "a bound function needs a remaining required argument";
+      let parameters,answer=arguments [] (Some(List.length required))result in
+      if List.exists(fun(_,label)->Option.has_some label)parameters ||
+         List.map(fun(typ,_)->ocaml_type env sigma type_vars typ)parameters<>required ||
+         ocaml_type env sigma type_vars answer<>callable.callable_result then
+        native_error "bound function signature differs from the remaining required callable arguments";
+      SomaForeign.NativeBoundBooleanFunction(native_path path,callable,label,value)
     | SomaForeign.NativeDefaultedFunction (path, callable) ->
       if argument_names<>["unit"] then native_error "a defaulted function takes a unit getter";
       let required=List.filter_map(fun(typ,label)->match label with
@@ -1572,6 +1590,13 @@ let native_defaulted_function name result path schema =
   let sigma,schema=Constrintern.interp_type_evars env (Evd.from_env env) schema in
   let callable=native_callable_type env sigma [] schema in
   native_getter name result (SomaForeign.NativeDefaultedFunction(path,callable))
+
+let native_bound_boolean_function name result path schema label value =
+  ignore(native_context());
+  let env=Global.env()in
+  let sigma,schema=Constrintern.interp_type_evars env (Evd.from_env env) schema in
+  let callable=native_callable_type env sigma [] schema in
+  native_getter name result (SomaForeign.NativeBoundBooleanFunction(path,callable,label,value))
 
 let native_deferred_fields name result fields =
   native_getter name result (SomaForeign.NativeDeferredFields(fields,""))
