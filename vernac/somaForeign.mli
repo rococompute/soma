@@ -183,6 +183,14 @@ type native_logical_record = {
   logical_definitions : string list;
 }
 
+type native_module_alias = {
+  module_alias_namespace : string;
+  module_alias_name : string;
+  module_alias_target : string;
+  module_alias_source : string;
+  module_alias_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -197,6 +205,7 @@ type ocaml_item =
   | OCamlNativeParametricVariant of string list * native_variant
   | OCamlNativeParametricCallable of string list * native_callable
   | OCamlNativeOpenVariant of string * native_variant
+  | OCamlNativeModuleAlias of native_module_alias
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)

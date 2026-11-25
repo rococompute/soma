@@ -167,6 +167,14 @@ type native_logical_record = {
   logical_definitions : string list;
 }
 
+type native_module_alias = {
+  module_alias_namespace : string;
+  module_alias_name : string;
+  module_alias_target : string;
+  module_alias_source : string;
+  module_alias_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -181,6 +189,7 @@ type ocaml_item =
   | OCamlNativeParametricVariant of string list * native_variant
   | OCamlNativeParametricCallable of string list * native_callable
   | OCamlNativeOpenVariant of string * native_variant
+  | OCamlNativeModuleAlias of native_module_alias
 
 type ocaml_module = {
   ml_file : string option;
@@ -314,6 +323,9 @@ let native_algebraic_ml group =
     group.algebraic_exceptions)
 
 let native_identity = function
+ | OCamlNativeModuleAlias alias ->
+   String.concat "\n" ["native-module-alias";alias.module_alias_namespace;
+     alias.module_alias_name;alias.module_alias_target;string_of_int alias.module_alias_order]
  | OCamlNativeAlgebraic (group, member) ->
    "native-algebraic " ^ Printf.sprintf "%S %S" member (native_algebraic_ml group)
  | OCamlNativeOwnedRecord r ->

@@ -473,6 +473,25 @@ let native_register name c item =
   let path = "__native__." ^ native_namespace () ^ "." ^ Id.to_string name in
   Lib.add_leaf (in_binding (c, {key; top; path; item}));
   Lib.add_leaf (in_module (key, (ml_file, top, !pending)))
+(* A module alias is a declaration, not a callable or opaque logical type.
+   Its canonical unit token records dependency/ownership without a new axiom. *)
+let native_module_alias name target =
+  ignore(native_context());
+  let valid part=is_module_name part && part.[0]>='A' && part.[0]<='Z' in
+  let alias=Id.to_string name in
+  if not(valid alias) then native_error "a module alias needs an uppercase OCaml module name";
+  if not(List.for_all valid(String.split_on_char '.' target)) then
+    native_error "a module alias target needs a qualified OCaml module path";
+  let namespace=native_namespace() in
+  let order=Cmap_env.fold(fun _ binding count->match binding.item with
+    |SomaForeign.OCamlNativeModuleAlias info when info.module_alias_namespace=namespace->count+1
+    |_->count)!bindings 0 in
+  let source=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
+  let c=native_declare name (native_global "core.unit.tt") (Some(native_global "core.unit.type"))in
+  native_register name c (SomaForeign.OCamlNativeModuleAlias {
+    module_alias_namespace=namespace;module_alias_name=alias;module_alias_target=target;
+    module_alias_source=source;module_alias_order=order})
+
 let native_external_family name parameters path =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.family") then native_error "import Soma.Native first";
@@ -1913,7 +1932,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -1954,6 +1973,9 @@ let describe c =
       | _ -> str "OCaml's " in
     let path = b.top ^ "." ^ b.path in
     Some (match b.item with
+        | SomaForeign.OCamlNativeModuleAlias info ->
+          str "native module alias " ++ str info.module_alias_namespace ++ str "." ++
+          str info.module_alias_name ++ str " = " ++ str info.module_alias_target
         | SomaForeign.OCamlNativeCallableType c | SomaForeign.OCamlNativeParametricCallable(_,c) ->
           str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
         | SomaForeign.OCamlNativeOpenVariant(row,v) ->

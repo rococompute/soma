@@ -77,6 +77,11 @@ VERNAC ARGUMENT EXTEND native_signature PRINTED BY { pr_native_signature }
 | [ lconstr(typ) ] -> { typ }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeModule CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Module" "Alias" ident(name) ":=" string(target) ] ->
+ { Soma_ocaml.native_module_alias name target }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
