@@ -130,6 +130,8 @@ VERNAC ARGUMENT EXTEND native_type_parameter
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Float" ident(name) ":" native_signature(typ) ":=" string(literal) ] ->
+ { Soma_ocaml.native_float_constant name typ literal }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(outer) "Composing" string(inner) "After" natural(after) "Transforming" string(transform) "At" natural(position) ] ->
   { Soma_ocaml.native_transformed_composition name typ outer inner after transform position }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(outer) "Composing" string(inner) "After" natural(after) ] ->

@@ -91,6 +91,7 @@ type native_operation =
   | NativeExternalTransformedComposition of string * string * int * int * string * int
   | NativeSetFunction of string * string
   | NativeCallableApplyFunction of native_callable option
+  | NativeFloatConstant of string
 
 type native_callback = {
   namespace : string;
@@ -296,6 +297,7 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let operation=match n.operation with
+    | NativeFloatConstant literal -> "float-constant " ^ literal
     | NativeValue p->"call "^Printf.sprintf "%S" p
     | NativeExternalValue p->"external-call "^Printf.sprintf "%S" p
     | NativePrimitive (byte, native, noalloc) ->

@@ -862,7 +862,8 @@ let native_callback name typ operation =
     | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
-    | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _ -> Some 1 in
+    | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
+    | SomaForeign.NativeFloatConstant _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -940,7 +941,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
      constructor_type (List.hd args_types)
@@ -982,6 +983,10 @@ let native_callback name typ operation =
         | None -> native_error (operation ^ " field is absent from its schema") in
     name, declaration, local in
   let operation = match operation with
+    | SomaForeign.NativeFloatConstant literal ->
+      if argument_names<>["unit"] || result_name<>"float" then
+        native_error "a native float literal needs a unit getter with native float result";
+      SomaForeign.NativeFloatConstant literal
     | SomaForeign.NativeCallableApplyFunction _ ->
       if argument_names<>["unit"] then native_error "Apply AsFunction is a unit getter";
       let receiver,_=arguments [] (Some 1) result in
@@ -1288,6 +1293,19 @@ let native_getter name result operation =
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
   native_callback name (insert_unit result) operation
+
+(* Literal data has a native static representation, without a new logical
+   float assumption or a runtime parser/allocation. Canonicalization also
+   keeps spelling out of the ABI and rejects non-finite/code-like input. *)
+let native_float_constant name result literal =
+  if literal="" || not(String.for_all(function '0'..'9'|'.'|'e'|'E'|'+'|'-'->true|_->false)literal) then
+    native_error "a native float literal needs a finite decimal numeral";
+  let value=try float_of_string literal with Failure _->
+    native_error "a native float literal needs a finite decimal numeral" in
+  if not(Float.is_finite value) then native_error "a native float literal must be finite";
+  let literal=Printf.sprintf "%.17g" value in
+  let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
+  native_getter name result (SomaForeign.NativeFloatConstant literal)
 
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)
