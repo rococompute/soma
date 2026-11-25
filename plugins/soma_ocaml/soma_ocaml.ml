@@ -202,6 +202,14 @@ let rec ocaml_type env sigma vars t =
       if EConstr.isProd sigma (Reductionops.whd_all env sigma a) then "(" ^ s ^ ")" else s in
     if GradualTyping.is_unknown_type env sigma t then
       not_ocaml (str "Any has no OCaml type: an OCaml value has one type")
+    (* Executable result boundaries erase to their result, just as in native
+       extraction. This lets typed native callable wrappers label a checked
+       entry/group-producing function. It adds no logical evaluator: values
+       still cannot be run or inspected by a logical consumer. *)
+    else if List.exists is ["soma.native.entry"; "soma.native.callback_group";
+                            "soma.native.function_group"; "soma.native.function_knot"] then
+      (match args with [result]->ocaml_type env sigma vars result
+       |_->not_ocaml(str "a native result boundary needs one result type"))
     else if is "core.string.type" then "string"
     else if is "core.ascii.type" then "char"
     else if is "core.bool.type" then "bool"

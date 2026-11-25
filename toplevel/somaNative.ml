@@ -82,6 +82,20 @@ Extract Inductive Soma.Native.function_group => "Soma_effect.entry"
        and second a b c = right first second a b c in
        next first second)" ]
  "(fun _ _ -> failwith ""a native function group cannot be inspected"")".
+Extract Inductive Soma.Native.function_knot => "Soma_effect.entry"
+ [ "(fun (prepare, body1, body2, body3, body4, body5, next) ->
+       let environment = ref None in
+       let current () = match !environment with Some value -> value
+         | None -> invalid_arg ""recursive functions cannot run during preparation"" in
+       let rec first a b c d = body1 (current ()) a b c d
+       and second a b c d = body2 (current ()) a b c d
+       and third a b c d = body3 (current ()) a b c d
+       and fourth a b c d = body4 (current ()) a b c d
+       and fifth a b c d = body5 (current ()) a b c d in
+       let value = prepare first second third fourth fifth in
+       environment := Some value;
+       next value)" ]
+ "(fun _ _ -> failwith ""a native function knot cannot be inspected"")".
 Extract Inlined Constant Soma.Native.lexical_callback3 =>
  "(fun body () -> fun a b c -> body a b c ())".
 Extract Inlined Constant Soma.Native.lexical_callback5 =>

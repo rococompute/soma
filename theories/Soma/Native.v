@@ -288,6 +288,25 @@ Arguments Function_group_bind {State A} before next.
 Arguments Export_function_pair3 {A B C R D E F S T} left right next.
 Register function_group as soma.native.function_group.
 
+(** Tie a prepared native environment to five direct recursive functions.
+    The preparation step creates shared labelled views exactly once; bodies
+    receive that same environment without per-call programs or argument tuples.
+    The environment must be returned before any recursive handle is invoked.
+    Keep this separate from earlier boundary representation fingerprints. *)
+Inductive function_knot : Type -> Type :=
+| Export_function_knot5_4 {A1 B1 C1 D1 R1 A2 B2 C2 D2 R2 A3 B3 C3 D3 R3 A4 B4 C4 D4 R4 A5 B5 C5 D5 R5 Environment Result}
+    (prepare : callback4 A1 B1 C1 D1 R1 -> callback4 A2 B2 C2 D2 R2 -> callback4 A3 B3 C3 D3 R3 -> callback4 A4 B4 C4 D4 R4 -> callback4 A5 B5 C5 D5 R5 -> Environment)
+    (body1 : Environment -> A1 -> B1 -> C1 -> D1 -> R1)
+    (body2 : Environment -> A2 -> B2 -> C2 -> D2 -> R2)
+    (body3 : Environment -> A3 -> B3 -> C3 -> D3 -> R3)
+    (body4 : Environment -> A4 -> B4 -> C4 -> D4 -> R4)
+    (body5 : Environment -> A5 -> B5 -> C5 -> D5 -> R5)
+    (next : Environment -> Result) : function_knot Result.
+Arguments Export_function_knot5_4 {A1 B1 C1 D1 R1 A2 B2 C2 D2 R2 A3 B3 C3 D3 R3 A4 B4 C4 D4 R4 A5 B5 C5 D5 R5 Environment Result}
+    prepare body1 body2 body3 body4 body5 next.
+Register function_knot as soma.native.function_knot.
+
+
 
 
 (** Create an ordinary nonrecursive callback with the lexical captures of
