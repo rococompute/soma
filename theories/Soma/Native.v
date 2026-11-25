@@ -266,6 +266,24 @@ Arguments Export_callback_pair {A B C D R} left right next.
 Arguments Export_callback_pair4 {A B C D R E F G H S T} left right next.
 Register callback_group as soma.native.callback_group.
 
+(** Direct recursive functions need no per-call program thunk. Like
+    [Pure_callback], their bodies use checked native function capabilities;
+    the owned handles remain opaque and no logical evaluator is added.
+    Keep this independent of earlier boundary representation fingerprints. *)
+Local Abbreviation callback3 A B C R :=
+  (callback A (callback B (callback C R))).
+Inductive function_group : Type -> Type :=
+| Function_group_bind {State A} (before : program State)
+    (next : State -> function_group A) : function_group A
+| Export_function_pair3 {A B C R D E F S T}
+    (left : callback3 A B C R -> callback3 D E F S -> A -> B -> C -> R)
+    (right : callback3 A B C R -> callback3 D E F S -> D -> E -> F -> S)
+    (next : callback3 A B C R -> callback3 D E F S -> T) : function_group T.
+Arguments Function_group_bind {State A} before next.
+Arguments Export_function_pair3 {A B C R D E F S T} left right next.
+Register function_group as soma.native.function_group.
+
+
 
 (** Create an ordinary nonrecursive callback with the lexical captures of
     its body. The symbolic program uses a callback that ignores itself. *)

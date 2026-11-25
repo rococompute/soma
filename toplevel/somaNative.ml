@@ -75,6 +75,13 @@ Extract Inductive Soma.Native.callback_group => "Soma_effect.entry"
        and second a b c d = right first second a b c d () in
        next first second ())" ]
  "(fun _ _ -> failwith ""a native callback group cannot be inspected"")".
+Extract Inductive Soma.Native.function_group => "Soma_effect.entry"
+ [ "(fun (before, next) -> let value = before () in next value)"
+   "(fun (left, right, next) ->
+       let rec first a b c = left first second a b c
+       and second a b c = right first second a b c in
+       next first second)" ]
+ "(fun _ _ -> failwith ""a native function group cannot be inspected"")".
 Extract Inlined Constant Soma.Native.lexical_callback3 =>
  "(fun body () -> fun a b c -> body a b c ())".
 Extract Inlined Constant Soma.Native.lexical_callback5 =>
