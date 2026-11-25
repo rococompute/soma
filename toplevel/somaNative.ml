@@ -63,6 +63,10 @@ Extract Inductive Soma.Native.program => "Soma_effect.t"
    "(fun (left, right) () ->
        let rec first argument = left first second argument ()
        and second argument = right first second argument () in
+       (first, second))"
+   "(fun (left, right) () ->
+       let rec first a b c d = left first second a b c d ()
+       and second a b c d = right first second a b c d () in
        (first, second))" ]
  "(fun _ _ -> failwith ""a native program cannot be inspected"")".
 Extract Inductive Soma.Native.entry => "Soma_effect.entry"

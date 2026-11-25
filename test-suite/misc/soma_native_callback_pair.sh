@@ -36,7 +36,17 @@ Definition alternating : entry (callback PrimInt63.int bool * callback PrimInt63
     (fun even _ n => if PrimInt63.eqb n 0%uint63 then Return false
       else Call_callback even (PrimInt63.sub n 1%uint63))).
 
-Definition main := (heterogeneous,alternating).
+Definition saturated :=
+  Export (New_callback_pair4
+    (fun _ second (_ : unit) (value : string) (limit : nat) (prefix : string) =>
+      Bind (Call_callback4 second true value limit tt)
+        (fun count => Return (if Nat.eqb count limit then prefix else value)))
+    (fun first _ (test : bool) (value : string) (limit : nat) (_ : unit) =>
+      if test then Return (String.length value)
+      else Bind (Call_callback4 first tt value limit ""%string)
+             (fun prefix => Return (String.length prefix)))).
+
+Definition main := (heterogeneous,alternating,saturated).
 SOMA
 
 soma extract main.soma -no-soma-prelude -o native
@@ -49,6 +59,9 @@ let () =
   let even, odd = Prog.alternating in
   assert (even 500_000 && not (odd 500_000));
   assert (not (even 500_001) && odd 500_001);
+  let prefix, count = Prog.saturated in
+  assert (prefix () "value" 5 "prefix" = "prefix");
+  assert (prefix () "value" 4 "prefix" = "value" && count false "value" 5 () = 0);
   print_endline "PASS: typed mutually recursive native callbacks preserve separate result types and tail calls."
 OCAML
 for compiler in ocamlc ocamlopt; do

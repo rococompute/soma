@@ -77,6 +77,9 @@ Inductive progress (S A : Type) := Continue (state : S) | Finish (value : A).
 Arguments Continue {S A} state.
 Arguments Finish {S A} value.
 
+Local Abbreviation callback4 A B C D R :=
+  (callback A (callback B (callback C (callback D R)))).
+
 Inductive program : Type -> Type :=
 | Return {A} (value : A) : program A
 | Invoke {A B} (primitive : unit -> A) (next : A -> program B) : program B
@@ -193,6 +196,11 @@ Inductive program : Type -> Type :=
  (left : callback A B -> callback C D -> A -> program B)
  (right : callback A B -> callback C D -> C -> program D)
  : program (callback A B * callback C D)
+(** A saturated group keeps the native argument slots separate. *)
+| New_callback_pair4 {A B C D R E F G H S}
+ (left : callback4 A B C D R -> callback4 E F G H S -> A -> B -> C -> D -> program R)
+ (right : callback4 A B C D R -> callback4 E F G H S -> E -> F -> G -> H -> program S)
+ : program (callback4 A B C D R * callback4 E F G H S)
 with entry : Type -> Type :=
 | Export {A} (body : program A) : entry A.
 
@@ -247,6 +255,7 @@ Arguments Promise_bind_borrowed {Owner A B} owner body next.
 Arguments List_map {A B} mapper items.
 Arguments Promise_map_borrowed {Owner A B} owner body next.
 Arguments New_callback_pair {A B C D} left right.
+Arguments New_callback_pair4 {A B C D R E F G H S} left right.
 Arguments Export {A} body.
 
 Register program as soma.native.program.
