@@ -142,6 +142,8 @@ VERNAC ARGUMENT EXTEND native_fixed_boolean
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Compose" "Scope" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->
+ { Soma_ocaml.native_static_composition_scope name typ outer inner }
 | [ "OCaml" "Native" "Static" "Compose" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->
  { Soma_ocaml.native_static_function name typ false outer inner }
 | [ "OCaml" "Native" "Static" "Prefix" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->

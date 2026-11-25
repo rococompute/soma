@@ -1030,7 +1030,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeStaticFunction _
+    | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
@@ -1115,7 +1115,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
-   | SomaForeign.NativeStaticFunction _
+   | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
@@ -1208,7 +1208,10 @@ let native_callback name typ operation =
         | _ -> native_error "an assertion factory has type unit -> unit -> answer" in
       unit_arguments 2 result;
       SomaForeign.NativeAssertionFactory(line,column)
-    | SomaForeign.NativeStaticFunction(prefix,outer,inner,_) ->
+    | (SomaForeign.NativeStaticFunction(_,outer,inner,_)
+      |SomaForeign.NativeStaticCompositionScope(outer,inner,_) as operation) ->
+      let scoped=match operation with SomaForeign.NativeStaticCompositionScope _->true|_->false in
+      let prefix=if scoped then false else match operation with SomaForeign.NativeStaticFunction(prefix,_,_,_)->prefix|_->false in
       if argument_names<>["unit"] then native_error "a static function needs a unit getter";
       let shape typ =
         let head,_=EConstr.decompose_app sigma typ in
@@ -1264,11 +1267,20 @@ let native_callback name typ operation =
         if inner_result<>List.hd left_args then native_error "static inner result differs from the first target argument";
         inner_args @ List.tl left_args,inner_labels
       end in
-      let output,labels,answer=shape result in
+      let output_type=if scoped then begin
+        let head,parts=EConstr.decompose_app sigma(Reductionops.whd_all env sigma result)in
+        if Array.length parts<>2 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.prod.type")head)then
+          native_error "a static composition scope returns (inner function * composed function)";
+        if ocaml_type env sigma type_vars parts.(0)<>ocaml_type env sigma type_vars right_type then
+          native_error "the first scope export differs from the inner function type";
+        parts.(1)
+      end else result in
+      let output,labels,answer=shape output_type in
       if wanted=[] || output<>wanted || answer<>left_result then
         native_error "static function arguments/result differ from the declared signature";
-      SomaForeign.NativeStaticFunction(prefix,outer,inner,
-        Some(left,right,left_labels,inner_labels,labels))
+      let data=Some(left,right,left_labels,inner_labels,labels)in
+      if scoped then SomaForeign.NativeStaticCompositionScope(outer,inner,data)
+      else SomaForeign.NativeStaticFunction(prefix,outer,inner,data)
     | SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_) ->
       if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
       let parameters,_=arguments [] None result in
@@ -1657,6 +1669,9 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_static_composition_scope name result outer inner =
+  native_getter name result (SomaForeign.NativeStaticCompositionScope(Id.to_string outer,Id.to_string inner,None))
 
 let native_static_function name result prefix outer inner =
   native_getter name result (SomaForeign.NativeStaticFunction(prefix,Id.to_string outer,Id.to_string inner,None))

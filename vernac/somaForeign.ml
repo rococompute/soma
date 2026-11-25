@@ -103,6 +103,7 @@ type native_operation =
   | NativeExternalInsertedLiteralFunction of string * string * int * int
   | NativeExternalFieldsFunction of string * string list * string * int
   | NativeStaticFunction of bool * string * string * (native_operation * native_operation * string option list * string option list * string option list) option
+  | NativeStaticCompositionScope of string * string * (native_operation * native_operation * string option list * string option list * string option list) option
 
 type native_callback = {
   namespace : string;
@@ -308,6 +309,11 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let rec describe_operation = function
+    | NativeStaticCompositionScope(outer,inner,Some(left,right,outer_labels,inner_labels,labels)) ->
+      String.concat "\n" ["static-composition-scope "^outer^" "^inner;
+        describe_operation left;describe_operation right;
+        String.concat ";"(List.map(fun labels->String.concat " "(List.map(fun label->Printf.sprintf "%S"(Option.default ""label))labels))[outer_labels;inner_labels;labels])]
+    | NativeStaticCompositionScope(_,_,None)->invalid_arg "unvalidated static composition scope"
     | NativeStaticFunction(prefix,outer,inner,Some(left,right,outer_labels,inner_labels,labels)) ->
       String.concat "\n" ["static-function " ^ string_of_bool prefix ^ " " ^ outer ^ " " ^ inner;
         describe_operation left;describe_operation right;

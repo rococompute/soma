@@ -272,6 +272,25 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       static_apply ~labels:left_labels left(first::tail)
     |_->invalid_arg "unvalidated static native expression" in
   let body = match n.operation,args with
+    | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
+      let parameters labels prefix=
+        let values=List.mapi(fun i _->prefix^string_of_int i)labels in
+        let params=List.map2(fun value->function
+          |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+          |Some label->"~"^label^":"^value)values labels in values,params in
+      let inner_values,inner_params=parameters inner_labels "inner" in
+      let values,params=parameters labels "value" in
+      let first,tail=CList.chop(List.length inner_labels)values in
+      let supplied=List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)first inner_labels in
+      let first="(scoped_inner "^String.concat " "supplied^")"in
+      let inner_definition=match right with
+        |SomaForeign.NativeExternalConstant path->"let scoped_inner = "^path
+        |_->"let scoped_inner "^String.concat " "inner_params^" = "^static_apply ~labels:inner_labels right inner_values in
+      "("^inner_definition^
+      " in let scoped_composed "^String.concat " "params^" = "^static_apply ~labels:left_labels left(first::tail)^
+      " in (scoped_inner, scoped_composed))"
     | SomaForeign.NativeStaticFunction(_,_,_,Some(_,_,_,_,labels)) as operation,[_] ->
       let values=List.mapi(fun i _->"value"^string_of_int i)labels in
       let parameters=List.map2(fun value->function

@@ -3167,3 +3167,28 @@ and public APIs, defaults, multi-argument/nested compositions, polymorphic
 bytes and returned functions, exact creation/call allocations, mutable prefix
 contents, full-call timing/faults, raw promises/cancellation, dynamic context,
 Weak ownership and transitive hash invalidation.
+
+`OCaml Native Static Compose Scope prepared : ((owner -> effects) *
+public_call) := outer With inner.` prepares the inner function and its composed
+function together. The first export has exactly the inner getter's function
+type; the second has the checked composition signature, including public
+labels. Both exports come from one scope. A literal-bearing inner function
+has one literal site, and the composed callback refers to that same prepared
+function. Its closure graph therefore retains the exported inner callback for
+as long as the original composed callback does. An existing native function
+value is borrowed directly as the first export, preserving its identity.
+
+Use a composition scope when the inner callback is also public and its literal
+identity or lifetime must be shared with the composed callback. Each inner
+function body is emitted once, followed by its composition and the returned
+pair, with no per-call getter or wrapper allocation. Native closure sharing,
+bytecode closure creation, partial-application timing and caller ownership
+follow the original pair of local function definitions. The scope has a
+separate appended metadata tag. Its component metadata and complete signatures
+participate in native ABI and semantic hashes. It introduces no evaluator or
+axiom. `test-suite/misc/soma_native_static_scope.sh` compares real generated
+code with original scopes in native and bytecode, covering literal identity,
+closure sharing, borrowed existing functions, generic payloads, exact faults,
+Weak retention/release of the inner callback and caller, and exact construction
+and invocation allocations. Existing standalone static-function output remains
+unchanged.
