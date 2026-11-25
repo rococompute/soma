@@ -244,6 +244,8 @@ VERNAC ARGUMENT EXTEND native_variant_case
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeVariant CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Open" "Polymorphic" "Variant" ident(name) "(" ne_native_type_parameter_list_sep(params, ";") ")" ":=" "[" ne_native_variant_case_list_sep(cases, ";") "]" ] ->
+ { Soma_ocaml.native_variant ~parameters:params ~open_row:true name cases }
 | [ "OCaml" "Native" "Polymorphic" "Variant" ident(name) "(" ne_native_type_parameter_list_sep(params, ";") ")" ":=" "[" ne_native_variant_case_list_sep(cases, ";") "]" ] ->
  { Soma_ocaml.native_variant ~parameters:params name cases }
 | [ "OCaml" "Native" "Polymorphic" "Variant" ident(name) ":=" "[" ne_native_variant_case_list_sep(cases, ";") "]" ] ->

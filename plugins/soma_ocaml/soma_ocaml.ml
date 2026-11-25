@@ -181,6 +181,8 @@ let rec ocaml_type env sigma vars t =
           let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
           Some(applied^" "^SomaForeign.native_callable_type c)
+        |Some{item=SomaForeign.OCamlNativeOpenVariant(_,v);_} when Array.length args=1 ->
+          Some("("^ocaml_type env sigma vars args.(0)^") "^SomaForeign.native_variant_type v)
         |Some{item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when List.length params=Array.length args ->
           let args=Array.to_list(Array.map(ocaml_type env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
@@ -720,10 +722,11 @@ let native_variant_tag_hash tag =
   let h=String.fold_left(fun h c->Int64.logand 0x7fffffffL
     (Int64.add(Int64.mul 223L h)(Int64.of_int(Char.code c))))0L tag in
   Int64.to_int h
-let native_variant ?(parameters=[]) name cases =
+let native_variant ?(parameters=[]) ?(open_row=false) name cases =
   ignore(native_context());
   if not(Rocqlib.has_ref "soma.native.handle")then native_error "import Soma.Native first";
   if cases=[]then native_error "a polymorphic variant needs at least one tag";
+  if open_row && List.length parameters<>1 then native_error "an open variant needs exactly one row type parameter";
   let tags=List.map(fun(tag,_)->native_variant_tag tag)cases in
   if List.length(List.sort_uniq String.compare tags)<>List.length tags then
     native_error "polymorphic variant tags must be distinct";
@@ -756,6 +759,8 @@ let native_variant ?(parameters=[]) name cases =
          | Prod(_,domain,_) when EConstr.isSort sigma domain -> native_error "polymorphic variant payloads must be monomorphic"
          | _->());EConstr.iter sigma monomorphic t in
       monomorphic typ;
+      if open_row && not(EConstr.Vars.noccurn sigma 1 typ)then
+        native_error "an open variant row parameter cannot occur in a payload";
       try ocaml_type env sigma vars typ,EConstr.isProd sigma(Reductionops.whd_all env sigma typ) with Not_ocaml why->
         CErrors.user_err(str "OCaml Native variant payload: "++why))syntax in
     syntax,{SomaForeign.case_tag=tag;case_payload=Option.map fst payload;
@@ -772,7 +777,8 @@ let native_variant ?(parameters=[]) name cases =
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   let variant={SomaForeign.variant_namespace=namespace;variant_name=Id.to_string name;variant_source=source;variant_cases=List.map snd checked}in
   let params=List.rev(fst(List.fold_left(fun(names,used)(id,_)->let name=type_variable used(Name id)in name::names,name::used)([],[])parameters))in
-  native_register name c (if params=[]then SomaForeign.OCamlNativeOwnedVariant variant else SomaForeign.OCamlNativeParametricVariant(params,variant))
+  native_register name c (if open_row then SomaForeign.OCamlNativeOpenVariant(List.hd params,variant)
+   else if params=[]then SomaForeign.OCamlNativeOwnedVariant variant else SomaForeign.OCamlNativeParametricVariant(params,variant))
 
 (* Leading type parameters form an opaque native family. Keep the checked
    signature in a type-valued let so Apply instantiates logical types rather
@@ -1075,10 +1081,13 @@ let native_callback name typ operation =
     match external_shape t with
     | Some _ -> ()
     | None -> native_error "a record operation needs a declared native type" in
-  let variant_type t =
+  let variant_type ?(allow_open=false) t =
     let head,args=EConstr.decompose_app sigma t in
     match EConstr.kind sigma head with
     | Const(c,_) -> (match Cmap_env.find_opt c !bindings with
+      | Some {item=SomaForeign.OCamlNativeOpenVariant(_,v);_} when Array.length args=1->
+        if not allow_open then native_error "an open variant cannot be viewed exhaustively";
+        v
       | Some {item=SomaForeign.OCamlNativeOwnedVariant v;_} when Array.length args=0->v
       | Some {item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when Array.length args=List.length params->
         (* Instantiate checked logical payload types, rather than substituting
@@ -1175,7 +1184,7 @@ let native_callback name typ operation =
        | [(first,None);(payload,None)]
          when EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type") first -> payload
        | _ -> native_error "a variant factory has type unit -> payload -> variant" in
-      let v=variant_type answer in
+      let v=variant_type ~allow_open:true answer in
       let tag=native_variant_tag tag in
       let case=match List.find_opt(fun c->c.SomaForeign.case_tag=tag)v.variant_cases with
        |Some case->case|None->native_error "factory tag is absent from the native variant" in
@@ -1409,7 +1418,7 @@ let native_callback name typ operation =
       SomaForeign.NativeVariantView(Some v)
     | SomaForeign.NativeVariantBuild(tag,_) ->
       if List.length args<>1 then native_error "Construct needs one payload argument (unit for a nullary tag)";
-      let v=variant_type result in
+      let v=variant_type ~allow_open:true result in
       let tag=native_variant_tag tag in
       let case=match List.find_opt(fun c->c.SomaForeign.case_tag=tag)v.variant_cases with
         | Some c->c|None->native_error "Construct tag is absent from the native variant" in
@@ -1776,7 +1785,7 @@ let bind_c file =
                             str " is in a module; a C module's declarations are at its top, each the C function " ++
                             str (SomaC.base_of base) ++ str "_name.");
         match b.item with
-        | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+        | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
           CErrors.user_err (str "native declarations cannot be bound to C")
         | SomaForeign.OCamlType 0 -> ()
         | SomaForeign.OCamlType _ ->
@@ -1819,6 +1828,8 @@ let describe c =
     Some (match b.item with
         | SomaForeign.OCamlNativeCallableType c | SomaForeign.OCamlNativeParametricCallable(_,c) ->
           str "native callable " ++ str(SomaForeign.native_callable_type c) ++ str ", opaque to Soma"
+        | SomaForeign.OCamlNativeOpenVariant(row,v) ->
+          str "open native variant " ++ str(row^" "^SomaForeign.native_variant_type v)
         | SomaForeign.OCamlNativeParametricVariant(_,v) ->
           str "parameterized closed native variant " ++ str(SomaForeign.native_variant_type v)
         | SomaForeign.OCamlNativeOwnedVariant v ->

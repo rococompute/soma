@@ -3192,3 +3192,44 @@ closure sharing, borrowed existing functions, generic payloads, exact faults,
 Weak retention/release of the inner callback and caller, and exact construction
 and invocation allocations. Existing standalone static-function output remains
 unchanged.
+
+### Open native variant rows
+
+An OCaml API that returns `[> ...]` exposes width polymorphism: a caller can
+combine its values with additional tags. Preserve that API with a row parameter:
+
+```soma
+From Soma Require Import Native.
+From Corelib Require Import PrimInt63.
+From Stdlib Require Import Strings.String.
+OCaml Native Open Polymorphic Variant token (Row : Type) :=
+  ["N" : PrimInt63.int; "V" : string; "O" : string].
+OCaml Native Construct Factory number : forall Row : Type,
+  unit -> PrimInt63.int -> token Row := "N".
+Definition number_factory {Row : Type} :=
+  Native.Export (Native.Call_callback (number Row) tt).
+Definition main (Row : Type) := number_factory (Row := Row).
+```
+
+The generated native family has the form
+`type 'row t = ([> ...] as 'row)`. Each exported polymorphic function can be
+instantiated at a different wider row. `Construct` and `Construct Factory`
+retain typed payloads and their existing callback creation phases. There is
+exactly one row parameter, which cannot occur inside a payload; payloads may
+include ordinary functions. `View` rejects open variants because an ordered
+sum of the declared cases cannot represent additional caller tags.
+
+The row family is opaque symbolic native metadata, without an axiom, logical
+callback evaluator or arbitrary OCaml expression. The generated typed native
+boundary rejects a primitive with the wrong result type. An appended metadata
+case distinguishes open from closed row ABIs and invalidates their hashes;
+existing closed and parameterized schemas keep their original output.
+
+`test-suite/misc/soma_native_open_variant.sh` checks independent wider-row
+instantiations, direct construction, borrowed string/function payloads,
+native/bytecode constructor sharing, exact creation and dynamic-payload call
+allocation, natural Weak collection, invalid schemas/views/ABIs and row-kind
+hash changes. Closed factories, variant aliases, callable functions, static
+functions/scopes and record aliases also pass. A separate cold-cache comparison
+with the preceding compiler keeps 22 older products and the complete
+contract/witness hash report byte-identical.
