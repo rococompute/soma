@@ -25,12 +25,12 @@ SOMA
 cat > main.soma <<'SOMA'
 From Soma Require Import Native.
 Import values.
-Definition zero := Native.Export (Native.Call_callback values.zero tt).
-Definition negative_zero := Native.Export (Native.Call_callback values.negative_zero tt).
-Definition minute := Native.Export (Native.Call_callback values.minute tt).
-Definition same_minute := Native.Export (Native.Call_callback values.same_minute tt).
-Definition fraction := Native.Export (Native.Call_callback values.fraction tt).
-Definition main := (zero,negative_zero,minute,same_minute,fraction).
+Definition public_zero := Native.Export (Native.Call_callback values.zero tt).
+Definition public_negative_zero := Native.Export (Native.Call_callback values.negative_zero tt).
+Definition public_minute := Native.Export (Native.Call_callback values.minute tt).
+Definition public_same_minute := Native.Export (Native.Call_callback values.same_minute tt).
+Definition public_fraction := Native.Export (Native.Call_callback values.fraction tt).
+Definition main := (public_zero,public_negative_zero,public_minute,public_same_minute,public_fraction).
 SOMA
 soma extract main.soma -no-soma-prelude -o native >extract.log 2>&1
 soma hash main.soma -no-soma-prelude >hash.log
@@ -57,8 +57,8 @@ let original_minute ()=60.
 let original_same_minute ()=60.
 let reference_zero=original_zero() and reference_negative_zero=original_negative_zero()
   and reference_minute=original_minute() and reference_same_minute=original_same_minute()
-let zero=zero() and negative_zero=negative_zero() and minute=minute()
-  and same_minute=same_minute() and fraction=fraction()
+let zero=public_zero and negative_zero=public_negative_zero and minute=public_minute
+  and same_minute=public_same_minute and fraction=public_fraction
 let require name value=if not value then failwith name
 let () =
   require "zero bit representation" (Int64.bits_of_float zero=Int64.bits_of_float 0.);

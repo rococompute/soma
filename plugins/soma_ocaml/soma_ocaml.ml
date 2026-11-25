@@ -886,7 +886,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeFloatConstant _ -> Some 1 in
+    | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -964,7 +964,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
      constructor_type (List.hd args_types)
@@ -1006,6 +1006,12 @@ let native_callback name typ operation =
         | None -> native_error (operation ^ " field is absent from its schema") in
     name, declaration, local in
   let operation = match operation with
+    | SomaForeign.NativeExternalLiteralFunction(path,literal,_) ->
+      if argument_names<>["unit"] then native_error "a full literal function needs a unit getter";
+      let parameters,_=arguments [] None result in
+      if parameters=[] || List.exists(fun(_,label)->Option.has_some label)parameters then
+        native_error "a full literal function needs positional function arguments";
+      SomaForeign.NativeExternalLiteralFunction(native_external_path path,literal,List.length parameters)
     | SomaForeign.NativeFloatConstant literal ->
       if argument_names<>["unit"] || result_name<>"float" then
         native_error "a native float literal needs a unit getter with native float result";
@@ -1329,6 +1335,9 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_literal_function name result path literal =
+  native_getter name result (SomaForeign.NativeExternalLiteralFunction(path,literal,0))
 
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)

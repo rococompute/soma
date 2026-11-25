@@ -299,6 +299,10 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       "({ "^assignments(record_prefix n.result)names args^" } : "^n.result^")"
     | SomaForeign.NativeCopy names,record::values ->
       "{ "^record^" with "^assignments(record_prefix(List.hd n.arguments))names values^" }"
+    | SomaForeign.NativeExternalLiteralFunction(path,literal,arity),[_] ->
+      let values=List.init arity(fun i->"value"^string_of_int i)in
+      "(fun "^String.concat " " values^" -> "^path^" "^Printf.sprintf "%S" literal^
+        " "^String.concat " " values^")"
     | SomaForeign.NativeFloatConstant literal,[_] -> "(" ^ literal ^ ")"
     | SomaForeign.NativeCallableApplyFunction(Some c),[_] ->
       let values=List.mapi(fun i _->"value"^string_of_int i)c.callable_arguments in
