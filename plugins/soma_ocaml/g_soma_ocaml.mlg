@@ -148,6 +148,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_defaulted_function name typ path schema }
 | [ "OCaml" "Native" "External" "Thunk" "Factory" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
  { Soma_ocaml.native_external_thunk_factory name typ path literal }
+| [ "OCaml" "Native" "Assertion" "Function" "Factory" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->
+ { Soma_ocaml.native_assertion_function_factory name typ line column }
 | [ "OCaml" "Native" "Assertion" "Factory" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->
  { Soma_ocaml.native_assertion_factory name typ line column }
 | [ "OCaml" "Native" "Float" ident(name) ":" native_signature(typ) ":=" string(literal) ] ->

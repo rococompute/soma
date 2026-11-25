@@ -2949,6 +2949,21 @@ native metadata identity; there is no arbitrary OCaml expression or logical
 effect evaluator. `test-suite/misc/soma_native_assertion_factory.sh` compares
 actual compiler output against original assertions in native and bytecode.
 
+`OCaml Native Assertion Function Factory invalid : unit -> input -> answer :=
+42 28.` prepares a closed `fun _ -> assert false` callback for an ignored native
+argument. The factory trigger is positional `unit`; the ignored input is also
+positional and may have any native representation. Neither value may affect
+the result type. Leading type parameters are supported. Preparing the factory
+or creating a callback does not allocate or raise its exception. Invocation
+raises the original fresh synchronous assertion at the fixed in-unit location,
+without retaining or inspecting the input. The original unit-only assertion
+command and its existing generated products are unchanged. The function form
+has a separate appended native metadata tag and includes its coordinates and
+signature in semantic/native ABI identity. See
+`test-suite/misc/soma_native_assertion_function_factory.sh` for typed arguments,
+closed sharing, ignored callbacks, 64MiB input, ownership, exact allocations
+and location invalidation in native and bytecode.
+
 `OCaml Native External Thunk Factory failure : unit -> unit -> A :=
 "Stdlib.invalid_arg" With "negative index".` prepares a factory for the closed
 callback `fun () -> invalid_arg "negative index"`. Reading the descriptor and

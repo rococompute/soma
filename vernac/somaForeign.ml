@@ -99,6 +99,7 @@ type native_operation =
   | NativeDeferredFields of string list * string
   | NativeDefaultedFunction of string * native_callable
   | NativeBoundBooleanFunction of string * native_callable * string * bool
+  | NativeAssertionFunctionFactory of int * int
 
 type native_callback = {
   namespace : string;
@@ -309,6 +310,8 @@ let native_identity = function
     | NativeVariantFactory(tag,Some variant) ->
       "variant-factory " ^ Printf.sprintf "%S " tag ^ native_variant_identity variant
     | NativeVariantFactory(_,None) -> invalid_arg "unvalidated native variant factory"
+    | NativeAssertionFunctionFactory(line,column) ->
+      Printf.sprintf "assertion-function-factory line %d column %d" line column
     | NativeAssertionFactory(line,column) ->
       Printf.sprintf "assertion-factory line %d column %d" line column
     | NativeFloatConstant literal -> "float-constant " ^ literal

@@ -115,6 +115,7 @@ type native_operation =
   | NativeDeferredFields of string list * string
   | NativeDefaultedFunction of string * native_callable
   | NativeBoundBooleanFunction of string * native_callable * string * bool
+  | NativeAssertionFunctionFactory of int * int
 
 type native_callback = {
   namespace : string;

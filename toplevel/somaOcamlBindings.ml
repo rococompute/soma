@@ -375,6 +375,8 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       (match case.SomaForeign.case_payload with
        |None -> "(fun () -> fun () -> `" ^ tag ^ ")"
        |Some _ -> "(fun () -> fun payload -> `" ^ tag ^ " payload)")
+    | SomaForeign.NativeAssertionFunctionFactory(line,column),[_] ->
+      Printf.sprintf "(fun () -> fun _ -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     | SomaForeign.NativeAssertionFactory(line,column),[_] ->
       Printf.sprintf "(fun () -> fun () -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     | SomaForeign.NativeFloatConstant literal,[_] -> "(" ^ literal ^ ")"
