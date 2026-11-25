@@ -1032,7 +1032,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeExternalThunkFactory _
-    | SomaForeign.NativeVariantFactory _ -> Some 1 in
+    | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -1106,6 +1106,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
+   | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _
    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
@@ -1342,6 +1343,30 @@ let native_callback name typ operation =
       if List.length (List.sort_uniq String.compare fields) <> List.length fields then
         native_error "inline record fields must be distinct";
       SomaForeign.NativeInlineBuild (native_constructor_path path, List.map field fields)
+    | SomaForeign.NativeDefaultedFunction (path, callable) ->
+      if argument_names<>["unit"] then native_error "a defaulted function takes a unit getter";
+      let required=List.filter_map(fun(typ,label)->match label with
+        |Some label when String.starts_with ~prefix:"?" label->None|_->Some typ)
+        (List.combine callable.SomaForeign.callable_arguments callable.callable_labels)in
+      if required=[] then native_error "a defaulted function needs a required argument";
+      let parameters,answer=arguments [] (Some(List.length required))result in
+      if List.exists(fun(_,label)->Option.has_some label)parameters ||
+         List.map(fun(typ,_)->ocaml_type env sigma type_vars typ)parameters<>required ||
+         ocaml_type env sigma type_vars answer<>callable.callable_result then
+        native_error "defaulted function signature differs from the required callable arguments";
+      SomaForeign.NativeDefaultedFunction(native_path path,callable)
+    | SomaForeign.NativeDeferredFields (fields, _) ->
+      if argument_names<>["unit"] then native_error "a deferred field getter takes unit";
+      let parameters, _value = arguments [] (Some 2) result in
+      let receiver, trigger = match parameters with
+        | [receiver,None;trigger,None] -> receiver,trigger
+        | _ -> native_error "a deferred field getter returns record -> unit -> value" in
+      record_type receiver;
+      if not (EConstr.isRefX env sigma (Rocqlib.lib_ref "core.unit.type")
+        (Reductionops.whd_all env sigma trigger)) then
+        native_error "a deferred field getter is triggered by unit";
+      if fields=[] then native_error "a deferred field getter needs a nonempty field path";
+      SomaForeign.NativeDeferredFields(List.map native_path fields,ocaml_type env sigma type_vars receiver)
     | SomaForeign.NativeGetFunction (name, _) ->
       if argument_names <> ["unit"] then native_error "a record getter takes unit";
       let parameters, value = arguments [] (Some 1) result in
@@ -1540,6 +1565,16 @@ let native_variant_factory name result tag =
 
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)
+
+let native_defaulted_function name result path schema =
+  ignore(native_context());
+  let env=Global.env()in
+  let sigma,schema=Constrintern.interp_type_evars env (Evd.from_env env) schema in
+  let callable=native_callable_type env sigma [] schema in
+  native_getter name result (SomaForeign.NativeDefaultedFunction(path,callable))
+
+let native_deferred_fields name result fields =
+  native_getter name result (SomaForeign.NativeDeferredFields(fields,""))
 
 let native_get_function name result field =
   native_getter name result (SomaForeign.NativeGetFunction (field, ""))

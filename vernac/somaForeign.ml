@@ -96,6 +96,8 @@ type native_operation =
   | NativeAssertionFactory of int * int
   | NativeExternalThunkFactory of string * string
   | NativeVariantFactory of string * native_variant option
+  | NativeDeferredFields of string list * string
+  | NativeDefaultedFunction of string * native_callable
 
 type native_callback = {
   namespace : string;
@@ -333,6 +335,10 @@ let native_identity = function
     | NativeInlineSet (p,f) -> Printf.sprintf "inline-set %S %S" p f
     | NativeInlineBuild (p,fields) ->
       "inline-build " ^ String.concat " " (List.map (Printf.sprintf "%S") (p :: fields))
+    | NativeDefaultedFunction (path, callable) ->
+      "defaulted-function " ^ Printf.sprintf "%S" path ^ " " ^ native_callable_identity callable
+    | NativeDeferredFields (fields, owner) ->
+      "deferred-fields " ^ String.concat " " (List.map(Printf.sprintf "%S")fields) ^ " for " ^ owner
     | NativeGetFunction (field, owner) -> Printf.sprintf "get-function %S for %s" field owner
     | NativeSetFunction (field, owner) -> Printf.sprintf "set-function %S for %s" field owner
     | NativeGet p->"get "^Printf.sprintf "%S" p

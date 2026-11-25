@@ -2972,6 +2972,32 @@ or tuple bridge. Their target/literal/tag/schema data participates in native
 provenance. `test-suite/misc/soma_native_closed_factories.sh` checks both modes,
 original allocation/identity/ownership behavior and semantic-hash invalidation.
 
+`OCaml Native Get Deferred read : owner -> unit -> string :=
+"cell" "Target.text".` prepares an ordinary owner-to-thunk function. Creating
+the thunk borrows only its owner; invoking it reads the current field chain.
+The first unqualified field uses the receiver's native record namespace;
+subsequent fields may specify their native record modules. Paths contain only
+validated identifiers. The receiver must be a declared native record/type and
+the trigger is positional `unit`; generated typed bindings check every native
+field and the final result, including callback and promise results. A compiler
+barrier preserves the one-owner closure instead of merging its curried arity.
+No logical native evaluator or runtime program bridge is introduced.
+
+`OCaml Native External Defaulted Function lookup : string -> string -> result :=
+"Target.lookup" Using lookup_call.` prepares a closed positional adapter for a
+named function and a closed declared native callable schema. Its signature
+must match all required schema arguments and the result. Required labels are
+supplied by the generated adapter; optional parameters are omitted so the
+native function retains its defaults. The named implementation is also checked
+against the complete callable schema. Creation does not invoke the function;
+partial calls keep native default timing. Closed native sharing and bytecode
+creation phases match direct callbacks without a captured receiver or argument
+tuple. Native symbol, labels/default schema and deferred field paths contribute
+to semantic and native ABI identities. See
+`test-suite/misc/soma_native_deferred_fields.sh` and
+`test-suite/misc/soma_native_defaulted_function.sh` for both-backend allocation,
+identity, live-state, failure, promise/context/cancellation and Weak checks.
+
 Immutable record projections use named generated schema getters. Pure field
 reads retain their expression order and allocate no temporary projection
 closures per access, including bytecode execution.

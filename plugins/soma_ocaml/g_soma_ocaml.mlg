@@ -100,6 +100,8 @@ VERNAC ARGUMENT EXTEND native_dispatch_case
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeCallback CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Get" "Deferred" ident(name) ":" native_signature(typ) ":=" ne_string_list(fields) ] ->
+  { Soma_ocaml.native_deferred_fields name typ fields }
 | [ "OCaml" "Native" "Callback" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
   { Soma_ocaml.native_callback name typ (SomaForeign.NativeValue path) }
 | [ "OCaml" "Native" "Get" ident(name) ":" native_signature(typ) ":=" string(field) ] ->
@@ -134,6 +136,8 @@ VERNAC ARGUMENT EXTEND native_type_parameter
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "External" "Defaulted" "Function" ident(name) ":" native_signature(typ) ":=" string(path) "Using" native_signature(schema) ] ->
+ { Soma_ocaml.native_defaulted_function name typ path schema }
 | [ "OCaml" "Native" "External" "Thunk" "Factory" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
  { Soma_ocaml.native_external_thunk_factory name typ path literal }
 | [ "OCaml" "Native" "Assertion" "Factory" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->

@@ -292,6 +292,19 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       let constructor = qualified_constructor path n.result in
       let fields = List.map2 (fun field value -> field ^ " = " ^ value) fields args in
       constructor ^ " { " ^ String.concat "; " fields ^ " }"
+    | SomaForeign.NativeDefaultedFunction (path, callable), [_] ->
+      let labels=List.filter(function Some name->not(String.starts_with ~prefix:"?" name)|None->true)
+        callable.SomaForeign.callable_labels in
+      let values=List.mapi(fun index _->"value"^string_of_int index)labels in
+      let given=List.map2(fun value->function None->value|Some name->"~"^name^":"^value)values labels in
+      "(fun " ^ String.concat " " values ^ " -> (" ^ path ^ " : " ^
+      SomaForeign.native_callable_type callable ^ ") " ^ String.concat " " given ^ ")"
+    | SomaForeign.NativeDeferredFields (names, owner), [_] ->
+      let path=match names with
+        | first::rest -> (if String.contains first '.' then first else field(record_prefix owner)first)::rest
+        | [] -> invalid_arg "unvalidated empty deferred field path" in
+      "(fun (record : " ^ owner ^ ") -> Sys.opaque_identity (fun () -> record." ^
+        String.concat "." path ^ "))"
     | SomaForeign.NativeGetFunction (name, owner), [_] ->
       "(fun (record : " ^ owner ^ ") -> record." ^ field (record_prefix owner) name ^ ")"
     | SomaForeign.NativeSetFunction (name, owner), [_] ->

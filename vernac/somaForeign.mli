@@ -112,6 +112,8 @@ type native_operation =
   | NativeAssertionFactory of int * int
   | NativeExternalThunkFactory of string * string
   | NativeVariantFactory of string * native_variant option
+  | NativeDeferredFields of string list * string
+  | NativeDefaultedFunction of string * native_callable
 
 type native_callback = {
   namespace : string;
