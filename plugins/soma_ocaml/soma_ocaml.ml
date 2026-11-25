@@ -862,7 +862,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
-    | SomaForeign.NativeExternalException _ -> Some 1 in
+    | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -940,7 +940,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
    | SomaForeign.NativeExternalException _
-   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
+   | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
    | SomaForeign.NativeConstructorTag _ | SomaForeign.NativeConstructorCase _
    | SomaForeign.NativeInlineGet _ | SomaForeign.NativeInlineSet _ ->
      constructor_type (List.hd args_types)
@@ -982,6 +982,19 @@ let native_callback name typ operation =
         | None -> native_error (operation ^ " field is absent from its schema") in
     name, declaration, local in
   let operation = match operation with
+    | SomaForeign.NativeCallableApplyFunction _ ->
+      if argument_names<>["unit"] then native_error "Apply AsFunction is a unit getter";
+      let receiver,_=arguments [] (Some 1) result in
+      let receiver=match receiver with [value,None]->value
+        |_->native_error "Apply AsFunction returns a positional callable invoker" in
+      let callable=native_callable_type env sigma type_vars receiver in
+      let parameters,answer=arguments [] (Some(1+List.length callable.SomaForeign.callable_arguments)) result in
+      let types=List.map(fun(typ,label)->
+        if Option.has_some label then native_error "Apply AsFunction parameters are positional";
+        ocaml_type env sigma type_vars typ)(List.tl parameters) in
+      if types<>callable.callable_arguments || ocaml_type env sigma type_vars answer<>callable.callable_result then
+        native_error "Apply AsFunction signature differs from the declared callable";
+      SomaForeign.NativeCallableApplyFunction(Some callable)
     | SomaForeign.NativeCallableApply _ ->
       let c=native_callable_type env sigma type_vars(List.hd args_types)in
       if List.tl argument_names<>c.SomaForeign.callable_arguments || result_name<>c.callable_result then
@@ -1275,6 +1288,9 @@ let native_getter name result operation =
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
   native_callback name (insert_unit result) operation
+
+let native_apply_function name result =
+  native_getter name result (SomaForeign.NativeCallableApplyFunction None)
 
 let native_get_function name result field =
   native_getter name result (SomaForeign.NativeGetFunction (field, ""))

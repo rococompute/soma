@@ -288,6 +288,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
       "({ "^assignments(record_prefix n.result)names args^" } : "^n.result^")"
     | SomaForeign.NativeCopy names,record::values ->
       "{ "^record^" with "^assignments(record_prefix(List.hd n.arguments))names values^" }"
+    | SomaForeign.NativeCallableApplyFunction(Some c),[_] ->
+      let values=List.mapi(fun i _->"value"^string_of_int i)c.callable_arguments in
+      let given=List.map2(fun value->function
+        |None->value
+        |Some label when String.starts_with ~prefix:"?" label->label^":"^value
+        |Some label->"~"^label^":"^value)values c.callable_labels in
+      "fun receiver "^String.concat " "values^" -> receiver "^String.concat " "given
     | SomaForeign.NativeCallableApply(Some c),body::values ->
       let given=List.map2(fun value->function
         | None->value

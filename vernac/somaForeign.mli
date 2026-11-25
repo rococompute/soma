@@ -106,6 +106,7 @@ type native_operation =
   | NativeExternalComposedValue of string * string * int * int
   | NativeExternalTransformedComposition of string * string * int * int * string * int
   | NativeSetFunction of string * string
+  | NativeCallableApplyFunction of native_callable option
 
 type native_callback = {
   namespace : string;

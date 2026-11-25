@@ -244,6 +244,11 @@ Arguments Export {A} body.
 Register program as soma.native.program.
 Register entry as soma.native.entry.
 
+(** Recover only an export's result type for checked module composition.
+    The entry value and its program are never inspected or executed. *)
+Definition entry_result {A : Type} (_ : entry A) : Type := A.
+
+
 (** A separate boundary for mutually recursive callbacks. Extending this
     boundary leaves [program]'s representation and existing proof receipts
     unchanged. Every callback body and the final continuation remain checked

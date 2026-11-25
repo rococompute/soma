@@ -90,6 +90,7 @@ type native_operation =
   | NativeExternalComposedValue of string * string * int * int
   | NativeExternalTransformedComposition of string * string * int * int * string * int
   | NativeSetFunction of string * string
+  | NativeCallableApplyFunction of native_callable option
 
 type native_callback = {
   namespace : string;
@@ -340,9 +341,10 @@ let native_identity = function
       "variant-dispatch " ^ owner ^ context ^ " [" ^ String.concat "; " (List.map describe cases) ^ "]"
     | NativeCopy fs->"copy "^String.concat " "(List.map(Printf.sprintf "%S")fs)
     | NativeCallableApply(Some c)->"apply "^native_callable_identity c
+    | NativeCallableApplyFunction(Some c)->"apply-function "^native_callable_identity c
     | NativeCallableWrap(Some c)->"wrap "^native_callable_identity c
     | NativeCallableWrapFull (Some c) -> "wrap-full " ^ native_callable_identity c
-    | NativeCallableApply None | NativeCallableWrap None | NativeCallableWrapFull None -> invalid_arg "unvalidated native callable descriptor"
+    | NativeCallableApplyFunction None | NativeCallableApply None | NativeCallableWrap None | NativeCallableWrapFull None -> invalid_arg "unvalidated native callable descriptor"
     | NativeVariantView(Some v)->"variant-view "^native_variant_identity v
     | NativeVariantBuild(tag,Some v)->"variant-build "^Printf.sprintf "%S" tag^" "^native_variant_identity v
     | NativeVariantView None | NativeVariantBuild(_,None)->invalid_arg "unvalidated native variant descriptor" in
