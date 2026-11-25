@@ -24,6 +24,13 @@ let pr_native_signature typ =
   Ppconstr.pr_constr_expr ~flags:(Ppconstr.current_flags ()) env (Evd.from_env env) typ
 
 
+let rec pr_native_static_expression = function
+  | SomaForeign.StaticArgument index -> Pp.(str "Argument " ++ int index)
+  | SomaForeign.StaticValue name -> Pp.(str "Value " ++ str name)
+  | SomaForeign.StaticCall(name,values) ->
+    Pp.(str "Call " ++ str name ++ str " [" ++
+      prlist_with_sep(fun () -> str "; ")pr_native_static_expression values ++ str "]")
+
 let pr_native_record_field (name,mutable_,typ) =
   Pp.(str (if mutable_ then "mutable " else "") ++ Names.Id.print name ++ str " : " ++ pr_native_signature typ)
 
@@ -141,7 +148,17 @@ VERNAC ARGUMENT EXTEND native_fixed_boolean
 | [ "false" ] -> { false }
 END
 
+VERNAC ARGUMENT EXTEND native_static_expression
+ PRINTED BY { pr_native_static_expression }
+| [ "Argument" natural(index) ] -> { SomaForeign.StaticArgument index }
+| [ "Value" ident(name) ] -> { SomaForeign.StaticValue(Names.Id.to_string name) }
+| [ "Call" ident(name) "[" ne_native_static_expression_list_sep(values, ";") "]" ] ->
+ { SomaForeign.StaticCall(Names.Id.to_string name,values) }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Invoke" ident(name) ":" native_signature(typ) ":=" ident(target) "With" "[" ne_native_static_expression_list_sep(values, ";") "]" "AtFullApplication" ] ->
+ { Soma_ocaml.native_static_invocation name typ target values }
 | [ "OCaml" "Native" "Static" "Apply" ident(name) ":" native_signature(typ) ":=" ident(target) "With" "[" ne_ident_list_sep(bound, ";") "]" "AtFullApplication" ] ->
  { Soma_ocaml.native_static_application name typ target bound }
 | [ "OCaml" "Native" "Static" "Compose" "Scope" ident(name) ":" native_signature(typ) ":=" ident(outer) "With" ident(inner) ] ->

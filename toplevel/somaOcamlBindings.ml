@@ -268,6 +268,13 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     |SomaForeign.NativeExternalTransformedComposition(outer,inner,after,_,transform,position)->
       let values=List.mapi(fun i value->if i=position then apply transform[value]else value)values in
       let before,rest=CList.chop after values in apply outer(before @ [apply inner rest])
+    |SomaForeign.NativeVariantFunction(tag,Some variant)->
+      let case=List.find(fun c->c.SomaForeign.case_tag=tag)variant.SomaForeign.variant_cases in
+      (match case.SomaForeign.case_payload,values with
+        |None,[value]->"(let () = "^value^" in `"^tag^")"
+        |Some _,[value]->"(`"^tag^" "^value^")"
+        |_->invalid_arg "unvalidated static constructor invocation")
+    |SomaForeign.NativeStaticInvocation(_,Some(term,_))->static_term values term
     |SomaForeign.NativeStaticApplication(_,_,Some(target,bound,target_labels,_))->
       static_apply ~labels:target_labels target(List.map static_value bound @ values)
     |SomaForeign.NativeStaticFunction(prefix,_,_,Some(left,right,left_labels,inner_labels,_))->
@@ -275,6 +282,11 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         let first,tail=CList.chop (List.length inner_labels) values in static_apply ~labels:inner_labels right first,tail in
       static_apply ~labels:left_labels left(first::tail)
     |_->invalid_arg "unvalidated static native expression"
+  and static_term inputs = function
+    |SomaForeign.NativeStaticArgument index->List.nth inputs index
+    |SomaForeign.NativeStaticValue operation->static_value operation
+    |SomaForeign.NativeStaticCall(operation,values,labels)->
+      static_apply ~labels operation(List.map(static_term inputs)values)
   and static_value operation =
     let closure labels =
       let values=List.mapi(fun i _->"bound"^string_of_int i)labels in
@@ -290,6 +302,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
     |SomaForeign.NativeExternalFieldsFunction(_,_,_,arity)
     |SomaForeign.NativeExternalComposedValue(_,_,_,arity)
     |SomaForeign.NativeExternalTransformedComposition(_,_,_,arity,_,_)->closure(List.init arity(fun _->None))
+    |SomaForeign.NativeStaticInvocation(_,Some(_,labels))
     |SomaForeign.NativeStaticFunction(_,_,_,Some(_,_,_,_,labels))
     |SomaForeign.NativeStaticApplication(_,_,Some(_,_,_,labels))->closure labels
     |SomaForeign.NativeVariantFunction(tag,Some variant)->
@@ -299,7 +312,7 @@ let native_binding (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) 
         |Some _->"(fun payload -> `"^tag^" payload)")
     |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
-    | (SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
+    | (SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
       static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
       let parameters labels prefix=

@@ -106,6 +106,17 @@ type native_operation =
   | NativeStaticCompositionScope of string * string * (native_operation * native_operation * string option list * string option list * string option list) option
   | NativeVariantFunction of string * native_variant option
   | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
+  | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
+
+and native_static_expression =
+  | StaticArgument of int
+  | StaticValue of string
+  | StaticCall of string * native_static_expression list
+
+and native_static_term =
+  | NativeStaticArgument of int
+  | NativeStaticValue of native_operation
+  | NativeStaticCall of native_operation * native_static_term list * string option list
 
 type native_callback = {
   namespace : string;
@@ -320,6 +331,16 @@ let native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let rec describe_operation = function
+    | NativeStaticInvocation(_,Some(term,labels)) ->
+      let rec describe = function
+        | NativeStaticArgument index -> "argument "^string_of_int index
+        | NativeStaticValue operation -> "value ("^describe_operation operation^")"
+        | NativeStaticCall(operation,values,labels) ->
+          "invoke ("^describe_operation operation^") ["^String.concat ";"(List.map describe values)^"] labels ["^
+          String.concat ";"(List.map(fun label->Printf.sprintf "%S"(Option.default ""label))labels)^"]" in
+      "static-invocation "^describe term^" public ["^
+      String.concat ";"(List.map(fun label->Printf.sprintf "%S"(Option.default ""label))labels)^"]"
+    | NativeStaticInvocation(_,None) -> invalid_arg "unvalidated static invocation"
     | NativeStaticApplication(target,bound,Some(operation,values,target_labels,labels)) ->
       String.concat "\n" (["static-application "^target^" with "^String.concat " "bound;
         describe_operation operation] @ List.map describe_operation values @

@@ -1036,7 +1036,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
+    | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
@@ -1125,7 +1125,7 @@ let native_callback name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
-   | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
+   | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
    | SomaForeign.NativeExternalLiteralFunction _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeValue _ | SomaForeign.NativeExternalValue _ | SomaForeign.NativeExternalLiteralCallback _ | SomaForeign.NativePrimitive _ | SomaForeign.NativeCallableApply _ | SomaForeign.NativeCallableApplyFunction _ | SomaForeign.NativeCallableWrap _ | SomaForeign.NativeCallableWrapFull _ | SomaForeign.NativeVariantView _ | SomaForeign.NativeVariantBuild _ -> ()
@@ -1262,6 +1262,60 @@ let native_callback name typ operation =
       if ocaml_type env sigma type_vars payload<>Option.default "unit"case.SomaForeign.case_payload then
         native_error "variant function argument differs from the declared payload";
       SomaForeign.NativeVariantFunction(tag,Some v)
+    | SomaForeign.NativeStaticInvocation(expression,_) ->
+      if argument_names<>["unit"] then native_error "a static invocation needs a unit getter";
+      let inputs,labels,answer=static_shape result in
+      if inputs=[] then native_error "a static invocation needs a public function argument";
+      let rec closed = function
+        | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeFloatConstant _
+        | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalLiteralFunction _
+        | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
+        | SomaForeign.NativeExternalComposedValue _ | SomaForeign.NativeExternalTransformedComposition _
+        | SomaForeign.NativeVariantFunction(_,Some _) -> true
+        | SomaForeign.NativeStaticFunction(_,_,_,Some(a,b,_,_,_)) -> closed a && closed b
+        | SomaForeign.NativeStaticApplication(_,_,Some(fn,values,_,_)) -> closed fn && List.for_all closed values
+        | SomaForeign.NativeStaticInvocation(_,Some(term,_)) -> closed_term term
+        | _ -> false
+      and closed_term = function
+        | SomaForeign.NativeStaticArgument _ -> true
+        | SomaForeign.NativeStaticValue operation -> closed operation
+        | SomaForeign.NativeStaticCall(operation,values,_) -> closed operation && List.for_all closed_term values in
+      let descriptor name =
+        let operation,typ=static_descriptor name in
+        if not(closed operation) then native_error "a static invocation needs closed native value/function getters";
+        operation,typ in
+      let rec check = function
+        | SomaForeign.StaticArgument index ->
+          if index<0 || index>=List.length inputs then native_error "a static argument index exceeds the public arity";
+          SomaForeign.NativeStaticArgument index,List.nth inputs index
+        | SomaForeign.StaticValue name ->
+          let operation,typ=descriptor name in
+          SomaForeign.NativeStaticValue operation,ocaml_type env sigma type_vars typ
+        | SomaForeign.StaticCall(name,values) ->
+          let operation,typ=descriptor name in
+          (* Ordinary borrowed arrows may return a partial application. Its
+             remaining arrow is checked as a value type. Opaque callable and
+             generated function blueprints keep their declared full arity. *)
+          let wanted,labels,answer=match operation with
+            | SomaForeign.NativeExternalConstant _ ->
+              let parameters,rest=arguments [] (Some(List.length values)) typ in
+              if parameters=[] then static_shape typ else begin
+                let remaining,_=arguments [] None rest in
+                if List.exists(fun(_,label)->Option.has_some label)remaining then
+                  native_error "a partial static invocation needs a declared callable for a labelled result";
+                List.map(fun(t,_)->ocaml_type env sigma type_vars t)parameters,
+                List.map snd parameters,ocaml_type env sigma type_vars rest
+              end
+            | _ -> static_shape typ in
+          if wanted=[] || List.length wanted<>List.length values then
+            native_error "a static invocation call has the wrong arity";
+          let checked=List.map check values in
+          List.iter2(fun expected(_,actual)->if expected<>actual then
+            native_error "a static invocation argument differs from its target domain")wanted checked;
+          SomaForeign.NativeStaticCall(operation,List.map fst checked,labels),answer in
+      let term,actual=check expression in
+      if actual<>answer then native_error "a static invocation result differs from the public signature";
+      SomaForeign.NativeStaticInvocation(expression,Some(term,labels))
     | SomaForeign.NativeStaticApplication(target,bound,_) ->
       if argument_names<>["unit"]then native_error "a static application needs a unit getter";
       let rec closed = function
@@ -1721,6 +1775,10 @@ let native_float_constant name result literal =
 
 let native_static_composition_scope name result outer inner =
   native_getter name result (SomaForeign.NativeStaticCompositionScope(Id.to_string outer,Id.to_string inner,None))
+
+let native_static_invocation name result target arguments =
+  native_getter name result (SomaForeign.NativeStaticInvocation(
+    SomaForeign.StaticCall(Id.to_string target,arguments),None))
 
 let native_static_application name result target bound =
   native_getter name result (SomaForeign.NativeStaticApplication(Id.to_string target,List.map Id.to_string bound,None))

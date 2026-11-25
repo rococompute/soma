@@ -122,6 +122,17 @@ type native_operation =
   | NativeStaticCompositionScope of string * string * (native_operation * native_operation * string option list * string option list * string option list) option
   | NativeVariantFunction of string * native_variant option
   | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
+  | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
+
+and native_static_expression =
+  | StaticArgument of int
+  | StaticValue of string
+  | StaticCall of string * native_static_expression list
+
+and native_static_term =
+  | NativeStaticArgument of int
+  | NativeStaticValue of native_operation
+  | NativeStaticCall of native_operation * native_static_term list * string option list
 
 type native_callback = {
   namespace : string;
