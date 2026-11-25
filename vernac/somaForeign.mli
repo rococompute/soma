@@ -210,3 +210,14 @@ val native_callable_identity : native_callable -> string
 
 val native_parametric_callable_ml : string list -> native_callable -> string
 val native_parametric_callable_identity : string list -> native_callable -> string
+
+
+(** A checked logical enumeration may share an existing native variant. *)
+type native_enum_alias = {
+  enum_constant : Names.Constant.t;
+  enum_logical_type : string;
+  enum_target : string;
+  enum_constructors : string list;
+  enum_source : string;
+}
+val native_enum_aliases : (unit -> native_enum_alias list) ref

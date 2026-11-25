@@ -349,3 +349,14 @@ let native_identity = function
    String.concat "\n" (["native-callback";n.namespace;n.name;operation;n.result] @
     List.map2(fun t l->Printf.sprintf "%S %S" t (Option.default "" l))n.arguments n.labels)
  | _ -> invalid_arg "not a native declaration"
+
+
+(** A checked logical enumeration may share an existing native variant. *)
+type native_enum_alias = {
+  enum_constant : Names.Constant.t;
+  enum_logical_type : string;
+  enum_target : string;
+  enum_constructors : string list;
+  enum_source : string;
+}
+let native_enum_aliases : (unit -> native_enum_alias list) ref = ref (fun () -> [])

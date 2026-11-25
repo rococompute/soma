@@ -72,6 +72,11 @@ VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeEnum CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Enum" ident(name) ":=" reference(source) "As" string(target) ] ->
+  { Soma_ocaml.native_enum name source target }
+END
+
 VERNAC ARGUMENT EXTEND native_dispatch_payload
  PRINTED BY { pr_native_dispatch_payload }
 | [ string(name) "ReadFields" "[" ne_string_list_sep(fields, ";") "]" ] ->

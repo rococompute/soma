@@ -42,6 +42,15 @@ let in_binding : Constant.t * binding -> Libobject.obj =
     ~cache:(fun (c, b) -> bindings := Cmap_env.add c b !bindings)
     ~subst:None
 
+(* Reusing an enum records its existing checked inductive and generates only
+   typed native references and an exhaustive ABI check, never conversion code. *)
+let native_enums = Summary.ref ~name:"soma-native-enum-aliases" []
+let in_native_enum =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native enum alias"
+    ~cache:(fun info -> native_enums := info :: !native_enums)
+    ~subst:None
+let () = SomaForeign.native_enum_aliases := (fun () -> !native_enums)
+
 (* the modules, by key: FILE.ml or none, their name, and the libraries
    they use *)
 let modules = Summary.ref ~name:"soma-ocaml-modules" CString.Map.empty
@@ -152,9 +161,11 @@ let rec ocaml_type env sigma vars t =
       |_->None)
     | Ind((m,0),_) ->
       let symbol=KerName.to_string(MutInd.canonical m)in
+      let reused=List.find_opt(fun info->info.SomaForeign.enum_logical_type=symbol)!native_enums in
+      (match reused with Some info->Some info.SomaForeign.enum_target | None->
       Cmap_env.fold(fun _ binding found->match found,binding.item with
        |None,SomaForeign.OCamlNativeImmutableRecord(r,info)when info.logical_type=symbol->Some(SomaForeign.native_record_type r)
-       |_->found)!bindings None
+       |_->found)!bindings None)
     | _ -> None in
   match native with Some path -> path | None ->
   let t = Reductionops.whd_all env sigma t in
@@ -435,6 +446,43 @@ let native_type ?(external_=false) name path =
   let body = native_app (native_global "soma.native.handle") [native_string symbol] in
   let c = native_declare name body None in
   native_register name c (SomaForeign.OCamlNativeType path)
+
+(* [OCaml Native Enum alias := checked.kind As "Module.kind"]. Reuse the
+   logical constructors directly; the emitted type equation validates their
+   exact order, arity and completeness even for identity-only native clients. *)
+let native_enum name source target =
+  ignore(native_context());
+  let target=native_path target in
+  let qualification=String.split_on_char '.' target in
+  if List.length qualification<2 then native_error "an enum needs a qualified native type";
+  let env=Global.env() in
+  let ind=match Nametab.locate source with
+    |GlobRef.IndRef ind->ind
+    |_->native_error "an enum alias needs an existing inductive type" in
+  let mib,mip=Inductive.lookup_mind_specif env ind in
+  if Array.length mib.Declarations.mind_packets<>1 || mib.mind_nparams<>0 || mip.mind_nrealargs<>0 ||
+     Array.length mip.mind_consnames=0 || Array.exists((<>)0)mip.mind_consnrealdecls ||
+     mib.mind_finite=Declarations.CoFinite then
+    native_error "an enum alias needs a nonempty, unparameterized, unindexed type with nullary constructors";
+  let sigma=Evd.from_env env in
+  (match EConstr.kind sigma(EConstr.of_constr mip.mind_user_arity) with
+   |Sort sort when not(EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort)->()
+   |_->native_error "a logical proof type cannot be a native enum");
+  let prefix=String.concat "." (List.rev(List.tl(List.rev qualification))) in
+  let constructors=Array.to_list(Array.map(fun id->
+    let name=Id.to_string id in
+    if not(is_module_name name) || name.[0]<>Char.uppercase_ascii name.[0] || name.[0]='_' then
+      native_error "native enum constructors need uppercase OCaml names";
+    prefix^"."^name)mip.mind_consnames) in
+  let logical_type=KerName.to_string(MutInd.canonical(fst ind)) in
+  if List.exists(fun info->info.SomaForeign.enum_logical_type=logical_type && info.enum_target<>target)!native_enums then
+    native_error "one logical enum cannot use conflicting native types";
+  let body=CAst.make(Constrexpr.CRef(source,None)) in
+  let c=native_declare name body None in
+  native_register name c (SomaForeign.OCamlNativeType target);
+  let enum_source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_enum SomaForeign.{enum_constant=c;enum_logical_type=logical_type;
+    enum_target=target;enum_constructors=constructors;enum_source})
 
 (* The opaque handle has no pure mutable fields. Anonymous type-valued lets
    retain checked schema dependencies in the kernel term for module discovery
