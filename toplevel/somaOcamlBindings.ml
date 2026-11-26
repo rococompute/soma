@@ -247,6 +247,11 @@ let rec native_static_data_literal = function
 
 let native_publication_module namespace="Soma_published_"^SomaMerkle.string namespace
 let native_publication_filename namespace=String.uncapitalize_ascii(native_publication_module namespace)^".ml"
+let native_is_field_value path =
+  let rec fields=function
+    |[]|[_]->false
+    |part::rest->(part<>""&&(match part.[0]with 'a'..'z'|'_'->true|_->false))||fields rest in
+  fields(String.split_on_char '.'path)
 let native_publication_namespaces modules =
   let rec references = function
     |SomaForeign.NativePublishedValue(_,Some(namespace,_))->[namespace]
@@ -258,6 +263,7 @@ let native_publication_namespaces modules =
       |SomaForeign.OCamlNativeValueReexport info->
         (match info.value_callback.operation with
          |NativeStaticInitialization _|NativePublishedValue _->info.value_namespace::references info.value_callback.operation
+         |NativeExternalConstant path when native_is_field_value path->[info.value_namespace]
          |_->[])
       |_->[])m.items)modules)
 let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =

@@ -282,6 +282,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_external_constant ~literal name typ path }
 | [ "OCaml" "Native" "External" "Value" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
  { Soma_ocaml.native_external_constant name typ path }
+| [ "OCaml" "Native" "External" "Field" "Value" ident(name) ":" native_signature(typ) ":=" string(path) ] ->
+ { Soma_ocaml.native_external_constant ~field_value:true name typ path }
 | [ "OCaml" "Native" "External" "Exception" ident(name) ":=" string(path) ] ->
  { Soma_ocaml.native_external_exception name path }
 | [ "OCaml" "Native" "External" "Type" ident(name) "(" ne_native_type_parameter_list_sep(params, ";") ")" ":=" string(path) ] ->

@@ -472,6 +472,22 @@ let native_path path =
     then native_error "an external path has an invalid module name";
     path
 
+(* A native record projection is a qualified value followed by field names,
+   never a general native expression or an implicit per-call wrapper. *)
+let native_external_field_path path =
+  let invalid()=native_error "an external field value needs a module-qualified record and plain field identifiers"in
+  let identifier part =
+    if part=""||part="_"then invalid();
+    ignore(ocaml_name ~definition:"external field value" part);
+    if not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)part)then invalid()in
+  let rec split modules = function
+    |part::rest when part<>"" && part.[0]>='A'&&part.[0]<='Z'->
+      if not(is_module_name part)then invalid();split(part::modules)rest
+    |value::field::rest when modules<>[]->
+      List.iter(fun part->identifier part;if part.[0]>='A'&&part.[0]<='Z'then invalid())(value::field::rest)
+    |_->invalid()in
+  split[](String.split_on_char '.'path);path
+
 (* A qualified symbolic reference is a value expression. Keep this grammar
    separate from native type and field paths, which only admit identifiers. *)
 let native_external_path path =
@@ -1780,7 +1796,7 @@ let primitive_symbol symbol =
     native_error "a primitive symbol must be a C identifier";
   symbol
 
-let native_callback ?(optional=[]) name typ operation =
+let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
   if optional<>[]then begin
@@ -2451,7 +2467,7 @@ let native_callback ?(optional=[]) name typ operation =
       SomaForeign.NativeExternalLiteralCallback (native_external_path path, literal, after)
     | SomaForeign.NativeExternalConstant path ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
-      SomaForeign.NativeExternalConstant(native_external_path path)
+      SomaForeign.NativeExternalConstant((if field_value then native_external_field_path else native_external_path)path)
     | SomaForeign.NativeExternalLiteralConstant (path, literal) ->
       if argument_names<>["unit"]then native_error "an external value getter takes unit";
       SomaForeign.NativeExternalLiteralConstant(native_external_path path, literal)
@@ -2728,7 +2744,7 @@ let native_callback ?(optional=[]) name typ operation =
   native_register name c (SomaForeign.OCamlNativeCallback {
     namespace;name=Id.to_string name;arguments=argument_names;result=result_name;labels;operation})
 
-let native_getter name result operation =
+let native_getter ?(field_value=false) name result operation =
   let open Constrexpr in
   let unit_argument = CLocalAssum ([CAst.make Anonymous], None,
     Default Glob_term.Explicit, native_global "core.unit.type") in
@@ -2743,7 +2759,7 @@ let native_getter name result operation =
       CAst.make (CProdN ([binder], insert_unit body))
     | _ -> CAst.make (CProdN ([unit_argument], result))
   in
-  native_callback name (insert_unit result) operation
+  native_callback ~field_value name (insert_unit result) operation
 
 (* Literal data has a native static representation, without a new logical
    float assumption or a runtime parser/allocation. Canonicalization also
@@ -2843,11 +2859,11 @@ let native_variant_dispatch name result cases with_context =
 let native_record_factory name result fields reading =
   native_getter name result (SomaForeign.NativeRecordFactory (fields, reading, ""))
 
-let native_external_constant ?literal name result path =
+let native_external_constant ?literal ?(field_value=false) name result path =
   let operation = match literal with
     | None -> SomaForeign.NativeExternalConstant path
     | Some literal -> SomaForeign.NativeExternalLiteralConstant (path, literal) in
-  native_getter name result operation
+  native_getter ~field_value name result operation
 
 let native_composed_value name result outer inner after =
   native_getter name result (SomaForeign.NativeExternalComposedValue (outer, inner, after, 0))

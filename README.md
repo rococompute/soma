@@ -113,6 +113,8 @@ explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
+- [Direct native field values](doc/native-external-field-values.md): borrow
+  existing record fields with checked types and shared publication snapshots.
 - [Initialized native publications](doc/native-initialized-publications.md):
   apply providers once and share their exact published objects and functions.
 - [Borrowed native binding publications](doc/native-binding-reexports.md):
