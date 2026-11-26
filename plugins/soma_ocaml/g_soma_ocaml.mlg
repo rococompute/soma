@@ -131,6 +131,25 @@ VERNAC ARGUMENT EXTEND native_functor_parameter
 | [ string(name) ":" string(signature) ] -> { name,signature }
 END
 
+VERNAC ARGUMENT EXTEND native_lexical_prefix
+ PRINTED BY { fun(kind,source)->Pp.(str kind++spc()++Libnames.pr_qualid source) }
+| [ "Values" reference(source) ] -> { "values",source }
+| [ "Modules" reference(source) ] -> { "modules",source }
+| [ "Types" reference(source) ] -> { "types",source }
+END
+VERNAC ARGUMENT EXTEND native_lexical_module
+ PRINTED BY { fun(name,path,_)->Pp.(str name++str " := "++str path) }
+| [ "Module" string(name) ":=" string(path) "Apply" "[" ne_string_list_sep(args, ";") "]" ] -> { name,path,args }
+| [ "Module" string(name) ":=" string(path) ] -> { name,path,[] }
+END
+VERNAC COMMAND EXTEND SomaOCamlNativeLexicalEnvironment CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Lexical" "Environment" reference(owner)
+ "Prefix" "[" native_lexical_prefix_list_sep(prefix, ";") "]"
+ "Modules" "[" native_lexical_module_list_sep(modules, ";") "]"
+ "Local" "[" native_lexical_module_list_sep(locals, ";") "]" ] ->
+ { Soma_ocaml.native_lexical_environment owner prefix modules locals }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeLexicalScope CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Lexical" "Scope" reference(owner) ] ->
  { Soma_ocaml.native_lexical_scope owner [] None }
@@ -235,6 +254,8 @@ VERNAC ARGUMENT EXTEND native_static_expression
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Project" ident(name) ":" native_signature(typ) ":=" reference(selector) "From" reference(source) ] ->
+ { Soma_ocaml.native_published_projection name typ selector source }
 | [ "OCaml" "Native" "Projected" "Value" ident(name) ":" native_signature(typ) ":=" reference(source) "Member" string(member) ] ->
  { Soma_ocaml.native_projected_value name typ source member }
 | [ "OCaml" "Native" "Published" "Value" ident(name) ":" native_signature(typ) ":=" reference(source) ] ->

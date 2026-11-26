@@ -892,6 +892,62 @@ let native_lexical_scope selected opens functor_ =
   Lib.add_leaf(in_native_lexical_scope SomaForeign.{lexical_owner=owner;
     lexical_opens=opens;lexical_functor=functor_})
 
+let native_lexical_environments = Summary.ref ~name:"soma-native-lexical-environments" []
+let in_native_lexical_environment =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native lexical environment"
+    ~cache:(fun info->native_lexical_environments:=info:: !native_lexical_environments;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_lexical_environments := (fun()-> !native_lexical_environments)
+let native_lexical_environment selected prefix modules locals =
+  let owner=match Nametab.locate selected with GlobRef.ConstRef c->c|_->native_error "a lexical environment needs an assembly main"in
+  let scope=match SomaForeign.lexical_scope owner with Some scope->scope|None->native_error "declare its lexical scope before the environment"in
+  let assembly=List.find(fun info->Constant.CanOrd.equal owner info.SomaForeign.static_owner)!native_static_assemblies in
+  if assembly.static_namespace<>native_namespace()then native_error "a lexical environment belongs to its Source namespace";
+  if SomaForeign.lexical_environment owner<>None then native_error "duplicate lexical environment";
+  let module_name name=
+    if not(is_module_name name&&name.[0]>='A'&&name.[0]<='Z')||String.contains name '.'then native_error "expected a single uppercase module identifier"in
+  let module_path path=List.iter module_name(String.split_on_char '.'path)in
+  let parameters=match scope.lexical_functor with None->[]|Some(_,params)->List.map fst params in
+  let used=ref(assembly.static_module::(String.capitalize_ascii assembly.static_namespace^"_bindings")::parameters)in
+  List.iter(fun(name,path,args)->
+    module_name name;module_path path;List.iter module_path args;
+    if List.mem name !used||String.starts_with ~prefix:"Soma_"name then native_error "duplicate or reserved lexical module";
+    used:=name:: !used)(modules@locals);
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let visited=ref Constants.empty and referenced=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->referenced:=Constants.add c !referenced;constant c|_->());Constr.iter term t
+  and constant c=if ModPath.to_string(Constant.modpath c)=assembly.static_namespace && not(Constants.mem c !visited)then begin
+    visited:=Constants.add c !visited;let declaration=Environ.lookup_constant c(Global.env())in term declaration.Declarations.const_type;
+    match declaration.const_body with Declarations.Def body->term body|_->()end in
+  constant owner;
+  let seen=ref []in
+  let layouts=ref []in
+  let prefix=List.map(fun(kind,reference)->
+    let c=match Nametab.locate reference with GlobRef.ConstRef c when Constants.mem c !referenced->c
+      |_->native_error "a lexical prefix must be a checked dependency of main"in
+    let namespace=match Cmap_env.find_opt c !bindings with
+     |Some{item=SomaForeign.OCamlNativeValueReexport info;_}when kind="values"->info.value_namespace
+     |Some{item=SomaForeign.OCamlNativeBindingProjection info;_}when kind="values"->info.projection_namespace
+     |Some{item=(SomaForeign.OCamlNativeModuleAlias info|SomaForeign.OCamlNativeModuleInclude info);_}when kind="modules"->info.module_alias_namespace
+     |Some{item=SomaForeign.OCamlNativeSourceTypeReexport info;_}when kind="types"->info.source_type_namespace
+     |_->native_error "a lexical prefix needs a matching typed publication marker"in
+    if List.mem(kind,namespace)!seen then native_error "duplicate lexical prefix scope";
+    seen:=(kind,namespace):: !seen;
+    let entries=Cmap_env.fold(fun _ binding entries->
+      let order=match binding.item with
+       |SomaForeign.OCamlNativeValueReexport info when kind="values"&&info.value_namespace=namespace->Some info.value_order
+       |SomaForeign.OCamlNativeBindingProjection info when kind="values"&&info.projection_namespace=namespace->Some info.projection_order
+       |SomaForeign.OCamlNativeModuleAlias info|SomaForeign.OCamlNativeModuleInclude info when kind="modules"&&info.module_alias_namespace=namespace->Some info.module_alias_order
+       |SomaForeign.OCamlNativeSourceTypeReexport info when kind="types"&&info.source_type_namespace=namespace->Some info.source_type_order
+       |_->None in
+      match order with None->entries|Some order->(order,binding.item)::entries)!bindings[]in
+    let entries=List.sort(fun(a,_)(b,_)->Int.compare a b)entries in
+    List.iteri(fun expected(order,_)->if expected<>order then native_error "lexical prefix declaration order is incomplete")entries;
+    layouts:= !layouts@[String.concat "\n"(List.map(fun(_,item)->SomaForeign.native_identity item)entries)];
+    kind,namespace,Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)))prefix in
+  Lib.add_leaf(in_native_lexical_environment SomaForeign.{environment_owner=owner;environment_prefix=prefix;environment_prefix_layouts= !layouts;
+    environment_modules=modules;environment_locals=locals})
+
 let native_public_assembly selected applications =
   let namespace=native_namespace()in
   let env=Global.env()and sigma=Evd.from_env(Global.env())in
@@ -1803,7 +1859,7 @@ let native_value_reexport ?(binding=false) name source =
    |SomaForeign.NativeStaticInvocation(_,Some _)->()
    |SomaForeign.NativeExternalConstant _ when binding || (String.contains callback.result '>' && String.contains callback.result '-')->()
    |SomaForeign.NativeStaticData(_,_,_,_,Some _) when binding->()
-   |SomaForeign.NativeStaticInitialization(_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _) when binding->()
+   |SomaForeign.NativeStaticInitialization(_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)|SomaForeign.NativePublishedProjection(_,_,Some _) when binding->()
    |_->native_error "only a checked Static Invoke or borrowed function can be reexported; Binding also accepts closed borrowed/static data");
   let namespace=native_namespace()in
   Cmap_env.iter(fun _ binding->match binding.item with
@@ -1926,7 +1982,7 @@ let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _ | SomaForeign.NativeProjectedValue _
+    | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _ | SomaForeign.NativeProjectedValue _ | SomaForeign.NativePublishedProjection _
     | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -2031,7 +2087,7 @@ let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
-   | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _ | SomaForeign.NativeProjectedValue _
+   | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _ | SomaForeign.NativeProjectedValue _ | SomaForeign.NativePublishedProjection _
    | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -2087,14 +2143,12 @@ let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
         else let params,answer=arguments [] None typ in
           List.map(fun(t,_)->ocaml_type env sigma type_vars t)params,
           List.map snd params,ocaml_type env sigma type_vars answer in
-  let static_descriptor name =
+  let callback_descriptor name =
         let c=match Nametab.locate(Libnames.qualid_of_string name)with
           |GlobRef.ConstRef c->c|_->native_error "a static input needs a declared native getter" in
         let n=match Cmap_env.find_opt c !bindings with
           |Some {item=SomaForeign.OCamlNativeCallback n;_}->n
           |_->native_error "a static input needs a declared native getter" in
-        if n.SomaForeign.arguments<>["unit"] || n.labels<>[None] then
-          native_error "a static input needs a unit native getter";
         let typ=EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
         let rec instantiate index typ =match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
           |Prod(_,domain,rest)when is_sort env sigma domain ->
@@ -2105,9 +2159,26 @@ let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
         let head,args=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
         if Array.length args<>2 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "soma.native.callback")head)then
           native_error "a static input needs a native callback type";
-        n.operation,args.(1) in
+        c,n,args in
+  let static_descriptor name =
+    let _,n,args=callback_descriptor name in
+    if n.SomaForeign.arguments<>["unit"]||n.labels<>[None]then native_error "a static input needs a unit native getter";
+    n.operation,args.(1) in
   let logical_dependencies=ref [] in
   let operation = match operation with
+    | SomaForeign.NativePublishedProjection(selector,source,_) ->
+      let marker=match Nametab.locate(Libnames.qualid_of_string source)with GlobRef.ConstRef c->c|_->native_error "a field projection needs a published value marker"in
+      let info=match Cmap_env.find_opt marker !bindings with Some{item=SomaForeign.OCamlNativeValueReexport info;_}->info
+        |_->native_error "a field projection needs an earlier published binding"in
+      let getter,selected,signature=callback_descriptor selector in
+      let field=match selected.SomaForeign.operation with SomaForeign.NativeGet field->field
+        |_->native_error "a field projection needs a checked Native Get selector"in
+      let _,receiver=static_descriptor info.value_owner in
+      if argument_names<>["unit"]||labels<>[None]||selected.labels<>[None] ||
+        not(Reductionops.is_conv env sigma receiver signature.(0))||not(Reductionops.is_conv env sigma result signature.(1))then
+        native_error "published field selector, owner and result types differ";
+      logical_dependencies:=[marker;getter];
+      SomaForeign.NativePublishedProjection(selector,source,Some(info.value_namespace,info.value_name,field,ocaml_type env sigma type_vars receiver))
     | SomaForeign.NativeProjectedValue(symbol,member,_) ->
       let marker=match Nametab.locate(Libnames.qualid_of_string symbol)with GlobRef.ConstRef c->c|_->native_error "a projected value needs a checked projection marker"in
       let info=match Cmap_env.find_opt marker !bindings with Some{item=SomaForeign.OCamlNativeBindingProjection info;_}->info
@@ -2145,7 +2216,7 @@ let native_callback ?(optional=[]) ?(field_value=false) name typ operation =
       let values=List.map static_descriptor inputs in
       let closed=function
         |SomaForeign.NativeExternalConstant _
-        |SomaForeign.NativeStaticData(_,_,_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)->true
+        |SomaForeign.NativeStaticData(_,_,_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)|SomaForeign.NativePublishedProjection(_,_,Some _)->true
         |_->false in
       if not(closed fn&&List.for_all(fun(operation,_)->closed operation)values)then
         native_error "initialization borrows only closed native or already published values";
@@ -2883,6 +2954,8 @@ let native_float_constant name result literal =
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
 
+let native_published_projection name result selector source =
+  native_getter name result(SomaForeign.NativePublishedProjection(Libnames.string_of_qualid selector,Libnames.string_of_qualid source,None))
 let native_projected_value name result source member =
   native_getter name result(SomaForeign.NativeProjectedValue(Libnames.string_of_qualid source,member,None))
 let native_published_value name result source =

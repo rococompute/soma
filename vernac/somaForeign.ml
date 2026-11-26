@@ -119,6 +119,7 @@ type native_operation =
   | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
   | NativePublishedValue of string * (string * string) option
   | NativeProjectedValue of string * string * (string * string) option
+  | NativePublishedProjection of string * string * (string * string * string * string) option
 
 and native_static_expression =
   | StaticArgument of int
@@ -516,6 +517,9 @@ let rec native_identity = function
       "initialize "^Printf.sprintf "%S"target^" ["^String.concat ";"(List.map(Printf.sprintf "%S")inputs)^"] "^
       describe_operation fn^" ["^String.concat ";"(List.map describe_operation values)^"] "^
       String.concat ";"(List.map(function None->"_"|Some label->label)labels)
+    | NativePublishedProjection(selector,source,Some(namespace,name,field,owner))->
+      Printf.sprintf "published-projection %S %S %S %S %S %S"selector source namespace name field owner
+    | NativePublishedProjection(_,_,None)->invalid_arg "unchecked published projection"
     | NativeProjectedValue(symbol,member,Some(namespace,name))->
       Printf.sprintf "projected-value %S %S %S %S"symbol member namespace name
     | NativeProjectedValue(_,_,None)->invalid_arg "unchecked projected value"
@@ -759,6 +763,24 @@ let native_lexical_scope_identity scope =
     List.map(fun path->"open "^path)scope.lexical_opens @
     (match scope.lexical_functor with None->[]|Some(name,parameters)->
       ("functor "^name)::List.map(fun(name,signature)->name^" : "^signature)parameters))
+type native_lexical_environment = {
+  environment_owner : Names.Constant.t;
+  environment_prefix : (string * string * string) list;
+  environment_prefix_layouts : string list;
+  environment_modules : (string * string * string list) list;
+  environment_locals : (string * string * string list) list;
+}
+let native_lexical_environments : (unit -> native_lexical_environment list) ref = ref(fun()->[])
+let lexical_environment owner = List.find_opt(fun info->Names.Constant.CanOrd.equal info.environment_owner owner)
+  (!native_lexical_environments())
+let native_lexical_environment_identity info =
+  let modules label entries=List.map(fun(name,path,args)->
+    String.concat " "(label::name::path::args))entries in
+  String.concat "\n"(["native-lexical-environment-v1"] @
+    List.map(fun(kind,namespace,symbol)->String.concat " "[kind;namespace;symbol])info.environment_prefix @
+    info.environment_prefix_layouts @
+    modules "module" info.environment_modules @ modules "local" info.environment_locals)
+
 let native_static_assembly_identity info =
   String.concat "\n" (["native-static-assembly-v1";info.static_namespace;info.static_module] @
     List.map(fun item->
@@ -771,7 +793,8 @@ let native_static_assembly_identity info =
     "\nstatic-exceptions-v1\n"^String.concat "\n"(List.map(fun item->
       String.concat " "([Printf.sprintf "%S" item.static_exception_name;item.static_exception_symbol]@
         List.map(Printf.sprintf "%S")item.static_exception_arguments))exceptions)) ^
-  (match lexical_scope info.static_owner with None->""|Some scope->"\n"^native_lexical_scope_identity scope)
+  (match lexical_scope info.static_owner with None->""|Some scope->"\n"^native_lexical_scope_identity scope) ^
+  (match lexical_environment info.static_owner with None->""|Some scope->"\n"^native_lexical_environment_identity scope)
 
 (* Filled by the OCaml project producer, then by extraction's actual name
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)

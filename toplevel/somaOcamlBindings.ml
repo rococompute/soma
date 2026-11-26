@@ -254,6 +254,7 @@ let native_is_field_value path =
   fields(String.split_on_char '.'path)
 let native_publication_namespaces modules =
   let rec references = function
+    |SomaForeign.NativePublishedProjection(_,_,Some(namespace,_,_,_))->[namespace]
     |SomaForeign.NativePublishedValue(_,Some(namespace,_))|SomaForeign.NativeProjectedValue(_,_,Some(namespace,_))->[namespace]
     |NativeStaticInitialization(_,_,Some(fn,values,_))->List.concat_map references(fn::values)
     |_->[]in
@@ -263,11 +264,11 @@ let native_publication_namespaces modules =
       |SomaForeign.OCamlNativeBindingProjection info->info.projection_namespace::references info.projection_callback.operation
       |SomaForeign.OCamlNativeValueReexport info->
         (match info.value_callback.operation with
-         |NativeStaticInitialization _|NativePublishedValue _|NativeProjectedValue _->info.value_namespace::references info.value_callback.operation
+         |NativeStaticInitialization _|NativePublishedValue _|NativeProjectedValue _|NativePublishedProjection _->info.value_namespace::references info.value_callback.operation
          |NativeExternalConstant path when native_is_field_value path->[info.value_namespace]
          |_->[])
       |_->[])m.items)modules)
-let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
+let native_binding ?publication_scope ?(inline_publications=[]) ?(value=false) ?(data_owners=[]) (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
   let args = List.mapi(fun i _->"a"^string_of_int i)n.arguments in
   let signature = native_product(List.map(fun t->"("^t^")")n.arguments)^" -> ("^n.result^")" in
   let module_prefix ty =
@@ -302,11 +303,17 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
       if given=[]then path else apply path given
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->apply("("^path^" "^Printf.sprintf "%S"literal^")")values
     |SomaForeign.NativePublishedValue(_,Some(namespace,name))|SomaForeign.NativeProjectedValue(_,_,Some(namespace,name))->
-      let target=if publication_scope=Some namespace then name else native_publication_module namespace^"."^name in
+      let target=if publication_scope=Some namespace || List.mem namespace inline_publications then name else native_publication_module namespace^"."^name in
       let given=match labels with None->values|Some labels->List.map2(fun value->function
         |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
         |Some label->"~"^label^":"^value)values labels in
       apply target given
+    |SomaForeign.NativePublishedProjection(_,_,Some(namespace,name,field,owner))->
+      let target=if publication_scope=Some namespace || List.mem namespace inline_publications then name else native_publication_module namespace^"."^name in
+      let given=match labels with None->values|Some labels->List.map2(fun value->function
+        |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
+        |Some label->"~"^label^":"^value)values labels in
+      apply("("^target^" : "^owner^")."^field)given
     |SomaForeign.NativeStaticData(owner,_,_,_,Some _)when values=[]->native_static_data_name owner
     |SomaForeign.NativeFloatConstant literal when values=[]->"("^literal^")"
     |SomaForeign.NativeExternalLiteralFunction(path,literal,_)->apply path(Printf.sprintf "%S"literal::values)
@@ -362,7 +369,7 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
     match operation with
     |SomaForeign.NativeStaticInitialization(_,_,Some(fn,values,labels))->
       static_apply ~labels fn(List.map static_value values)
-    |SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)->static_apply operation []
+    |SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)|SomaForeign.NativePublishedProjection(_,_,Some _)->static_apply operation []
     |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)->static_apply operation []
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->"("^path^" "^Printf.sprintf "%S"literal^")"
     |SomaForeign.NativeExternalLiteralFunction(_,_,arity)
@@ -382,7 +389,7 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
         |Some _->"(fun payload -> `"^tag^" payload)")
     |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
-    | (SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _|SomaForeign.NativeProjectedValue _)as operation,[_]->static_value operation
+    | (SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _|SomaForeign.NativeProjectedValue _|SomaForeign.NativePublishedProjection _)as operation,[_]->static_value operation
     | (SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
       static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
@@ -738,17 +745,17 @@ let native_value_scopes modules =
     namespace,entries)names
 let native_value_scope_name namespace="Soma_values_"^SomaMerkle.string namespace
 let native_value_scope_filename namespace=String.uncapitalize_ascii(native_value_scope_name namespace)^".exports"
-let native_value_scope_ml ?(interface=false) ?publication_scope (namespace,entries)=
+let native_value_scope_ml ?(interface=false) ?publication_scope ?(inline_publications=[]) (namespace,entries)=
   "(* Generated by Soma: native value reexports for "^namespace^". *)\n"^
   String.concat ""(List.map(function
    |Value_entry(_,m,info)->
-    let typ,body=native_binding ?publication_scope ~value:true {m with top=info.SomaForeign.value_module} info.SomaForeign.value_callback in
+    let typ,body=native_binding ?publication_scope ~inline_publications ~value:true {m with top=info.SomaForeign.value_module} info.SomaForeign.value_callback in
     if interface then "val "^info.value_name^" : "^typ^"\n"
     else let vars=type_variables typ in
       "let "^info.value_name^" : "^(if vars=[]then ""else String.concat " "vars^". ")^typ^" =\n  "^body^"\n"
    |Projection_entry(_,m,info)->
     if interface then String.concat ""(List.map(fun(name,typ)->"val "^name^" : "^typ^"\n")info.SomaForeign.projection_fields)
-    else let typ,body=native_binding ?publication_scope ~value:true {m with top=info.SomaForeign.projection_module} info.projection_callback in
+    else let typ,body=native_binding ?publication_scope ~inline_publications ~value:true {m with top=info.SomaForeign.projection_module} info.projection_callback in
       "let "^info.projection_text^" = ("^body^" : "^typ^")\n")entries)
 let native_value_scope_bindings ~interface ~publications ((namespace,_)as scope)=
   if List.mem namespace publications then
@@ -756,8 +763,8 @@ let native_value_scope_bindings ~interface ~publications ((namespace,_)as scope)
   else "\nmodule "^native_value_scope_name namespace^(if interface then " : sig\n"else" = struct\n")^
     native_value_scope_ml ~interface scope^"end\n"
 
-let native_callback_declaration ~interface ~data_owners m n =
-  let signature,body=native_binding ~data_owners m n in
+let native_callback_declaration ~interface ~data_owners ~inline_publications m n =
+  let signature,body=native_binding ~data_owners ~inline_publications m n in
   let vars=type_variables signature in
   let poly=if vars=[]then ""else String.concat " "vars^". "in
   if interface then Printf.sprintf "val %s : %s\n" (native_binding_name n) signature
@@ -803,8 +810,12 @@ let native_static_data_sources modules =
   List.rev !output
 
 let bindings_ml ?(interface=false) modules =
+  let inline_publications=match main_reference()with
+    |GlobRef.ConstRef owner->(match SomaForeign.lexical_environment owner with None->[]|Some info->
+      List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)info.environment_prefix)
+    |_->[]in
   let data_owners=native_static_data_owners modules in
-  let values=String.concat ""(List.map(native_value_scope_bindings ~interface ~publications:(native_publication_namespaces modules))(native_value_scopes modules))in
+  let values=String.concat ""(List.map(native_value_scope_bindings ~interface ~publications:(native_publication_namespaces modules))(List.filter(fun(namespace,_)->not(List.mem namespace inline_publications))(native_value_scopes modules)))in
   let types=String.concat ""(List.map(native_reexport_scope_bindings ~interface)(native_reexport_scopes modules))in
   let aliases=String.concat ""(List.map(native_module_scope_bindings ~interface)(native_module_scopes modules))in
   header ^ "(* Each value that a .definition declares, at its declared type. *)\n" ^
@@ -817,7 +828,7 @@ let bindings_ml ?(interface=false) modules =
       let wrappers = List.filter_map (fun (_, path, item) -> match item with
           | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
-            Some(native_callback_declaration ~interface ~data_owners m n)
+            Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -1143,8 +1154,23 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       let results=List.concat_map(fun item->match item.SomaForeign.static_export_kind with
         |SomaForeign.Static_projection pattern->SomaForeign.native_export_names pattern
         |_->let name,_=allocated item in [info.static_module^"."^name])info.static_exports in
-      opens^before^"let "^String.concat ", "(List.concat_map SomaForeign.native_static_export_names info.static_exports)^" =\n"^
-      captures^"  let module "^info.static_module^" : sig\n"^header^interface^
+      let environment=SomaForeign.lexical_environment info.static_owner in
+      let module_application(name,path,args)="module "^name^" = "^path^String.concat ""(List.map(fun arg->" ("^arg^")")args)in
+      let prefix,body_modules,local_modules=match environment with None->"","",""|Some environment->
+        let prefix=String.concat ""(List.map(fun(kind,namespace,_)->
+          let find scopes=match List.assoc_opt namespace scopes with Some entries->namespace,entries
+            |None->error Pp.(str "lexical publication scope is absent")in
+          match kind with
+          |"values"->let scope=find(native_value_scopes modules)in
+            let inline_publications=List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)environment.environment_prefix in
+            native_value_scope_ml ~publication_scope:namespace ~inline_publications scope
+          |"modules"->native_module_scope_ml ~interface:false(find(native_module_scopes modules))
+          |"types"->native_source_type_scope_ml(find(native_source_type_scopes modules))
+          |_->assert false)environment.environment_prefix)in
+        prefix,String.concat ""(List.map(fun item->module_application item^"\n")environment.environment_modules),
+          String.concat ""(List.map(fun item->"  let "^module_application item^" in\n")environment.environment_locals)in
+      opens^prefix^before^body_modules^"let "^String.concat ", "(List.concat_map SomaForeign.native_static_export_names info.static_exports)^" =\n"^
+      local_modules^captures^"  let module "^info.static_module^" : sig\n"^header^interface^
       "\n  end = struct\n    module "^bindings_module()^" = struct\n"^bindings^
       "\n    end\n"^header^program^"\n  end in\n"^projections^"  "^
       String.concat ", "results^"\n"^after in

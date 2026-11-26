@@ -135,6 +135,7 @@ type native_operation =
   | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
   | NativePublishedValue of string * (string * string) option
   | NativeProjectedValue of string * string * (string * string) option
+  | NativePublishedProjection of string * string * (string * string * string * string) option
 
 and native_static_expression =
   | StaticArgument of int
@@ -434,6 +435,17 @@ type native_lexical_scope = {
 val native_lexical_scopes : (unit -> native_lexical_scope list) ref
 val lexical_scope : Names.Constant.t -> native_lexical_scope option
 val native_lexical_scope_identity : native_lexical_scope -> string
+type native_lexical_environment = {
+  environment_owner : Names.Constant.t;
+  environment_prefix : (string * string * string) list;
+  environment_prefix_layouts : string list;
+  environment_modules : (string * string * string list) list;
+  environment_locals : (string * string * string list) list;
+}
+val native_lexical_environments : (unit -> native_lexical_environment list) ref
+val lexical_environment : Names.Constant.t -> native_lexical_environment option
+val native_lexical_environment_identity : native_lexical_environment -> string
+
 val native_static_assembly_identity : native_static_assembly -> string
 val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
 val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref
