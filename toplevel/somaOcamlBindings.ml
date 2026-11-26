@@ -415,6 +415,11 @@ let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.na
     | SomaForeign.NativeDefaultedFunction (path, callable), [_] ->
       let labels=List.filter(function Some name->not(String.starts_with ~prefix:"?" name)|None->true)
         callable.SomaForeign.callable_labels in
+      (* Typed argument coercion erases defaults only when necessary, retaining
+         an already positional function object instead of eta-expanding it. *)
+      if List.for_all (function None -> true | Some _ -> false) labels then
+        "((fun (value : " ^ n.result ^ ") -> value) " ^ path ^ ")"
+      else
       let values=List.mapi(fun index _->"value"^string_of_int index)labels in
       let given=List.map2(fun value->function None->value|Some name->"~"^name^":"^value)values labels in
       "(fun " ^ String.concat " " values ^ " -> (" ^ path ^ " : " ^
