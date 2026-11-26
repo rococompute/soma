@@ -388,7 +388,7 @@ let native_source_type_reexport_ml info =
   (match info.source_type_body with
    |Source_alias typ->typ^"\n"
    |Source_record fields->params^info.source_type_target^" = { "^
-      String.concat "; "(List.map(fun f->f.field_name^" : "^f.field_type)fields)^" }\n"
+      String.concat "; "(List.map(fun f->(if f.field_mutable then "mutable "else "")^f.field_name^" : "^f.field_type)fields)^" }\n"
    |Source_variant []->params^info.source_type_target^" = |\n"
    |Source_variant cases->params^info.source_type_target^" =\n"^
       String.concat "\n"(List.map(fun(name,fields)->"| "^name^

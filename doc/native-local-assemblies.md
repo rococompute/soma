@@ -351,3 +351,38 @@ promise identity, caller context, cancellation, synchronous/initialization
 faults, exact call allocation, natural Weak ownership, provenance, rejected
 scopes (including attempted polymorphic-value weakening) and semantic identity
 changes. The static fixture separately retains unrestricted generic checks.
+
+### Owned record equations and ordered public type aliases
+
+A `.definition` can publish a nominal equation for an already checked owned
+record without parsing its generated implementation:
+
+```soma
+Import model.
+OCaml Native Reexport Record public_entry := model.entry As "entry".
+OCaml Native Reexport Source public_tree := model.tree As "tree" From "Owner.tree".
+OCaml Native Reexport Type public_action As "action" := (model.tree (model.entry -> bool)).
+```
+
+`model.entry` must be an owned mutable or immutable native record, not an
+arbitrary external type. Its owner path is derived from the schema's canonical
+module identity. The complete field list and each mutability flag come from
+the checked native record descriptor; publication adds no getters, copies or
+conversions. Native compilation checks the equation against that actual owner.
+This shares the existing type-only manifest/artifact and metadata shape.
+
+Closed type aliases can refer to previously published ordinary Source and
+owned record types in the same declaration namespace. A local printer context
+maps their checked logical references and arities to the earlier public names
+in declaration order. Recursive type rendering retains its own self-reference
+context. No global extraction remapping is installed, and unrelated native
+families and clients without such references retain their previous output.
+Mutable field flags and these complete alias declarations participate in the
+existing semantic identity.
+
+The Source-type fixture now also checks mutable owned records, callable fields,
+closed aliases containing a generic recursive variant over a function from the
+owned record, native owner/type and mutability mismatches, semantic changes
+when only mutability changes, and rejection of non-record/duplicate/malformed
+reexports. Existing recursive/generic/identity/allocation/provenance/cleanup
+checks remain in place for both native and bytecode.

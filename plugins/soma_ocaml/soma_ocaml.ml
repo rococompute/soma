@@ -191,14 +191,14 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
   let t=Reductionops.whd_betaiotazeta env sigma t in
   let selected_nominal=
     let head,args=EConstr.decompose_app sigma t in
-    match EConstr.kind sigma head with
-    |Ind(ind,_)->(match List.find_opt(fun(other,_,_)->GlobRef.CanOrd.equal
-        (GlobRef.IndRef ind)(GlobRef.IndRef other))nominal with
+    let reference=match EConstr.kind sigma head with
+      |Ind(ind,_)->Some(GlobRef.IndRef ind)|Const(c,_)->Some(GlobRef.ConstRef c)|_->None in
+    Option.bind reference(fun reference->match List.find_opt(fun(other,_,_)->
+        GlobRef.CanOrd.equal reference other)nominal with
       |Some(_,target,arity)when Array.length args=arity->
         let arguments=Array.to_list(Array.map(ocaml_type ~nominal env sigma vars)args)in
         Some((match arguments with []->""|[t]->"("^t^") "|ts->"("^String.concat ", "ts^") ")^target)
-      |Some _->not_ocaml(str "source reexport parameter arity differs")|None->None)
-    |_->None in
+      |Some _->not_ocaml(str "source reexport parameter arity differs")|None->None)in
   let reused_record =
     let head,args = EConstr.decompose_app sigma t in
     match EConstr.kind sigma head with
@@ -1084,7 +1084,7 @@ let native_source_type_reexport marker source name target =
   (match EConstr.kind sigma(Reductionops.whd_all parameter_env sigma arity)with
    |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->()
    |_->native_error "logical propositions cannot be reexported as native data");
-  let nominal=[ind,name,List.length params]in
+  let nominal=[GlobRef.IndRef ind,name,List.length params]in
   let rec strip count env typ=if count=0 then typ else
     match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
     |Prod(na,domain,rest)->strip(count-1)(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
@@ -1126,6 +1126,33 @@ let native_source_type_reexport marker source name target =
     (Libnames.string_of_path(Nametab.path_of_global(GlobRef.IndRef ind)))target params body
     (CAst.make(Constrexpr.CRef(source,None)))
 
+let native_record_reexport marker source name =
+  ignore(native_context());
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
+    |_->native_error "a record reexport needs a checked owned native record"in
+  let record=match Cmap_env.find_opt owner !bindings with
+    |Some{item=(SomaForeign.OCamlNativeOwnedRecord r|SomaForeign.OCamlNativeImmutableRecord(r,_));_}->r
+    |_->native_error "a record reexport needs a checked owned native record"in
+  if record.SomaForeign.record_fields=[]then native_error "a record reexport needs native fields";
+  native_source_reexport_finish marker name
+    (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner)))
+    (SomaForeign.native_record_type record)[] (SomaForeign.Source_record record.record_fields)
+    (CAst.make(Constrexpr.CRef(source,None)))
+
+(* Previously published shapes can be named in later declarations. This is a
+   local printer context, never a global extraction/type conversion override. *)
+let native_public_type_names () =
+  let namespace=native_namespace()in
+  let previous=Cmap_env.fold(fun _ binding found->match binding.item with
+    |SomaForeign.OCamlNativeSourceTypeReexport info when info.source_type_namespace=namespace &&
+        info.source_type_symbol<>"type-alias"->info::found
+    |_->found)!bindings []in
+  List.map(fun info->
+    let reference=try Nametab.locate(Libnames.qualid_of_string info.SomaForeign.source_type_symbol)
+      with Not_found->native_error "a public type's checked Source owner is unavailable"in
+    reference,info.source_type_name,List.length info.source_type_parameters)
+    (List.sort(fun a b->Int.compare a.SomaForeign.source_type_order b.SomaForeign.source_type_order)previous)
+
 let native_source_alias_reexport marker syntax name =
   ignore(native_context());
   let env=Global.env()in
@@ -1134,7 +1161,7 @@ let native_source_alias_reexport marker syntax name =
   if EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
     native_error "a Source type alias needs a runtime type";
   native_source_monomorphic env sigma typ;
-  let representation=try ocaml_type env sigma [] typ with Not_ocaml why->
+  let representation=try ocaml_type ~nominal:(native_public_type_names()) env sigma [] typ with Not_ocaml why->
     CErrors.user_err(str "OCaml Native Source type alias: "++why)in
   native_source_reexport_finish marker name "type-alias" "" []
     (SomaForeign.Source_alias representation)syntax

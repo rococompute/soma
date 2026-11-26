@@ -18,10 +18,16 @@ Record higher := Higher {run:forall A:Type,A->A}.
 Record empty_record := Empty_record {}.
 Definition main := true.
 SOMA
+cat >owner.definition <<'SOMA'
+From Soma Require Import Native.
+From Stdlib Require Import Strings.String.
+OCaml Native Record owned := { payload:string; mutable changed:bool; accept:bool -> bool }.
+OCaml Native External Type other := "Target.other".
+SOMA
 cat >exports.definition <<'SOMA'
 From Soma Require Import Native.
 From Stdlib Require Import Strings.String.
-Import schema.
+Import schema owner.
 OCaml Native External Type real := "Float.t".
 OCaml Native External Type native_json(F:Type) := "Target.json".
 Fail OCaml Native Reexport Source bad := schema.main As "bad" From "Target.json".
@@ -39,10 +45,16 @@ OCaml Native Reexport Source public_inbox := schema.inbox As "inbox" From "Targe
 OCaml Native Reexport Source public_box := schema.box As "box_value" From "Target.box".
 OCaml Native Reexport Type public_json As "json" := (native_json real).
 OCaml Native Reexport Type public_fn As "fn" := (bool -> bool).
+Fail OCaml Native Reexport Record invalid := schema.inbox As "invalid".
+Fail OCaml Native Reexport Record invalid := owner.other As "invalid".
+Fail OCaml Native Reexport Record invalid := owner.owned As "bad.name".
+OCaml Native Reexport Record public_owned := owner.owned As "owned".
+Fail OCaml Native Reexport Record duplicate_owned := owner.owned As "owned".
+OCaml Native Reexport Type public_rule As "rule" := (schema.json (owner.owned -> bool)).
 SOMA
 cat >main.soma <<'SOMA'
 Import exports.
-Definition main := (public_json_value,(public_inbox,(public_box,(public_json,public_fn)))).
+Definition main := (public_json_value,(public_inbox,(public_box,(public_json,(public_fn,(public_owned,public_rule)))))).
 SOMA
 soma extract main.soma -no-soma-prelude -o native >extract.log 2>&1
 soma hash main.soma -no-soma-prelude >hash.log
@@ -50,7 +62,7 @@ python3 - <<'PY'
 from pathlib import Path
 import shlex,hashlib
 rows=Path('native/native_source_type_reexports.manifest').read_text().splitlines()
-assert rows[0]=='soma-native-source-type-reexports-v1' and len(rows)==6
+assert rows[0]=='soma-native-source-type-reexports-v1' and len(rows)==8
 files=set();names=[]
 for line in rows[1:]:
  symbol,namespace,source,src_hash,name,digest,public,target,order=shlex.split(line)
@@ -58,9 +70,15 @@ for line in rows[1:]:
  assert hashlib.sha256(Path(source).read_bytes()).hexdigest()==src_hash
  assert hashlib.sha256(Path('native',name).read_bytes()).hexdigest()==digest
  assert int(order)==len(names);names.append(public);files.add(name)
-assert names==['json_value','inbox','box_value','json','fn'] and len(files)==1
+assert names==['json_value','inbox','box_value','json','fn','owned','rule'] and len(files)==1
 Path('types.ml').write_bytes(Path('native',files.pop()).read_bytes())
 Path('types.mli').write_bytes(Path('types.ml').read_bytes())
+owned=[shlex.split(l)[3]for l in Path('native/native_owned.manifest').read_text().splitlines()[1:]if shlex.split(l)[0]=='owner.owned']
+assert len(owned)==1
+Path(owned[0]).write_bytes(Path('native',owned[0]).read_bytes())
+Path('owned-file').write_text(owned[0])
+assert 'mutable changed : bool' in Path('types.ml').read_text()
+assert 'type rule = (owned -> bool) json_value' in Path('types.ml').read_text()
 for line in Path('hash.log').read_text().splitlines():
  assumptions=set(line.split('  assumes ',1)[1].split(', '))if'  assumes 'in line else set()
  assert assumptions<={'Corelib.Numbers.Cyclic.Int63.PrimInt63.int'},assumptions
@@ -86,6 +104,11 @@ let ()=
  let public:T.inbox=record in require "record labels and nominal identity" (public==record && public.T.host="localhost");
  let ints:int T.box_value={T.payload=7;index=3}and texts:string T.box_value={T.payload="x";index=4}in
  let native:int Target.box=ints in require "generic record equation" (native==ints && texts.T.payload="x");
+ let owner:T.owned={T.payload="owned";changed=false;accept=(fun x->x)}in
+ let rule:T.rule=T.Num(fun value->value.T.changed)in
+ let native:(T.owned->bool)Target.json=rule in
+ owner.T.changed<-true;
+ require "owned mutable record and chained public aliases" (match native with Target.Num test->test owner && owner.T.accept true|_->false);
  let callback:T.fn=fun x->x in let native:bool->bool=callback in require "function alias identity" (callback==native);
  Gc.full_major();let before=Gc.allocated_bytes()in
  for _=1 to 10000 do ignore(as_native(as_public integers))done;
@@ -95,7 +118,7 @@ let ()=
  print_endline "PASS: recursive constructors, generic records, original objects, closed aliases and no conversion allocation"
 ML
 for compiler in ocamlopt ocamlc;do
- ocamlfind "$compiler" -w -a uint63.ml target.ml types.mli types.ml check.ml -o check >"$compiler.log" 2>&1
+ ocamlfind "$compiler" -w -a uint63.ml target.ml "$(cat owned-file)" types.mli types.ml check.ml -o check >"$compiler.log" 2>&1
  ./check
 done
 # Native typing checks the shape against the actual external owner as well.
@@ -105,6 +128,22 @@ if ocamlc -w -a -c target.ml types.mli >wrong-owner.log 2>&1;then
  echo 'wrong native record shape was accepted';exit 1
 fi
 mv target-good.ml target.ml
+record_file=$(cat owned-file)
+cp "$record_file" "$record_file.good"
+sed -i.bak 's/mutable changed/changed/' "$record_file"
+if ocamlc -w -a -c "$record_file" types.mli >wrong-mutability.log 2>&1;then
+ echo 'wrong native record mutability was accepted';exit 1
+fi
+mv "$record_file.good" "$record_file"
+cp owner.definition owner-good.definition
+sed -i.bak 's/mutable changed/changed/' owner.definition
+soma hash main.soma -no-soma-prelude >mutability-hash.log
+mv owner-good.definition owner.definition
+python3 - <<'PY_MUTABLE'
+from pathlib import Path
+def main(file):return next(l.split()[0]for l in Path(file).read_text().splitlines()if l.split()[2]=='main.main')
+assert main('hash.log')!=main('mutability-hash.log')
+PY_MUTABLE
 cp hash.log before.log
 sed -i.bak 's/As "json_value"/As "json_view"/' exports.definition
 soma hash main.soma -no-soma-prelude >after.log
