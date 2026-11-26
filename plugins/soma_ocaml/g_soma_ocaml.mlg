@@ -136,6 +136,7 @@ VERNAC ARGUMENT EXTEND native_lexical_prefix
 | [ "Values" reference(source) ] -> { "values",source }
 | [ "Modules" reference(source) ] -> { "modules",source }
 | [ "Types" reference(source) ] -> { "types",source }
+| [ "Exception" reference(source) ] -> { "exception",source }
 END
 VERNAC ARGUMENT EXTEND native_lexical_module
  PRINTED BY { fun(name,path,_)->Pp.(str name++str " := "++str path) }

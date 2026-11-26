@@ -825,7 +825,13 @@ let bindings_ml ?(interface=false) modules =
   let data_owners=native_static_data_owners modules in
   let values=String.concat ""(List.map(native_value_scope_bindings ~interface ~publications:(native_publication_namespaces modules))(List.filter(fun(namespace,_)->not(List.mem namespace inline_publications))(native_value_scopes modules)))in
   let types=String.concat ""(List.map(native_reexport_scope_bindings ~interface)(native_reexport_scopes modules))in
-  let aliases=String.concat ""(List.map(native_module_scope_bindings ~interface)(native_module_scopes modules))in
+  let prefix_scopes=match !SomaForeign.native_runtime_references,main_reference()with
+    |Some _,GlobRef.ConstRef owner->(match SomaForeign.lexical_environment owner with None->[]|Some info->info.environment_prefix)
+    |_->[]in
+  let prefix_namespaces=List.map(fun(_,namespace,_)->namespace)prefix_scopes in
+  let prefix_modules=List.filter_map(fun(kind,namespace,_)->if kind="modules"then Some namespace else None)prefix_scopes in
+  let aliases=String.concat ""(List.map(native_module_scope_bindings ~interface)
+    (List.filter(fun(namespace,_)->not(List.mem namespace prefix_modules))(native_module_scopes modules)))in
   header ^ "(* Each value that a .definition declares, at its declared type. *)\n" ^
   values^types^aliases ^
   String.concat "" (List.concat_map (fun (m : SomaForeign.ocaml_module) ->
@@ -833,10 +839,13 @@ let bindings_ml ?(interface=false) modules =
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       let primitives = primitive_declarations ~interface m in
-      let wrappers = List.filter_map (fun (_, path, item) -> match item with
+      let wrappers = List.filter_map (fun (reference, path, item) -> match item with
           | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
-            if List.mem n.namespace postlude_namespaces then None else Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
+            if List.mem n.namespace postlude_namespaces ||
+              (List.mem n.namespace prefix_namespaces && match !SomaForeign.native_runtime_references with None->false|Some refs->
+                not(List.exists(GlobRef.CanOrd.equal(GlobRef.ConstRef reference))refs))then None
+            else Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -1056,6 +1065,9 @@ let prepare_native_static_extraction () =
     then kept else kept@[reference,type_])[]requests in
   SomaForeign.native_static_extraction_requests:=requests;
   SomaForeign.native_static_extracted_names:=[];
+  SomaForeign.native_runtime_references:=
+    (if List.exists(fun info->SomaForeign.lexical_scope info.SomaForeign.static_owner<>None &&
+        SomaForeign.static_exceptions info.static_owner<>[])(selected_native_static_assemblies())then Some[]else None);
   SomaForeign.native_public_type_declarations:=[];
   SomaForeign.native_public_extracted_types:=
     (if selected_native_public_assemblies()=[]then None else Some []);
@@ -1130,10 +1142,11 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         let prefix=match variables with []->""|[v]->v^" "|_->"("^String.concat ", "variables^") "in
         "type "^prefix^item.static_export_name^" = "^prefix^target^"\n"in
     let exceptions=SomaForeign.static_exceptions info.static_owner in
-    let declarations=String.concat ""(List.map(fun item->
+    let exception_declaration item=
       "exception "^item.SomaForeign.static_exception_name^
       (match item.static_exception_arguments with []->""|arguments->
-        " of "^String.concat " * "(List.map(fun typ->"("^typ^")")arguments))^"\n")exceptions)in
+        " of "^String.concat " * "(List.map(fun typ->"("^typ^")")arguments))^"\n"in
+    let declarations=String.concat ""(List.map exception_declaration exceptions)in
     let rebasing=if exceptions=[]then ""else
       "    module Soma_handles = struct\n      include Soma_handles\n"^
       String.concat ""(List.map(fun item->"      exception "^item.SomaForeign.static_exception_name^
@@ -1182,12 +1195,13 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
             native_value_scope_ml ~publication_scope:namespace ~inline_publications scope
           |"modules"->native_module_scope_ml ~interface:false(find(native_module_scopes modules))
           |"types"->native_source_type_scope_ml(find(native_source_type_scopes modules))
+          |"exception"->exception_declaration(List.find(fun item->item.SomaForeign.static_exception_symbol=namespace)exceptions)
           |_->assert false)environment.environment_prefix)in
         prefix,String.concat ""(List.map(fun item->module_application item^"\n")environment.environment_modules),
           String.concat ""(List.map(fun item->"  let "^module_application item^" in\n")environment.environment_locals)in
-      opens^prefix^before^body_modules^"let "^String.concat ", "(List.concat_map SomaForeign.native_static_export_names info.static_exports)^" =\n"^
+      opens^(if environment=None then declarations else "")^prefix^before^body_modules^"let "^String.concat ", "(List.concat_map SomaForeign.native_static_export_names info.static_exports)^" =\n"^
       local_modules^captures^"  let module "^info.static_module^" : sig\n"^header^interface^
-      "\n  end = struct\n    module "^bindings_module()^" = struct\n"^bindings^
+      "\n  end = struct\n    module "^bindings_module()^" = struct\n"^rebasing^bindings^
       "\n    end\n"^header^program^"\n  end in\n"^projections^"  "^
       String.concat ", "results^"\n"^after)^postlude in
     let filename=Filename.remove_extension(Filename.basename info.static_source)^".assembly"in

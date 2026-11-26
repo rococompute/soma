@@ -752,6 +752,12 @@ let full_extr opaque_access f (refs,mps) =
   let () = warns table in
   print_structure_to_file table (mono_filename f) false struc;
   if lang()=Ocaml && !SomaImport.generated_output then begin
+    (match !SomaForeign.native_runtime_references with None->()|Some _->
+      let refs=ref[]in
+      ignore(struct_ast_search(function MLglob r->
+        if not(List.exists(GlobRef.CanOrd.equal r.glob)!refs)then refs:=r.glob:: !refs;false
+        |_->false)struc);
+      SomaForeign.native_runtime_references:=Some !refs);
     let capture(reference,type_)=
       let candidates=List.filter(fun r->GlobRef.CanOrd.equal r.glob reference)refs in
       let r=match candidates with [r]->r

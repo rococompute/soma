@@ -458,6 +458,7 @@ val native_static_postlude_identity : native_static_postlude -> string
 
 val native_static_assembly_identity : native_static_assembly -> string
 val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
+val native_runtime_references : Names.GlobRef.t list option ref
 val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref
 val native_public_extracted_values : string list option ref
 

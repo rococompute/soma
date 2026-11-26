@@ -814,6 +814,7 @@ let native_static_assembly_identity info =
 (* Filled by the OCaml project producer, then by extraction's actual name
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)
 let native_static_extraction_requests : (Names.GlobRef.t * bool) list ref = ref []
+let native_runtime_references : Names.GlobRef.t list option ref = ref None
 let native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref = ref []
 let native_public_extracted_values : string list option ref = ref None
 

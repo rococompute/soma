@@ -856,9 +856,8 @@ let native_lexical_scope selected opens functor_ =
   if SomaForeign.lexical_scope owner<>None then native_error "duplicate lexical assembly scope";
   if SomaForeign.static_postlude owner<>None then native_error "an ordinary static postlude cannot become a lexical scope";
   if List.exists(fun item->match item.SomaForeign.static_export_kind with
-      |SomaForeign.Static_value|SomaForeign.Static_projection _->false|_->true)assembly.static_exports ||
-     SomaForeign.static_exceptions owner<>[]then
-    native_error "a lexical assembly publishes values without escaping types, modules or exception declarations";
+      |SomaForeign.Static_value|SomaForeign.Static_projection _->false|_->true)assembly.static_exports then
+    native_error "a lexical assembly publishes values without escaping types or modules";
   (* A let-module expression is expansive in OCaml. Do not silently weaken
      a polymorphic Source export through the native value restriction. *)
   let env=Global.env()and sigma=Evd.from_env(Global.env())in
@@ -899,7 +898,7 @@ let in_native_lexical_environment =
     ~cache:(fun info->native_lexical_environments:=info:: !native_lexical_environments;SomaHash.invalidate())
     ~subst:None
 let () = SomaForeign.native_lexical_environments := (fun()-> !native_lexical_environments)
-let native_publication_scopes owner namespace prefix =
+let native_publication_scopes ?(exceptions=false) owner namespace prefix =
   let module Constants=Set.Make(Constant.CanOrd)in
   let visited=ref Constants.empty and referenced=ref Constants.empty in
   let rec term t=(match Constr.kind t with Const(c,_)->referenced:=Constants.add c !referenced;constant c|_->());Constr.iter term t
@@ -912,6 +911,16 @@ let native_publication_scopes owner namespace prefix =
   let prefix=List.map(fun(kind,reference)->
     let c=match Nametab.locate reference with GlobRef.ConstRef c when Constants.mem c !referenced->c
       |_->native_error "a lexical prefix must be a checked dependency of main"in
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))in
+    if kind="exception"then begin
+      if not exceptions || not(List.exists(fun info->info.SomaForeign.static_exception_symbol=symbol)(SomaForeign.static_exceptions owner))then
+        native_error "an exception prefix needs this assembly's checked public exception Constructor";
+      if List.mem(kind,symbol)!seen then native_error "duplicate lexical prefix exception";
+      seen:=(kind,symbol):: !seen;
+      let binding=Cmap_env.find c !bindings in
+      layouts:= !layouts@[SomaForeign.native_identity binding.item];
+      kind,symbol,symbol
+    end else begin
     let namespace=match Cmap_env.find_opt c !bindings with
      |Some{item=SomaForeign.OCamlNativeValueReexport info;_}when kind="values"->info.value_namespace
      |Some{item=SomaForeign.OCamlNativeBindingProjection info;_}when kind="values"->info.projection_namespace
@@ -931,7 +940,7 @@ let native_publication_scopes owner namespace prefix =
     let entries=List.sort(fun(a,_)(b,_)->Int.compare a b)entries in
     List.iteri(fun expected(order,_)->if expected<>order then native_error "lexical prefix declaration order is incomplete")entries;
     layouts:= !layouts@[String.concat "\n"(List.map(fun(_,item)->SomaForeign.native_identity item)entries)];
-    kind,namespace,Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)))prefix in
+    kind,namespace,symbol end)prefix in
   prefix, !layouts
 
 let native_lexical_environment selected prefix modules locals =
@@ -949,7 +958,9 @@ let native_lexical_environment selected prefix modules locals =
     module_name name;module_path path;List.iter module_path args;
     if List.mem name !used||String.starts_with ~prefix:"Soma_"name then native_error "duplicate or reserved lexical module";
     used:=name:: !used)(modules@locals);
-  let prefix,layouts=native_publication_scopes owner assembly.static_namespace prefix in
+  let prefix,layouts=native_publication_scopes ~exceptions:true owner assembly.static_namespace prefix in
+  List.iter(fun info->if not(List.exists(fun(kind,_,symbol)->kind="exception"&&symbol=info.SomaForeign.static_exception_symbol)prefix)then
+    native_error "a lexical environment must place every public exception in its prefix")(SomaForeign.static_exceptions owner);
   Lib.add_leaf(in_native_lexical_environment SomaForeign.{environment_owner=owner;environment_prefix=prefix;environment_prefix_layouts=layouts;
     environment_modules=modules;environment_locals=locals})
 
