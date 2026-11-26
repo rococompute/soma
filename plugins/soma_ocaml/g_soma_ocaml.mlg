@@ -115,6 +115,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_assembly source pattern }
 | [ "OCaml" "Native" "Static" "Assembly" reference(source) "As" string(name) "With" "[" ne_native_assembly_member_list_sep(exports, ";") "]" ] ->
  { Soma_ocaml.native_static_assembly source name exports }
+| [ "OCaml" "Native" "Public" "Types" reference(source) "With" "[" ne_native_assembly_member_list_sep(exports, ";") "]" ] ->
+ { Soma_ocaml.native_public_type_equations source exports }
 | [ "OCaml" "Native" "Public" "Assembly" reference(source) "With" "[" ne_native_public_application_list_sep(applications, ";") "]" ] ->
  { Soma_ocaml.native_public_assembly source applications }
 END

@@ -152,3 +152,52 @@ in native and bytecode. It exercises retained generic helpers, allocated name
 collisions, single preparation, original owner/input/promise identity, caller
 context, exact faults/cancellation, call allocation, natural Weak retention
 and release, rejected declarations, semantic fingerprints and stale cleanup.
+
+### Checked public type equations
+
+Public type equations can preserve constructors and record labels without
+parsing generated ML or repeating their shapes in a wrapper generator:
+
+```soma
+From Soma Require Import Native OCaml.
+From Stdlib Require Import Strings.String.
+Record entry := Entry { path : string; data : string }.
+Definition path_of (value : entry) := path value.
+Definition main := path_of.
+OCaml Native Public Types main With [Type "entry" := entry].
+```
+
+The reference must be a transparent type definition or inductive type in the
+same checked Source namespace and in main's dependency closure. Only runtime
+type parameters are supported; indexed runtime parameters, logical parameters,
+opaque types, unrelated references, non-types and invalid/duplicate names are
+rejected. One declaration supplies the complete list for that namespace. If
+there is also a `Public Assembly` application declaration, place it before the
+`Public Types` declaration; otherwise the latter creates a public producer.
+
+Extraction retains the referenced types and captures their representations
+from MiniML while the actual OCaml printer's visibility context is live. It
+uses the allocated type, constructor, field and parameter names. The emitted
+equation has the form `type ... public = ... actual = ...` for ordinary
+records and variants, including recursive and mutually recursive variants;
+plain aliases and erased singleton representations retain their actual alias
+representation. A name already equal to its actual extracted name needs no
+additional declaration. A name that would hide another emitted type is
+rejected; erased inline native type names do not count as emitted declarations.
+Coinductive representation equations currently fail explicitly.
+
+The complete `.assembly` and `.assembly-interface` include the equations.
+They carry the existing `native-public-assembly-v1` envelope with an additional
+`public-type-equations-v1` identity component. Changing only an equation's
+public name changes main's checked contract. Source cannot provide arbitrary
+OCaml declaration text. Existing public-application metadata is unchanged, and
+clients with no type equations preserve their previous products and identities.
+No runtime adapter, constructor conversion, copying or extra preparation is
+introduced.
+
+`test-suite/misc/soma_native_public_types.sh` compiles complete implementation
+and interface products in native and bytecode. It covers record labels,
+recursive/mutual constructors, generics, keyword type renaming, actual physical
+identity and allocation, composition with partial applications, manifest/hash
+agreement, rejected indices/opaque types/name collisions, semantic identity
+changes and producer cleanup.

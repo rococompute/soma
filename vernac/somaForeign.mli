@@ -347,6 +347,21 @@ val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
 val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref
 val native_public_extracted_values : string list option ref
 
+type native_public_type_equation = {
+  equation_name : string;
+  equation_reference : Names.GlobRef.t;
+  equation_symbol : string;
+  equation_arity : int;
+}
+type native_public_types = {
+  types_owner : Names.Constant.t;
+  types_equations : native_public_type_equation list;
+}
+val native_public_types : (unit -> native_public_types list) ref
+val native_public_extracted_types : string list option ref
+val native_public_type_declarations : (Names.GlobRef.t * string * string) list ref
+val public_type_equations : Names.Constant.t -> native_public_type_equation list
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;

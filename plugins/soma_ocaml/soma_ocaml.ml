@@ -84,7 +84,12 @@ let in_native_public_assembly =
     ~subst:None
 let () = SomaForeign.native_public_assemblies := (fun()-> !native_public_assemblies)
 
-
+let native_public_types = Summary.ref ~name:"soma-native-public-types" []
+let in_native_public_types =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public type equations"
+    ~cache:(fun info->native_public_types:=info:: !native_public_types;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_public_types := (fun()-> !native_public_types)
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
    they use *)
@@ -806,6 +811,62 @@ let native_public_assembly selected applications =
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   Lib.add_leaf(in_native_public_assembly SomaForeign.{public_owner=main;public_namespace=namespace;
     public_source=source;public_applications=applications})
+
+let native_public_type_equations selected exports =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let main=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace &&
+      Id.to_string(Constant.label c)="main" ->
+      (match(Environ.lookup_constant c env).Declarations.const_body with
+       |Declarations.Def _->c|_->native_error "public types need a transparent Source main")
+    |_->native_error "public types must select their Source main"in
+  if List.exists(fun info->Constant.CanOrd.equal info.SomaForeign.types_owner main)!native_public_types then
+    native_error "one Source namespace may declare public types only once";
+  let module References=Set.Make(GlobRef.CanOrd)in
+  let visited=ref References.empty in
+  let rec term t=
+    (match Constr.kind t with Const(c,_)->reference(GlobRef.ConstRef c)
+      |Ind(i,_)->reference(GlobRef.IndRef i)|_->());Constr.iter term t
+  and reference r=if not(References.mem r !visited)then begin
+    visited:=References.add r !visited;
+    match r with GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+      (match cb.const_body with Declarations.Def body->term body|_->())
+    |_->()end in
+  reference(GlobRef.ConstRef main);
+  let used=ref []in
+  let equations=List.map(fun(kind,public,source)->
+    if kind<>"type"then native_error "public types accept only Type equations";
+    ignore(ocaml_name ~definition:"public type equation" public);
+    if public="_"||not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)public)then
+      native_error "a public type equation needs one native identifier";
+    if List.mem public !used then native_error "duplicate public type equation";
+    used:=public:: !used;
+    let r=Nametab.locate source in
+    if not(References.mem r !visited)then native_error "public types must be dependencies of main";
+    let typ=match r with
+      |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+        (match(Environ.lookup_constant c env).Declarations.const_body with
+         |Declarations.Def _->EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type
+         |_->native_error "public types need transparent Source definitions")
+      |GlobRef.IndRef((mind,_)as ind)when ModPath.to_string(MutInd.modpath mind)=namespace->
+        Retyping.get_type_of env sigma(EConstr.of_constr(Constr.mkIndU(ind,UVars.Instance.empty)))
+      |_->native_error "public type equations need types from their checked Source namespace"in
+    let rec type_arity env count typ=match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->count
+      |Prod(na,domain,body)when is_sort env sigma domain->
+        (match EConstr.kind sigma(Reductionops.whd_all env sigma domain)with
+        |Sort sort when EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort->
+          native_error "public type parameters must be runtime types"|_->());
+        type_arity(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)(count+1)body
+      |_->native_error "public type equations need nondependent runtime type constructors"in
+    let arity=type_arity env 0 typ in
+    SomaForeign.{equation_name=public;equation_reference=r;equation_arity=arity;
+      equation_symbol=Libnames.string_of_path(Nametab.path_of_global r)})exports in
+  if not(List.exists(fun info->Constant.CanOrd.equal info.SomaForeign.public_owner main)!native_public_assemblies)
+  then native_public_assembly selected [];
+  Lib.add_leaf(in_native_public_types SomaForeign.{types_owner=main;types_equations=equations})
 
 let native_external_family name parameters path =
   ignore (native_context ());

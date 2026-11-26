@@ -601,6 +601,24 @@ let native_static_extraction_requests : (Names.GlobRef.t * bool) list ref = ref 
 let native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref = ref []
 let native_public_extracted_values : string list option ref = ref None
 
+(* Separate metadata keeps existing public-application objects compatible. *)
+type native_public_type_equation = {
+  equation_name : string;
+  equation_reference : Names.GlobRef.t;
+  equation_symbol : string;
+  equation_arity : int;
+}
+type native_public_types = {
+  types_owner : Names.Constant.t;
+  types_equations : native_public_type_equation list;
+}
+let native_public_types : (unit -> native_public_types list) ref = ref(fun()->[])
+let native_public_extracted_types : string list option ref = ref None
+let native_public_type_declarations : (Names.GlobRef.t * string * string) list ref = ref []
+let public_type_equations owner =
+  List.concat_map(fun info->if Names.Constant.CanOrd.equal owner info.types_owner
+    then info.types_equations else [])(!native_public_types())
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;
@@ -619,4 +637,7 @@ let native_public_assembly_identity info =
   String.concat "\n" (["native-public-assembly-v1";info.public_namespace] @
     List.map(fun item->String.concat " "
       ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
-       item.application_symbols))info.public_applications)
+       item.application_symbols))info.public_applications) ^
+  (match public_type_equations info.public_owner with []->""|equations->
+    "\npublic-type-equations-v1\n"^String.concat "\n"(List.map(fun item->
+      Printf.sprintf "%S %s %d" item.equation_name item.equation_symbol item.equation_arity)equations))

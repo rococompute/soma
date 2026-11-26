@@ -891,12 +891,17 @@ let prepare_native_static_extraction () =
       info.SomaForeign.static_exports)(selected_native_static_assemblies()) @
     List.concat_map(fun info->List.concat_map(fun item->
       List.map(fun r->r,false)(item.SomaForeign.application_function::item.application_arguments))
-        info.SomaForeign.public_applications)(selected_native_public_assemblies())in
+        info.SomaForeign.public_applications)(selected_native_public_assemblies()) @
+    List.concat_map(fun info->List.map(fun item->item.SomaForeign.equation_reference,true)
+      (SomaForeign.public_type_equations info.SomaForeign.public_owner))(selected_native_public_assemblies())in
   let requests=List.fold_left(fun kept(reference,type_) ->
     if List.exists(fun(other,kind)->GlobRef.CanOrd.equal reference other&&type_=kind)kept
     then kept else kept@[reference,type_])[]requests in
   SomaForeign.native_static_extraction_requests:=requests;
   SomaForeign.native_static_extracted_names:=[];
+  SomaForeign.native_public_type_declarations:=[];
+  SomaForeign.native_public_extracted_types:=
+    (if selected_native_public_assemblies()=[]then None else Some []);
   SomaForeign.native_public_extracted_values:=
     (if selected_native_public_assemblies()=[]then None else Some []);
   List.map(fun(reference,_)->Libnames.string_of_path(Nametab.path_of_global reference))requests
@@ -986,11 +991,27 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
     let name reference=match List.filter(fun(r,type_,_,_)->GlobRef.CanOrd.equal r reference&&not type_)
       !SomaForeign.native_static_extracted_names with
       |[(_,_,name,_)]->name|_->error Pp.(str "public application member is absent or ambiguous in extraction")in
+    let type_equations=String.concat ""(List.map(fun item->
+      let reference=item.SomaForeign.equation_reference in
+      let actual,arity=match List.filter(fun(r,type_,_,_)->GlobRef.CanOrd.equal r reference&&type_)
+        !SomaForeign.native_static_extracted_names with
+        |[(_,_,name,arity)]->name,arity
+        |_->error Pp.(str "public type is absent or ambiguous in fresh extraction")in
+      if arity<>item.equation_arity then error Pp.(str "public type parameter erasure differs from Source");
+      if actual=item.equation_name then ""else begin
+        let existing=match !SomaForeign.native_public_extracted_types with Some names->names
+          |None->error Pp.(str "public type has no extracted name table")in
+        if List.mem item.equation_name existing then error Pp.(str "public type would shadow an extracted type");
+        match List.filter(fun(r,name,_)->GlobRef.CanOrd.equal reference r&&name=item.equation_name)
+          !SomaForeign.native_public_type_declarations with
+        |[(_,_,declaration)]->"\n"^declaration^"\n"
+        |_->error Pp.(str "public type has no checked representation declaration")
+      end)(SomaForeign.public_type_equations info.SomaForeign.public_owner))in
     let implementation=header^program^String.concat ""(List.map(fun item->
       "\nlet "^item.SomaForeign.application_name^" = "^name item.application_function^" "^
-      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)in
+      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations in
     let interface_=header^interface^String.concat ""(List.map(fun item->
-      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)in
+      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations in
     let source_hash=SomaMerkle.string(read_source(SomaImport.resolve_project_file info.public_source))in
     let layout=SomaMerkle.string(SomaForeign.native_public_assembly_identity info)in
     let contract=match List.assoc_opt owner contracts with Some h->h

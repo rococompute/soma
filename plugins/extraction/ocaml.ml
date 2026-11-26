@@ -712,6 +712,37 @@ let pp_mind table i =
     | Record fields -> pp_record table fields (i.ind_equiv,0) i.ind_packets.(0)
     | Standard -> pp_ind table false i
 
+(* Public equations reuse MiniML's actual representation and allocated names.
+   No OCaml source is parsed, nor can Source supply arbitrary declaration text. *)
+let public_type_equation table ~name reference declaration =
+  let alias variables actual =
+    let pl=rename_tvars keywords variables in
+    str "type " ++ pp_parameters pl ++ str name ++ str " = " ++
+    pp_parameters pl ++ pp_global table Type actual in
+  match declaration with
+  |Dtype(actual,variables,_)->alias variables actual ++ fnl()
+  |Dind block->
+    let packet=match Array.find_opt(fun p->GlobRef.CanOrd.equal p.ip_typename_ref.glob reference.glob &&
+      not p.ip_logical)block.ind_packets with
+      |Some p->p|None->CErrors.user_err(str "Public type equation was erased.")in
+    let head=alias packet.ip_vars packet.ip_typename_ref in
+    let pl=rename_tvars keywords packet.ip_vars in
+    (match block.ind_kind with
+    |Singleton->head
+    |Coinductive->CErrors.user_err(str "Public equations for coinductive representations are not supported.")
+    |Record fields->
+      let fields=List.combine(pp_fields table packet.ip_typename_ref fields)packet.ip_types.(0)in
+      head ++ str " = { " ++ hov 0(prlist_with_sep(fun()->str ";"++spc())
+        (fun(field,typ)->field++str " : "++pp_type table true pl typ)fields)++str " }"
+    |Standard->
+      let constructor i arguments=
+        (if i=0 then mt()else fnl())++str "| "++pp_global table Cons packet.ip_consnames_ref.(i)++
+        (if arguments=[]then mt()else str " of "++
+          prlist_with_sep(fun()->spc()++str "* ")(pp_type table true pl)arguments)in
+      head++str " ="++fnl()++
+        (if Array.length packet.ip_types=0 then str " |"else prvecti constructor packet.ip_types))++fnl()
+  |_->CErrors.user_err(str "Public equation does not name an extracted type.")
+
 let pp_ind_brands ~signature table ind =
   if Option.is_empty (Gradual.get (Global.env ()) Gradual.GCast) then mt () else
   Array.mapi (fun i p ->
@@ -737,7 +768,8 @@ let pp_ind_brands ~signature table ind =
     ind.ind_packets
   |> Array.to_list |> prlist identity
 
-let pp_decl table = function
+let pp_decl table declaration =
+  let output=match declaration with
     | Dtype (r,_,_) when is_inline_custom r -> mt ()
     | Dterm (r,_,_) when is_inline_custom r -> mt ()
     | Dind i -> pp_mind table i ++ pp_ind_brands ~signature:false table i
@@ -782,6 +814,27 @@ let pp_decl table = function
 
     | Dfix (rv,defs,typs) ->
         pp_Dfix table (rv,defs,typs)
+
+  in
+  (* Capture while the real printer's module visibility is live. Rendering
+     after pp_struct has returned loses qualification/record-label context. *)
+  if State.get_phase table=Impl && Option.has_some !SomaForeign.native_public_extracted_types then begin
+    let references=match declaration with
+      |Dtype(r,_,_)->[r]
+      |Dind block->Array.to_list(Array.map(fun p->p.ip_typename_ref)block.ind_packets)
+      |_->[]in
+    List.iter(fun info->List.iter(fun item->
+      if List.exists(fun(r,type_)->type_&&GlobRef.CanOrd.equal r item.SomaForeign.equation_reference)
+        !SomaForeign.native_static_extraction_requests then
+      match List.find_opt(fun r->GlobRef.CanOrd.equal r.glob item.equation_reference)references with
+      |None->()
+      |Some reference->
+        let equation=Pp.string_of_ppcmds(public_type_equation table ~name:item.equation_name reference declaration)in
+        SomaForeign.native_public_type_declarations:=
+          (item.equation_reference,item.equation_name,equation):: !SomaForeign.native_public_type_declarations)
+      (SomaForeign.public_type_equations info.SomaForeign.public_owner))(!SomaForeign.native_public_assemblies())
+  end;
+  output
 
 let pp_spec table = function
   | Sval (r,_) when is_inline_custom r -> mt ()

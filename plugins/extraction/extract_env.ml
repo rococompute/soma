@@ -772,6 +772,14 @@ let full_extr opaque_access f (refs,mps) =
         |_->user_err(str "A static assembly export changed kind during extraction.")in
       reference,type_,Common.pp_global_name table (if type_ then Common.Type else Common.Term)actual,arity in
     SomaForeign.native_static_extracted_names:=List.map capture !SomaForeign.native_static_extraction_requests;
+    (match !SomaForeign.native_public_extracted_types with None->()|Some _->
+      let names=ref[]in
+      List.iter(fun(_,structure)->List.iter(fun(_,item)->match item with
+        |SEdecl(Dtype(actual,_,_))when not(is_inline_custom actual)->names:=Common.pp_global_name table Common.Type actual:: !names
+        |SEdecl(Dind block)->Array.iter(fun packet->if not packet.ip_logical && not(is_custom packet.ip_typename_ref)then
+          names:=Common.pp_global_name table Common.Type packet.ip_typename_ref:: !names)block.ind_packets
+        |_->())structure)struc;
+      SomaForeign.native_public_extracted_types:=Some !names);
     (match !SomaForeign.native_public_extracted_values with None->()|Some _->
       let values=List.concat_map(fun(_,fields)->List.concat_map(function
         |_,SEdecl(Dterm(r,_,_))->[Common.pp_global_name table Common.Term r]
