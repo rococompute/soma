@@ -84,6 +84,13 @@ let in_native_algebraic_dependencies =
     ~subst:None
 let () = SomaForeign.native_algebraic_dependencies := (fun()-> !native_algebraic_dependencies)
 
+let native_algebraic_record_views = Summary.ref ~name:"soma-native-algebraic-record-views" []
+let in_native_algebraic_record_views =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native algebraic record views"
+    ~cache:(fun info->native_algebraic_record_views:=info:: !native_algebraic_record_views)
+    ~subst:None
+let () = SomaForeign.native_algebraic_record_views := (fun()-> !native_algebraic_record_views)
+
 let native_lexical_scopes = Summary.ref ~name:"soma-native-lexical-scopes" []
 let in_native_lexical_scope =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native lexical scope"
@@ -1063,8 +1070,10 @@ let native_packed_module_type name path =
    conversion/getter functions to the runtime. *)
 let native_source_reexport_finish marker name symbol target parameters body checked =
   let namespace=native_namespace()in
-  ignore(ocaml_name ~definition:"Source type reexport" name);
-  ignore(native_path name);
+  (match body with SomaForeign.Source_exception _->
+    if not(is_module_name name && name.[0]>='A' && name.[0]<='Z')then
+      native_error "an exception publication needs an uppercase constructor name"
+   |_->ignore(ocaml_name ~definition:"Source type reexport" name);ignore(native_path name));
   if String.contains name '.' then native_error "a Source type reexport needs a single public identifier";
   let order=ref 0 in
   Cmap_env.iter(fun _ binding->match binding.item with
@@ -1100,6 +1109,7 @@ let native_public_type_names () =
     |_->found)!bindings []in
   List.concat_map(fun info->
     let names=match info.SomaForeign.source_type_body with
+      |SomaForeign.Source_exception _->[]
       |SomaForeign.Source_group group->List.map(fun name->group.algebraic_namespace^"."^name,name,0)
           (List.map fst group.algebraic_members)
       |_->[info.source_type_symbol,info.source_type_name,List.length info.source_type_parameters]in
@@ -1187,14 +1197,38 @@ let native_record_reexport marker source name =
   ignore(native_context());
   let owner=match Nametab.locate source with GlobRef.ConstRef c->c
     |_->native_error "a record reexport needs a checked owned native record"in
-  let record=match Cmap_env.find_opt owner !bindings with
-    |Some{item=(SomaForeign.OCamlNativeOwnedRecord r|SomaForeign.OCamlNativeImmutableRecord(r,_));_}->r
+  let target,fields=match Cmap_env.find_opt owner !bindings with
+    |Some{item=(SomaForeign.OCamlNativeOwnedRecord r|SomaForeign.OCamlNativeImmutableRecord(r,_));_}->
+      SomaForeign.native_record_type r,r.record_fields
+    |Some{item=SomaForeign.OCamlNativeAlgebraic(group,member);_}->
+      (match List.assoc_opt member group.algebraic_members with
+       |Some(SomaForeign.Algebraic_record _)->()
+       |_->native_error "a record reexport needs a checked native record member");
+      let views=match List.find_opt(fun info->info.SomaForeign.views_namespace=group.algebraic_namespace &&
+        info.views_group=group.algebraic_name)!native_algebraic_record_views with
+        |Some info->info.views_records
+        |None->native_error "recompile the algebraic owner to obtain checked record view metadata"in
+      let fields=match List.assoc_opt member views with Some fields->fields|None->assert false in
+      SomaForeign.native_algebraic_type group member,fields
     |_->native_error "a record reexport needs a checked owned native record"in
-  if record.SomaForeign.record_fields=[]then native_error "a record reexport needs native fields";
+  if fields=[]then native_error "a record reexport needs native fields";
   native_source_reexport_finish marker name
     (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner)))
-    (SomaForeign.native_record_type record)[] (SomaForeign.Source_record record.record_fields)
-    (CAst.make(Constrexpr.CRef(source,None)))
+    target[] (SomaForeign.Source_record fields)(CAst.make(Constrexpr.CRef(source,None)))
+
+let native_exception_reexport marker source constructor name =
+  ignore(native_context());
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
+    |_->native_error "an exception reexport needs a checked algebraic owner"in
+  let group=match Cmap_env.find_opt owner !bindings with
+    |Some{item=SomaForeign.OCamlNativeAlgebraic(group,_);_}->group
+    |_->native_error "an exception reexport needs a checked algebraic owner"in
+  let payload=match List.assoc_opt constructor group.algebraic_exceptions with
+    |Some payload->payload|None->native_error "the algebraic owner does not declare this exception"in
+  native_source_reexport_finish marker name
+    (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner)))
+    (SomaForeign.native_algebraic_module group^"."^constructor)[]
+    (SomaForeign.Source_exception payload)(CAst.make(Constrexpr.CRef(source,None)))
 
 let native_algebraic_selection marker source members =
   ignore(native_context());
@@ -1654,14 +1688,19 @@ let native_algebraic ?(exceptions=[]) name members =
   let scope syntax = CAst.make (Constrexpr.CProdN (binders, syntax)) in
   let logical_dependencies = ref [] in
   let used_members=ref []and member_dependencies=ref []in
-  let checked_type syntax =
+  let group_path=SomaForeign.native_algebraic_module {
+    algebraic_namespace=namespace;algebraic_name=Id.to_string name;algebraic_source="";
+    algebraic_members=[];algebraic_exceptions=[]}in
+  let record_views=ref []in
+  let checked_type ?(qualified=false) syntax =
     let scoped = scope syntax in
-    logical_dependencies := scoped :: !logical_dependencies;
+    if not qualified then logical_dependencies := scoped :: !logical_dependencies;
     let env = Global.env () in
     let sigma, typ = Constrintern.interp_type_evars env (Evd.from_env env) scoped in
     let rec enter env vars typ = function
       | [] -> env, vars, typ
       | name :: rest ->
+        let name=if qualified then group_path^"."^name else name in
         match EConstr.kind sigma typ with
         | Prod (binder, dom, cod) ->
           let env = EConstr.push_rel (Context.Rel.Declaration.LocalAssum (binder, dom)) env in
@@ -1675,13 +1714,13 @@ let native_algebraic ?(exceptions=[]) name members =
        | _ -> ());
       EConstr.iter sigma monomorphic typ in
     monomorphic typ;
-    try ocaml_type ~on_variable:(fun name->if List.mem name names then used_members:=name:: !used_members)
+    try ocaml_type ~on_variable:(fun name->if not qualified && List.mem name names then used_members:=name:: !used_members)
       env sigma vars typ with Not_ocaml why ->
       CErrors.user_err (str "OCaml Native algebraic member: " ++ why) in
-  let fields declarations =
+  let fields ?(qualified=false) declarations =
     let result = List.map (fun (id, mutable_, syntax) ->
       { SomaForeign.field_name = checked_name id;
-        field_type = checked_type syntax; field_mutable = mutable_ }) declarations in
+        field_type = checked_type ~qualified syntax; field_mutable = mutable_ }) declarations in
     distinct "algebraic record field names" (List.map (fun f -> f.SomaForeign.field_name) result);
     result in
   let case (name, body) =
@@ -1709,6 +1748,7 @@ let native_algebraic ?(exceptions=[]) name members =
     algebraic_members = List.map2 (fun name (_, form) ->
       used_members:=[];let representation=body form in
       member_dependencies:=(name,List.sort_uniq String.compare !used_members):: !member_dependencies;
+      (match form with Record_fields declarations->record_views:=(name,fields ~qualified:true declarations):: !record_views|_->());
       name,representation) names members;
     algebraic_exceptions = exceptions;
   } in
@@ -1721,7 +1761,9 @@ let native_algebraic ?(exceptions=[]) name members =
     let constant = native_declare id body None in
     native_register id constant (SomaForeign.OCamlNativeAlgebraic (group, member))) ids names;
   Lib.add_leaf(in_native_algebraic_dependencies SomaForeign.{dependencies_namespace=namespace;
-    dependencies_group=group.algebraic_name;dependencies_members=List.rev !member_dependencies})
+    dependencies_group=group.algebraic_name;dependencies_members=List.rev !member_dependencies});
+  Lib.add_leaf(in_native_algebraic_record_views SomaForeign.{views_namespace=namespace;
+    views_group=group.algebraic_name;views_records=List.rev !record_views})
 let native_algebraic_reexport name source target =
   ignore(native_context());
   let target=native_constructor_path target in

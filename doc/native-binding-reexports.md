@@ -28,3 +28,6 @@ retains its original rejection of scalar `Reexport Value` declarations.
 
 For one-time provider applications and reuse of already initialized values, see
 [initialized native publications](native-initialized-publications.md).
+
+For original algebraic record and exception identities at the same public
+boundary, see [owned publications](native-owned-publications.md).

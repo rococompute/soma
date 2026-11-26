@@ -245,11 +245,19 @@ type native_algebraic_dependencies = {
 }
 val native_algebraic_dependencies : (unit -> native_algebraic_dependencies list) ref
 
+type native_algebraic_record_views = {
+  views_namespace : string;
+  views_group : string;
+  views_records : (string * native_record_field list) list;
+}
+val native_algebraic_record_views : (unit -> native_algebraic_record_views list) ref
+
 type native_source_type_body =
   | Source_record of native_record_field list
   | Source_variant of (string * string list) list
   | Source_alias of string
   | Source_group of native_algebraic
+  | Source_exception of native_algebraic_payload
 
 type native_source_type_reexport = {
   source_type_namespace : string;

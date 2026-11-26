@@ -229,11 +229,19 @@ type native_algebraic_dependencies = {
 }
 let native_algebraic_dependencies : (unit -> native_algebraic_dependencies list) ref = ref(fun()->[])
 
+type native_algebraic_record_views = {
+  views_namespace : string;
+  views_group : string;
+  views_records : (string * native_record_field list) list;
+}
+let native_algebraic_record_views : (unit -> native_algebraic_record_views list) ref = ref(fun()->[])
+
 type native_source_type_body =
   | Source_record of native_record_field list
   | Source_variant of (string * string list) list
   | Source_alias of string
   | Source_group of native_algebraic
+  | Source_exception of native_algebraic_payload
 
 type native_source_type_reexport = {
   source_type_namespace : string;
@@ -436,12 +444,13 @@ let native_source_type_names info = match info.source_type_body with
 let native_source_type_reexport_ml info =
   match info.source_type_body with
   |Source_group group->native_algebraic_declarations ~target:info.source_type_target ~exceptions:false group
+  |Source_exception _->"exception "^info.source_type_name^" = "^info.source_type_target^"\n"
   |_->
   let params=match info.source_type_parameters with []->""|[p]->p^" "
     |ps->"("^String.concat ", "ps^") "in
   "type "^params^info.source_type_name^" = "^
   (match info.source_type_body with
-   |Source_group _->assert false
+   |Source_group _|Source_exception _->assert false
    |Source_alias typ->typ^"\n"
    |Source_record fields->params^info.source_type_target^" = { "^
       String.concat "; "(List.map(fun f->(if f.field_mutable then "mutable "else "")^f.field_name^" : "^f.field_type)fields)^" }\n"
@@ -453,7 +462,12 @@ let native_source_type_reexport_ml info =
 let native_source_type_identity info =
   String.concat "\n" ["native-source-type-reexport-v1";info.source_type_namespace;
     info.source_type_source;info.source_type_symbol;string_of_int info.source_type_order;
-    native_source_type_reexport_ml info]
+    native_source_type_reexport_ml info] ^
+  (match info.source_type_body with
+   |Source_exception(Constructor_arguments types)->"\narguments "^String.concat ";"(List.map(Printf.sprintf "%S")types)
+   |Source_exception(Constructor_record fields)->"\nrecord "^String.concat ";"(List.map(fun field->
+      Printf.sprintf "%S %S %b"field.field_name field.field_type field.field_mutable)fields)
+   |_->"")
 
 let rec native_identity = function
  | OCamlNativeSourceTypeReexport info -> native_source_type_identity info
