@@ -45,3 +45,7 @@ allocation oracle includes a caller that creates a bind callback using the
 published return function, detecting the 32-byte native closure regression
 that motivated this capability. It also checks canonical markers, invalid
 sources/getters, provenance and changed target fingerprints.
+
+For scalar, cell or immutable-data aliases, use
+[`Reexport Binding`](native-binding-reexports.md). `Reexport Value` retains
+its existing callable-only checks.

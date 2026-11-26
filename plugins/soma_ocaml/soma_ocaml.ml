@@ -1732,7 +1732,7 @@ let native_algebraic_reexport name source target =
 
 (* Publish a checked callable descriptor directly, preserving native closure
    approximations that an opaque effect export would otherwise hide. *)
-let native_value_reexport name source =
+let native_value_reexport ?(binding=false) name source =
   ignore(native_context());
   let label=ocaml_name ~definition:"native value reexport"(Id.to_string name)in
   let owner=match Nametab.locate source with
@@ -1743,8 +1743,9 @@ let native_value_reexport name source =
   if callback.SomaForeign.arguments<>["unit"]then native_error "a value reexport needs a unit getter";
   (match callback.SomaForeign.operation with
    |SomaForeign.NativeStaticInvocation(_,Some _)->()
-   |SomaForeign.NativeExternalConstant _ when String.contains callback.result '>' && String.contains callback.result '-'->()
-   |_->native_error "only a checked Static Invoke or borrowed function can be reexported");
+   |SomaForeign.NativeExternalConstant _ when binding || (String.contains callback.result '>' && String.contains callback.result '-')->()
+   |SomaForeign.NativeStaticData(_,_,_,_,Some _) when binding->()
+   |_->native_error "only a checked Static Invoke or borrowed function can be reexported; Binding also accepts closed borrowed/static data");
   let namespace=native_namespace()in
   let order=Cmap_env.fold(fun _ binding count->match binding.item with
     |SomaForeign.OCamlNativeValueReexport info when info.value_namespace=namespace->count+1

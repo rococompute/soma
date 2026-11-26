@@ -88,6 +88,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeReexport CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_source_alias_reexport marker typ name }
 | [ "OCaml" "Native" "Reexport" "Value" ident(name) ":=" reference(source) ] ->
  { Soma_ocaml.native_value_reexport name source }
+| [ "OCaml" "Native" "Reexport" "Binding" ident(name) ":=" reference(source) ] ->
+ { Soma_ocaml.native_value_reexport ~binding:true name source }
 | [ "OCaml" "Native" "Reexport" "Algebraic" ident(name) ":=" reference(source) "As" string(target) ] ->
  { Soma_ocaml.native_algebraic_reexport name source target }
 END

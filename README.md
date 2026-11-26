@@ -113,6 +113,8 @@ explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
+- [Borrowed native binding publications](doc/native-binding-reexports.md):
+  export original scalar, cell and generic values as checked direct aliases.
 - [Checked shared native data](doc/native-static-data.md): stage pure Source
   recipes as shared typed constants without a build-script code template.
 
