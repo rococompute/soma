@@ -25,3 +25,6 @@ exact returned payloads, public-call allocation, natural Weak release, Source
 and product authentication, target-sensitive fingerprints, invalid declarations
 and an incorrect actual OCaml scalar type. The earlier callable-value fixture
 retains its original rejection of scalar `Reexport Value` declarations.
+
+For one-time provider applications and reuse of already initialized values, see
+[initialized native publications](native-initialized-publications.md).

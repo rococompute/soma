@@ -1745,6 +1745,7 @@ let native_value_reexport ?(binding=false) name source =
    |SomaForeign.NativeStaticInvocation(_,Some _)->()
    |SomaForeign.NativeExternalConstant _ when binding || (String.contains callback.result '>' && String.contains callback.result '-')->()
    |SomaForeign.NativeStaticData(_,_,_,_,Some _) when binding->()
+   |SomaForeign.NativeStaticInitialization(_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _) when binding->()
    |_->native_error "only a checked Static Invoke or borrowed function can be reexported; Binding also accepts closed borrowed/static data");
   let namespace=native_namespace()in
   let order=Cmap_env.fold(fun _ binding count->match binding.item with
@@ -1820,7 +1821,7 @@ let native_callback ?(optional=[]) name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
-    | SomaForeign.NativeStaticData _
+    | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _
     | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -1925,7 +1926,7 @@ let native_callback ?(optional=[]) name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
-   | SomaForeign.NativeStaticData _
+   | SomaForeign.NativeStaticData _ | SomaForeign.NativeStaticInitialization _ | SomaForeign.NativePublishedValue _
    | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -2002,6 +2003,40 @@ let native_callback ?(optional=[]) name typ operation =
         n.operation,args.(1) in
   let logical_dependencies=ref [] in
   let operation = match operation with
+    | SomaForeign.NativePublishedValue(symbol,_) ->
+      let marker=match Nametab.locate(Libnames.qualid_of_string symbol)with
+        |GlobRef.ConstRef c->c|_->native_error "a published value needs a checked binding marker"in
+      let info=match Cmap_env.find_opt marker !bindings with
+        |Some{item=SomaForeign.OCamlNativeValueReexport info;_}->info
+        |_->native_error "a published value needs an earlier checked binding publication"in
+      let _,actual=static_descriptor info.SomaForeign.value_owner in
+      if argument_names<>["unit"] || labels<>[None] || not(Reductionops.is_conv env sigma result actual)then
+        native_error "a published value type differs from its checked original binding";
+      logical_dependencies:=[marker];
+      SomaForeign.NativePublishedValue(symbol,Some(info.value_namespace,info.value_name))
+    | SomaForeign.NativeStaticInitialization(target,inputs,_) ->
+      if argument_names<>["unit"]||labels<>[None]then native_error "initialization needs a positional unit getter";
+      let fn,typ=static_descriptor target in
+      let values=List.map static_descriptor inputs in
+      let closed=function
+        |SomaForeign.NativeExternalConstant _
+        |SomaForeign.NativeStaticData(_,_,_,_,Some _)|SomaForeign.NativePublishedValue(_,Some _)->true
+        |_->false in
+      if not(closed fn&&List.for_all(fun(operation,_)->closed operation)values)then
+        native_error "initialization borrows only closed native or already published values";
+      let domains,target_labels,answer=static_shape typ in
+      if inputs=[]||List.length inputs>List.length domains then native_error "invalid initialized application arity";
+      let wanted,remaining=CList.chop(List.length inputs)domains in
+      List.iter2(fun domain(_,typ)->if domain<>ocaml_type env sigma type_vars typ then
+        native_error "initialized input differs from the checked target domain")wanted values;
+      let output,output_labels,result_name=static_shape result in
+      let supplied_labels,remaining_labels=CList.chop(List.length inputs)target_labels in
+      if (if remaining=[]then ocaml_type env sigma type_vars result<>answer
+          else output<>remaining||result_name<>answer||output_labels<>remaining_labels)then
+        native_error "initialized result differs from its declared residual type";
+      logical_dependencies:=List.map(fun name->match Nametab.locate(Libnames.qualid_of_string name)with
+        |GlobRef.ConstRef c->c|_->assert false)(target::inputs);
+      SomaForeign.NativeStaticInitialization(target,inputs,Some(fn,List.map fst values,supplied_labels))
     | SomaForeign.NativeStaticData(owner,source_file,recipe,leaves,_) ->
       if argument_names<>["unit"] || labels<>[None] then
         native_error "static data needs a positional unit getter";
@@ -2722,6 +2757,12 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_published_value name result source =
+  native_getter name result(SomaForeign.NativePublishedValue(Libnames.string_of_qualid source,None))
+let native_static_initialization name result target values =
+  native_getter name result(SomaForeign.NativeStaticInitialization(
+    Libnames.string_of_qualid target,List.map Libnames.string_of_qualid values,None))
 
 let native_static_data name result recipe leaves =
   native_getter name result (SomaForeign.NativeStaticData(

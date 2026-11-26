@@ -113,6 +113,8 @@ explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
+- [Initialized native publications](doc/native-initialized-publications.md):
+  apply providers once and share their exact published objects and functions.
 - [Borrowed native binding publications](doc/native-binding-reexports.md):
   export original scalar, cell and generic values as checked direct aliases.
 - [Checked shared native data](doc/native-static-data.md): stage pure Source

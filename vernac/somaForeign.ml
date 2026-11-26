@@ -110,6 +110,8 @@ type native_operation =
   | NativeAssertionFunction of int * int
   | NativeEtaFunction of string * native_callable
   | NativeStaticData of string * string * string * string list * native_static_data option
+  | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
+  | NativePublishedValue of string * (string * string) option
 
 and native_static_expression =
   | StaticArgument of int
@@ -467,6 +469,13 @@ let rec native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let rec describe_operation = function
+    | NativeStaticInitialization(target,inputs,Some(fn,values,labels))->
+      "initialize "^Printf.sprintf "%S"target^" ["^String.concat ";"(List.map(Printf.sprintf "%S")inputs)^"] "^
+      describe_operation fn^" ["^String.concat ";"(List.map describe_operation values)^"] "^
+      String.concat ";"(List.map(function None->"_"|Some label->label)labels)
+    | NativePublishedValue(symbol,Some(namespace,name))->
+      Printf.sprintf "published-value %S %S %S"symbol namespace name
+    | NativeStaticInitialization(_,_,None)|NativePublishedValue(_,None)->invalid_arg "unchecked native initialization"
     | NativeStaticData(owner,_,recipe,leaves,Some value) ->
       let rec data = function
         |DataReference owner->"reference "^Printf.sprintf "%S"owner

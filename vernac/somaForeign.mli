@@ -126,6 +126,8 @@ type native_operation =
   | NativeAssertionFunction of int * int
   | NativeEtaFunction of string * native_callable
   | NativeStaticData of string * string * string * string list * native_static_data option
+  | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
+  | NativePublishedValue of string * (string * string) option
 
 and native_static_expression =
   | StaticArgument of int
