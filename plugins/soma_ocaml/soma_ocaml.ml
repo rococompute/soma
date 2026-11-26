@@ -77,6 +77,13 @@ let in_native_static_assembly =
     ~subst:None
 let () = SomaForeign.native_static_assemblies := (fun()-> !native_static_assemblies)
 
+let native_static_exception_scopes = Summary.ref ~name:"soma-native-static-exception-scopes" []
+let in_native_static_exception_scope =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native static exception scope"
+    ~cache:(fun info->native_static_exception_scopes:=info:: !native_static_exception_scopes;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_static_exception_scopes := (fun()-> !native_static_exception_scopes)
+
 let native_public_assemblies = Summary.ref ~name:"soma-native-public-assemblies" []
 let in_native_public_assembly =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public assembly"
@@ -684,9 +691,9 @@ let native_static_assembly selected name exports =
   (* Every published member must already contribute to main's checked
      dependency closure, including dependencies in its type annotations. *)
   let module Constants=Set.Make(Constant.CanOrd)in
-  let visited=ref Constants.empty in
+  let visited=ref Constants.empty and referenced=ref Constants.empty in
   let rec term t=
-    (match Constr.kind t with Const(c,_)->constant c|_->());
+    (match Constr.kind t with Const(c,_)->referenced:=Constants.add c !referenced;constant c|_->());
     Constr.iter term t
   and constant c=
     if ModPath.to_string(Constant.modpath c)=namespace && not(Constants.mem c !visited)then begin
@@ -700,6 +707,41 @@ let native_static_assembly selected name exports =
     ignore(ocaml_name ~definition:"static export" name);
     if name="_"||not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)name)then
       native_error "a static export needs one native identifier"in
+  let exceptions,exports=List.partition(fun(kind,_,_)->kind="exception")exports in
+  let exceptions=List.map(fun(_,public,reference)->
+    if not(is_module_name public&&public.[0]>='A'&&public.[0]<='Z')||String.contains public '.'then
+      native_error "a public exception needs one uppercase constructor identifier";
+    if List.mem("exception",public)!used then native_error "duplicate public exception";
+    used:=("exception",public):: !used;
+    let c=match Nametab.locate reference with
+      |GlobRef.ConstRef c when Constants.mem c !referenced->c
+      |_->native_error "a public exception constructor must be a dependency of main"in
+    let typ=EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
+    (match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Prod _->native_error "a public exception constructor must have closed payload types"|_->());
+    let callback=match Cmap_env.find_opt c !bindings with
+      |Some{item=SomaForeign.OCamlNativeCallback info;_}->info
+      |_->native_error "a public exception needs a checked native Constructor"in
+    let head,signature=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
+    if Array.length signature<>2 ||
+      not(EConstr.isRefX env sigma(Rocqlib.lib_ref "soma.native.callback")head)then
+      native_error "a public exception needs a closed native callback descriptor";
+    let rec monomorphic env term=
+      let head,_=EConstr.decompose_app sigma term in
+      let known=match EConstr.kind sigma head with Const(c,_)->Cmap_env.mem c !bindings|_->false in
+      let term=if known then term else Reductionops.whd_all env sigma term in
+      (match EConstr.kind sigma term with Prod(_,domain,_)when is_sort env sigma domain->
+        native_error "public exception payloads cannot contain polymorphic functions"|_->());
+      EConstr.iter_with_full_binders env sigma EConstr.push_rel monomorphic env term in
+    monomorphic env signature.(0);
+    let arguments=match callback.SomaForeign.operation with
+      |SomaForeign.NativeConstructorBuild(path,arity)when path=public &&
+          callback.result="Soma_handles.exception_value"->
+        if arity=0 then []else callback.arguments
+      |_->native_error "a public exception needs its matching unqualified exception-value Constructor"in
+    SomaForeign.{static_exception_name=public;
+      static_exception_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c));
+      static_exception_arguments=arguments})exceptions in
   let exports=List.map(fun(kind,public,reference)->
     let c=own_constant reference in
     if Constant.CanOrd.equal c main then native_error "main is reserved for the executable entry point";
@@ -739,7 +781,9 @@ let native_static_assembly selected name exports =
       static_export_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))})exports in
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   Lib.add_leaf(in_native_static_assembly SomaForeign.{static_owner=main;static_namespace=namespace;
-    static_source=source;static_module=name;static_exports=exports})
+    static_source=source;static_module=name;static_exports=exports});
+  if exceptions<>[]then Lib.add_leaf(in_native_static_exception_scope SomaForeign.{
+    static_exception_owner=main;static_exception_fields=exceptions})
 
 let native_public_assembly selected applications =
   let namespace=native_namespace()in

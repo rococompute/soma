@@ -327,6 +327,18 @@ val native_assemblies : (unit -> native_assembly list) ref
 val native_export_identity : native_export_pattern -> string
 val native_assembly_identity : native_assembly -> string
 
+type native_static_exception = {
+  static_exception_name : string;
+  static_exception_symbol : string;
+  static_exception_arguments : string list;
+}
+type native_static_exception_scope = {
+  static_exception_owner : Names.Constant.t;
+  static_exception_fields : native_static_exception list;
+}
+val native_static_exception_scopes : (unit -> native_static_exception_scope list) ref
+val static_exceptions : Names.Constant.t -> native_static_exception list
+
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
 type native_static_export = {
   static_export_kind : native_static_export_kind;

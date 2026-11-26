@@ -968,8 +968,17 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         let variables=List.init arity(fun i->"'a"^string_of_int i)in
         let prefix=match variables with []->""|[v]->v^" "|_->"("^String.concat ", "variables^") "in
         "type "^prefix^item.static_export_name^" = "^prefix^target^"\n"in
-    let contents="module "^info.static_module^" : sig\n"^header^interface^
-      "\nend = struct\n  module "^bindings_module()^" = struct\n"^bindings^
+    let exceptions=SomaForeign.static_exceptions info.static_owner in
+    let declarations=String.concat ""(List.map(fun item->
+      "exception "^item.SomaForeign.static_exception_name^
+      (match item.static_exception_arguments with []->""|arguments->
+        " of "^String.concat " * "(List.map(fun typ->"("^typ^")")arguments))^"\n")exceptions)in
+    let rebasing=if exceptions=[]then ""else
+      "    module Soma_handles = struct\n      include Soma_handles\n"^
+      String.concat ""(List.map(fun item->"      exception "^item.SomaForeign.static_exception_name^
+        " = "^item.static_exception_name^"\n")exceptions)^"    end\n"in
+    let contents=declarations^"module "^info.static_module^" : sig\n"^header^interface^
+      "\nend = struct\n  module "^bindings_module()^" = struct\n"^rebasing^bindings^
       "\n  end\n"^header^program^"\nend\n"^String.concat ""(List.map exported info.static_exports)in
     let filename=Filename.remove_extension(Filename.basename info.static_source)^".assembly"in
     file filename contents;

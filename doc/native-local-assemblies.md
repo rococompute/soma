@@ -201,3 +201,47 @@ recursive/mutual constructors, generics, keyword type renaming, actual physical
 identity and allocation, composition with partial applications, manifest/hash
 agreement, rejected indices/opaque types/name collisions, semantic identity
 changes and producer cleanup.
+
+### Fresh public exception slots
+
+A static assembly can own fresh exception constructors at its public module
+boundary. For a checked native constructor such as
+`OCaml Native Constructor failed : string -> exception_value := "Failed" 1`,
+used by the selected Source main, declare:
+
+```soma
+OCaml Native Static Assembly main As "Checked" With
+ [Exception "Failed" := failed; Value "fail" := fail].
+```
+
+The exception declarations precede the checked module, in their listed order.
+The compiler emits the checked constructor payload types, then a local
+`Soma_handles` inclusion and exception aliases inside the binding module. The
+ordinary checked constructor/case bindings therefore use the fresh public
+slots. Public exception names remain associated with the containing compiled
+module, rather than with a shared helper or with `Checked`.
+
+The constructor may be from a checked `.definition` dependency. It must be a
+reachable native `Constructor` whose unqualified name matches the public name
+and whose result is the standard native exception value. Nullary constructors
+have no payload; ordinary constructors retain their argument representations.
+Names must be distinct uppercase identifiers. Wrong constructors, unrelated
+references, mismatched names, qualified external constructors, and generic or
+nested polymorphic payloads are rejected. This does not introduce a logical
+exception evaluator or a new assumption about native execution.
+
+Scope metadata uses a new separate library object, preserving existing static
+assembly object shapes. Its `static-exceptions-v1` component contributes to the
+existing static assembly's layout and main contract. Static assemblies with no
+exceptions preserve their previous identities and bytes. The complete
+`.assembly` owns both the fresh slot and binding scope; a consumer copies it
+without generating those declarations or rewriting binding source.
+
+`test-suite/misc/soma_native_static_exceptions.sh` compiles complete artifacts
+in native and bytecode. It checks root slot names, fresh slots in separate
+modules, constructor/case agreement, declaration-before-initialization order,
+nullary and multiple payloads, generic raises, original payload identity,
+natural Weak retention/release, invalid declarations, semantic identity,
+manifest provenance and stale producer cleanup. Retention is tested with an
+actual post-GC read; the fixture does not artificially clear Weak slots or pin
+payloads with GC lifetime primitives.

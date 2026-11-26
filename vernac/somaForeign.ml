@@ -573,6 +573,21 @@ let native_assembly_identity info =
   String.concat "\n" ["native-local-assembly-v1"; info.assembly_namespace;
     info.assembly_value; native_export_identity info.assembly_pattern]
 
+(* Additional scope metadata leaves existing assembly objects unchanged. *)
+type native_static_exception = {
+  static_exception_name : string;
+  static_exception_symbol : string;
+  static_exception_arguments : string list;
+}
+type native_static_exception_scope = {
+  static_exception_owner : Names.Constant.t;
+  static_exception_fields : native_static_exception list;
+}
+let native_static_exception_scopes : (unit -> native_static_exception_scope list) ref = ref(fun()->[])
+let static_exceptions owner =
+  List.concat_map(fun info->if Names.Constant.CanOrd.equal info.static_exception_owner owner
+    then info.static_exception_fields else [])(!native_static_exception_scopes())
+
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
 type native_static_export = {
   static_export_kind : native_static_export_kind;
@@ -593,7 +608,11 @@ let native_static_assembly_identity info =
     List.map(fun item->
       let kind=match item.static_export_kind with Static_value->"value"
         |Static_type arity->"type "^string_of_int arity|Static_unpack->"module"in
-      String.concat " "[kind;Printf.sprintf "%S"item.static_export_name;item.static_export_symbol])info.static_exports)
+      String.concat " "[kind;Printf.sprintf "%S"item.static_export_name;item.static_export_symbol])info.static_exports) ^
+  (match static_exceptions info.static_owner with []->""|exceptions->
+    "\nstatic-exceptions-v1\n"^String.concat "\n"(List.map(fun item->
+      String.concat " "([Printf.sprintf "%S" item.static_exception_name;item.static_exception_symbol]@
+        List.map(Printf.sprintf "%S")item.static_exception_arguments))exceptions))
 
 (* Filled by the OCaml project producer, then by extraction's actual name
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)
