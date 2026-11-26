@@ -76,6 +76,12 @@ type native_dispatch_pattern =
   | Dispatch_fields of string list
   | Dispatch_ignore of bool
 
+type native_export_pattern =
+  | Export_name of string
+  | Export_tuple of native_export_pattern list
+  | Export_record of string * string list
+
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
@@ -128,6 +134,7 @@ type native_operation =
   | NativeStaticData of string * string * string * string list * native_static_data option
   | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
   | NativePublishedValue of string * (string * string) option
+  | NativeProjectedValue of string * string * (string * string) option
 
 and native_static_expression =
   | StaticArgument of int
@@ -255,6 +262,19 @@ type native_source_type_reexport = {
   source_type_order : int;
 }
 
+type native_binding_projection = {
+  projection_namespace : string;
+  projection_name : string;
+  projection_source : string;
+  projection_owner : string;
+  projection_module : string;
+  projection_callback : native_callback;
+  projection_pattern : native_export_pattern;
+  projection_text : string;
+  projection_fields : (string * string) list;
+  projection_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -274,6 +294,7 @@ type ocaml_item =
   | OCamlNativeModuleInclude of native_module_alias
   | OCamlNativeValueReexport of native_value_reexport
   | OCamlNativeSourceTypeReexport of native_source_type_reexport
+  | OCamlNativeBindingProjection of native_binding_projection
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
@@ -354,10 +375,6 @@ type native_record_alias = {
 }
 val native_record_aliases : (unit -> native_record_alias list) ref
 
-type native_export_pattern =
-  | Export_name of string
-  | Export_tuple of native_export_pattern list
-  | Export_record of string * string list
 
 type native_assembly = {
   assembly_owner : Names.Constant.t;

@@ -60,6 +60,12 @@ type native_dispatch_pattern =
   | Dispatch_fields of string list
   | Dispatch_ignore of bool
 
+type native_export_pattern =
+  | Export_name of string
+  | Export_tuple of native_export_pattern list
+  | Export_record of string * string list
+
+
 type native_operation =
   | NativeValue of string
   | NativeGet of string
@@ -112,6 +118,7 @@ type native_operation =
   | NativeStaticData of string * string * string * string list * native_static_data option
   | NativeStaticInitialization of string * string list * (native_operation * native_operation list * string option list) option
   | NativePublishedValue of string * (string * string) option
+  | NativeProjectedValue of string * string * (string * string) option
 
 and native_static_expression =
   | StaticArgument of int
@@ -239,6 +246,19 @@ type native_source_type_reexport = {
   source_type_order : int;
 }
 
+type native_binding_projection = {
+  projection_namespace : string;
+  projection_name : string;
+  projection_source : string;
+  projection_owner : string;
+  projection_module : string;
+  projection_callback : native_callback;
+  projection_pattern : native_export_pattern;
+  projection_text : string;
+  projection_fields : (string * string) list;
+  projection_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -258,6 +278,7 @@ type ocaml_item =
   | OCamlNativeModuleInclude of native_module_alias
   | OCamlNativeValueReexport of native_value_reexport
   | OCamlNativeSourceTypeReexport of native_source_type_reexport
+  | OCamlNativeBindingProjection of native_binding_projection
 
 type ocaml_module = {
   ml_file : string option;
@@ -467,12 +488,23 @@ let rec native_identity = function
  | OCamlNativeType path -> "native-type " ^ Printf.sprintf "%S" path
  | OCamlNativeExternalFamily (params, path) ->
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
+ | OCamlNativeBindingProjection info ->
+   let rec pattern=function Export_name name->Printf.sprintf "name %S"name
+    |Export_tuple parts->"tuple ["^String.concat ";"(List.map pattern parts)^"]"
+    |Export_record(owner,fields)->Printf.sprintf "record %S [%s]"owner(String.concat ";"fields)in
+   String.concat "\n"(["native-binding-projection";info.projection_namespace;info.projection_name;
+    info.projection_owner;info.projection_module;pattern info.projection_pattern;string_of_int info.projection_order] @
+    List.map(fun(name,typ)->Printf.sprintf "%S %S"name typ)info.projection_fields @
+    [native_identity(OCamlNativeCallback info.projection_callback)])
  | OCamlNativeCallback n ->
    let rec describe_operation = function
     | NativeStaticInitialization(target,inputs,Some(fn,values,labels))->
       "initialize "^Printf.sprintf "%S"target^" ["^String.concat ";"(List.map(Printf.sprintf "%S")inputs)^"] "^
       describe_operation fn^" ["^String.concat ";"(List.map describe_operation values)^"] "^
       String.concat ";"(List.map(function None->"_"|Some label->label)labels)
+    | NativeProjectedValue(symbol,member,Some(namespace,name))->
+      Printf.sprintf "projected-value %S %S %S %S"symbol member namespace name
+    | NativeProjectedValue(_,_,None)->invalid_arg "unchecked projected value"
     | NativePublishedValue(symbol,Some(namespace,name))->
       Printf.sprintf "published-value %S %S %S"symbol namespace name
     | NativeStaticInitialization(_,_,None)|NativePublishedValue(_,None)->invalid_arg "unchecked native initialization"
@@ -640,11 +672,6 @@ let native_record_aliases : (unit -> native_record_alias list) ref = ref (fun ()
 
 (** Source-owned native module assembly. Patterns contain identifiers and
     structural destructuring only, never an arbitrary OCaml expression. *)
-type native_export_pattern =
-  | Export_name of string
-  | Export_tuple of native_export_pattern list
-  | Export_record of string * string list
-
 type native_assembly = {
   assembly_owner : Names.Constant.t;
   assembly_namespace : string;

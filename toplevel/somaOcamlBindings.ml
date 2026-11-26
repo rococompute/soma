@@ -254,15 +254,16 @@ let native_is_field_value path =
   fields(String.split_on_char '.'path)
 let native_publication_namespaces modules =
   let rec references = function
-    |SomaForeign.NativePublishedValue(_,Some(namespace,_))->[namespace]
+    |SomaForeign.NativePublishedValue(_,Some(namespace,_))|SomaForeign.NativeProjectedValue(_,_,Some(namespace,_))->[namespace]
     |NativeStaticInitialization(_,_,Some(fn,values,_))->List.concat_map references(fn::values)
     |_->[]in
   List.sort_uniq String.compare(List.concat_map(fun(m:SomaForeign.ocaml_module)->
     List.concat_map(fun(_,_,item)->match item with
       |SomaForeign.OCamlNativeCallback callback->references callback.operation
+      |SomaForeign.OCamlNativeBindingProjection info->info.projection_namespace::references info.projection_callback.operation
       |SomaForeign.OCamlNativeValueReexport info->
         (match info.value_callback.operation with
-         |NativeStaticInitialization _|NativePublishedValue _->info.value_namespace::references info.value_callback.operation
+         |NativeStaticInitialization _|NativePublishedValue _|NativeProjectedValue _->info.value_namespace::references info.value_callback.operation
          |NativeExternalConstant path when native_is_field_value path->[info.value_namespace]
          |_->[])
       |_->[])m.items)modules)
@@ -300,7 +301,7 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
         |Some label->"~"^label^":"^value)values labels in
       if given=[]then path else apply path given
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->apply("("^path^" "^Printf.sprintf "%S"literal^")")values
-    |SomaForeign.NativePublishedValue(_,Some(namespace,name))->
+    |SomaForeign.NativePublishedValue(_,Some(namespace,name))|SomaForeign.NativeProjectedValue(_,_,Some(namespace,name))->
       let target=if publication_scope=Some namespace then name else native_publication_module namespace^"."^name in
       let given=match labels with None->values|Some labels->List.map2(fun value->function
         |None->value|Some label when String.starts_with ~prefix:"?"label->label^":"^value
@@ -361,7 +362,7 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
     match operation with
     |SomaForeign.NativeStaticInitialization(_,_,Some(fn,values,labels))->
       static_apply ~labels fn(List.map static_value values)
-    |SomaForeign.NativePublishedValue(_,Some _)->static_apply operation []
+    |SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)->static_apply operation []
     |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)->static_apply operation []
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->"("^path^" "^Printf.sprintf "%S"literal^")"
     |SomaForeign.NativeExternalLiteralFunction(_,_,arity)
@@ -381,7 +382,7 @@ let native_binding ?publication_scope ?(value=false) ?(data_owners=[]) (m:SomaFo
         |Some _->"(fun payload -> `"^tag^" payload)")
     |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
-    | (SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _)as operation,[_]->static_value operation
+    | (SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _|SomaForeign.NativeProjectedValue _)as operation,[_]->static_value operation
     | (SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
       static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
@@ -715,24 +716,40 @@ let native_module_scope_bindings ~interface scope =
   "\nmodule "^native_module_scope_name namespace^(if interface then " : sig\n" else " = struct\n")^
   native_module_scope_ml ~interface scope^"end\n"
 
+type native_value_entry =
+ | Value_entry of Names.Constant.t * SomaForeign.ocaml_module * SomaForeign.native_value_reexport
+ | Projection_entry of Names.Constant.t * SomaForeign.ocaml_module * SomaForeign.native_binding_projection
+let native_value_entry_namespace=function Value_entry(_,_,info)->info.SomaForeign.value_namespace
+ |Projection_entry(_,_,info)->info.SomaForeign.projection_namespace
+let native_value_entry_order=function Value_entry(_,_,info)->info.SomaForeign.value_order
+ |Projection_entry(_,_,info)->info.SomaForeign.projection_order
+let native_value_entry_source=function Value_entry(_,_,info)->info.SomaForeign.value_source
+ |Projection_entry(_,_,info)->info.SomaForeign.projection_source
 let native_value_scopes modules =
   let all=List.concat_map(fun(m:SomaForeign.ocaml_module)->List.filter_map(fun(c,_,item)->match item with
-    |SomaForeign.OCamlNativeValueReexport info->Some(c,m,info)|_->None)m.items)modules in
-  let names=List.sort_uniq String.compare(List.map(fun(_,_,info)->info.SomaForeign.value_namespace)all)in
+    |SomaForeign.OCamlNativeValueReexport info->Some(Value_entry(c,m,info))
+    |SomaForeign.OCamlNativeBindingProjection info->Some(Projection_entry(c,m,info))
+    |_->None)m.items)modules in
+  let names=List.sort_uniq String.compare(List.map native_value_entry_namespace all)in
   List.map(fun namespace->
-    let entries=List.filter(fun(_,_,info)->info.SomaForeign.value_namespace=namespace)all in
-    let entries=List.sort(fun(_,_,a)(_,_,b)->Int.compare a.SomaForeign.value_order b.SomaForeign.value_order)entries in
-    List.iteri(fun order(_,_,info)->if order<>info.SomaForeign.value_order then error Pp.(str "native value export order is incomplete"))entries;
+    let entries=List.filter(fun entry->native_value_entry_namespace entry=namespace)all in
+    let entries=List.sort(fun a b->Int.compare(native_value_entry_order a)(native_value_entry_order b))entries in
+    List.iteri(fun order entry->if order<>native_value_entry_order entry then error Pp.(str "native value export order is incomplete"))entries;
     namespace,entries)names
 let native_value_scope_name namespace="Soma_values_"^SomaMerkle.string namespace
 let native_value_scope_filename namespace=String.uncapitalize_ascii(native_value_scope_name namespace)^".exports"
 let native_value_scope_ml ?(interface=false) ?publication_scope (namespace,entries)=
   "(* Generated by Soma: native value reexports for "^namespace^". *)\n"^
-  String.concat ""(List.map(fun(_,m,info)->
+  String.concat ""(List.map(function
+   |Value_entry(_,m,info)->
     let typ,body=native_binding ?publication_scope ~value:true {m with top=info.SomaForeign.value_module} info.SomaForeign.value_callback in
     if interface then "val "^info.value_name^" : "^typ^"\n"
     else let vars=type_variables typ in
-      "let "^info.value_name^" : "^(if vars=[]then ""else String.concat " "vars^". ")^typ^" =\n  "^body^"\n")entries)
+      "let "^info.value_name^" : "^(if vars=[]then ""else String.concat " "vars^". ")^typ^" =\n  "^body^"\n"
+   |Projection_entry(_,m,info)->
+    if interface then String.concat ""(List.map(fun(name,typ)->"val "^name^" : "^typ^"\n")info.SomaForeign.projection_fields)
+    else let typ,body=native_binding ?publication_scope ~value:true {m with top=info.SomaForeign.projection_module} info.projection_callback in
+      "let "^info.projection_text^" = ("^body^" : "^typ^")\n")entries)
 let native_value_scope_bindings ~interface ~publications ((namespace,_)as scope)=
   if List.mem namespace publications then
     "\nmodule "^native_value_scope_name namespace^" = "^native_publication_module namespace^"\n"
@@ -798,7 +815,7 @@ let bindings_ml ?(interface=false) modules =
         | None -> String.uncapitalize_ascii m.top ^ ".definition" in
       let primitives = primitive_declarations ~interface m in
       let wrappers = List.filter_map (fun (_, path, item) -> match item with
-          | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
+          | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             Some(native_callback_declaration ~interface ~data_owners m n)
           | SomaForeign.OCamlValue (ty, labels) ->
@@ -831,7 +848,7 @@ let extraction_lines modules =
           let soma = Libnames.string_of_path (Nametab.path_of_global (GlobRef.ConstRef c)) in
           match record_alias c with Some info->record_extraction soma info |None->
           match item with
-          | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ ->
+          | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ ->
             Printf.sprintf "Extract Constant %s => \"()\".\n" soma
           | SomaForeign.OCamlNativeCallableType c ->
             Printf.sprintf "Extract Constant %s => %S.\n" soma (SomaForeign.native_callable_type c)
@@ -1211,7 +1228,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
     let scope=match List.assoc_opt namespace value_scopes with
       |Some entries->namespace,entries|None->error Pp.(str "published value owner scope is absent")in
     let _,entries=scope in
-    let source=match entries with (_,_,info)::_->info.SomaForeign.value_source|_->assert false in
+    let source=match entries with entry::_->native_value_entry_source entry|_->assert false in
     let filename=native_publication_filename namespace in
     let contents=native_value_scope_ml ~publication_scope:namespace scope in
     file filename contents;
@@ -1220,17 +1237,23 @@ let write_files ~file ?c_file ~read_file ~directives modules =
     ("soma-native-binding-initializers-v1\n"^String.concat ""(List.map(fun(namespace,source,filename,contents)->
       Printf.sprintf "%S %S %S %S %S\n"namespace source
        (SomaMerkle.string(read_file(SomaImport.resolve_project_file source)))filename(SomaMerkle.string contents))publication_entries));
-  let value_entries=List.concat_map(fun((namespace,entries)as scope)->
+  let value_entries=ref []and projection_entries=ref []in
+  List.iter(fun((namespace,entries)as scope)->
     let filename=native_value_scope_filename namespace and contents=
       (if List.mem namespace publications then "include "^native_publication_module namespace^"\n"
        else native_value_scope_ml scope)in
     file filename contents;
-    List.map(fun(c,_,info)->
+    List.iter(fun entry->
+      let c,source,label,owner,order,projection=match entry with
+       |Value_entry(c,_,info)->c,info.SomaForeign.value_source,info.value_name,info.value_owner,info.value_order,false
+       |Projection_entry(c,_,info)->c,info.SomaForeign.projection_source,String.concat ","(List.map fst info.projection_fields),info.projection_owner,info.projection_order,true in
       let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))in
-      Printf.sprintf "%S %S %S %S %S %S %S %S %d\n" symbol namespace info.SomaForeign.value_source
-        (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.value_source)))
-        filename(SomaMerkle.string contents)info.value_name info.value_owner info.value_order)entries)value_scopes in
+      let row=Printf.sprintf "%S %S %S %S %S %S %S %S %d\n"symbol namespace source
+       (SomaMerkle.string(read_file(SomaImport.resolve_project_file source)))filename(SomaMerkle.string contents)label owner order in
+      if projection then projection_entries:= !projection_entries@[row]else value_entries:= !value_entries@[row])entries)value_scopes;
+  let value_entries= !value_entries and projection_entries= !projection_entries in
   if value_entries<>[]then file "native_value_reexports.manifest"("soma-native-value-reexports-v1\n"^String.concat ""value_entries);
+  if projection_entries<>[]then file "native_binding_projections.manifest"("soma-native-binding-projections-v1\n"^String.concat ""projection_entries);
   let source_type_scopes=native_source_type_scopes modules in
   let source_type_entries=List.concat_map(fun((namespace,entries)as scope)->
     let filename=native_source_type_filename namespace and contents=native_source_type_scope_ml scope in
@@ -1335,7 +1358,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
   file "native_callables.manifest" ("soma-native-callables-v1\n"^String.concat ""(List.sort String.compare callable_entries));
   let entries = List.concat_map(fun (m:SomaForeign.ocaml_module)->
     List.filter_map(fun(c,path,item)->match item with
-      | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
+      | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ | SomaForeign.OCamlNativeCallback _ ->
         let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)) in
         let source=match item with
           | SomaForeign.OCamlNativeSourceTypeReexport info ->
@@ -1380,7 +1403,9 @@ let write_files ~file ?c_file ~read_file ~directives modules =
   ["soma_nat.ml"; bindings] @ interfaces @
   (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @
   (if publication_entries=[]then []else "native_binding_initializers.manifest"::List.map(fun(_,_,filename,_)->filename)publication_entries) @
-  (if value_entries=[]then []else "native_value_reexports.manifest"::List.map(fun(namespace,_)->native_value_scope_filename namespace)value_scopes) @
+  (if value_entries=[]then []else ["native_value_reexports.manifest"]) @
+  (if projection_entries=[]then []else ["native_binding_projections.manifest"]) @
+  List.map(fun(namespace,_)->native_value_scope_filename namespace)value_scopes @
   (if source_type_entries=[]then []else "native_source_type_reexports.manifest"::
     List.map(fun(namespace,_)->native_source_type_filename namespace)source_type_scopes) @
   (if type_entries=[]then []else "native_algebraic_reexports.manifest"::List.map(fun(namespace,_)->native_reexport_scope_filename namespace)type_scopes) @

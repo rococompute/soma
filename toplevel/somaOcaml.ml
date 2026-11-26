@@ -280,7 +280,7 @@ let checked_modules = SomaOcamlBindings.checked_modules
 let record_generated_files ~capture_generated dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
-    (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest";"native_source_type_reexports.manifest";"native_static_data.manifest";"native_binding_initializers.manifest";"native_value_reexports.manifest"] ||
+    (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest";"native_source_type_reexports.manifest";"native_static_data.manifest";"native_binding_initializers.manifest";"native_value_reexports.manifest";"native_binding_projections.manifest"] ||
      List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h";".assembly";".assembly-interface"] ||
      ((String.starts_with ~prefix:"soma_source_types_" f || String.starts_with ~prefix:"soma_values_" f) && Filename.check_suffix f ".exports")) in
   let hash f =
