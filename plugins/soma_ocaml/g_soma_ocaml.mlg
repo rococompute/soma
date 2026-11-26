@@ -97,9 +97,18 @@ VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
 
+VERNAC ARGUMENT EXTEND native_assembly_member
+ PRINTED BY { fun(kind,name,source)->Pp.(str kind++spc()++str name++str " := "++Libnames.pr_qualid source) }
+| [ "Value" string(name) ":=" reference(source) ] -> { "value",name,source }
+| [ "Type" string(name) ":=" reference(source) ] -> { "type",name,source }
+| [ "Module" string(name) ":=" reference(source) ] -> { "module",name,source }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Assembly" reference(source) "As" string(pattern) ] ->
  { Soma_ocaml.native_assembly source pattern }
+| [ "OCaml" "Native" "Static" "Assembly" reference(source) "As" string(name) "With" "[" ne_native_assembly_member_list_sep(exports, ";") "]" ] ->
+ { Soma_ocaml.native_static_assembly source name exports }
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeEnum CLASSIFIED AS SIDEFF

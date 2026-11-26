@@ -750,7 +750,29 @@ let full_extr opaque_access f (refs,mps) =
   List.iter (fun mp -> if is_modfile mp then error_MPfile_as_mod mp true) mps;
   let struc = optimize_struct table (refs,mps) (mono_environment table ~opaque_access refs mps) in
   let () = warns table in
-  print_structure_to_file table (mono_filename f) false struc
+  print_structure_to_file table (mono_filename f) false struc;
+  if lang()=Ocaml && !SomaImport.generated_output then begin
+    let capture(reference,type_)=
+      let candidates=List.filter(fun r->GlobRef.CanOrd.equal r.glob reference)refs in
+      let r=match candidates with [r]->r
+        |_->user_err(str "A static assembly export has "++int(List.length candidates)++
+          str " extraction instances: "++Libnames.pr_qualid(Libnames.qualid_of_path(Nametab.path_of_global reference)))in
+      let declaration=get_decl_in_structure r struc in
+      let actual,arity=match type_,declaration with
+        |true,Dtype(actual,parameters,_)->actual,List.length parameters
+        |true,Dind block->
+          let packet=Array.find_opt(fun p->GlobRef.CanOrd.equal p.ip_typename_ref.glob reference &&
+            not p.ip_logical)block.ind_packets in
+          (match packet with Some p->p.ip_typename_ref,List.length p.ip_vars
+           |None->user_err(str "A static assembly type was erased during extraction."))
+        |false,Dterm(actual,_,_)->actual,0
+        |false,Dfix(actual,_,_)->
+          (match Array.find_opt(fun r->GlobRef.CanOrd.equal r.glob reference)actual with
+           |Some r->r,0|None->user_err(str "A static assembly value is absent from extraction."))
+        |_->user_err(str "A static assembly export changed kind during extraction.")in
+      reference,type_,Common.pp_global_name table (if type_ then Common.Type else Common.Term)actual,arity in
+    SomaForeign.native_static_extracted_names:=List.map capture !SomaForeign.native_static_extraction_requests
+  end
 
 (* Explicit output names in Soma builds are relative to the source project's
    root, independently of Cd and Extraction Output Directory. Resolve existing

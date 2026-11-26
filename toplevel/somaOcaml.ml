@@ -205,6 +205,7 @@ let host_module = "Soma_host"
 let extract ~state ~modules dir =
   let cmds = Filename.concat dir "extract.soma" in
   let lines = SomaOcamlBindings.extraction_lines modules in
+  let exports=SomaOcamlBindings.prepare_native_static_extraction()in
   SomaMirage.write_file cmds (Printf.sprintf
     "From Corelib Require Extraction PrimFloat FloatClass PrimInt63 CarryType.\n\
      Set Extraction Output Directory %s.\n\
@@ -213,10 +214,11 @@ let extract ~state ~modules dir =
      %s%s%s%s%s\
      Definition soma_main (_ : unit) := main.\n\
      Extraction Inline main.\n\
-     Extraction \"prog\" soma_main.\n" (quote_soma_string dir) SomaMirage.float_extraction
+     Extraction \"prog\" soma_main%s.\n" (quote_soma_string dir) SomaMirage.float_extraction
        SomaMirage.nat_string_extraction SomaMirage.word64_extraction
        ((if SomaNative.loaded () then SomaMirage.handles_extraction ^ SomaNative.extraction
-         else SomaMirage.buffer_extraction)) (String.concat "" lines));
+         else SomaMirage.buffer_extraction)) (String.concat "" lines)
+       (if exports=[]then ""else " "^String.concat " "exports));
   Dumpglob.push_output Dumpglob.NoGlob;
   (* its Extraction "prog" goes to [dir], the output directory it sets *)
   SomaImport.generated_output := true;

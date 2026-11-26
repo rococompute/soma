@@ -70,6 +70,13 @@ let in_native_assembly =
     ~subst:None
 let () = SomaForeign.native_assemblies := (fun () -> !native_assemblies)
 
+let native_static_assemblies = Summary.ref ~name:"soma-native-static-assemblies" []
+let in_native_static_assembly =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native static assembly"
+    ~cache:(fun info->native_static_assemblies:=info:: !native_static_assemblies;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_static_assemblies := (fun()-> !native_static_assemblies)
+
 
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
@@ -539,7 +546,8 @@ let native_assembly source text =
   let term c=EConstr.of_constr(Constr.mkConstU(c,UVars.Instance.empty))in
   if not(Reductionops.is_conv env sigma(term main)(term owner))then
     native_error "an assembly's value must be the checked value selected by main";
-  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies then
+  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
+     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies then
     native_error "one Source namespace may declare only one assembly";
   let offset=ref 0 and size=String.length text in
   let fail()=native_error "assembly patterns contain only names, tuples and record field puns" in
@@ -643,6 +651,81 @@ let native_assembly source text =
   let value=ocaml_name ~definition:"assembly value"(Id.to_string(Constant.label owner))in
   Lib.add_leaf(in_native_assembly SomaForeign.{assembly_owner=owner;assembly_namespace=namespace;
     assembly_source=source;assembly_value=value;assembly_pattern=parsed;assembly_pattern_text=text})
+
+let native_static_assembly selected name exports =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let own_constant reference=match Nametab.locate reference with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      (match(Environ.lookup_constant c env).Declarations.const_body with
+       |Declarations.Def _->c|_->native_error "static assemblies need transparent checked Source definitions")
+    |_->native_error "static assembly members must belong to their Source namespace"in
+  let main=own_constant selected in
+  if Id.to_string(Constant.label main)<>"main"then native_error "a static assembly must select main";
+  if not(is_module_name name && name.[0]>='A'&&name.[0]<='Z')then
+    native_error "a static assembly needs one uppercase native module identifier";
+  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
+     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies then
+    native_error "one Source namespace may declare only one assembly";
+  (* Every published member must already contribute to main's checked
+     dependency closure, including dependencies in its type annotations. *)
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let visited=ref Constants.empty in
+  let rec term t=
+    (match Constr.kind t with Const(c,_)->constant c|_->());
+    Constr.iter term t
+  and constant c=
+    if ModPath.to_string(Constant.modpath c)=namespace && not(Constants.mem c !visited)then begin
+      visited:=Constants.add c !visited;
+      let body=Environ.lookup_constant c env in term body.Declarations.const_type;
+      match body.const_body with Declarations.Def body->term body|_->()
+    end in
+  constant main;
+  let used=ref []in
+  let public_identifier name=
+    ignore(ocaml_name ~definition:"static export" name);
+    if name="_"||not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)name)then
+      native_error "a static export needs one native identifier"in
+  let exports=List.map(fun(kind,public,reference)->
+    let c=own_constant reference in
+    if Constant.CanOrd.equal c main then native_error "main is reserved for the executable entry point";
+    if not(Constants.mem c !visited)then native_error "static assembly members must be dependencies of main";
+    let typ=EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
+    let kind=match kind with
+      |"type"->
+        public_identifier public;
+        let rec arity env count typ=match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+          |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->count
+          |Prod(na,domain,rest)when is_sort env sigma domain->
+            (match EConstr.kind sigma(Reductionops.whd_all env sigma domain)with
+             |Sort sort when EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort->
+               native_error "static type parameters must be runtime types"|_->());
+            arity(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)(count+1)rest
+          |_->native_error "a static type export needs a checked type constructor"in
+        SomaForeign.Static_type(arity env 0 typ)
+      |"value"->
+        public_identifier public;
+        let sort=Retyping.get_sort_of env sigma typ in
+        if Option.has_some(type_arity env sigma typ) || EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
+          native_error "a static value export needs a runtime value";
+        SomaForeign.Static_value
+      |"module"->
+        if not(is_module_name public && public.[0]>='A'&&public.[0]<='Z')||public=name then
+          native_error "a packed module export needs a distinct uppercase identifier";
+        let packed=try ocaml_type env sigma [] typ with Not_ocaml _->""in
+        if not(String.starts_with ~prefix:"(module "packed && String.ends_with ~suffix:")"packed)then
+          native_error "a module export needs a checked packed module value";
+        SomaForeign.Static_unpack
+      |_->assert false in
+    let category=match kind with SomaForeign.Static_type _->"type"|Static_value->"value"|Static_unpack->"module"in
+    if List.mem(category,public)!used then native_error "duplicate static public name";
+    used:=(category,public):: !used;
+    SomaForeign.{static_export_kind=kind;static_export_name=public;
+      static_export_reference=GlobRef.ConstRef c;
+      static_export_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))})exports in
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_static_assembly SomaForeign.{static_owner=main;static_namespace=namespace;
+    static_source=source;static_module=name;static_exports=exports})
 
 let native_external_family name parameters path =
   ignore (native_context ());

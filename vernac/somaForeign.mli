@@ -326,3 +326,22 @@ type native_assembly = {
 val native_assemblies : (unit -> native_assembly list) ref
 val native_export_identity : native_export_pattern -> string
 val native_assembly_identity : native_assembly -> string
+
+type native_static_export_kind = Static_value | Static_type of int | Static_unpack
+type native_static_export = {
+  static_export_kind : native_static_export_kind;
+  static_export_name : string;
+  static_export_reference : Names.GlobRef.t;
+  static_export_symbol : string;
+}
+type native_static_assembly = {
+  static_owner : Names.Constant.t;
+  static_namespace : string;
+  static_source : string;
+  static_module : string;
+  static_exports : native_static_export list;
+}
+val native_static_assemblies : (unit -> native_static_assembly list) ref
+val native_static_assembly_identity : native_static_assembly -> string
+val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
+val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref

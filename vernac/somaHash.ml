@@ -221,11 +221,15 @@ let invalidate () = Hashtbl.clear constants; Hashtbl.clear inductives
 
 let foreign_identity c =
   let base=foreign_identity_base c in
-  match List.find_opt(fun info->Names.Constant.CanOrd.equal c info.SomaForeign.assembly_owner)
+  let local=match List.find_opt(fun info->Names.Constant.CanOrd.equal c info.SomaForeign.assembly_owner)
     (!SomaForeign.native_assemblies())with
-  |None->base
-  |Some info->Some(String.concat "\n"((match base with None->[]|Some b->[b])@
-      [SomaForeign.native_assembly_identity info]))
+  |None->None|Some info->Some(SomaForeign.native_assembly_identity info)in
+  let assembly=match local with Some _->local|None->
+    Option.map SomaForeign.native_static_assembly_identity
+      (List.find_opt(fun info->Names.Constant.CanOrd.equal c info.SomaForeign.static_owner)
+        (!SomaForeign.native_static_assemblies()))in
+  match assembly with None->base|Some identity->
+    Some(String.concat "\n"((match base with None->[]|Some b->[b])@[identity]))
 (* a block being hashed, should its own types mention it by name *)
 let in_progress = ref []
 

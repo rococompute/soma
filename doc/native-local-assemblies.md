@@ -69,3 +69,45 @@ initialization faults, exact public-call allocation, natural Weak lifetimes,
 invalid patterns, semantic/ABI fingerprints and safe stale cleanup. Kykeon's
 migration also compares the former assembly renderer against fresh compiler
 output and runs the unchanged public assembly fixtures.
+
+## Static module assemblies
+
+Static publication keeps a checked module and publishes nonexpansive aliases
+of its values/types, or unpacks a checked first-class module:
+
+```soma
+From Soma Require Import Native OCaml.
+Definition items(A:Type) := list A.
+Definition identity{A:Type}(value:items A) := value.
+Definition main := @identity.
+OCaml Native Static Assembly main As "Checked" With
+ [Type "items" := items; Value "id" := identity].
+```
+
+`Module "Log" := body` publishes `module Log = (val Checked.body)` when
+`body` has a declared packed-module representation. All references must be
+transparent definitions in the current Source namespace and dependencies of
+`main`, including its type annotations. Value/type/module names and kinds,
+complete type constructor arities, packed-module representations, and duplicate
+public names are checked. Arbitrary expressions and code-like names are
+rejected. A namespace may choose either a local or static assembly.
+
+The extractor retains the selected Source members and supplies their actual
+allocated OCaml names and type parameter counts directly from its MiniML
+structure and name table. Neither Python nor the Source declaration guesses
+collision suffixes (a Source definition called `external`, for example, can
+be emitted as `external0`). Generic value publication uses direct aliases;
+there is no eta wrapper, interpreter, invocation or extra initialization.
+Type aliases preserve every runtime parameter and actual compiler type
+identity. The full program/interface/bindings remain in one compilation unit.
+
+The same ten-column assembly manifest authenticates the complete fragment;
+its layout identity is `native-static-assembly-v1`. The checked main contract
+and native ABI include the ordered public members and Source references.
+Programs without static declarations retain their extraction roots and bytes.
+`test-suite/misc/soma_native_static_assembly.sh` covers unrestricted generic
+values, aliases of the same closure, keyword collisions, parameterized types,
+packed modules with abstract/generic/optional members, initialization order,
+original mutable cells, caller context, exact promises/faults/cancellation,
+allocation, natural Weak ownership, malformed declarations, semantic/ABI
+fingerprints and obsolete artifact cleanup, in native and bytecode modes.

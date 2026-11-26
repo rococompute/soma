@@ -572,3 +572,30 @@ let rec native_export_identity = function
 let native_assembly_identity info =
   String.concat "\n" ["native-local-assembly-v1"; info.assembly_namespace;
     info.assembly_value; native_export_identity info.assembly_pattern]
+
+type native_static_export_kind = Static_value | Static_type of int | Static_unpack
+type native_static_export = {
+  static_export_kind : native_static_export_kind;
+  static_export_name : string;
+  static_export_reference : Names.GlobRef.t;
+  static_export_symbol : string;
+}
+type native_static_assembly = {
+  static_owner : Names.Constant.t;
+  static_namespace : string;
+  static_source : string;
+  static_module : string;
+  static_exports : native_static_export list;
+}
+let native_static_assemblies : (unit -> native_static_assembly list) ref = ref(fun()->[])
+let native_static_assembly_identity info =
+  String.concat "\n" (["native-static-assembly-v1";info.static_namespace;info.static_module] @
+    List.map(fun item->
+      let kind=match item.static_export_kind with Static_value->"value"
+        |Static_type arity->"type "^string_of_int arity|Static_unpack->"module"in
+      String.concat " "[kind;Printf.sprintf "%S"item.static_export_name;item.static_export_symbol])info.static_exports)
+
+(* Filled by the OCaml project producer, then by extraction's actual name
+   allocator. Consumers never guess collision suffixes or parse OCaml text. *)
+let native_static_extraction_requests : (Names.GlobRef.t * bool) list ref = ref []
+let native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref = ref []
