@@ -621,6 +621,11 @@ let rec native_export_identity = function
   | Export_record (owner, fields) -> "record " ^ Printf.sprintf "%S" owner ^ " [" ^
       String.concat ";" (List.map (Printf.sprintf "%S") fields) ^ "]"
 
+let rec native_export_names = function
+  |Export_name "_"->[]|Export_name name->[name]
+  |Export_tuple fields->List.concat_map native_export_names fields
+  |Export_record(_,fields)->fields
+
 let native_assembly_identity info =
   String.concat "\n" ["native-local-assembly-v1"; info.assembly_namespace;
     info.assembly_value; native_export_identity info.assembly_pattern]
@@ -641,6 +646,7 @@ let static_exceptions owner =
     then info.static_exception_fields else [])(!native_static_exception_scopes())
 
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
+  | Static_projection of native_export_pattern
 type native_static_export = {
   static_export_kind : native_static_export_kind;
   static_export_name : string;
@@ -654,6 +660,9 @@ type native_static_assembly = {
   static_module : string;
   static_exports : native_static_export list;
 }
+let native_static_export_names item = match item.static_export_kind with
+  |Static_projection pattern->native_export_names pattern
+  |_->[item.static_export_name]
 let native_static_assemblies : (unit -> native_static_assembly list) ref = ref(fun()->[])
 type native_lexical_scope = {
   lexical_owner : Names.Constant.t;
@@ -671,9 +680,11 @@ let native_lexical_scope_identity scope =
 let native_static_assembly_identity info =
   String.concat "\n" (["native-static-assembly-v1";info.static_namespace;info.static_module] @
     List.map(fun item->
-      let kind=match item.static_export_kind with Static_value->"value"
-        |Static_type arity->"type "^string_of_int arity|Static_unpack->"module"in
-      String.concat " "[kind;Printf.sprintf "%S"item.static_export_name;item.static_export_symbol])info.static_exports) ^
+      let kind,name=match item.static_export_kind with Static_value->"value",Printf.sprintf "%S"item.static_export_name
+        |Static_type arity->"type "^string_of_int arity,Printf.sprintf "%S"item.static_export_name
+        |Static_unpack->"module",Printf.sprintf "%S"item.static_export_name
+        |Static_projection pattern->"projection",native_export_identity pattern in
+      String.concat " "[kind;name;item.static_export_symbol])info.static_exports) ^
   (match static_exceptions info.static_owner with []->""|exceptions->
     "\nstatic-exceptions-v1\n"^String.concat "\n"(List.map(fun item->
       String.concat " "([Printf.sprintf "%S" item.static_exception_name;item.static_exception_symbol]@

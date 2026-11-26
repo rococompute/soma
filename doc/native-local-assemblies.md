@@ -427,3 +427,36 @@ related generic Source variants, invalid/reordered/duplicate/partial selections,
 nominal typing and the existing identity/allocation/provenance/cleanup checks in
 native and bytecode. Separate publisher namespaces can emit separate whole
 artifacts so a consumer copies each into its original declaration position.
+
+
+### Checked projections in static and lexical publication
+
+A static member can unpack a checked value without reconstructing it:
+
+```soma
+OCaml Native Static Assembly main As "Checked" With
+ [Project "((first, second), third)" := public_api;
+  Value "run" := run].
+OCaml Native Lexical Scope main Open ["Lx"].
+```
+
+`Project` uses the same checked name/tuple/owned-record-pun pattern grammar as
+local assemblies. The checker validates the pattern against the actual Source
+value type, including native entry erasure, and rejects malformed shapes,
+injected code, duplicate pattern names and collisions with ordinary value
+exports. It selects the actual extracted member name. Each projection evaluates
+that member once; it adds no callback, conversion, closure or object copy.
+
+In a lexical scope the compiler keeps the checked module local, unpacks the
+selected values after that module's initialization, then publishes the ordered
+flat tuple of projected names and ordinary values. The existing monomorphic
+lexical export restriction still applies to complete selected values; this
+feature does not silently specialize polymorphic APIs. Global static assemblies
+retain their unrestricted generic publication behavior.
+
+The new projection metadata case is appended without changing existing tags or
+record shapes. Its semantic identity records the checked pattern structure,
+not incidental whitespace. Declarations without projections retain their old
+identities and output. Native/bytecode fixtures cover invalid declarations,
+original cell/closure identity, single initialization, promise/context/fault
+phases, exact call allocation and natural Weak ownership.

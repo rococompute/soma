@@ -52,7 +52,8 @@ Definition unrelated := true.
 Definition evidence : True := I.
 Definition prepared := Native.Export(Native.Call_callback prepare tt).
 Definition state := Native.Export(Native.Call_callback get_clock tt).
-Definition main := ((@identity,@external),(prepared,state)).
+Definition state_pair := (state,state).
+Definition main := ((@identity,@external),(prepared,state_pair)).
 Fail OCaml Native Static Assembly identity As "Checked" With [Value "id" := identity].
 Fail OCaml Native Static Assembly main As "Bad; Injected" With [Value "id" := identity].
 Fail OCaml Native Static Assembly main As "Checked" With [Value "id" := unrelated].
@@ -63,7 +64,7 @@ Fail OCaml Native Static Assembly main As "Checked" With [Type "id" := identity]
 Fail OCaml Native Static Assembly main As "Checked" With [Module "Package" := state].
 Fail OCaml Native Static Assembly main As "Checked" With [Value "same" := identity;Value "same" := external].
 Fail OCaml Native Static Assembly main As "Checked" With [Value "id;bad" := identity].
-OCaml Native Static Assembly main As "Checked" With [Type "items" := items;Value "id" := identity;Value "first" := external;Value "second" := external;Value "clock" := state;Module "Package" := prepared].
+OCaml Native Static Assembly main As "Checked" With [Type "items" := items;Value "id" := identity;Value "first" := external;Value "second" := external;Value "clock" := state;Module "Package" := prepared;Project "(clock_first,clock_second)" := state_pair].
 Fail OCaml Native Assembly prepared As "duplicate".
 SOMA
 soma extract main.soma -no-soma-prelude -o native >extract.log 2>&1
@@ -96,12 +97,14 @@ module Original=struct module Build()=struct
   val external_:'a->'a
   val prepared:(module Target.API)
   val state:(unit->int)ref
+  val state_pair:((unit->int)ref * (unit->int)ref)
  end=struct
   type 'a items='a list
   let identity value=value
   let external_ value=value
   let prepared=Target.prepare()
   let state=Target.get_clock()
+  let state_pair=(state,state)
  end
  type 'a items='a Checked.items
  let id=Checked.identity
@@ -109,6 +112,7 @@ module Original=struct module Build()=struct
  let second=Checked.external_
  let clock=Checked.state
  module Package=(val Checked.prepared)
+ let clock_first,clock_second=Checked.state_pair
 end end
 module Current=struct module Build()=struct
 ML
@@ -121,6 +125,7 @@ let ()=
  Target.trace:=[];let module Old=Original.Build()in let old_trace=List.rev !Target.trace in
  Target.trace:=[];let module New=Current.Build()in
  require "initialization once, in source order"(!Target.prepared=before+2&&old_trace=["package";"clock"]&&old_trace=List.rev !Target.trace);
+ require "static tuple projections preserve shared cells"(New.clock_first==New.clock&&New.clock_second==New.clock);
  let text=String.make 1048576 't'and data=Bytes.make 1048576 'b'in
  let values=[text]in let f x=x in
  let (_:string New.items)=values in

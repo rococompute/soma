@@ -47,8 +47,13 @@ Definition body := Native.Export(
  Native.Invoke create(fun owner=>Native.Return(owner,(fun text=>invoke owner text)))))).
 Definition main := ((@identity,@external),body).
 Fail OCaml Native Lexical Scope main.
+Fail OCaml Native Static Assembly main As "Checked" With [Project "(one,two,three)" := body].
+Fail OCaml Native Static Assembly main As "Checked" With [Project "(same,same)" := body].
+Fail OCaml Native Static Assembly main As "Checked" With [Project "(held,run); injected" := body].
+Fail OCaml Native Static Assembly main As "Checked" With [Value "held" := external;Project "(held,run)" := body].
 OCaml Native Static Assembly main As "Checked" With
- [Value "id" := identity;Value "first" := external;Value "second" := external;Value "bundle" := body].
+ [Value "id" := identity;Value "first" := external;Value "second" := external;Value "bundle" := body;
+  Project "(held,run)" := body].
 Fail OCaml Native Lexical Scope identity.
 Fail OCaml Native Lexical Scope main Open ["Target;bad"].
 Fail OCaml Native Lexical Scope main Open ["Target";"Target"].
@@ -104,12 +109,12 @@ for line in Path('hash.log').read_text().splitlines():
  assumptions=set(line.split('  assumes ',1)[1].split(', '))if'  assumes 'in line else set()
  assert assumptions<={'Corelib.Numbers.Cyclic.Int63.PrimInt63.int'},assumptions
 # Independent old driver recipe around the same freshly checked implementation.
-out=['module Make (S:Target.API)=struct\nlet id,first,second,bundle=\n']
+out=['module Make (S:Target.API)=struct\nlet id,first,second,bundle,held,run=\n']
 for filename in sorted({shlex.split(l)[3]for l in Path('native/native_callables.manifest').read_text().splitlines()[1:]}):
  data=Path('native',filename).read_text()
  assert data in Path('native/main.assembly').read_text()
  out+=['let module '+Path(filename).stem.capitalize()+'=struct\n',data,'end in\n']
-out+=['let module Checked:sig\n',Path('native/prog.mli').read_text(),'end=struct\nmodule Soma_bindings=struct\n',Path('native/soma_bindings.ml').read_text(),'end\n',Path('native/prog.ml').read_text(),'end in\nChecked.identity,Checked.external0,Checked.external0,Checked.body\nend\n']
+out+=['let module Checked:sig\n',Path('native/prog.mli').read_text(),'end=struct\nmodule Soma_bindings=struct\n',Path('native/soma_bindings.ml').read_text(),'end\n',Path('native/prog.ml').read_text(),'end in\nlet (held,run)=Checked.body in\nChecked.identity,Checked.external0,Checked.external0,Checked.body,held,run\nend\n']
 Path('original.ml').write_text(''.join(out))
 Path('current.ml').write_bytes(Path('native/main.assembly').read_bytes())
 PY
@@ -126,6 +131,7 @@ let ()=
  let text=String.make 1048576 't' in let ints=[1;2;3]and strings=[text]in
  require "original alias values"(New.id strings==strings&&New.first text==text);
  require "same function reexport"(New.first==New.second);
+ require "projected aliases reuse original objects"(New.held==fst New.bundle&&New.run==snd New.bundle);
  let owner,run=New.bundle and old_owner,old_run=Old.bundle in
  let pending,wake=Lwt.task()in Target.response:=pending;
  let seen=ref []in Target.observe:=(fun held value->seen:=(held==owner,value==text,Lwt.get Target.context):: !seen);

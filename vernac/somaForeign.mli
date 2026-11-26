@@ -349,6 +349,7 @@ type native_assembly = {
   assembly_pattern_text : string;
 }
 val native_assemblies : (unit -> native_assembly list) ref
+val native_export_names : native_export_pattern -> string list
 val native_export_identity : native_export_pattern -> string
 val native_assembly_identity : native_assembly -> string
 
@@ -365,6 +366,7 @@ val native_static_exception_scopes : (unit -> native_static_exception_scope list
 val static_exceptions : Names.Constant.t -> native_static_exception list
 
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
+  | Static_projection of native_export_pattern
 type native_static_export = {
   static_export_kind : native_static_export_kind;
   static_export_name : string;
@@ -378,6 +380,7 @@ type native_static_assembly = {
   static_module : string;
   static_exports : native_static_export list;
 }
+val native_static_export_names : native_static_export -> string list
 val native_static_assemblies : (unit -> native_static_assembly list) ref
 type native_lexical_scope = {
   lexical_owner : Names.Constant.t;

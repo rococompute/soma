@@ -569,30 +569,7 @@ let native_module_include name target =
     module_alias_target=target;module_alias_source=source;module_alias_order=order})
 
 (* Source-owned assembly: no expressions, type annotations or code escapes. *)
-let native_assembly source text =
-  let namespace=native_namespace() in
-  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
-    |_->native_error "an assembly needs a checked Source definition" in
-  if Id.to_string(Constant.label owner)="main"then
-    native_error "an assembly needs a separate Source definition selected by main";
-  if ModPath.to_string(Constant.modpath owner)<>namespace then
-    native_error "an assembly must belong to its Source definition's namespace";
-  let env=Global.env()in
-  let definition=Environ.lookup_constant owner env in
-  (match definition.Declarations.const_body with Declarations.Def _->()
-   |_->native_error "an assembly needs a transparent checked Source definition");
-  let main=try Nametab.locate(Libnames.qualid_of_ident(Id.of_string "main"))
-    with Not_found->native_error "define main before declaring its assembly" in
-  let main=match main with GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->c
-    |_->native_error "an assembly needs main in the same Source namespace" in
-  let sigma=Evd.from_env env in
-  let term c=EConstr.of_constr(Constr.mkConstU(c,UVars.Instance.empty))in
-  if not(Reductionops.is_conv env sigma(term main)(term owner))then
-    native_error "an assembly's value must be the checked value selected by main";
-  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
-     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies ||
-     List.exists(fun info->info.SomaForeign.public_namespace=namespace)!native_public_assemblies then
-    native_error "one Source namespace may declare only one assembly";
+let checked_export_pattern env sigma typ text =
   let offset=ref 0 and size=String.length text in
   let fail()=native_error "assembly patterns contain only names, tuples and record field puns" in
   let space()=while !offset<size && List.mem text.[!offset][' ';'\n';'\t';'\r']do incr offset done in
@@ -690,7 +667,35 @@ let native_assembly source text =
         |None->native_error "an assembly record pattern needs a declared native record alias"in
       if prefix<>target then native_error "assembly record qualification differs from its checked owner"
   in
-  check(EConstr.of_constr definition.const_type)parsed;
+  check typ parsed;
+  parsed,exports
+
+
+let native_assembly source text =
+  let namespace=native_namespace() in
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
+    |_->native_error "an assembly needs a checked Source definition" in
+  if Id.to_string(Constant.label owner)="main"then
+    native_error "an assembly needs a separate Source definition selected by main";
+  if ModPath.to_string(Constant.modpath owner)<>namespace then
+    native_error "an assembly must belong to its Source definition's namespace";
+  let env=Global.env()in
+  let definition=Environ.lookup_constant owner env in
+  (match definition.Declarations.const_body with Declarations.Def _->()
+   |_->native_error "an assembly needs a transparent checked Source definition");
+  let main=try Nametab.locate(Libnames.qualid_of_ident(Id.of_string "main"))
+    with Not_found->native_error "define main before declaring its assembly" in
+  let main=match main with GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->c
+    |_->native_error "an assembly needs main in the same Source namespace" in
+  let sigma=Evd.from_env env in
+  let term c=EConstr.of_constr(Constr.mkConstU(c,UVars.Instance.empty))in
+  if not(Reductionops.is_conv env sigma(term main)(term owner))then
+    native_error "an assembly's value must be the checked value selected by main";
+  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
+     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies ||
+     List.exists(fun info->info.SomaForeign.public_namespace=namespace)!native_public_assemblies then
+    native_error "one Source namespace may declare only one assembly";
+  let parsed,_=checked_export_pattern env sigma(EConstr.of_constr definition.const_type)text in
   let source=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
   let value=ocaml_name ~definition:"assembly value"(Id.to_string(Constant.label owner))in
   Lib.add_leaf(in_native_assembly SomaForeign.{assembly_owner=owner;assembly_namespace=namespace;
@@ -789,6 +794,12 @@ let native_static_assembly selected name exports =
         if Option.has_some(type_arity env sigma typ) || EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
           native_error "a static value export needs a runtime value";
         SomaForeign.Static_value
+      |"project"->
+        let sort=Retyping.get_sort_of env sigma typ in
+        if Option.has_some(type_arity env sigma typ) || EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
+          native_error "a projected export needs a checked runtime value";
+        let pattern,_=checked_export_pattern env sigma typ public in
+        SomaForeign.Static_projection pattern
       |"module"->
         if not(is_module_name public && public.[0]>='A'&&public.[0]<='Z')||public=name then
           native_error "a packed module export needs a distinct uppercase identifier";
@@ -797,9 +808,12 @@ let native_static_assembly selected name exports =
           native_error "a module export needs a checked packed module value";
         SomaForeign.Static_unpack
       |_->assert false in
-    let category=match kind with SomaForeign.Static_type _->"type"|Static_value->"value"|Static_unpack->"module"in
-    if List.mem(category,public)!used then native_error "duplicate static public name";
-    used:=(category,public):: !used;
+    let category,names=match kind with SomaForeign.Static_type _->"type",[public]
+      |Static_value->"value",[public]|Static_unpack->"module",[public]
+      |Static_projection pattern->"value",SomaForeign.native_export_names pattern in
+    List.iter(fun public->
+      if List.mem(category,public)!used then native_error "duplicate static public name";
+      used:=(category,public):: !used)names;
     SomaForeign.{static_export_kind=kind;static_export_name=public;
       static_export_reference=GlobRef.ConstRef c;
       static_export_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))})exports in
@@ -817,7 +831,8 @@ let native_lexical_scope selected opens functor_ =
       !native_static_assemblies with Some info when info.static_namespace=namespace->info
     |_->native_error "declare a static assembly in this namespace before its lexical scope"in
   if SomaForeign.lexical_scope owner<>None then native_error "duplicate lexical assembly scope";
-  if List.exists(fun item->item.SomaForeign.static_export_kind<>SomaForeign.Static_value)assembly.static_exports ||
+  if List.exists(fun item->match item.SomaForeign.static_export_kind with
+      |SomaForeign.Static_value|SomaForeign.Static_projection _->false|_->true)assembly.static_exports ||
      SomaForeign.static_exceptions owner<>[]then
     native_error "a lexical assembly publishes values without escaping types, modules or exception declarations";
   (* A let-module expression is expansive in OCaml. Do not silently weaken

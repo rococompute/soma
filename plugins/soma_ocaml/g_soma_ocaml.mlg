@@ -108,6 +108,7 @@ END
 VERNAC ARGUMENT EXTEND native_assembly_member
  PRINTED BY { fun(kind,name,source)->Pp.(str kind++spc()++str name++str " := "++Libnames.pr_qualid source) }
 | [ "Value" string(name) ":=" reference(source) ] -> { "value",name,source }
+| [ "Project" string(pattern) ":=" reference(source) ] -> { "project",pattern,source }
 | [ "Exception" string(name) ":=" reference(source) ] -> { "exception",name,source }
 | [ "Type" string(name) ":=" reference(source) ] -> { "type",name,source }
 | [ "Module" string(name) ":=" reference(source) ] -> { "module",name,source }

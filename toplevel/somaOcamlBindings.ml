@@ -978,6 +978,7 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       let target=info.static_module^"."^name in
       match item.static_export_kind with
       |SomaForeign.Static_value->"let "^item.static_export_name^" = "^target^"\n"
+      |Static_projection _->"let "^item.static_export_name^" = "^target^"\n"
       |Static_unpack->"module "^item.static_export_name^" = (val "^target^")\n"
       |Static_type expected->
         if arity<>expected then error Pp.(str "static type parameter erasure differs from its checked declaration");
@@ -1010,11 +1011,18 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       let before,after=match scope.lexical_functor with None->"",""|Some(name,parameters)->
         "module "^name^String.concat ""(List.map(fun(name,signature)->" ("^name^" : "^signature^")")parameters)^
         " = struct\n","end\n"in
-      opens^before^"let "^String.concat ", "(List.map(fun i->i.SomaForeign.static_export_name)info.static_exports)^" =\n"^
+      let projections=String.concat ""(List.filter_map(fun item->match item.SomaForeign.static_export_kind with
+        |SomaForeign.Static_projection _->let name,_=allocated item in
+          Some("  let "^item.static_export_name^" = "^info.static_module^"."^name^" in\n")
+        |_->None)info.static_exports)in
+      let results=List.concat_map(fun item->match item.SomaForeign.static_export_kind with
+        |SomaForeign.Static_projection pattern->SomaForeign.native_export_names pattern
+        |_->let name,_=allocated item in [info.static_module^"."^name])info.static_exports in
+      opens^before^"let "^String.concat ", "(List.concat_map SomaForeign.native_static_export_names info.static_exports)^" =\n"^
       captures^"  let module "^info.static_module^" : sig\n"^header^interface^
       "\n  end = struct\n    module "^bindings_module()^" = struct\n"^bindings^
-      "\n    end\n"^header^program^"\n  end in\n  "^
-      String.concat ", "(List.map(fun i->let name,_=allocated i in info.static_module^"."^name)info.static_exports)^"\n"^after in
+      "\n    end\n"^header^program^"\n  end in\n"^projections^"  "^
+      String.concat ", "results^"\n"^after in
     let filename=Filename.remove_extension(Filename.basename info.static_source)^".assembly"in
     file filename contents;
     let contract=match List.assoc_opt owner contracts with Some hash->hash
