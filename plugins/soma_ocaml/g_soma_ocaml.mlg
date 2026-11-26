@@ -229,6 +229,10 @@ VERNAC ARGUMENT EXTEND native_static_expression
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Data" ident(name) ":" native_signature(typ) ":=" reference(recipe) "With" "[" ne_reference_list_sep(leaves, ";") "]" ] ->
+ { Soma_ocaml.native_static_data name typ recipe leaves }
+| [ "OCaml" "Native" "Static" "Data" ident(name) ":" native_signature(typ) ":=" reference(recipe) ] ->
+ { Soma_ocaml.native_static_data name typ recipe [] }
 | [ "OCaml" "Native" "Static" "Invoke" ident(name) ":" native_signature(typ) ":=" ident(target) "With" "[" ne_native_static_expression_list_sep(values, ";") "]" "AtFullApplication" ] ->
  { Soma_ocaml.native_static_invocation name typ target values }
 | [ "OCaml" "Native" "Static" "Apply" ident(name) ":" native_signature(typ) ":=" ident(target) "With" "[" ne_ident_list_sep(bound, ";") "]" "AtFullApplication" ] ->

@@ -220,7 +220,32 @@ let rec native_product = function
 let rec native_pattern = function
   | [] -> "()" | [value] -> value
   | first::rest -> "(" ^ first ^ ", " ^ native_pattern rest ^ ")"
-let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
+let native_static_data_module owner = "Soma_data_"^SomaMerkle.string owner
+let native_static_data_filename owner = String.uncapitalize_ascii(native_static_data_module owner)^".ml"
+let native_static_data_name owner = native_static_data_module owner^".value"
+let native_static_data_owners modules =
+  let rec references = function
+    |SomaForeign.DataReference owner->[owner]
+    |DataPair(a,b)|DataCons(a,b)->references a @ references b
+    |DataSome value|DataVariant(_,Some value)->references value|_->[]in
+  List.sort_uniq String.compare(List.concat_map(fun(m:SomaForeign.ocaml_module)->
+    List.concat_map(fun(_,_,item)->match item with
+      |SomaForeign.OCamlNativeCallback{operation=NativeStaticData(owner,_,_,_,Some value);_}->owner::references value
+      |_->[])m.items)modules)
+
+let rec native_static_data_literal = function
+        |SomaForeign.DataReference owner->native_static_data_name owner
+        |SomaForeign.DataString text->Printf.sprintf "%S"text
+        |DataChar byte->Printf.sprintf "%C"byte
+        |DataWord word|DataNat word|DataFloat word->word
+        |DataBool value->string_of_bool value|DataUnit->"()"
+        |DataPair(a,b)->"("^native_static_data_literal a^", "^native_static_data_literal b^")"
+        |DataNil->"[]"|DataCons(a,b)->"("^native_static_data_literal a^" :: "^native_static_data_literal b^")"
+        |DataNone->"None"|DataSome value->"(Some "^native_static_data_literal value^")"
+        |DataVariant(tag,None)->"`"^tag
+        |DataVariant(tag,Some value)->"(`"^tag^" "^native_static_data_literal value^")"
+
+let native_binding ?(value=false) ?(data_owners=[]) (m:SomaForeign.ocaml_module) (n:SomaForeign.native_callback) =
   let args = List.mapi(fun i _->"a"^string_of_int i)n.arguments in
   let signature = native_product(List.map(fun t->"("^t^")")n.arguments)^" -> ("^n.result^")" in
   let module_prefix ty =
@@ -254,6 +279,7 @@ let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.na
         |Some label->"~"^label^":"^value)values labels in
       if given=[]then path else apply path given
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->apply("("^path^" "^Printf.sprintf "%S"literal^")")values
+    |SomaForeign.NativeStaticData(owner,_,_,_,Some _)when values=[]->native_static_data_name owner
     |SomaForeign.NativeFloatConstant literal when values=[]->"("^literal^")"
     |SomaForeign.NativeExternalLiteralFunction(path,literal,_)->apply path(Printf.sprintf "%S"literal::values)
     |SomaForeign.NativeExternalInsertedLiteralFunction(path,literal,after,_)->
@@ -306,7 +332,7 @@ let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.na
         |Some label->"~"^label^":"^value)values labels in
       "(fun "^String.concat " "params^" -> "^static_apply operation values^")"in
     match operation with
-    |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _->static_apply operation []
+    |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)->static_apply operation []
     |SomaForeign.NativeExternalLiteralConstant(path,literal)->"("^path^" "^Printf.sprintf "%S"literal^")"
     |SomaForeign.NativeExternalLiteralFunction(_,_,arity)
     |SomaForeign.NativeExternalInsertedLiteralFunction(_,_,_,arity)
@@ -507,7 +533,11 @@ let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.na
       Printf.sprintf "(fun () -> fun _ -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
     | SomaForeign.NativeAssertionFactory(line,column),[_] ->
       Printf.sprintf "(fun () -> fun () -> Stdlib.raise (Stdlib.Assert_failure (__FILE__, %d, %d)))" line column
-    | SomaForeign.NativeFloatConstant literal,[_] -> "(" ^ literal ^ ")"
+    | SomaForeign.NativeStaticData(owner,_,_,_,Some _),[_] ->
+      native_static_data_name owner
+    | SomaForeign.NativeFloatConstant literal,[_] ->
+      let owner=n.namespace^"."^n.name in
+      if List.mem owner data_owners then native_static_data_name owner else "("^literal^")"
     | SomaForeign.NativeCallableApplyFunction(Some c),[_] ->
       let values=List.mapi(fun i _->"value"^string_of_int i)c.callable_arguments in
       let given=List.map2(fun value->function
@@ -676,11 +706,59 @@ let native_value_scope_bindings ~interface ((namespace,_)as scope)=
   "\nmodule "^native_value_scope_name namespace^(if interface then " : sig\n"else" = struct\n")^
   native_value_scope_ml ~interface scope^"end\n"
 
+let native_callback_declaration ~interface ~data_owners m n =
+  let signature,body=native_binding ~data_owners m n in
+  let vars=type_variables signature in
+  let poly=if vars=[]then ""else String.concat " "vars^". "in
+  if interface then Printf.sprintf "val %s : %s\n" (native_binding_name n) signature
+  else Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s%s =\n  %s\n"
+    n.SomaForeign.namespace n.name (native_binding_name n) poly signature body
+
+let native_static_data_sources modules =
+  let callbacks=List.concat_map(fun(m:SomaForeign.ocaml_module)->
+    List.filter_map(fun(_,_,item)->match item with
+      |SomaForeign.OCamlNativeCallback callback->Some(callback.namespace^"."^callback.name,callback)
+      |_->None)m.items)modules in
+  let roots=List.filter_map(fun(_,callback)->match callback.SomaForeign.operation with
+    |NativeStaticData(owner,source,_,_,Some _)->Some(owner,source)|_->None)callbacks in
+  let visited=ref [] and active=ref [] and output=ref [] in
+  let rec visit root source owner=
+    if List.mem owner !active then error Pp.(str "cyclic native static data references");
+    if not(List.mem owner !visited)then begin
+      let callback=match List.assoc_opt owner callbacks with
+        |Some callback->callback
+        |None->error Pp.(str "a native static data dependency is missing from its extracted scope")in
+      active:=owner:: !active;
+      let root,source,value=match callback.SomaForeign.operation with
+        |NativeStaticData(_,source,_,_,Some value)->references owner source value;owner,source,value
+        |NativeFloatConstant value->root,source,SomaForeign.DataFloat value
+        |NativeVariantBuild(tag,Some variant)->
+          let case=List.find(fun case->case.SomaForeign.case_tag=tag)variant.SomaForeign.variant_cases in
+          (match case.SomaForeign.case_payload with
+           |Some "unit"->root,source,SomaForeign.DataVariant(tag,Some DataUnit)
+           |_->error Pp.(str "a shared static constructor atom must have a unit payload"))
+        |_->error Pp.(str "an invalid primitive entered native static data dependencies")in
+      active:=List.tl !active;
+      visited:=owner:: !visited;
+      let contents=header^"(* Shared checked static data; inferred principal types stay independent of caller scopes. *)\n"^
+        "let value = "^native_static_data_literal value^"\n"in
+      output:=(root,source,native_static_data_filename owner,contents):: !output
+    end
+  and references root source = function
+    |SomaForeign.DataReference owner->visit root source owner
+    |DataPair(a,b)|DataCons(a,b)->references root source a;references root source b
+    |DataSome value|DataVariant(_,Some value)->references root source value
+    |_->()in
+  List.iter(fun(owner,source)->visit owner source owner)roots;
+  List.rev !output
+
 let bindings_ml ?(interface=false) modules =
+  let data_owners=native_static_data_owners modules in
+  let values=String.concat ""(List.map(native_value_scope_bindings ~interface)(native_value_scopes modules))in
+  let types=String.concat ""(List.map(native_reexport_scope_bindings ~interface)(native_reexport_scopes modules))in
+  let aliases=String.concat ""(List.map(native_module_scope_bindings ~interface)(native_module_scopes modules))in
   header ^ "(* Each value that a .definition declares, at its declared type. *)\n" ^
-  String.concat ""(List.map(native_value_scope_bindings ~interface)(native_value_scopes modules)) ^
-  String.concat ""(List.map(native_reexport_scope_bindings ~interface)(native_reexport_scopes modules)) ^
-  String.concat ""(List.map(native_module_scope_bindings ~interface)(native_module_scopes modules)) ^
+  values^types^aliases ^
   String.concat "" (List.concat_map (fun (m : SomaForeign.ocaml_module) ->
       let definition = match m.ml_file with
         | Some f -> Filename.remove_extension (Filename.basename f) ^ ".definition"
@@ -689,12 +767,7 @@ let bindings_ml ?(interface=false) modules =
       let wrappers = List.filter_map (fun (_, path, item) -> match item with
           | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
-            let signature,body=native_binding m n in
-            let vars=type_variables signature in
-            let poly=if vars=[]then ""else String.concat " "vars^". "in
-            Some (if interface then Printf.sprintf "val %s : %s\n" (native_binding_name n) signature
-              else Printf.sprintf "\n(* native %s.%s *)\nlet %s : %s%s =\n  %s\n"
-                n.namespace n.name (native_binding_name n) poly signature body)
+            Some(native_callback_declaration ~interface ~data_owners m n)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -1092,6 +1165,13 @@ let write_files ~file ?c_file ~read_file ~directives modules =
       file interface (bindings_ml ~interface:true modules);
       [interface]
     end else [] in
+  let static_data=native_static_data_sources modules in
+  let data_entries=List.map(fun(symbol,source,filename,contents)->
+    file filename contents;
+    Printf.sprintf "%S %S %S %S %S\n"symbol source
+      (SomaMerkle.string(read_file(SomaImport.resolve_project_file source)))filename(SomaMerkle.string contents))static_data in
+  if data_entries<>[]then file "native_static_data.manifest"
+    ("soma-native-static-data-v1\n"^String.concat ""data_entries);
   let value_scopes=native_value_scopes modules in
   let value_entries=List.concat_map(fun((namespace,entries)as scope)->
     let filename=native_value_scope_filename namespace and contents=native_value_scope_ml scope in
@@ -1249,6 +1329,7 @@ let write_files ~file ?c_file ~read_file ~directives modules =
         (SomaForeign.native_public_assembly_identity info))(selected_native_public_assemblies())in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
+  (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @
   (if value_entries=[]then []else "native_value_reexports.manifest"::List.map(fun(namespace,_)->native_value_scope_filename namespace)value_scopes) @
   (if source_type_entries=[]then []else "native_source_type_reexports.manifest"::
     List.map(fun(namespace,_)->native_source_type_filename namespace)source_type_scopes) @

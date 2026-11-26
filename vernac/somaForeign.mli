@@ -125,6 +125,7 @@ type native_operation =
   | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
   | NativeAssertionFunction of int * int
   | NativeEtaFunction of string * native_callable
+  | NativeStaticData of string * string * string * string list * native_static_data option
 
 and native_static_expression =
   | StaticArgument of int
@@ -137,6 +138,22 @@ and native_static_term =
   | NativeStaticValue of native_operation
   | NativeStaticCall of native_operation * native_static_term list * string option list
   | NativeStaticLambda of native_static_term * native_callable
+
+and native_static_data =
+  | DataReference of string
+  | DataString of string
+  | DataChar of char
+  | DataWord of string
+  | DataNat of string
+  | DataFloat of string
+  | DataBool of bool
+  | DataUnit
+  | DataPair of native_static_data * native_static_data
+  | DataNil
+  | DataCons of native_static_data * native_static_data
+  | DataNone
+  | DataSome of native_static_data
+  | DataVariant of string * native_static_data option
 
 type native_callback = {
   namespace : string;

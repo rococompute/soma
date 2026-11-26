@@ -113,6 +113,9 @@ explore, compile, extract, hash, search, diff, get and repl.
 
 ## Documentation
 
+- [Checked shared native data](doc/native-static-data.md): stage pure Source
+  recipes as shared typed constants without a build-script code template.
+
 - [GRADUAL.md](GRADUAL.md): the language, the `soma` command, projects
   (`soma.toml`, dependencies by git tag), OCaml, WebAssembly, Sandbox
   (MirageOS) and JSX programs, and how the kernel's rules work.

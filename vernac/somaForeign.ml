@@ -109,6 +109,7 @@ type native_operation =
   | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
   | NativeAssertionFunction of int * int
   | NativeEtaFunction of string * native_callable
+  | NativeStaticData of string * string * string * string list * native_static_data option
 
 and native_static_expression =
   | StaticArgument of int
@@ -121,6 +122,22 @@ and native_static_term =
   | NativeStaticValue of native_operation
   | NativeStaticCall of native_operation * native_static_term list * string option list
   | NativeStaticLambda of native_static_term * native_callable
+
+and native_static_data =
+  | DataReference of string
+  | DataString of string
+  | DataChar of char
+  | DataWord of string
+  | DataNat of string
+  | DataFloat of string
+  | DataBool of bool
+  | DataUnit
+  | DataPair of native_static_data * native_static_data
+  | DataNil
+  | DataCons of native_static_data * native_static_data
+  | DataNone
+  | DataSome of native_static_data
+  | DataVariant of string * native_static_data option
 
 type native_callback = {
   namespace : string;
@@ -450,6 +467,21 @@ let rec native_identity = function
    Printf.sprintf "native-external-family %S %s" path (String.concat " " params)
  | OCamlNativeCallback n ->
    let rec describe_operation = function
+    | NativeStaticData(owner,_,recipe,leaves,Some value) ->
+      let rec data = function
+        |DataReference owner->"reference "^Printf.sprintf "%S"owner
+        |DataString text->"string "^Printf.sprintf "%S"text
+        |DataChar byte->"char "^string_of_int(Char.code byte)
+        |DataWord word->"word "^word|DataNat value->"nat "^value|DataFloat value->"float "^value
+        |DataBool value->"bool "^string_of_bool value|DataUnit->"unit"
+        |DataPair(a,b)->"pair ("^data a^") ("^data b^")"
+        |DataNil->"nil"|DataCons(a,b)->"cons ("^data a^") ("^data b^")"
+        |DataNone->"none"|DataSome value->"some ("^data value^")"
+        |DataVariant(tag,None)->"tag "^Printf.sprintf "%S"tag
+        |DataVariant(tag,Some value)->"tag "^Printf.sprintf "%S"tag^" ("^data value^")" in
+      "static-data "^Printf.sprintf "%S"owner^" from "^Printf.sprintf "%S"recipe^" ["^
+      String.concat ";"(List.map(Printf.sprintf "%S")leaves)^"] "^data value
+    | NativeStaticData(_,_,_,_,None)->invalid_arg "unvalidated static data"
     | NativeStaticInvocation(_,Some(term,labels)) ->
       let rec describe = function
         | NativeStaticArgument index -> "argument "^string_of_int index

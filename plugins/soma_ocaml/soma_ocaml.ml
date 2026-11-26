@@ -1819,6 +1819,7 @@ let native_callback ?(optional=[]) name typ operation =
     | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
     | SomaForeign.NativeExternalTransformedComposition _
     | SomaForeign.NativeExternalException _ | SomaForeign.NativeCallableApplyFunction _
+    | SomaForeign.NativeStaticData _
     | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -1923,6 +1924,7 @@ let native_callback ?(optional=[]) name typ operation =
    | SomaForeign.NativeExternalException _
    | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
    | SomaForeign.NativeVariantFactory _
+   | SomaForeign.NativeStaticData _
    | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _
     | SomaForeign.NativeStaticCompositionScope _ | SomaForeign.NativeStaticFunction _
    | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
@@ -1997,7 +1999,125 @@ let native_callback ?(optional=[]) name typ operation =
         if Array.length args<>2 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "soma.native.callback")head)then
           native_error "a static input needs a native callback type";
         n.operation,args.(1) in
+  let logical_dependencies=ref [] in
   let operation = match operation with
+    | SomaForeign.NativeStaticData(owner,source_file,recipe,leaves,_) ->
+      if argument_names<>["unit"] || labels<>[None] then
+        native_error "static data needs a positional unit getter";
+      let source=match Nametab.locate(Libnames.qualid_of_string recipe)with
+        |GlobRef.ConstRef c->c|_->native_error "static data needs a checked Source definition"in
+      (match (Environ.lookup_constant source env).Declarations.const_body with
+       |Declarations.Def _ when not(Cmap_env.mem source !bindings)->()
+       |_->native_error "static data needs a transparent Source recipe, not a native operation");
+      let leaf name =
+        let c=match Nametab.locate(Libnames.qualid_of_string name)with
+          |GlobRef.ConstRef c->c|_->native_error "static data inputs need declared native getters"in
+        let operation,typ=static_descriptor name in
+        let input_owner=match Cmap_env.find_opt c !bindings with
+          |Some{item=SomaForeign.OCamlNativeCallback callback;_}->callback.namespace^"."^callback.name
+          |_->assert false in
+        let value=match operation with
+          |SomaForeign.NativeVariantBuild(tag,Some variant)->
+            let case=List.find(fun case->case.SomaForeign.case_tag=tag)variant.SomaForeign.variant_cases in
+            (match case.SomaForeign.case_payload with
+             |None->SomaForeign.DataVariant(tag,None)
+             |Some "unit"->SomaForeign.DataReference input_owner
+             |_->native_error "a static data constructor input needs a closed unit payload")
+          |SomaForeign.NativeFloatConstant _->SomaForeign.DataReference input_owner
+          |SomaForeign.NativeStaticData(owner,_,_,_,Some _)->SomaForeign.DataReference owner
+          |_->native_error "static data inputs must be checked literal or constructor getters, never runtime reads"in
+        c,typ,value in
+      let leaves_checked=List.map leaf leaves in
+      logical_dependencies:=source::List.map(fun(c,_,_)->c)leaves_checked;
+      let sigma,expression=Evd.fresh_global env sigma(GlobRef.ConstRef source)in
+      let rec instantiate sigma expression typ=match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+        |Prod(_,domain,rest)when is_sort env sigma domain->
+          let sigma,parameter=Evarutil.new_evar env sigma domain in
+          instantiate sigma(EConstr.mkApp(expression,[|parameter|]))(EConstr.Vars.subst1 parameter rest)
+        |_->sigma,expression,typ in
+      let sigma,expression,typ=instantiate sigma expression(Retyping.get_type_of env sigma expression)in
+      let count=List.length leaves_checked in
+      let _,local_env=List.fold_left(fun(index,env)(_,typ,_)->
+        let binder=Context.make_annot(Name(Id.of_string("static_input"^string_of_int index)))EConstr.ERelevance.relevant in
+        index+1,EConstr.push_rel(Context.Rel.Declaration.LocalAssum(binder,EConstr.Vars.lift index typ))env)
+        (0,env)leaves_checked in
+      let sigma=ref sigma in
+      let same_type left right message=
+        try sigma:=Evarconv.unify local_env !sigma Conversion.CONV left right
+        with Pretype_errors.PretypeError _|Evarconv.UnableToUnify _->native_error message in
+      let rec apply index expression typ=function
+        |[]->expression,typ
+        |_::rest->
+          let argument=EConstr.mkRel(count-index)in
+          (match EConstr.kind !sigma(Reductionops.whd_all local_env !sigma typ)with
+           |Prod(_,domain,body)->
+             if not(EConstr.Vars.noccurn !sigma 1 body)then
+               native_error "a static data recipe result cannot depend on a runtime input";
+             same_type domain(Retyping.get_type_of local_env !sigma argument)
+               "a static data input differs from its checked recipe domain";
+             apply(index+1)(EConstr.mkApp(expression,[|argument|]))(EConstr.Vars.subst1 argument body)rest
+           |_->native_error "too many static data inputs for the checked recipe")in
+      let expression,actual=apply 0(EConstr.Vars.lift count expression)(EConstr.Vars.lift count typ)leaves_checked in
+      same_type actual(EConstr.Vars.lift count result)"static data recipe result differs from its declared type";
+      let sigma= !sigma in
+      let reduce=Reductionops.whd_all local_env sigma in
+      let is key value=match Rocqlib.lib_ref_opt key with
+        |Some reference->EConstr.isRefX local_env sigma reference value|None->false in
+      let fail()=native_error "a static data recipe must reduce to immutable literal data and its declared constructor inputs"in
+      let byte value=
+        let head,args=EConstr.decompose_app sigma(reduce value)in
+        if not(is "core.ascii.ascii"head) || Array.length args<>8 then fail();
+        let value=Array.fold_right(fun bit value->let bit=reduce bit in
+          2*value+(if is "core.bool.true"bit then 1 else if is "core.bool.false"bit then 0 else fail()))args 0 in
+        Char.chr value in
+      let text value=
+        let buffer=Buffer.create 32 in
+        let rec loop value=
+          let head,args=EConstr.decompose_app sigma(reduce value)in
+          if is "core.string.empty"head && Array.length args=0 then Buffer.contents buffer else
+          if is "core.string.string"head && Array.length args=2 then
+            (Buffer.add_char buffer(byte args.(0));loop args.(1))else fail()in
+        loop value in
+      let natural value=
+        let rec loop count value=
+          let head,args=EConstr.decompose_app sigma(reduce value)in
+          if is "num.nat.O"head && Array.length args=0 then string_of_int count else
+          if is "num.nat.S"head && Array.length args=1 then
+            (if count=max_int then native_error "static natural exceeds its native representation";
+             loop(count+1)args.(0))else fail()in
+        loop 0 value in
+      let rec encode typ value=
+        let value=reduce value in
+        match EConstr.kind sigma value with
+        |Rel index when index>=1 && index<=count->
+          let _,_,value=List.nth leaves_checked(count-index)in value
+        |_->
+          let head,types=EConstr.decompose_app sigma(reduce typ)in
+          let constructor,args=EConstr.decompose_app sigma value in
+          if is "core.string.type"head then SomaForeign.DataString(text value)else
+          if is "core.ascii.type"head then SomaForeign.DataChar(byte value)else
+          if is "num.int63.type"head then(match EConstr.kind sigma value with
+            |Int value->SomaForeign.DataWord(Printf.sprintf "0x%Lx"(Uint63.to_int64 value))|_->fail())else
+          if is "num.nat.type"head then SomaForeign.DataNat(natural value)else
+          if is "num.float.type"head then(match EConstr.kind sigma value with
+            |Float value when Float.is_finite(Float64.to_float value)->SomaForeign.DataFloat(Float64.to_hex_string value)
+            |_->fail())else
+          if is "core.bool.type"head then
+            (if is "core.bool.true"value then SomaForeign.DataBool true else
+             if is "core.bool.false"value then SomaForeign.DataBool false else fail())else
+          if is "core.unit.type"head then
+            (if is "core.unit.tt"value then SomaForeign.DataUnit else fail())else
+          if is "core.prod.type"head && Array.length types=2 && is "core.prod.intro"constructor && Array.length args=4 then
+            SomaForeign.DataPair(encode types.(0)args.(2),encode types.(1)args.(3))else
+          if is "core.list.type"head && Array.length types=1 then
+            (if is "core.list.nil"constructor && Array.length args=1 then SomaForeign.DataNil else
+             if is "core.list.cons"constructor && Array.length args=3 then
+               SomaForeign.DataCons(encode types.(0)args.(1),encode typ args.(2))else fail())else
+          if is "core.option.type"head && Array.length types=1 then
+            (if is "core.option.None"constructor && Array.length args=1 then SomaForeign.DataNone else
+             if is "core.option.Some"constructor && Array.length args=2 then
+               SomaForeign.DataSome(encode types.(0)args.(1))else fail())else fail()in
+      SomaForeign.NativeStaticData(owner,source_file,recipe,leaves,Some(encode(EConstr.Vars.lift count result)expression))
     | SomaForeign.NativeExternalThunkFactory(path,literal) ->
       if argument_names<>["unit"] then native_error "a closed thunk factory needs a unit getter";
       let parameters,_=arguments [] (Some 2) result in
@@ -2072,7 +2192,7 @@ let native_callback ?(optional=[]) name typ operation =
       let inputs,labels,answer=static_shape result in
       if inputs=[] then native_error "a static invocation needs a public function argument";
       let rec closed = function
-        | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeFloatConstant _
+        | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeStaticData(_,_,_,_,Some _)
         | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalLiteralFunction _
         | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
         | SomaForeign.NativeExternalComposedValue _ | SomaForeign.NativeExternalTransformedComposition _
@@ -2141,7 +2261,7 @@ let native_callback ?(optional=[]) name typ operation =
     | SomaForeign.NativeStaticApplication(target,bound,_) ->
       if argument_names<>["unit"]then native_error "a static application needs a unit getter";
       let rec closed = function
-        |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _
+        |SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)
         |SomaForeign.NativeExternalLiteralConstant _|SomaForeign.NativeExternalLiteralFunction _
         |SomaForeign.NativeExternalInsertedLiteralFunction _|SomaForeign.NativeExternalFieldsFunction _
         |SomaForeign.NativeExternalComposedValue _|SomaForeign.NativeExternalTransformedComposition _
@@ -2173,7 +2293,7 @@ let native_callback ?(optional=[]) name typ operation =
         |SomaForeign.NativeExternalInsertedLiteralFunction _|SomaForeign.NativeExternalFieldsFunction _
         |SomaForeign.NativeExternalComposedValue _|SomaForeign.NativeExternalTransformedComposition _->true
         |SomaForeign.NativeStaticFunction(_,_,_,Some(a,b,_,_,_))->static_operation a && static_operation b
-        |SomaForeign.NativeFloatConstant _->true
+        |SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)->true
         |_->false in
       let left,left_type=static_descriptor outer and right,right_type=static_descriptor inner in
       if not(static_operation left && static_operation right)then
@@ -2181,7 +2301,7 @@ let native_callback ?(optional=[]) name typ operation =
       let left_args,left_labels,left_result=static_shape left_type in
       if left_args=[] then native_error "a static outer input needs a function";
       let wanted,inner_labels = if prefix then begin
-        (match right with SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _->()
+        (match right with SomaForeign.NativeExternalConstant _|SomaForeign.NativeFloatConstant _|SomaForeign.NativeStaticData(_,_,_,_,Some _)->()
           |_->native_error "a static prefix needs a native value, without creation-time calls");
         if ocaml_type env sigma type_vars right_type<>List.hd left_args then
           native_error "a static prefix differs from the first target argument";
@@ -2562,6 +2682,10 @@ let native_callback ?(optional=[]) name typ operation =
   let body = native_app
     (CAst.make(Constrexpr.CRef(Libnames.qualid_of_string "Soma.Native.Named_callback",None)))
     [native_string namespace;native_string(Id.to_string name)] in
+  let body=List.fold_right(fun c body->
+    let reference=CAst.make(Constrexpr.CAppExpl((Libnames.qualid_of_path
+      (Nametab.path_of_global(GlobRef.ConstRef c)),None),[]))in
+    CAst.make(Constrexpr.CLetIn(CAst.make Anonymous,reference,None,body)))!logical_dependencies body in
   let body=if type_parameters=[]then body else CAst.make(Constrexpr.CLambdaN(type_parameters,body))in
   let descriptor_type=if type_parameters=[]then descriptor_type else CAst.make(Constrexpr.CProdN(type_parameters,descriptor_type))in
   let c = native_declare name body (Some descriptor_type) in
@@ -2597,6 +2721,12 @@ let native_float_constant name result literal =
   let literal=Printf.sprintf "%.17g" value in
   let literal=if String.exists(function '.'|'e'|'E'->true|_->false)literal then literal else literal^"." in
   native_getter name result (SomaForeign.NativeFloatConstant literal)
+
+let native_static_data name result recipe leaves =
+  native_getter name result (SomaForeign.NativeStaticData(
+    native_namespace()^"."^Id.to_string name,
+    (match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false),
+    Libnames.string_of_qualid recipe,List.map Libnames.string_of_qualid leaves,None))
 
 let native_static_composition_scope name result outer inner =
   native_getter name result (SomaForeign.NativeStaticCompositionScope(Id.to_string outer,Id.to_string inner,None))
