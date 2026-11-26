@@ -639,6 +639,19 @@ type native_static_assembly = {
   static_exports : native_static_export list;
 }
 let native_static_assemblies : (unit -> native_static_assembly list) ref = ref(fun()->[])
+type native_lexical_scope = {
+  lexical_owner : Names.Constant.t;
+  lexical_opens : string list;
+  lexical_functor : (string * (string * string) list) option;
+}
+let native_lexical_scopes : (unit -> native_lexical_scope list) ref = ref(fun()->[])
+let lexical_scope owner = List.find_opt(fun info->Names.Constant.CanOrd.equal info.lexical_owner owner)
+  (!native_lexical_scopes())
+let native_lexical_scope_identity scope =
+  String.concat "\n" (["native-lexical-scope-v1";"capture-owned-callables"] @
+    List.map(fun path->"open "^path)scope.lexical_opens @
+    (match scope.lexical_functor with None->[]|Some(name,parameters)->
+      ("functor "^name)::List.map(fun(name,signature)->name^" : "^signature)parameters))
 let native_static_assembly_identity info =
   String.concat "\n" (["native-static-assembly-v1";info.static_namespace;info.static_module] @
     List.map(fun item->
@@ -648,7 +661,8 @@ let native_static_assembly_identity info =
   (match static_exceptions info.static_owner with []->""|exceptions->
     "\nstatic-exceptions-v1\n"^String.concat "\n"(List.map(fun item->
       String.concat " "([Printf.sprintf "%S" item.static_exception_name;item.static_exception_symbol]@
-        List.map(Printf.sprintf "%S")item.static_exception_arguments))exceptions))
+        List.map(Printf.sprintf "%S")item.static_exception_arguments))exceptions)) ^
+  (match lexical_scope info.static_owner with None->""|Some scope->"\n"^native_lexical_scope_identity scope)
 
 (* Filled by the OCaml project producer, then by extraction's actual name
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)

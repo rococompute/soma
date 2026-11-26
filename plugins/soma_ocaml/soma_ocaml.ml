@@ -77,6 +77,13 @@ let in_native_static_assembly =
     ~subst:None
 let () = SomaForeign.native_static_assemblies := (fun()-> !native_static_assemblies)
 
+let native_lexical_scopes = Summary.ref ~name:"soma-native-lexical-scopes" []
+let in_native_lexical_scope =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native lexical scope"
+    ~cache:(fun info->native_lexical_scopes:=info:: !native_lexical_scopes;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_lexical_scopes := (fun()-> !native_lexical_scopes)
+
 let native_static_exception_scopes = Summary.ref ~name:"soma-native-static-exception-scopes" []
 let in_native_static_exception_scope =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native static exception scope"
@@ -794,6 +801,51 @@ let native_static_assembly selected name exports =
     static_source=source;static_module=name;static_exports=exports});
   if exceptions<>[]then Lib.add_leaf(in_native_static_exception_scope SomaForeign.{
     static_exception_owner=main;static_exception_fields=exceptions})
+
+let native_lexical_scope selected opens functor_ =
+  let namespace=native_namespace()in
+  let owner=match Nametab.locate selected with GlobRef.ConstRef c->c
+    |_->native_error "a lexical scope needs its checked assembly main"in
+  let assembly=match List.find_opt(fun info->Constant.CanOrd.equal owner info.SomaForeign.static_owner)
+      !native_static_assemblies with Some info when info.static_namespace=namespace->info
+    |_->native_error "declare a static assembly in this namespace before its lexical scope"in
+  if SomaForeign.lexical_scope owner<>None then native_error "duplicate lexical assembly scope";
+  if List.exists(fun item->item.SomaForeign.static_export_kind<>SomaForeign.Static_value)assembly.static_exports ||
+     SomaForeign.static_exceptions owner<>[]then
+    native_error "a lexical assembly publishes values without escaping types, modules or exception declarations";
+  (* A let-module expression is expansive in OCaml. Do not silently weaken
+     a polymorphic Source export through the native value restriction. *)
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let rec monomorphic env typ=
+    let head,_=EConstr.decompose_app sigma typ in
+    let known=match EConstr.kind sigma head with Const(c,_)->Cmap_env.mem c !bindings|_->false in
+    let typ=if known then typ else Reductionops.whd_all env sigma typ in
+    (match EConstr.kind sigma typ with Prod(_,domain,_)when is_sort env sigma domain->
+      native_error "lexical publication cannot generalize a polymorphic value; keep its static assembly scope"
+     |_->());
+    EConstr.iter_with_full_binders env sigma EConstr.push_rel monomorphic env typ in
+  List.iter(fun item->match item.SomaForeign.static_export_reference with
+    |GlobRef.ConstRef c->monomorphic env(EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type)
+    |_->assert false)assembly.static_exports;
+  let module_name name =
+    if not(is_module_name name&&name.[0]>='A'&&name.[0]<='Z')||String.contains name '.'then
+      native_error "a lexical scope needs uppercase module identifiers"in
+  let module_path path=
+    List.iter module_name(String.split_on_char '.' path)in
+  List.iter module_path opens;
+  if List.length(List.sort_uniq String.compare opens)<>List.length opens then
+    native_error "duplicate lexical open";
+  Option.iter(fun(name,parameters)->
+    module_name name;
+    if parameters=[]then native_error "a lexical functor needs module parameters";
+    let used=ref []in
+    List.iter(fun(parameter,signature)->
+      module_name parameter;module_path signature;
+      if parameter=assembly.static_module || String.starts_with ~prefix:"Soma_" parameter || List.mem parameter !used then
+        native_error "duplicate or reserved lexical functor parameter";
+      used:=parameter:: !used)parameters)functor_;
+  Lib.add_leaf(in_native_lexical_scope SomaForeign.{lexical_owner=owner;
+    lexical_opens=opens;lexical_functor=functor_})
 
 let native_public_assembly selected applications =
   let namespace=native_namespace()in

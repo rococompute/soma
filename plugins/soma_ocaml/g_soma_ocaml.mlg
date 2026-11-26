@@ -115,6 +115,24 @@ VERNAC ARGUMENT EXTEND native_public_application
  { name,source,args }
 END
 
+VERNAC ARGUMENT EXTEND native_functor_parameter
+ PRINTED BY { fun(name,signature)->Pp.(str name++str " : "++str signature) }
+| [ string(name) ":" string(signature) ] -> { name,signature }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativeLexicalScope CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Lexical" "Scope" reference(owner) ] ->
+ { Soma_ocaml.native_lexical_scope owner [] None }
+| [ "OCaml" "Native" "Lexical" "Scope" reference(owner)
+    "Functor" string(name) "With" "[" ne_native_functor_parameter_list_sep(parameters, ";") "]" ] ->
+ { Soma_ocaml.native_lexical_scope owner [] (Some(name,parameters)) }
+| [ "OCaml" "Native" "Lexical" "Scope" reference(owner) "Open" "[" ne_string_list_sep(opens, ";") "]" ] ->
+ { Soma_ocaml.native_lexical_scope owner opens None }
+| [ "OCaml" "Native" "Lexical" "Scope" reference(owner) "Open" "[" ne_string_list_sep(opens, ";") "]"
+    "Functor" string(name) "With" "[" ne_native_functor_parameter_list_sep(parameters, ";") "]" ] ->
+ { Soma_ocaml.native_lexical_scope owner opens (Some(name,parameters)) }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Assembly" reference(source) "As" string(pattern) ] ->
  { Soma_ocaml.native_assembly source pattern }

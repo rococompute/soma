@@ -347,7 +347,7 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
     file "soma_host_io.c" SomaHost.io_c
   end;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
-  let assemblies=SomaOcamlBindings.write_assemblies ~file ~read_source ~contracts:assembly_contracts
+  let assemblies=SomaOcamlBindings.write_assemblies ~file ~read_source ~contracts:assembly_contracts ~modules
     ~program:(read_file(Filename.concat dir "prog.ml"))
     ~interface:(read_file(Filename.concat dir "prog.mli"))
     ~bindings:(read_file(Filename.concat dir(SomaOcamlBindings.bindings_filename())))in

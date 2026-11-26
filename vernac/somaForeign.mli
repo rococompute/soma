@@ -371,6 +371,14 @@ type native_static_assembly = {
   static_exports : native_static_export list;
 }
 val native_static_assemblies : (unit -> native_static_assembly list) ref
+type native_lexical_scope = {
+  lexical_owner : Names.Constant.t;
+  lexical_opens : string list;
+  lexical_functor : (string * (string * string) list) option;
+}
+val native_lexical_scopes : (unit -> native_lexical_scope list) ref
+val lexical_scope : Names.Constant.t -> native_lexical_scope option
+val native_lexical_scope_identity : native_lexical_scope -> string
 val native_static_assembly_identity : native_static_assembly -> string
 val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
 val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref

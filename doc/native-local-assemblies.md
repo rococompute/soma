@@ -299,3 +299,55 @@ record labels, original object/function identity, closed float/function aliases
 and no conversion allocation. Negative tests cover invalid Source shapes and
 names and a mismatching actual native record. Source/artifact hashes, semantic
 identity changes and producer cleanup are checked separately.
+
+### Lexical value publication and native functor scopes
+
+A static assembly can instead publish its values from a local checked module,
+retaining the original initialization expression rather than exposing a global
+module that keeps all of its fields alive:
+
+```soma
+OCaml Native Static Assembly main As "Checked" With
+ [Value "first" := first; Value "second" := second].
+OCaml Native Lexical Scope main Open ["Platform"]
+ Functor "Make" With ["S" : "Platform.API"].
+```
+
+`Lexical Scope main` also works without opens or a functor. The selected static
+assembly must already exist in the same Source namespace and publish only
+values. Escaping type/module/exception declarations are rejected. Public values
+retain their checked dependency membership and actual allocated extraction
+names, including keyword renaming. Because OCaml's let-module expression is
+expansive, lexical publication rejects polymorphic value exports rather than
+silently weakening their type variables. Unrestricted generic exports retain
+the existing static assembly facility. The compiler emits
+one flat value binding around the local checked module and projects the
+specified fields once, in declaration order; it does not introduce a public
+runtime adapter or evaluate the main tuple again.
+
+The compiler embeds the complete typed callable artifacts as local modules
+before the checked signature. Their filenames/order/definitions come from the
+same owned-callable descriptors as `native_callables.manifest`. This lets their
+representations mention a functor parameter's abstract types without creating
+standalone runtime modules outside that scope. Opens, functor names, module
+parameter names and signature paths are validated module identifiers/paths,
+not OCaml expressions. Duplicate opens/parameters, reserved local names,
+wrong owners and repeated scopes fail during Source checking. As with native
+bindings, final OCaml compilation checks the named external module signatures
+and their abstract type relationships against their actual owners.
+
+Scope metadata is a separate library object, leaving existing assembly object
+shapes unchanged. `native-lexical-scope-v1` and `capture-owned-callables`, the
+ordered opens and functor parameter signatures participate in the static
+assembly identity and checked main contract. The complete output uses the
+existing authenticated `.assembly` envelope and producer-owned cleanup.
+Assemblies without lexical scopes keep their former output and identities.
+
+`test-suite/misc/soma_native_lexical_scope.sh` compares the complete artifact
+against the former local-module publication recipe in native and bytecode. It
+covers abstract functor types, optional callable types, original aliases,
+same-function reexports, single preparation, original owner/input and
+promise identity, caller context, cancellation, synchronous/initialization
+faults, exact call allocation, natural Weak ownership, provenance, rejected
+scopes (including attempted polymorphic-value weakening) and semantic identity
+changes. The static fixture separately retains unrestricted generic checks.
