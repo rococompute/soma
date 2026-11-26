@@ -136,6 +136,7 @@ type native_operation =
   | NativePublishedValue of string * (string * string) option
   | NativeProjectedValue of string * string * (string * string) option
   | NativePublishedProjection of string * string * (string * string * string * string) option
+  | NativeStaticInitializerExpression of native_static_expression * native_static_term option
 
 and native_static_expression =
   | StaticArgument of int
@@ -445,6 +446,15 @@ type native_lexical_environment = {
 val native_lexical_environments : (unit -> native_lexical_environment list) ref
 val lexical_environment : Names.Constant.t -> native_lexical_environment option
 val native_lexical_environment_identity : native_lexical_environment -> string
+
+type native_static_postlude = {
+  postlude_owner : Names.Constant.t;
+  postlude_scopes : (string * string * string) list;
+  postlude_layouts : string list;
+}
+val native_static_postludes : (unit -> native_static_postlude list) ref
+val static_postlude : Names.Constant.t -> native_static_postlude option
+val native_static_postlude_identity : native_static_postlude -> string
 
 val native_static_assembly_identity : native_static_assembly -> string
 val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref

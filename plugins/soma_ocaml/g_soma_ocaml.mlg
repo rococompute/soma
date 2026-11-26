@@ -143,6 +143,8 @@ VERNAC ARGUMENT EXTEND native_lexical_module
 | [ "Module" string(name) ":=" string(path) ] -> { name,path,[] }
 END
 VERNAC COMMAND EXTEND SomaOCamlNativeLexicalEnvironment CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Postlude" reference(owner) "With" "[" ne_native_lexical_prefix_list_sep(scopes, ";") "]" ] ->
+ { Soma_ocaml.native_static_postlude owner scopes }
 | [ "OCaml" "Native" "Lexical" "Environment" reference(owner)
  "Prefix" "[" native_lexical_prefix_list_sep(prefix, ";") "]"
  "Modules" "[" native_lexical_module_list_sep(modules, ";") "]"
@@ -254,6 +256,8 @@ VERNAC ARGUMENT EXTEND native_static_expression
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeStatic CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Static" "Initialize" "Expression" ident(name) ":" native_signature(typ) ":=" native_static_expression(expression) ] ->
+ { Soma_ocaml.native_initializer_expression name typ expression }
 | [ "OCaml" "Native" "Static" "Project" ident(name) ":" native_signature(typ) ":=" reference(selector) "From" reference(source) ] ->
  { Soma_ocaml.native_published_projection name typ selector source }
 | [ "OCaml" "Native" "Projected" "Value" ident(name) ":" native_signature(typ) ":=" reference(source) "Member" string(member) ] ->

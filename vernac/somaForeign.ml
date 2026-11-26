@@ -120,6 +120,7 @@ type native_operation =
   | NativePublishedValue of string * (string * string) option
   | NativeProjectedValue of string * string * (string * string) option
   | NativePublishedProjection of string * string * (string * string * string * string) option
+  | NativeStaticInitializerExpression of native_static_expression * native_static_term option
 
 and native_static_expression =
   | StaticArgument of int
@@ -541,6 +542,9 @@ let rec native_identity = function
       "static-data "^Printf.sprintf "%S"owner^" from "^Printf.sprintf "%S"recipe^" ["^
       String.concat ";"(List.map(Printf.sprintf "%S")leaves)^"] "^data value
     | NativeStaticData(_,_,_,_,None)->invalid_arg "unvalidated static data"
+    | NativeStaticInitializerExpression(_,Some term)->
+      "initialized-expression ("^describe_operation(NativeStaticInvocation(StaticArgument 0,Some(term,[])))^")"
+    | NativeStaticInitializerExpression(_,None)->invalid_arg "unchecked initializer expression"
     | NativeStaticInvocation(_,Some(term,labels)) ->
       let rec describe = function
         | NativeStaticArgument index -> "argument "^string_of_int index
@@ -781,6 +785,16 @@ let native_lexical_environment_identity info =
     info.environment_prefix_layouts @
     modules "module" info.environment_modules @ modules "local" info.environment_locals)
 
+type native_static_postlude = {
+  postlude_owner : Names.Constant.t;
+  postlude_scopes : (string * string * string) list;
+  postlude_layouts : string list;
+}
+let native_static_postludes : (unit -> native_static_postlude list) ref = ref(fun()->[])
+let static_postlude owner = List.find_opt(fun info->Names.Constant.CanOrd.equal info.postlude_owner owner)(!native_static_postludes())
+let native_static_postlude_identity info = String.concat "\n"(["native-static-postlude-v1"] @
+  List.map(fun(kind,namespace,symbol)->String.concat " "[kind;namespace;symbol])info.postlude_scopes @ info.postlude_layouts)
+
 let native_static_assembly_identity info =
   String.concat "\n" (["native-static-assembly-v1";info.static_namespace;info.static_module] @
     List.map(fun item->
@@ -794,7 +808,8 @@ let native_static_assembly_identity info =
       String.concat " "([Printf.sprintf "%S" item.static_exception_name;item.static_exception_symbol]@
         List.map(Printf.sprintf "%S")item.static_exception_arguments))exceptions)) ^
   (match lexical_scope info.static_owner with None->""|Some scope->"\n"^native_lexical_scope_identity scope) ^
-  (match lexical_environment info.static_owner with None->""|Some scope->"\n"^native_lexical_environment_identity scope)
+  (match lexical_environment info.static_owner with None->""|Some scope->"\n"^native_lexical_environment_identity scope) ^
+  (match static_postlude info.static_owner with None->""|Some scope->"\n"^native_static_postlude_identity scope)
 
 (* Filled by the OCaml project producer, then by extraction's actual name
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)

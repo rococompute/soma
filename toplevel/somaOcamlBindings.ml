@@ -257,14 +257,18 @@ let native_publication_namespaces modules =
     |SomaForeign.NativePublishedProjection(_,_,Some(namespace,_,_,_))->[namespace]
     |SomaForeign.NativePublishedValue(_,Some(namespace,_))|SomaForeign.NativeProjectedValue(_,_,Some(namespace,_))->[namespace]
     |NativeStaticInitialization(_,_,Some(fn,values,_))->List.concat_map references(fn::values)
-    |_->[]in
+    |NativeStaticInitializerExpression(_,Some term)|NativeStaticInvocation(_,Some(term,_))->term_references term
+    |_->[]
+  and term_references=function NativeStaticValue op->references op
+    |NativeStaticCall(op,values,_)->references op @ List.concat_map term_references values
+    |NativeStaticLambda(body,_)->term_references body|NativeStaticArgument _->[]in
   List.sort_uniq String.compare(List.concat_map(fun(m:SomaForeign.ocaml_module)->
     List.concat_map(fun(_,_,item)->match item with
       |SomaForeign.OCamlNativeCallback callback->references callback.operation
       |SomaForeign.OCamlNativeBindingProjection info->info.projection_namespace::references info.projection_callback.operation
       |SomaForeign.OCamlNativeValueReexport info->
         (match info.value_callback.operation with
-         |NativeStaticInitialization _|NativePublishedValue _|NativeProjectedValue _|NativePublishedProjection _->info.value_namespace::references info.value_callback.operation
+         |NativeStaticInitializerExpression _|NativeStaticInitialization _|NativePublishedValue _|NativeProjectedValue _|NativePublishedProjection _->info.value_namespace::references info.value_callback.operation
          |NativeExternalConstant path when native_is_field_value path->[info.value_namespace]
          |_->[])
       |_->[])m.items)modules)
@@ -367,6 +371,7 @@ let native_binding ?publication_scope ?(inline_publications=[]) ?(value=false) ?
         |Some label->"~"^label^":"^value)values labels in
       "(fun "^String.concat " "params^" -> "^static_apply operation values^")"in
     match operation with
+    |SomaForeign.NativeStaticInitializerExpression(_,Some term)->static_term []term
     |SomaForeign.NativeStaticInitialization(_,_,Some(fn,values,labels))->
       static_apply ~labels fn(List.map static_value values)
     |SomaForeign.NativePublishedValue(_,Some _)|SomaForeign.NativeProjectedValue(_,_,Some _)|SomaForeign.NativePublishedProjection(_,_,Some _)->static_apply operation []
@@ -389,7 +394,7 @@ let native_binding ?publication_scope ?(inline_publications=[]) ?(value=false) ?
         |Some _->"(fun payload -> `"^tag^" payload)")
     |_->invalid_arg "unvalidated static native value" in
   let body = match n.operation,args with
-    | (SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _|SomaForeign.NativeProjectedValue _|SomaForeign.NativePublishedProjection _)as operation,[_]->static_value operation
+    | (SomaForeign.NativeStaticInitializerExpression _|SomaForeign.NativeStaticInitialization _|SomaForeign.NativePublishedValue _|SomaForeign.NativeProjectedValue _|SomaForeign.NativePublishedProjection _)as operation,[_]->static_value operation
     | (SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeStaticInvocation _ | SomaForeign.NativeStaticApplication _ | SomaForeign.NativeVariantFunction _) as operation,[_] ->
       static_value operation
     | SomaForeign.NativeStaticCompositionScope(_,_,Some(left,right,left_labels,inner_labels,labels)),[_] ->
@@ -810,10 +815,13 @@ let native_static_data_sources modules =
   List.rev !output
 
 let bindings_ml ?(interface=false) modules =
-  let inline_publications=match main_reference()with
+  let postlude_scopes=match main_reference()with
+    |GlobRef.ConstRef owner->(match SomaForeign.static_postlude owner with None->[]|Some info->info.postlude_scopes)|_->[]in
+  let postlude_namespaces=List.map(fun(_,namespace,_)->namespace)postlude_scopes in
+  let inline_publications=(List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)postlude_scopes) @ (match main_reference()with
     |GlobRef.ConstRef owner->(match SomaForeign.lexical_environment owner with None->[]|Some info->
       List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)info.environment_prefix)
-    |_->[]in
+    |_->[])in
   let data_owners=native_static_data_owners modules in
   let values=String.concat ""(List.map(native_value_scope_bindings ~interface ~publications:(native_publication_namespaces modules))(List.filter(fun(namespace,_)->not(List.mem namespace inline_publications))(native_value_scopes modules)))in
   let types=String.concat ""(List.map(native_reexport_scope_bindings ~interface)(native_reexport_scopes modules))in
@@ -828,7 +836,7 @@ let bindings_ml ?(interface=false) modules =
       let wrappers = List.filter_map (fun (_, path, item) -> match item with
           | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
-            Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
+            if List.mem n.namespace postlude_namespaces then None else Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
           | SomaForeign.OCamlValue (ty, labels) ->
             let vars = type_variables ty in
             let poly = if vars = [] then "" else String.concat " " vars ^ ". " in
@@ -1130,7 +1138,15 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       "    module Soma_handles = struct\n      include Soma_handles\n"^
       String.concat ""(List.map(fun item->"      exception "^item.SomaForeign.static_exception_name^
         " = "^item.static_exception_name^"\n")exceptions)^"    end\n"in
-    let contents=match SomaForeign.lexical_scope info.static_owner with
+    let postlude=match SomaForeign.static_postlude info.static_owner with None->""|Some info->
+      let inline_publications=List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)info.postlude_scopes in
+      String.concat ""(List.map(fun(kind,namespace,_)->
+        let find scopes=match List.assoc_opt namespace scopes with Some entries->namespace,entries|None->error Pp.(str "static postlude scope is absent")in
+        match kind with
+        |"values"->native_value_scope_ml ~publication_scope:namespace ~inline_publications(find(native_value_scopes modules))
+        |"modules"->native_module_scope_ml ~interface:false(find(native_module_scopes modules))
+        |"types"->native_source_type_scope_ml(find(native_source_type_scopes modules))|_->assert false)info.postlude_scopes)in
+    let contents=(match SomaForeign.lexical_scope info.static_owner with
     |None->declarations^"module "^info.static_module^" : sig\n"^header^interface^
       "\nend = struct\n  module "^bindings_module()^" = struct\n"^rebasing^bindings^
       "\n  end\n"^header^program^"\nend\n"^String.concat ""(List.map exported info.static_exports)
@@ -1173,7 +1189,7 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       local_modules^captures^"  let module "^info.static_module^" : sig\n"^header^interface^
       "\n  end = struct\n    module "^bindings_module()^" = struct\n"^bindings^
       "\n    end\n"^header^program^"\n  end in\n"^projections^"  "^
-      String.concat ", "results^"\n"^after in
+      String.concat ", "results^"\n"^after)^postlude in
     let filename=Filename.remove_extension(Filename.basename info.static_source)^".assembly"in
     file filename contents;
     let contract=match List.assoc_opt owner contracts with Some hash->hash
