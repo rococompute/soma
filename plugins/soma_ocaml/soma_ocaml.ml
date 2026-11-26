@@ -1778,9 +1778,15 @@ let primitive_symbol symbol =
     native_error "a primitive symbol must be a C identifier";
   symbol
 
-let native_callback name typ operation =
+let native_callback ?(optional=[]) name typ operation =
   ignore (native_context ());
   if not (Rocqlib.has_ref "soma.native.callback") then native_error "import Soma.Native first";
+  if optional<>[]then begin
+    (match operation with SomaForeign.NativeExternalValue _->()
+     |_->native_error "optional callback forwarding needs an external callback");
+    if List.length(List.sort_uniq Id.compare optional)<>List.length optional then
+      native_error "optional callback arguments must be distinct"
+  end;
   let env = Global.env () in
   let sigma, typ = Constrintern.interp_type_evars env (Evd.from_env env) typ in
   let rec enter env vars parameters typ=match EConstr.kind sigma typ with
@@ -1830,7 +1836,14 @@ let native_callback name typ operation =
       if is_sort env sigma domain then native_error "polymorphic native descriptors are not supported yet";
       if not (EConstr.Vars.noccurn sigma 1 codomain) then native_error "a native result cannot depend on a value";
       let label = match binder.Context.binder_name with
-        | Name id -> Some (ocaml_name ~definition:"native callback" (Id.to_string id))
+        | Name id ->
+          let label=ocaml_name ~definition:"native callback"(Id.to_string id)in
+          if List.mem id optional then begin
+            let head,payload=EConstr.decompose_app sigma(Reductionops.whd_all env sigma domain)in
+            if Array.length payload<>1 || not(EConstr.isRefX env sigma(Rocqlib.lib_ref "core.option.type")head)then
+              native_error "an optional callback argument must have type option";
+            Some("?"^label)
+          end else Some label
         | Anonymous -> None in
       arguments ((domain,label)::previous) (Option.map pred remaining) (EConstr.Vars.subst1 (EConstr.mkProp) codomain)
     | _ -> List.rev previous,t in
@@ -1840,6 +1853,14 @@ let native_callback name typ operation =
   let types = try List.map (ocaml_type env sigma type_vars) args_types,ocaml_type env sigma type_vars result
     with Not_ocaml why -> CErrors.user_err (str "OCaml Native: " ++ why) in
   let argument_names,result_name = types in
+  let expected=List.map(fun id->Some("?"^Id.to_string id))optional in
+  let observed=List.filter(function Some label->String.starts_with ~prefix:"?"label|None->false)labels in
+  if List.sort compare expected<>List.sort compare observed then
+    native_error "Optional must name each optional callback value argument exactly once";
+  List.iter2(fun label typ->match label with
+    |Some label when String.starts_with ~prefix:"?"label && not(String.ends_with ~suffix:" option"typ)->
+      native_error "an optional callback argument must use the native option representation"
+    |_->())labels argument_names;
   let field name =
     if String.contains name '.' then native_error "a field is a single name";
     native_path name in

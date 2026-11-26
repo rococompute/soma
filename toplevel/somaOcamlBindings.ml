@@ -366,7 +366,9 @@ let native_binding ?(value=false) (m:SomaForeign.ocaml_module) (n:SomaForeign.na
     | SomaForeign.NativePrimitive _,_ ->
       m.top ^ "." ^ n.name ^ " " ^ String.concat " " args
     | SomaForeign.NativeExternalValue path,_ ->
-      let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
+      let given=List.map2(fun a->function None->a
+        |Some l when String.starts_with ~prefix:"?"l->l^":"^a
+        |Some l->"~"^l^":"^a)args n.labels in
       path^" "^String.concat " "given
     | SomaForeign.NativeExternalLiteralCallback (path, literal, after),_ ->
       let given=List.map2(fun a->function None->a|Some l->"~"^l^":"^a)args n.labels in
