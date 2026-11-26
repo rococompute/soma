@@ -345,3 +345,20 @@ val native_static_assemblies : (unit -> native_static_assembly list) ref
 val native_static_assembly_identity : native_static_assembly -> string
 val native_static_extraction_requests : (Names.GlobRef.t * bool) list ref
 val native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref
+val native_public_extracted_values : string list option ref
+
+type native_public_application = {
+  application_name : string;
+  application_function : Names.GlobRef.t;
+  application_arguments : Names.GlobRef.t list;
+  application_symbols : string list;
+  application_signature : string;
+}
+type native_public_assembly = {
+  public_owner : Names.Constant.t;
+  public_namespace : string;
+  public_source : string;
+  public_applications : native_public_application list;
+}
+val native_public_assemblies : (unit -> native_public_assembly list) ref
+val native_public_assembly_identity : native_public_assembly -> string

@@ -111,3 +111,44 @@ packed modules with abstract/generic/optional members, initialization order,
 original mutable cells, caller context, exact promises/faults/cancellation,
 allocation, natural Weak ownership, malformed declarations, semantic/ABI
 fingerprints and obsolete artifact cleanup, in native and bytecode modes.
+
+## Public implementation/interface assembly
+
+A partial application of checked Source members can be published without a
+Python implementation or signature append:
+
+```soma
+From Soma Require Import Native OCaml.
+Definition prepared := Native.Export(Native.Return 3).
+Definition add_using(n:nat)(value:nat) := n+value.
+Definition main := (prepared,add_using).
+OCaml Native Public Assembly main With
+ [Apply "add" := add_using With [prepared]].
+```
+
+The declaration checks transparent same-namespace members in main's dependency
+closure. Each supplied value's native representation must match its function
+domain; executable boundaries erase in the compiler's type description, as
+already used for native bindings. This adds no logical operation to run,
+inspect or unwrap `Native.entry`. Dependent runtime argument types, wrong
+arguments and duplicate/invalid/shadowing public names are rejected. The
+resulting function signature is derived from its checked residual Source type.
+All previous program declarations and their generic signatures remain present.
+
+The backend uses actual allocated names and emits the complete fresh program
+plus the requested applications into `.assembly`, and its complete interface
+plus derived signatures into `.assembly-interface`. Applications are ordinary
+native partial applications, with the same preparation, closure, invocation
+and optional/default behavior as those expressions. No wrapper/interpreter or
+second preparation is introduced. A final check against the actual extracted
+declaration table prevents names from hiding compiler-generated or renamed
+members. Both artifacts have separate rows in the existing manifest, bound to
+the same fresh raw program/interface/bindings and checked owner/layout identity
+`native-public-assembly-v1`. Producer-owned stale cleanup covers both outputs.
+
+`test-suite/misc/soma_native_public_assembly.sh` compiles the actual public
+implementation/interface and tests them alongside the former append expression
+in native and bytecode. It exercises retained generic helpers, allocated name
+collisions, single preparation, original owner/input/promise identity, caller
+context, exact faults/cancellation, call allocation, natural Weak retention
+and release, rejected declarations, semantic fingerprints and stale cleanup.

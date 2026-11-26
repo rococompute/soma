@@ -104,11 +104,19 @@ VERNAC ARGUMENT EXTEND native_assembly_member
 | [ "Module" string(name) ":=" reference(source) ] -> { "module",name,source }
 END
 
+VERNAC ARGUMENT EXTEND native_public_application
+ PRINTED BY { fun(name,source,_)->Pp.(str name++str " := "++Libnames.pr_qualid source) }
+| [ "Apply" string(name) ":=" reference(source) "With" "[" ne_reference_list_sep(args, ";") "]" ] ->
+ { name,source,args }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Assembly" reference(source) "As" string(pattern) ] ->
  { Soma_ocaml.native_assembly source pattern }
 | [ "OCaml" "Native" "Static" "Assembly" reference(source) "As" string(name) "With" "[" ne_native_assembly_member_list_sep(exports, ";") "]" ] ->
  { Soma_ocaml.native_static_assembly source name exports }
+| [ "OCaml" "Native" "Public" "Assembly" reference(source) "With" "[" ne_native_public_application_list_sep(applications, ";") "]" ] ->
+ { Soma_ocaml.native_public_assembly source applications }
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeEnum CLASSIFIED AS SIDEFF

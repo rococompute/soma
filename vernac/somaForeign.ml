@@ -599,3 +599,24 @@ let native_static_assembly_identity info =
    allocator. Consumers never guess collision suffixes or parse OCaml text. *)
 let native_static_extraction_requests : (Names.GlobRef.t * bool) list ref = ref []
 let native_static_extracted_names : (Names.GlobRef.t * bool * string * int) list ref = ref []
+let native_public_extracted_values : string list option ref = ref None
+
+type native_public_application = {
+  application_name : string;
+  application_function : Names.GlobRef.t;
+  application_arguments : Names.GlobRef.t list;
+  application_symbols : string list;
+  application_signature : string;
+}
+type native_public_assembly = {
+  public_owner : Names.Constant.t;
+  public_namespace : string;
+  public_source : string;
+  public_applications : native_public_application list;
+}
+let native_public_assemblies : (unit -> native_public_assembly list) ref = ref(fun()->[])
+let native_public_assembly_identity info =
+  String.concat "\n" (["native-public-assembly-v1";info.public_namespace] @
+    List.map(fun item->String.concat " "
+      ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
+       item.application_symbols))info.public_applications)

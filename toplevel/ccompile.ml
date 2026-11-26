@@ -178,7 +178,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let () = SomaImport.wait_proof_jobs () in
       (* Soma: soma hash FILE, of what was checked (vernac/somaHash.ml) *)
       let () = SomaHash.report ~cache:(!SomaForeign.native_assemblies()<>[] ||
-        !SomaForeign.native_static_assemblies()<>[]) () in
+        !SomaForeign.native_static_assemblies()<>[] || !SomaForeign.native_public_assemblies()<>[]) () in
       let () = SomaOcamlBindings.capture_native_assembly_contracts ~source:long_f_dot_in in
       (* Soma: soma search QUERY, in what was checked (vernac/somaSearch.ml) *)
       let () = SomaSearch.report () in

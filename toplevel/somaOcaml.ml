@@ -281,7 +281,7 @@ let record_generated_files ~capture_generated dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
     (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest"] ||
-     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h";".assembly"]) in
+     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h";".assembly";".assembly-interface"]) in
   let hash f =
     let file = Filename.concat dir f in
     match Unix.lstat file with

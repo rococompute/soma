@@ -77,6 +77,13 @@ let in_native_static_assembly =
     ~subst:None
 let () = SomaForeign.native_static_assemblies := (fun()-> !native_static_assemblies)
 
+let native_public_assemblies = Summary.ref ~name:"soma-native-public-assemblies" []
+let in_native_public_assembly =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public assembly"
+    ~cache:(fun info->native_public_assemblies:=info:: !native_public_assemblies;SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_public_assemblies := (fun()-> !native_public_assemblies)
+
 
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
@@ -547,7 +554,8 @@ let native_assembly source text =
   if not(Reductionops.is_conv env sigma(term main)(term owner))then
     native_error "an assembly's value must be the checked value selected by main";
   if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
-     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies then
+     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies ||
+     List.exists(fun info->info.SomaForeign.public_namespace=namespace)!native_public_assemblies then
     native_error "one Source namespace may declare only one assembly";
   let offset=ref 0 and size=String.length text in
   let fail()=native_error "assembly patterns contain only names, tuples and record field puns" in
@@ -665,7 +673,8 @@ let native_static_assembly selected name exports =
   if not(is_module_name name && name.[0]>='A'&&name.[0]<='Z')then
     native_error "a static assembly needs one uppercase native module identifier";
   if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
-     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies then
+     List.exists(fun info->info.SomaForeign.static_namespace=namespace)!native_static_assemblies ||
+     List.exists(fun info->info.SomaForeign.public_namespace=namespace)!native_public_assemblies then
     native_error "one Source namespace may declare only one assembly";
   (* Every published member must already contribute to main's checked
      dependency closure, including dependencies in its type annotations. *)
@@ -726,6 +735,77 @@ let native_static_assembly selected name exports =
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   Lib.add_leaf(in_native_static_assembly SomaForeign.{static_owner=main;static_namespace=namespace;
     static_source=source;static_module=name;static_exports=exports})
+
+let native_public_assembly selected applications =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let own reference=match Nametab.locate reference with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      (match(Environ.lookup_constant c env).Declarations.const_body with
+       |Declarations.Def _->c|_->native_error "public assembly members need transparent Source definitions")
+    |_->native_error "public assembly members must belong to their Source namespace"in
+  let main=own selected in
+  if Id.to_string(Constant.label main)<>"main"then native_error "a public assembly must select main";
+  if List.exists(fun i->i.SomaForeign.assembly_namespace=namespace)!native_assemblies ||
+     List.exists(fun i->i.SomaForeign.static_namespace=namespace)!native_static_assemblies ||
+     List.exists(fun i->i.SomaForeign.public_namespace=namespace)!native_public_assemblies then
+    native_error "one Source namespace may declare only one assembly";
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let visited=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->constant c|_->());Constr.iter term t
+  and constant c=if ModPath.to_string(Constant.modpath c)=namespace && not(Constants.mem c !visited)then begin
+    visited:=Constants.add c !visited;
+    let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    match cb.const_body with Declarations.Def body->term body|_->()end in
+  constant main;
+  let member reference=let c=own reference in
+    if Constant.CanOrd.equal c main||not(Constants.mem c !visited)then
+      native_error "public application members must be dependencies of main";
+    GlobRef.ConstRef c,EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
+  (* This is representation checking in the compiler, not a term that can
+     eliminate an executable boundary in the logical language. *)
+  let boundary env typ=
+    let head,args=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
+    if Array.length args=1 && List.exists(fun name->match ref_of name with
+      |Some r->EConstr.isRefX env sigma r head|None->false)
+      ["soma.native.entry";"soma.native.preparation";"soma.native.function_group";
+       "soma.native.function_knot";"soma.native.callback_group"]then args.(0)else typ in
+  let used=ref []in
+  let applications=List.map(fun(public,function_,arguments)->
+    ignore(ocaml_name ~definition:"public application" public);
+    if public="_"||not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)public)then
+      native_error "a public application needs one native identifier";
+    if List.mem public !used then native_error "duplicate public application name";
+    used:=public:: !used;
+    (try (match Nametab.locate(Libnames.qualid_of_ident(Id.of_string public))with
+      |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+        native_error "a public application cannot shadow an existing Source member"|_->())
+     with Not_found->());
+    let fn,typ=member function_ in
+    let args=List.map member arguments in
+    let rec apply env vars typ args=match args with
+      |[]->ocaml_type env sigma vars typ
+      |(_,actual)::rest->match EConstr.kind sigma(Reductionops.whd_all env sigma(boundary env typ))with
+        |Prod(na,domain,codomain)when is_sort env sigma domain->
+          let var=type_variable(List.filter_map Fun.id vars)na.Context.binder_name in
+          apply(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)
+            (Some var::vars)codomain args
+        |Prod(_,domain,codomain)->
+          if not(EConstr.Vars.noccurn sigma 1 codomain)then
+            native_error "a public application's result cannot depend on a runtime argument";
+          if not(Reductionops.is_conv env sigma(boundary env domain)(boundary env actual))then
+            native_error "public application argument differs from its checked function domain";
+          apply env vars(EConstr.Vars.subst1 EConstr.mkProp codomain)rest
+        |_->native_error "public application has more arguments than its checked function"in
+    let signature=try apply env [] typ args with Not_ocaml why->
+      CErrors.user_err(str "OCaml Native public signature: "++why)in
+    let refs=fn::List.map fst args in
+    SomaForeign.{application_name=public;application_function=fn;application_arguments=List.map fst args;
+      application_symbols=List.map(fun r->Libnames.string_of_path(Nametab.path_of_global r))refs;
+      application_signature=signature})applications in
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_public_assembly SomaForeign.{public_owner=main;public_namespace=namespace;
+    public_source=source;public_applications=applications})
 
 let native_external_family name parameters path =
   ignore (native_context ());

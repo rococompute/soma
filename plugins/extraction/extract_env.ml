@@ -771,7 +771,13 @@ let full_extr opaque_access f (refs,mps) =
            |Some r->r,0|None->user_err(str "A static assembly value is absent from extraction."))
         |_->user_err(str "A static assembly export changed kind during extraction.")in
       reference,type_,Common.pp_global_name table (if type_ then Common.Type else Common.Term)actual,arity in
-    SomaForeign.native_static_extracted_names:=List.map capture !SomaForeign.native_static_extraction_requests
+    SomaForeign.native_static_extracted_names:=List.map capture !SomaForeign.native_static_extraction_requests;
+    (match !SomaForeign.native_public_extracted_values with None->()|Some _->
+      let values=List.concat_map(fun(_,fields)->List.concat_map(function
+        |_,SEdecl(Dterm(r,_,_))->[Common.pp_global_name table Common.Term r]
+        |_,SEdecl(Dfix(rs,_,_))->Array.to_list(Array.map(Common.pp_global_name table Common.Term)rs)
+        |_->[])fields)struc in
+      SomaForeign.native_public_extracted_values:=Some values)
   end
 
 (* Explicit output names in Soma builds are relative to the source project's
