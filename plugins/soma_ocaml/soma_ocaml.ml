@@ -63,6 +63,13 @@ let in_native_record_alias =
     ~subst:None
 let () = SomaForeign.native_record_aliases := (fun () -> !native_record_aliases)
 
+let native_assemblies = Summary.ref ~name:"soma-native-assemblies" []
+let in_native_assembly =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native assembly"
+    ~cache:(fun info -> native_assemblies := info :: !native_assemblies; SomaHash.invalidate())
+    ~subst:None
+let () = SomaForeign.native_assemblies := (fun () -> !native_assemblies)
+
 
 
 (* the modules, by key: FILE.ml or none, their name, and the libraries
@@ -510,6 +517,132 @@ let native_module_include name target =
   native_register name c(SomaForeign.OCamlNativeModuleInclude{
     module_alias_namespace=namespace;module_alias_name=Id.to_string name;
     module_alias_target=target;module_alias_source=source;module_alias_order=order})
+
+(* Source-owned assembly: no expressions, type annotations or code escapes. *)
+let native_assembly source text =
+  let namespace=native_namespace() in
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
+    |_->native_error "an assembly needs a checked Source definition" in
+  if Id.to_string(Constant.label owner)="main"then
+    native_error "an assembly needs a separate Source definition selected by main";
+  if ModPath.to_string(Constant.modpath owner)<>namespace then
+    native_error "an assembly must belong to its Source definition's namespace";
+  let env=Global.env()in
+  let definition=Environ.lookup_constant owner env in
+  (match definition.Declarations.const_body with Declarations.Def _->()
+   |_->native_error "an assembly needs a transparent checked Source definition");
+  let main=try Nametab.locate(Libnames.qualid_of_ident(Id.of_string "main"))
+    with Not_found->native_error "define main before declaring its assembly" in
+  let main=match main with GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->c
+    |_->native_error "an assembly needs main in the same Source namespace" in
+  let sigma=Evd.from_env env in
+  let term c=EConstr.of_constr(Constr.mkConstU(c,UVars.Instance.empty))in
+  if not(Reductionops.is_conv env sigma(term main)(term owner))then
+    native_error "an assembly's value must be the checked value selected by main";
+  if List.exists(fun info->info.SomaForeign.assembly_namespace=namespace)!native_assemblies then
+    native_error "one Source namespace may declare only one assembly";
+  let offset=ref 0 and size=String.length text in
+  let fail()=native_error "assembly patterns contain only names, tuples and record field puns" in
+  let space()=while !offset<size && List.mem text.[!offset][' ';'\n';'\t';'\r']do incr offset done in
+  let take c=space();if !offset<size && text.[!offset]=c then(incr offset;true)else false in
+  let require c=if not(take c)then fail()in
+  let identifier()=
+    space();let first= !offset in
+    while !offset<size && (match text.[!offset]with
+      |'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)do incr offset done;
+    if first= !offset then fail();String.sub text first(!offset-first)in
+  let name()=let value=identifier()in
+    ignore(ocaml_name ~definition:"assembly export" value);value in
+  let qualified()=
+    let first=identifier()in
+    let rec rest parts=if take '.'then rest(parts@[identifier()])else parts in rest[first]in
+  let rec pattern()=
+    if take '('then begin
+      let first=pattern()in require ',';
+      let rec rest fields=let field=pattern()in
+        if take ','then rest(fields@[field])else(require ')';fields@[field])in
+      SomaForeign.Export_tuple(rest[first])
+    end else if take '{'then begin
+      let first=qualified()in
+      let field=List.hd(List.rev first)in ignore(ocaml_name ~definition:"assembly field" field);
+      let prefix=String.concat "."(List.rev(List.tl(List.rev first)))in
+      if prefix=""then native_error "an assembly record needs its checked module qualification";
+      List.iter(fun part->if not(is_module_name part && part.[0]>='A'&&part.[0]<='Z')then fail())
+        (String.split_on_char '.' prefix);
+      let rec rest fields=
+        if take '}'then fields else begin require ';';
+          if take '}'then fields else
+          let item=qualified()in let label=List.hd(List.rev item)in
+          ignore(ocaml_name ~definition:"assembly field" label);
+          let owner=String.concat "."(List.rev(List.tl(List.rev item)))in
+          if owner<>""&&owner<>prefix then native_error "mixed assembly record qualifications";
+          rest(fields@[label])end in
+      SomaForeign.Export_record(prefix,rest[field])
+    end else SomaForeign.Export_name(name())in
+  let parsed=pattern()in space();if !offset<>size then fail();
+  let rec names=function
+    |SomaForeign.Export_name "_"->[]|Export_name name->[name]
+    |Export_tuple parts->List.concat_map names parts|Export_record(_,fields)->fields in
+  let exports=names parsed in
+  if exports=[]||List.length(List.sort_uniq String.compare exports)<>List.length exports then
+    native_error "assembly exports must contain distinct public names";
+  let application typ=EConstr.decompose_app sigma(Reductionops.whd_all env sigma typ)in
+  let is head name=match ref_of name with Some r->EConstr.isRefX env sigma r head|None->false in
+  let boundary typ=
+    let head,args=application typ in
+    if Array.length args=1 && List.exists(is head)
+      ["soma.native.entry";"soma.native.preparation";"soma.native.function_group";
+       "soma.native.function_knot";"soma.native.callback_group"]then args.(0)else typ in
+  let rec check typ=function
+    |SomaForeign.Export_name _->()
+    |Export_tuple parts->
+      let head,args=application(boundary typ)in
+      let arity=if is head "core.prod.type"then 2 else if is head "soma.native.triple"then 3
+        else if is head "soma.native.quadruple"then 4 else if is head "soma.native.quintuple"then 5 else 0 in
+      if arity=0||arity<>Array.length args||arity<>List.length parts then
+        native_error "assembly tuple pattern does not match the checked result type";
+      List.iter2 check(Array.to_list args)parts
+    |Export_record(prefix,fields)->
+      let head,_=application(boundary typ)in
+      let ind=match EConstr.kind sigma head with Ind(ind,_)->ind
+        |_->native_error "assembly record pattern needs a checked record result"in
+      let structure=try Structures.Structure.find env ind with Not_found->
+        native_error "assembly record pattern needs a checked record result"in
+      let expected=List.map(fun p->
+        if not p.Structures.Structure.proj_true then native_error "defined record fields cannot be assembly puns";
+        match p.proj_name with Name id->Id.to_string id|_->native_error "anonymous assembly record field")structure.projections in
+      if List.sort String.compare fields<>List.sort String.compare expected then
+        native_error "assembly record fields must match the complete checked record";
+      let mib,mip=Inductive.lookup_mind_specif env ind in
+      let rec strip count env typ=
+        if count=0 then env,typ else
+        match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+        |Prod(na,domain,rest)->strip(count-1)
+            (EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
+        |_->native_error "unsupported assembly record parameters"in
+      let field_env,constructor=strip mib.mind_nparams env(EConstr.of_constr mip.mind_user_lc.(0))in
+      let rec runtime_fields env typ=function
+        |[]->()
+        |_::rest->match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+          |Prod(na,domain,codomain)->
+            let sort=Retyping.get_sort_of env sigma domain in
+            if EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort || is_sort env sigma domain then
+              native_error "erased proof or type fields cannot be assembly record exports";
+            runtime_fields(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)codomain rest
+          |_->native_error "unsupported assembly record constructor"in
+      runtime_fields field_env constructor fields;
+      let logical=KerName.to_string(MutInd.canonical(fst ind))in
+      let target=match List.find_opt(fun r->r.SomaForeign.record_alias_logical_type=logical)!native_record_aliases with
+        |Some r->let parts=String.split_on_char '.' r.record_alias_target in
+          String.concat "."(List.rev(List.tl(List.rev parts)))
+        |None->native_error "an assembly record pattern needs a declared native record alias"in
+      if prefix<>target then native_error "assembly record qualification differs from its checked owner"
+  in
+  check(EConstr.of_constr definition.const_type)parsed;
+  let source=match !SomaImport.source_file with Some file->SomaImport.project_file file|None->assert false in
+  let value=ocaml_name ~definition:"assembly value"(Id.to_string(Constant.label owner))in
+  Lib.add_leaf(in_native_assembly SomaForeign.{assembly_owner=owner;assembly_namespace=namespace;
+    assembly_source=source;assembly_value=value;assembly_pattern=parsed;assembly_pattern_text=text})
 
 let native_external_family name parameters path =
   ignore (native_context ());
@@ -1142,7 +1275,7 @@ let native_callback name typ operation =
     | SomaForeign.NativeExternalInsertedLiteralFunction _ | SomaForeign.NativeExternalFieldsFunction _
     | SomaForeign.NativeFloatConstant _ | SomaForeign.NativeExternalLiteralFunction _
     | SomaForeign.NativeAssertionFunction _ | SomaForeign.NativeAssertionFactory _ | SomaForeign.NativeAssertionFunctionFactory _ | SomaForeign.NativeExternalThunkFactory _
-    | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _ -> Some 1 in
+    | SomaForeign.NativeVariantFactory _ | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeEtaFunction _ | SomaForeign.NativeBoundBooleanFunction _ -> Some 1 in
   let rec arguments previous remaining t =
     if remaining=Some 0 then List.rev previous,t else
     (* Leave native aliases intact: they denote opaque external types. *)
@@ -1219,7 +1352,7 @@ let native_callback name typ operation =
             external_shape t = Some `External)
     then native_error "constructor operations need a declared native type" in
   (match operation with
-   | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeBoundBooleanFunction _
+   | SomaForeign.NativeDeferredFields _ | SomaForeign.NativeDefaultedFunction _ | SomaForeign.NativeEtaFunction _ | SomaForeign.NativeBoundBooleanFunction _
    | SomaForeign.NativeRecordFactory _ | SomaForeign.NativeVariantDispatch _ | SomaForeign.NativeGetFunction _ | SomaForeign.NativeSetFunction _
    | SomaForeign.NativeExternalConstant _ | SomaForeign.NativeExternalLiteralConstant _ | SomaForeign.NativeExternalComposedValue _
    | SomaForeign.NativeExternalTransformedComposition _
@@ -1693,7 +1826,8 @@ let native_callback name typ operation =
          ocaml_type env sigma type_vars answer<>callable.callable_result then
         native_error "bound function signature differs from the remaining required callable arguments";
       SomaForeign.NativeBoundBooleanFunction(native_path path,callable,label,value)
-    | SomaForeign.NativeDefaultedFunction (path, callable) ->
+    | (SomaForeign.NativeDefaultedFunction (path, callable)
+      | SomaForeign.NativeEtaFunction (path, callable)) as operation ->
       if argument_names<>["unit"] then native_error "a defaulted function takes a unit getter";
       let required=List.filter_map(fun(typ,label)->match label with
         |Some label when String.starts_with ~prefix:"?" label->None|_->Some typ)
@@ -1704,7 +1838,9 @@ let native_callback name typ operation =
          List.map(fun(typ,_)->ocaml_type env sigma type_vars typ)parameters<>required ||
          ocaml_type env sigma type_vars answer<>callable.callable_result then
         native_error "defaulted function signature differs from the required callable arguments";
-      SomaForeign.NativeDefaultedFunction(native_path path,callable)
+      (match operation with
+       |SomaForeign.NativeEtaFunction _->SomaForeign.NativeEtaFunction(native_path path,callable)
+       |_->SomaForeign.NativeDefaultedFunction(native_path path,callable))
     | SomaForeign.NativeDeferredFields (fields, _) ->
       if argument_names<>["unit"] then native_error "a deferred field getter takes unit";
       let parameters, _value = arguments [] (Some 2) result in
@@ -1941,12 +2077,13 @@ let native_variant_factory name result tag =
 let native_apply_function name result =
   native_getter name result (SomaForeign.NativeCallableApplyFunction None)
 
-let native_defaulted_function name result path schema =
+let native_defaulted_function ?(eta=false) name result path schema =
   ignore(native_context());
   let env=Global.env()in
   let sigma,schema=Constrintern.interp_type_evars env (Evd.from_env env) schema in
   let callable=native_callable_type env sigma [] schema in
-  native_getter name result (SomaForeign.NativeDefaultedFunction(path,callable))
+  native_getter name result (if eta then SomaForeign.NativeEtaFunction(path,callable)
+    else SomaForeign.NativeDefaultedFunction(path,callable))
 
 let native_bound_boolean_function name result path schema label value =
   ignore(native_context());

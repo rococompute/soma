@@ -189,7 +189,7 @@ let file_digest f =
   try sha256 (In_channel.with_open_bin f In_channel.input_all)
   with Sys_error _ -> "missing"
 
-let foreign_identity c =
+let foreign_identity_base c =
   match !SomaForeign.image c with
   | Some i ->
     let side (a, b) = a ^ ":" ^ b in
@@ -216,6 +216,16 @@ let foreign_identity c =
 
 let constants : (string, info) Hashtbl.t = Hashtbl.create 997
 let inductives : (string, info) Hashtbl.t = Hashtbl.create 97
+
+let invalidate () = Hashtbl.clear constants; Hashtbl.clear inductives
+
+let foreign_identity c =
+  let base=foreign_identity_base c in
+  match List.find_opt(fun info->Names.Constant.CanOrd.equal c info.SomaForeign.assembly_owner)
+    (!SomaForeign.native_assemblies())with
+  |None->base
+  |Some info->Some(String.concat "\n"((match base with None->[]|Some b->[b])@
+      [SomaForeign.native_assembly_identity info]))
 (* a block being hashed, should its own types mention it by name *)
 let in_progress = ref []
 
@@ -429,10 +439,10 @@ let rec root_library = function
   | ModPath.MPdot (mp, l) ->
     Option.map (fun (d, subs) -> d, subs @ [Id.to_string l]) (root_library mp)
 
-let report () =
+let report ?(cache=false) () =
   match Sys.getenv_opt "SOMA_HASH" with
-  | None | Some "" -> ()
-  | Some file ->
+  | (None | Some "") when not cache -> ()
+  | destination ->
     let libraries = reported_libraries () in
     let env = Global.env () in
     let shown mp label =
@@ -464,6 +474,6 @@ let report () =
       else
         Printf.sprintf "%s %s %s%s\n" i.contract i.witness name
           (if assumes = [] then "" else "  assumes " ^ String.concat ", " assumes) in
-    Out_channel.with_open_bin file (fun oc ->
+    (match destination with None|Some ""->()|Some file->Out_channel.with_open_bin file (fun oc ->
         List.iter (fun l -> output_string oc (line l))
-          (List.sort (fun (a, _) (b, _) -> compare a b) lines))
+          (List.sort (fun (a, _) (b, _) -> compare a b) lines)))

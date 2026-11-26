@@ -108,6 +108,7 @@ type native_operation =
   | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
   | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
   | NativeAssertionFunction of int * int
+  | NativeEtaFunction of string * native_callable
 
 and native_static_expression =
   | StaticArgument of int
@@ -473,6 +474,8 @@ let rec native_identity = function
       " = " ^ string_of_bool value
     | NativeDefaultedFunction (path, callable) ->
       "defaulted-function " ^ Printf.sprintf "%S" path ^ " " ^ native_callable_identity callable
+    | NativeEtaFunction (path, callable) ->
+      "eta-function " ^ Printf.sprintf "%S" path ^ " " ^ native_callable_identity callable
     | NativeDeferredFields (fields, owner) ->
       "deferred-fields " ^ String.concat " " (List.map(Printf.sprintf "%S")fields) ^ " for " ^ owner
     | NativeGetFunction (field, owner) -> Printf.sprintf "get-function %S for %s" field owner
@@ -541,3 +544,31 @@ type native_record_alias = {
   record_alias_source : string;
 }
 let native_record_aliases : (unit -> native_record_alias list) ref = ref (fun () -> [])
+
+(** Source-owned native module assembly. Patterns contain identifiers and
+    structural destructuring only, never an arbitrary OCaml expression. *)
+type native_export_pattern =
+  | Export_name of string
+  | Export_tuple of native_export_pattern list
+  | Export_record of string * string list
+
+type native_assembly = {
+  assembly_owner : Names.Constant.t;
+  assembly_namespace : string;
+  assembly_source : string;
+  assembly_value : string;
+  assembly_pattern : native_export_pattern;
+  assembly_pattern_text : string;
+}
+
+let native_assemblies : (unit -> native_assembly list) ref = ref (fun () -> [])
+
+let rec native_export_identity = function
+  | Export_name name -> "name " ^ Printf.sprintf "%S" name
+  | Export_tuple fields -> "tuple [" ^ String.concat ";" (List.map native_export_identity fields) ^ "]"
+  | Export_record (owner, fields) -> "record " ^ Printf.sprintf "%S" owner ^ " [" ^
+      String.concat ";" (List.map (Printf.sprintf "%S") fields) ^ "]"
+
+let native_assembly_identity info =
+  String.concat "\n" ["native-local-assembly-v1"; info.assembly_namespace;
+    info.assembly_value; native_export_identity info.assembly_pattern]

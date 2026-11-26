@@ -18,7 +18,7 @@ val sha256 : string -> string
     a line for each definition of the file being compiled and of the files
     of its project and its dependencies that it imports. [soma hash] asks for
     it, and [soma diff] with [$SOMA_HASH_FIELDS]. *)
-val report : unit -> unit
+val report : ?cache:bool -> unit -> unit
 
 (** The contract of a definition, of the inductive of a constructor; none for a
     section variable *)
@@ -26,3 +26,6 @@ val contract_of : Names.GlobRef.t -> string option
 
 (** What it rests on, by kernel name, through proofs *)
 val assumptions_of : Names.GlobRef.t -> string list
+
+(** Invalidate memoized hashes after a Source-owned native interface annotation. *)
+val invalidate : unit -> unit

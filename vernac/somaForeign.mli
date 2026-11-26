@@ -124,6 +124,7 @@ type native_operation =
   | NativeStaticApplication of string * string list * (native_operation * native_operation list * string option list * string option list) option
   | NativeStaticInvocation of native_static_expression * (native_static_term * string option list) option
   | NativeAssertionFunction of int * int
+  | NativeEtaFunction of string * native_callable
 
 and native_static_expression =
   | StaticArgument of int
@@ -308,3 +309,20 @@ type native_record_alias = {
   record_alias_source : string;
 }
 val native_record_aliases : (unit -> native_record_alias list) ref
+
+type native_export_pattern =
+  | Export_name of string
+  | Export_tuple of native_export_pattern list
+  | Export_record of string * string list
+
+type native_assembly = {
+  assembly_owner : Names.Constant.t;
+  assembly_namespace : string;
+  assembly_source : string;
+  assembly_value : string;
+  assembly_pattern : native_export_pattern;
+  assembly_pattern_text : string;
+}
+val native_assemblies : (unit -> native_assembly list) ref
+val native_export_identity : native_export_pattern -> string
+val native_assembly_identity : native_assembly -> string

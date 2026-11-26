@@ -278,8 +278,8 @@ let checked_modules = SomaOcamlBindings.checked_modules
 let record_generated_files ~capture_generated dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
-    (String.equal f "native_algebraic.manifest" ||
-     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h"]) in
+    (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest"] ||
+     List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h";".assembly"]) in
   let hash f =
     let file = Filename.concat dir f in
     match Unix.lstat file with
@@ -311,6 +311,7 @@ let record_generated_files ~capture_generated dir made expected =
 let write_project ?(read_source=read_file) ?(private_extract=false)
     ?(capture_generated=(fun _ _ -> ())) ~state ~modules ~libraries ~js ~directives dir =
   mkdir_p dir;
+  let assembly_contracts=SomaOcamlBindings.native_assembly_contracts()in
   let expected = Hashtbl.create 17 in
   let file f contents =
     Hashtbl.replace expected f (SomaMerkle.string contents);
@@ -343,10 +344,14 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
     file "soma_host_io.c" SomaHost.io_c
   end;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
+  let assemblies=SomaOcamlBindings.write_assemblies ~file ~read_source ~contracts:assembly_contracts
+    ~program:(read_file(Filename.concat dir "prog.ml"))
+    ~interface:(read_file(Filename.concat dir "prog.mli"))
+    ~bindings:(read_file(Filename.concat dir(SomaOcamlBindings.bindings_filename())))in
   let made = List.sort_uniq String.compare
       (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; SomaOcamlBindings.bindings_filename(); "native_abi.manifest"; "native_owned.manifest"; "native_variants.manifest"; "native_callables.manifest"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else [])
-       @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own) in
+       @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own @ assemblies) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
   let c = SomaOcamlBindings.c_stub_names own in

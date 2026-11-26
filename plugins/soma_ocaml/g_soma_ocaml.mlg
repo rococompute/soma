@@ -97,6 +97,11 @@ VERNAC COMMAND EXTEND SomaOCamlNativeType CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Type" ident(name) ":=" string(path) ] -> { Soma_ocaml.native_type name path }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Assembly" reference(source) "As" string(pattern) ] ->
+ { Soma_ocaml.native_assembly source pattern }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeEnum CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Record" "Alias" ident(name) ":=" reference(source) "As" string(target) ] ->
   { Soma_ocaml.native_record_alias name source target }
@@ -194,6 +199,8 @@ VERNAC COMMAND EXTEND SomaOCamlNativeExternal CLASSIFIED AS SIDEFF
  { Soma_ocaml.native_bound_boolean_function name typ path schema label value }
 | [ "OCaml" "Native" "External" "Defaulted" "Function" ident(name) ":" native_signature(typ) ":=" string(path) "Using" native_signature(schema) ] ->
  { Soma_ocaml.native_defaulted_function name typ path schema }
+| [ "OCaml" "Native" "External" "Eta" "Function" ident(name) ":" native_signature(typ) ":=" string(path) "Using" native_signature(schema) ] ->
+ { Soma_ocaml.native_defaulted_function ~eta:true name typ path schema }
 | [ "OCaml" "Native" "External" "Thunk" "Factory" ident(name) ":" native_signature(typ) ":=" string(path) "With" string(literal) ] ->
  { Soma_ocaml.native_external_thunk_factory name typ path literal }
 | [ "OCaml" "Native" "Assertion" "Function" ident(name) ":" native_signature(typ) ":=" natural(line) natural(column) ] ->
