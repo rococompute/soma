@@ -49,8 +49,8 @@ differ 'another body' "$A" "$(contract a.soma a.double)"
 echo 'double (n : nat) : nat := n + n.' > a.soma
 
 # the format is stable: a change to this is a new format, and says so in it
-same 'the hash of this definition, in soma-hash 1' "$A" \
-  "549c4f409caaeb83f727f296841372b2470fd9a61c2f174af02eb7586caddfca"
+same 'the hash of this definition, in soma-hash 2' "$A" \
+  "1f9d0aa0d0d30a6d07c41542d257e99e461192ea10e0e4d28e50d2691c90d075"
 
 # * What mentions a definition, mentions its hash
 printf 'Import a.\nquad (n : nat) : nat := double (double n).\n' > b.soma

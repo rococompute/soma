@@ -108,7 +108,7 @@ let sha256 s =
 
 module SMap = CString.Map
 
-let format = "soma-hash 1\n"
+let format = "soma-hash 2\n"
 
 let hash parts = sha256 (format ^ String.concat "" parts)
 
@@ -297,8 +297,15 @@ let rec term w c =
 
 and mind w m =
   let key = kn_mind m in
-  if List.mem key !in_progress then text w ("self " ^ string_of_int (List.length !in_progress))
-  else begin
+  (* Relative to this block, not to the unrelated caller that happened to
+     populate the memo table first. Absolute depth made existing contracts
+     depend on which new proof relation was visited before them. *)
+  let rec distance n = function
+    | [] -> None
+    | current :: rest -> if current = key then Some n else distance (n + 1) rest in
+  match distance 1 !in_progress with
+  | Some n -> text w ("self " ^ string_of_int n)
+  | None -> begin
     let i = inductive m in
     w.mentioned <- i :: w.mentioned;
     mention w ~hash:i.contract ~name:key
