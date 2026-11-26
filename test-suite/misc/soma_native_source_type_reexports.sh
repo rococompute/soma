@@ -11,6 +11,7 @@ From Corelib Require Import PrimInt63.
 From Stdlib Require Import List Strings.String.
 Inductive json(F:Type) := Null | Bool(value:bool) | Num(value:F) | Str(value:string)
  | Arr(values:list(json F)) | Obj(fields:list(string*json F)).
+Inductive wrapper(F:Type) := Wrap (tree:json F).
 Record inbox := Inbox {host:string;port:PrimInt63.int;token:string}.
 Record box(A:Type) := Box {payload:A;index:PrimInt63.int}.
 Inductive indexed(n:nat) := Index(value:bool).
@@ -20,7 +21,15 @@ Definition main := true.
 SOMA
 cat >owner.definition <<'SOMA'
 From Soma Require Import Native.
+From Corelib Require Import PrimInt63.
 From Stdlib Require Import Strings.String.
+Definition erase(_A:Type):=bool.
+OCaml Native Algebraic graph := [
+ node := ["Leaf" Of [PrimInt63.int]; "Branch" Of [list edge]];
+ edge := {mutable target:node; weight:PrimInt63.int};
+ result := {output:string; status:PrimInt63.int};
+ independent := {flag:erase node}
+].
 OCaml Native Record owned := { payload:string; mutable changed:bool; accept:bool -> bool }.
 OCaml Native External Type other := "Target.other".
 SOMA
@@ -51,10 +60,23 @@ Fail OCaml Native Reexport Record invalid := owner.owned As "bad.name".
 OCaml Native Reexport Record public_owned := owner.owned As "owned".
 Fail OCaml Native Reexport Record duplicate_owned := owner.owned As "owned".
 OCaml Native Reexport Type public_rule As "rule" := (schema.json (owner.owned -> bool)).
+OCaml Native Reexport Source public_wrapper := schema.wrapper As "wrapper" From "Target.wrapper".
+Fail OCaml Native Reexport Group invalid := owner.other Members ["node"].
+Fail OCaml Native Reexport Group invalid := owner.node Members ["missing"].
+Fail OCaml Native Reexport Group invalid := owner.node Members ["node";"node"].
+Fail OCaml Native Reexport Group invalid := owner.node Members ["edge";"node"].
+Fail OCaml Native Reexport Group invalid := owner.node Members ["node"].
+Fail OCaml Native Reexport Group invalid := owner.node Members ["edge"].
+OCaml Native Reexport Group public_nodes := owner.node Members ["node";"edge"].
+Fail OCaml Native Reexport Record invalid := owner.owned As "edge".
+Fail OCaml Native Reexport Group invalid := owner.node Members ["node";"edge"].
+OCaml Native Reexport Type public_graph As "graph_nodes" := (list owner.node).
+OCaml Native Reexport Group public_result := owner.node Members ["result";"independent"].
 SOMA
 cat >main.soma <<'SOMA'
 Import exports.
-Definition main := (public_json_value,(public_inbox,(public_box,(public_json,(public_fn,(public_owned,public_rule)))))).
+Definition main := (public_json_value,public_inbox,public_box,public_json,public_fn,
+ public_owned,public_rule,public_wrapper,public_nodes,public_graph,public_result).
 SOMA
 soma extract main.soma -no-soma-prelude -o native >extract.log 2>&1
 soma hash main.soma -no-soma-prelude >hash.log
@@ -62,7 +84,7 @@ python3 - <<'PY'
 from pathlib import Path
 import shlex,hashlib
 rows=Path('native/native_source_type_reexports.manifest').read_text().splitlines()
-assert rows[0]=='soma-native-source-type-reexports-v1' and len(rows)==8
+assert rows[0]=='soma-native-source-type-reexports-v1' and len(rows)==12
 files=set();names=[]
 for line in rows[1:]:
  symbol,namespace,source,src_hash,name,digest,public,target,order=shlex.split(line)
@@ -70,15 +92,20 @@ for line in rows[1:]:
  assert hashlib.sha256(Path(source).read_bytes()).hexdigest()==src_hash
  assert hashlib.sha256(Path('native',name).read_bytes()).hexdigest()==digest
  assert int(order)==len(names);names.append(public);files.add(name)
-assert names==['json_value','inbox','box_value','json','fn','owned','rule'] and len(files)==1
+assert names==['json_value','inbox','box_value','json','fn','owned','rule','wrapper','node','graph_nodes','result'] and len(files)==1
 Path('types.ml').write_bytes(Path('native',files.pop()).read_bytes())
 Path('types.mli').write_bytes(Path('types.ml').read_bytes())
 owned=[shlex.split(l)[3]for l in Path('native/native_owned.manifest').read_text().splitlines()[1:]if shlex.split(l)[0]=='owner.owned']
 assert len(owned)==1
 Path(owned[0]).write_bytes(Path('native',owned[0]).read_bytes())
 Path('owned-file').write_text(owned[0])
+groups={shlex.split(l)[3]for l in Path('native/native_algebraic.manifest').read_text().splitlines()[1:]}
+assert len(groups)==1
+for name in groups:Path(name).write_bytes(Path('native',name).read_bytes())
+Path('group-file').write_text(groups.pop())
 assert 'mutable changed : bool' in Path('types.ml').read_text()
 assert 'type rule = (owned -> bool) json_value' in Path('types.ml').read_text()
+assert 'type graph_nodes = node list' in Path('types.ml').read_text()
 for line in Path('hash.log').read_text().splitlines():
  assumptions=set(line.split('  assumes ',1)[1].split(', '))if'  assumes 'in line else set()
  assert assumptions<={'Corelib.Numbers.Cyclic.Int63.PrimInt63.int'},assumptions
@@ -86,6 +113,7 @@ PY
 cp native/uint63.ml .
 cat >target.ml <<'ML'
 type 'a json=Null|Bool of bool|Num of 'a|Str of string|Arr of 'a json list|Obj of(string*'a json)list
+type 'a wrapper=Wrap of 'a json
 type inbox={host:string;port:int;token:string}
 type 'a box={payload:'a;index:int}
 ML
@@ -100,6 +128,14 @@ let ()=
  require "generic recursive nominal identity" (as_public integers==integers && as_native(as_public strings)==strings);
  (match as_public integers with T.Arr[T.Num 3;T.Obj["x",T.Bool true]]->()|_->assert false);
  let number:T.json=T.Num 1.25 in require "closed native type alias" (match number with Target.Num 1.25->true|_->false);
+ let wrapped:int T.wrapper=Target.Wrap integers in
+ (match wrapped with T.Wrap value->require "earlier Source type names in payloads"(value==integers));
+ let leaf=T.Leaf 7 in let edge:T.edge={T.target=leaf;weight=3}in
+ let graph:T.graph_nodes=[T.Branch[edge]]in
+ edge.T.target<-T.Leaf 9;
+ require "dependency-closed nominal graph and mutable edge"(match graph with [T.Branch[{T.target=T.Leaf 9;weight=3}]]->true|_->false);
+ let result:T.result={T.output="ok";status=0}and flag:T.independent={T.flag=true}in
+ require "independent group and erased logical parameter"(result.T.output="ok"&&flag.T.flag);
  let record:Target.inbox={host="localhost";port=80;token="token"}in
  let public:T.inbox=record in require "record labels and nominal identity" (public==record && public.T.host="localhost");
  let ints:int T.box_value={T.payload=7;index=3}and texts:string T.box_value={T.payload="x";index=4}in
@@ -118,7 +154,7 @@ let ()=
  print_endline "PASS: recursive constructors, generic records, original objects, closed aliases and no conversion allocation"
 ML
 for compiler in ocamlopt ocamlc;do
- ocamlfind "$compiler" -w -a uint63.ml target.ml "$(cat owned-file)" types.mli types.ml check.ml -o check >"$compiler.log" 2>&1
+ ocamlfind "$compiler" -w -a uint63.ml target.ml "$(cat owned-file)" "$(cat group-file)" types.mli types.ml check.ml -o check >"$compiler.log" 2>&1
  ./check
 done
 # Native typing checks the shape against the actual external owner as well.

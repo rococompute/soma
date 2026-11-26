@@ -77,6 +77,13 @@ let in_native_static_assembly =
     ~subst:None
 let () = SomaForeign.native_static_assemblies := (fun()-> !native_static_assemblies)
 
+let native_algebraic_dependencies = Summary.ref ~name:"soma-native-algebraic-dependencies" []
+let in_native_algebraic_dependencies =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native algebraic dependencies"
+    ~cache:(fun info->native_algebraic_dependencies:=info:: !native_algebraic_dependencies)
+    ~subst:None
+let () = SomaForeign.native_algebraic_dependencies := (fun()-> !native_algebraic_dependencies)
+
 let native_lexical_scopes = Summary.ref ~name:"soma-native-lexical-scopes" []
 let in_native_lexical_scope =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native lexical scope"
@@ -187,7 +194,7 @@ let is_sort env sigma t = EConstr.isSort sigma (Reductionops.whd_all env sigma t
    [option], products, [float], [word64], functions, types of OCaml modules that a
    .definition declares, and type variables ([forall A, ...]), which
    extraction erases as arguments *)
-let rec ocaml_type ?(nominal=[]) env sigma vars t =
+let rec ocaml_type ?(nominal=[]) ?(on_variable=(fun _->())) env sigma vars t =
   let t=Reductionops.whd_betaiotazeta env sigma t in
   let selected_nominal=
     let head,args=EConstr.decompose_app sigma t in
@@ -196,7 +203,7 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
     Option.bind reference(fun reference->match List.find_opt(fun(other,_,_)->
         GlobRef.CanOrd.equal reference other)nominal with
       |Some(_,target,arity)when Array.length args=arity->
-        let arguments=Array.to_list(Array.map(ocaml_type ~nominal env sigma vars)args)in
+        let arguments=Array.to_list(Array.map(ocaml_type ~nominal ~on_variable env sigma vars)args)in
         Some((match arguments with []->""|[t]->"("^t^") "|ts->"("^String.concat ", "ts^") ")^target)
       |Some _->not_ocaml(str "source reexport parameter arity differs")|None->None)in
   let reused_record =
@@ -207,7 +214,7 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
       List.find_map(fun info->
         if info.SomaForeign.record_alias_logical_type<>symbol ||
            List.length info.record_alias_parameters<>Array.length args then None else
-        let parameters=Array.to_list(Array.map(ocaml_type ~nominal env sigma vars)args) in
+        let parameters=Array.to_list(Array.map(ocaml_type ~nominal ~on_variable env sigma vars)args) in
         let applied=match parameters with []->"" |[p]->"("^p^") "
           |ps->"("^String.concat ", "ps^") " in
         Some(applied^info.record_alias_target))!native_record_aliases
@@ -225,16 +232,16 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
       |Const(c,_)->(match Cmap_env.find_opt c !bindings with
         | Some {item=SomaForeign.OCamlNativeExternalFamily (params, path); _}
           when List.length params = Array.length args ->
-          let args = Array.to_list (Array.map (ocaml_type ~nominal env sigma vars) args) in
+          let args = Array.to_list (Array.map (ocaml_type ~nominal ~on_variable env sigma vars) args) in
           Some ("(" ^ String.concat ", " args ^ ") " ^ path)
         |Some{item=SomaForeign.OCamlNativeParametricCallable(params,c);_} when List.length params=Array.length args ->
-          let args=Array.to_list(Array.map(ocaml_type ~nominal env sigma vars)args)in
+          let args=Array.to_list(Array.map(ocaml_type ~nominal ~on_variable env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
           Some(applied^" "^SomaForeign.native_callable_type c)
         |Some{item=SomaForeign.OCamlNativeOpenVariant(_,v);_} when Array.length args=1 ->
-          Some("("^ocaml_type ~nominal env sigma vars args.(0)^") "^SomaForeign.native_variant_type v)
+          Some("("^ocaml_type ~nominal ~on_variable env sigma vars args.(0)^") "^SomaForeign.native_variant_type v)
         |Some{item=SomaForeign.OCamlNativeParametricVariant(params,v);_} when List.length params=Array.length args ->
-          let args=Array.to_list(Array.map(ocaml_type ~nominal env sigma vars)args)in
+          let args=Array.to_list(Array.map(ocaml_type ~nominal ~on_variable env sigma vars)args)in
           let applied=match args with [arg]->"("^arg^")"|_->"("^String.concat ", "args^")"in
           Some(applied^" "^SomaForeign.native_variant_type v)
         |_->None)
@@ -256,23 +263,23 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
       let unfolded=Reductionops.whd_const c env sigma t in
       if EConstr.eq_constr sigma t unfolded then None else Some unfolded
     |_->None in
-  match alias with Some typ->ocaml_type ~nominal env sigma vars typ |None->
+  match alias with Some typ->ocaml_type ~nominal ~on_variable env sigma vars typ |None->
   let t = Reductionops.whd_all env sigma t in
   match EConstr.kind sigma t with
   | Prod (na, dom, cod) ->
     let env' = EConstr.push_rel (Context.Rel.Declaration.LocalAssum (na, dom)) env in
     if is_sort env sigma dom then
       let v = type_variable (List.filter_map Fun.id vars) na.Context.binder_name in
-      ocaml_type ~nominal env' sigma (Some v :: vars) cod
+      ocaml_type ~nominal ~on_variable env' sigma (Some v :: vars) cod
     else if not (EConstr.Vars.noccurn sigma 1 cod) then
       not_ocaml (str "its result depends on an argument, which OCaml's types cannot say")
     else
-      let d = ocaml_type ~nominal env sigma vars dom in
+      let d = ocaml_type ~nominal ~on_variable env sigma vars dom in
       let d = if EConstr.isProd sigma (Reductionops.whd_all env sigma dom) then "(" ^ d ^ ")" else d in
-      d ^ " -> " ^ ocaml_type ~nominal env' sigma (None :: vars) cod
+      d ^ " -> " ^ ocaml_type ~nominal ~on_variable env' sigma (None :: vars) cod
   | Rel n ->
     (match List.nth_opt vars (n - 1) with
-     | Some (Some v) -> v
+     | Some (Some v) -> on_variable v; v
      | _ -> not_ocaml (str "it uses a value as a type"))
   | _ ->
     let f, args = EConstr.decompose_app sigma t in
@@ -280,7 +287,7 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
     let is name = match ref_of name with Some gr -> EConstr.isRefX env sigma gr f | None -> false in
     (* a function, as an argument of a type, is in parentheses *)
     let arg a =
-      let s = ocaml_type ~nominal env sigma vars a in
+      let s = ocaml_type ~nominal ~on_variable env sigma vars a in
       if EConstr.isProd sigma (Reductionops.whd_all env sigma a) then "(" ^ s ^ ")" else s in
     if GradualTyping.is_unknown_type env sigma t then
       not_ocaml (str "Any has no OCaml type: an OCaml value has one type")
@@ -290,7 +297,7 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
        still cannot be run or inspected by a logical consumer. *)
     else if List.exists is ["soma.native.entry"; "soma.native.callback_group";
                             "soma.native.function_group"; "soma.native.function_knot"; "soma.native.preparation"] then
-      (match args with [result]->ocaml_type ~nominal env sigma vars result
+      (match args with [result]->ocaml_type ~nominal ~on_variable env sigma vars result
        |_->not_ocaml(str "a native result boundary needs one result type"))
     else if is "core.string.type" then "string"
     else if is "core.ascii.type" then "char"
@@ -339,7 +346,7 @@ let rec ocaml_type ?(nominal=[]) env sigma vars t =
            (match args with
             | [] -> path
             | [a] -> arg a ^ " " ^ path
-            | args -> "(" ^ String.concat ", " (List.map (ocaml_type ~nominal env sigma vars) args) ^ ") " ^ path)
+            | args -> "(" ^ String.concat ", " (List.map (ocaml_type ~nominal ~on_variable env sigma vars) args) ^ ") " ^ path)
          | _ -> not_ocaml (Printer.pr_econstr_env env sigma t ++ str " is no type of OCaml"))
       | _ -> not_ocaml (Printer.pr_econstr_env env sigma t ++ str " is no type of OCaml")
 
@@ -1031,7 +1038,7 @@ let native_source_reexport_finish marker name symbol target parameters body chec
   let order=ref 0 in
   Cmap_env.iter(fun _ binding->match binding.item with
     |SomaForeign.OCamlNativeSourceTypeReexport info when info.source_type_namespace=namespace->
-      if info.source_type_name=name then native_error "duplicate Source type reexport name";
+      if List.mem name(SomaForeign.native_source_type_names info)then native_error "duplicate Source type reexport name";
       incr order
     |_->())!bindings;
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
@@ -1051,6 +1058,25 @@ let native_source_monomorphic env sigma typ =
       native_error "Source reexport fields cannot contain polymorphic functions"|_->());
     EConstr.iter_with_full_binders env sigma EConstr.push_rel check env typ in
   check env typ
+
+(* Previously published shapes can be named in later declarations. This is a
+   local printer context, never a global extraction/type conversion override. *)
+let native_public_type_names () =
+  let namespace=native_namespace()in
+  let previous=Cmap_env.fold(fun _ binding found->match binding.item with
+    |SomaForeign.OCamlNativeSourceTypeReexport info when info.source_type_namespace=namespace &&
+        info.source_type_symbol<>"type-alias"->info::found
+    |_->found)!bindings []in
+  List.concat_map(fun info->
+    let names=match info.SomaForeign.source_type_body with
+      |SomaForeign.Source_group group->List.map(fun name->group.algebraic_namespace^"."^name,name,0)
+          (List.map fst group.algebraic_members)
+      |_->[info.source_type_symbol,info.source_type_name,List.length info.source_type_parameters]in
+    List.map(fun(symbol,name,arity)->
+      let reference=try Nametab.locate(Libnames.qualid_of_string symbol)
+        with Not_found->native_error "a public type's checked Source owner is unavailable"in
+      reference,name,arity)names)
+    (List.sort(fun a b->Int.compare a.SomaForeign.source_type_order b.SomaForeign.source_type_order)previous)
 
 let native_source_type_reexport marker source name target =
   ignore(native_context());
@@ -1084,7 +1110,7 @@ let native_source_type_reexport marker source name target =
   (match EConstr.kind sigma(Reductionops.whd_all parameter_env sigma arity)with
    |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->()
    |_->native_error "logical propositions cannot be reexported as native data");
-  let nominal=[GlobRef.IndRef ind,name,List.length params]in
+  let nominal=(GlobRef.IndRef ind,name,List.length params)::native_public_type_names()in
   let rec strip count env typ=if count=0 then typ else
     match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
     |Prod(na,domain,rest)->strip(count-1)(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
@@ -1139,19 +1165,39 @@ let native_record_reexport marker source name =
     (SomaForeign.native_record_type record)[] (SomaForeign.Source_record record.record_fields)
     (CAst.make(Constrexpr.CRef(source,None)))
 
-(* Previously published shapes can be named in later declarations. This is a
-   local printer context, never a global extraction/type conversion override. *)
-let native_public_type_names () =
+let native_algebraic_selection marker source members =
+  ignore(native_context());
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c
+    |_->native_error "a group reexport needs a checked native algebraic owner"in
+  let group=match Cmap_env.find_opt owner !bindings with
+    |Some{item=SomaForeign.OCamlNativeAlgebraic(group,_);_}->group
+    |_->native_error "a group reexport needs a checked native algebraic owner"in
+  let original=List.map fst group.SomaForeign.algebraic_members in
+  if members=[] || List.length(List.sort_uniq String.compare members)<>List.length members ||
+     not(List.for_all(fun name->List.mem name original)members)then
+    native_error "a group selection needs distinct declared members";
+  let selected=List.filter(fun(name,_)->List.mem name members)group.algebraic_members in
+  if List.map fst selected<>members then native_error "a group selection must retain Source declaration order";
+  let dependencies=match List.find_opt(fun info->info.SomaForeign.dependencies_namespace=group.algebraic_namespace &&
+      info.dependencies_group=group.algebraic_name)!native_algebraic_dependencies with
+    |Some info->info.dependencies_members
+    |None->native_error "recompile the algebraic owner to obtain checked dependency metadata"in
+  List.iter(fun name->
+    let needed=match List.assoc_opt name dependencies with Some names->names
+      |None->native_error "checked algebraic member dependencies are unavailable"in
+    if not(List.for_all(fun dependency->List.mem dependency members)needed)then
+      native_error "a group selection must include all referenced local type members")members;
   let namespace=native_namespace()in
-  let previous=Cmap_env.fold(fun _ binding found->match binding.item with
-    |SomaForeign.OCamlNativeSourceTypeReexport info when info.source_type_namespace=namespace &&
-        info.source_type_symbol<>"type-alias"->info::found
-    |_->found)!bindings []in
-  List.map(fun info->
-    let reference=try Nametab.locate(Libnames.qualid_of_string info.SomaForeign.source_type_symbol)
-      with Not_found->native_error "a public type's checked Source owner is unavailable"in
-    reference,info.source_type_name,List.length info.source_type_parameters)
-    (List.sort(fun a b->Int.compare a.SomaForeign.source_type_order b.SomaForeign.source_type_order)previous)
+  Cmap_env.iter(fun _ binding->match binding.item with
+    |SomaForeign.OCamlNativeSourceTypeReexport info when info.source_type_namespace=namespace->
+      if List.exists(fun name->List.mem name(SomaForeign.native_source_type_names info))members then
+        native_error "duplicate public group type name"
+    |_->())!bindings;
+  let target=SomaForeign.native_algebraic_module group in
+  let selected_group={group with SomaForeign.algebraic_members=selected;algebraic_exceptions=[]}in
+  native_source_reexport_finish marker(List.hd members)
+    (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner)))target[]
+    (SomaForeign.Source_group selected_group)(CAst.make(Constrexpr.CRef(source,None)))
 
 let native_source_alias_reexport marker syntax name =
   ignore(native_context());
@@ -1576,6 +1622,7 @@ let native_algebraic ?(exceptions=[]) name members =
   let binders = [Constrexpr.CLocalAssum (formals, None, Constrexpr.Default Glob_term.Explicit, sort)] in
   let scope syntax = CAst.make (Constrexpr.CProdN (binders, syntax)) in
   let logical_dependencies = ref [] in
+  let used_members=ref []and member_dependencies=ref []in
   let checked_type syntax =
     let scoped = scope syntax in
     logical_dependencies := scoped :: !logical_dependencies;
@@ -1597,7 +1644,8 @@ let native_algebraic ?(exceptions=[]) name members =
        | _ -> ());
       EConstr.iter sigma monomorphic typ in
     monomorphic typ;
-    try ocaml_type env sigma vars typ with Not_ocaml why ->
+    try ocaml_type ~on_variable:(fun name->if List.mem name names then used_members:=name:: !used_members)
+      env sigma vars typ with Not_ocaml why ->
       CErrors.user_err (str "OCaml Native algebraic member: " ++ why) in
   let fields declarations =
     let result = List.map (fun (id, mutable_, syntax) ->
@@ -1627,7 +1675,10 @@ let native_algebraic ?(exceptions=[]) name members =
     SomaForeign.algebraic_namespace = namespace;
     algebraic_name = Id.to_string name;
     algebraic_source = source;
-    algebraic_members = List.map2 (fun name (_, form) -> name, body form) names members;
+    algebraic_members = List.map2 (fun name (_, form) ->
+      used_members:=[];let representation=body form in
+      member_dependencies:=(name,List.sort_uniq String.compare !used_members):: !member_dependencies;
+      name,representation) names members;
     algebraic_exceptions = exceptions;
   } in
   List.iter2 (fun id member ->
@@ -1637,7 +1688,9 @@ let native_algebraic ?(exceptions=[]) name members =
     let body = List.fold_left (fun rest dependency ->
       CAst.make (Constrexpr.CLetIn (CAst.make Anonymous, dependency, None, rest))) handle !logical_dependencies in
     let constant = native_declare id body None in
-    native_register id constant (SomaForeign.OCamlNativeAlgebraic (group, member))) ids names
+    native_register id constant (SomaForeign.OCamlNativeAlgebraic (group, member))) ids names;
+  Lib.add_leaf(in_native_algebraic_dependencies SomaForeign.{dependencies_namespace=namespace;
+    dependencies_group=group.algebraic_name;dependencies_members=List.rev !member_dependencies})
 let native_algebraic_reexport name source target =
   ignore(native_context());
   let target=native_constructor_path target in

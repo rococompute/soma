@@ -386,3 +386,44 @@ owned record, native owner/type and mutability mismatches, semantic changes
 when only mutability changes, and rejection of non-record/duplicate/malformed
 reexports. Existing recursive/generic/identity/allocation/provenance/cleanup
 checks remain in place for both native and bytecode.
+
+### Dependency-closed selections from owned algebraic groups
+
+A type publisher can select a coherent part of a checked native group:
+
+```soma
+OCaml Native Reexport Group public_graph := model.node Members ["node"; "edge"].
+OCaml Native Reexport Group public_result := model.node Members ["result"].
+```
+
+The owner must be a checked native algebraic member. Selection names must be
+distinct, declared and in original Source order. The native type checker records
+which local group type variables its type printer actually uses for each
+member's fields/constructor payloads. These dependency sets are retained as
+separate library metadata. Every selected member must include its referenced
+local members; a recursive component cannot be cut in half. Independent types
+can be published separately, including when a transparent logical alias erases
+a type parameter. An imported owner without this metadata must be recompiled;
+the checker does not guess dependencies by parsing generated OCaml.
+
+The canonical owned module and the selected checked record/variant descriptors
+provide the complete nominal equations, retaining all constructors, inline
+records, mutable fields and declaration order. Exceptions are not reexported by
+this type-only rule. Public names are the selected members' original names;
+collisions with earlier types, other selections or later declarations fail.
+Closed aliases can use any previously selected member's public name. Ordinary
+Source shape reexports can also use previously declared public shapes in their
+payloads, while retaining their own recursive self-reference context.
+
+The existing type-only artifact/manifest is reused. A new appended body case
+stores the selection; existing metadata variant tags and layouts remain intact.
+The dependency table is a separate library object, and declarations without a
+selection keep their previous semantic identities and output. Native compilation
+checks the equations against the actual owned module without conversions.
+
+The Source-type fixture covers recursive node/edge closure, independent result
+and erased-parameter records, mutable edges, aliases of selected members,
+related generic Source variants, invalid/reordered/duplicate/partial selections,
+nominal typing and the existing identity/allocation/provenance/cleanup checks in
+native and bytecode. Separate publisher namespaces can emit separate whole
+artifacts so a consumer copies each into its original declaration position.

@@ -196,10 +196,18 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_algebraic_dependencies = {
+  dependencies_namespace : string;
+  dependencies_group : string;
+  dependencies_members : (string * string list) list;
+}
+let native_algebraic_dependencies : (unit -> native_algebraic_dependencies list) ref = ref(fun()->[])
+
 type native_source_type_body =
   | Source_record of native_record_field list
   | Source_variant of (string * string list) list
   | Source_alias of string
+  | Source_group of native_algebraic
 
 type native_source_type_reexport = {
   source_type_namespace : string;
@@ -381,11 +389,19 @@ let native_algebraic_reexport_ml ?(interface=false) info =
   (if interface then "include module type of " else "include ")^witness^"\n"^
   native_algebraic_declarations ~target:info.reexport_target ~exceptions:false info.reexport_group
 
+let native_source_type_names info = match info.source_type_body with
+  |Source_group group->List.map fst group.algebraic_members
+  |_->[info.source_type_name]
+
 let native_source_type_reexport_ml info =
+  match info.source_type_body with
+  |Source_group group->native_algebraic_declarations ~target:info.source_type_target ~exceptions:false group
+  |_->
   let params=match info.source_type_parameters with []->""|[p]->p^" "
     |ps->"("^String.concat ", "ps^") "in
   "type "^params^info.source_type_name^" = "^
   (match info.source_type_body with
+   |Source_group _->assert false
    |Source_alias typ->typ^"\n"
    |Source_record fields->params^info.source_type_target^" = { "^
       String.concat "; "(List.map(fun f->(if f.field_mutable then "mutable "else "")^f.field_name^" : "^f.field_type)fields)^" }\n"

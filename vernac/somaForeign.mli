@@ -212,10 +212,18 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_algebraic_dependencies = {
+  dependencies_namespace : string;
+  dependencies_group : string;
+  dependencies_members : (string * string list) list;
+}
+val native_algebraic_dependencies : (unit -> native_algebraic_dependencies list) ref
+
 type native_source_type_body =
   | Source_record of native_record_field list
   | Source_variant of (string * string list) list
   | Source_alias of string
+  | Source_group of native_algebraic
 
 type native_source_type_reexport = {
   source_type_namespace : string;
@@ -415,5 +423,6 @@ type native_public_assembly = {
 val native_public_assemblies : (unit -> native_public_assembly list) ref
 val native_public_assembly_identity : native_public_assembly -> string
 
+val native_source_type_names : native_source_type_reexport -> string list
 val native_source_type_reexport_ml : native_source_type_reexport -> string
 val native_source_type_identity : native_source_type_reexport -> string
