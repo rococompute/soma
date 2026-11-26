@@ -245,3 +245,57 @@ natural Weak retention/release, invalid declarations, semantic identity,
 manifest provenance and stale producer cleanup. Retention is tested with an
 actual post-GC read; the fixture does not artificially clear Weak slots or pin
 payloads with GC lifetime primitives.
+
+### Reexporting checked Source types from native owners
+
+Ordinary Source records and variants can provide the shape of a public nominal
+type equation, including parameterized recursive variants:
+
+```soma
+Import model.
+OCaml Native Reexport Source public_tree := model.tree As "tree" From "Owner.tree".
+OCaml Native Reexport Source public_record := model.record As "record" From "Owner.record".
+OCaml Native Reexport Type public_flag As "flag" := bool.
+```
+
+These declarations go in a native `.definition`. The marker names are logical
+unit definitions; public names are separate, so they need not shadow existing
+Source types. An anonymous checked let retains the schema/type dependency in
+the marker body. A client references the markers, or selects other declarations
+from their native module, and receives `native_source_type_reexports.manifest`
+and a complete `soma_source_types_<namespace-hash>.exports` file. Rows record the
+marker, namespace, Source file/hash, artifact/hash, public name, target and order.
+Declarations appear in Source order. Consumers copy the artifact unchanged.
+
+The frontend derives parameters, constructor order/payloads and record labels
+from the checked inductive definition. A local recursive type printer resolves
+self references to the new public type name; it does not install a global
+extraction override. Record fields are immutable. Native compilation of the
+emitted type equation checks the actual external owner's constructor, field,
+parameter and mutability representation. These are type declarations only:
+there are no conversion functions, getters, value copies or runtime providers.
+Bindings do not gain a type-scope module, and ordinary Source extraction retains
+its previous representations.
+
+The current shape declaration accepts a single unindexed, non-coinductive
+Source block with runtime type parameters. Constructor names and record labels
+must already be valid native names. Logical proof types, dependent runtime
+payloads, polymorphic fields, indexed/runtime parameters, malformed target
+paths and duplicate public names are rejected rather than approximated. Target
+paths must name a qualified native type. A closed `Reexport Type` derives its
+representation from its checked type expression and rejects free polymorphic
+function types. It adds no Source-to-native logical evaluator or trust axiom.
+
+The descriptor is appended to the native metadata variants; existing serialized
+descriptor shapes and tags stay unchanged. Its complete typed declaration is
+part of the marker's semantic identity and ABI. Producer cleanup removes an
+obsolete manifest/scope only when its previous generated-file hash still
+matches, preserving edited or unrelated files.
+
+`test-suite/misc/soma_native_source_type_reexports.sh` compiles public ML/Mli in
+native and bytecode against an independent owner module. It checks recursive
+constructors, parameterized records, nominal assignability in both directions,
+record labels, original object/function identity, closed float/function aliases
+and no conversion allocation. Negative tests cover invalid Source shapes and
+names and a mismatching actual native record. Source/artifact hashes, semantic
+identity changes and producer cleanup are checked separately.

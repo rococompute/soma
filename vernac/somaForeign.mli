@@ -212,6 +212,22 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_source_type_body =
+  | Source_record of native_record_field list
+  | Source_variant of (string * string list) list
+  | Source_alias of string
+
+type native_source_type_reexport = {
+  source_type_namespace : string;
+  source_type_source : string;
+  source_type_name : string;
+  source_type_symbol : string;
+  source_type_target : string;
+  source_type_parameters : string list;
+  source_type_body : native_source_type_body;
+  source_type_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -230,6 +246,7 @@ type ocaml_item =
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
   | OCamlNativeModuleInclude of native_module_alias
   | OCamlNativeValueReexport of native_value_reexport
+  | OCamlNativeSourceTypeReexport of native_source_type_reexport
 
 type ocaml_module = {
   ml_file : string option;          (** FILE.ml, absolute, or none: a library's module *)
@@ -389,3 +406,6 @@ type native_public_assembly = {
 }
 val native_public_assemblies : (unit -> native_public_assembly list) ref
 val native_public_assembly_identity : native_public_assembly -> string
+
+val native_source_type_reexport_ml : native_source_type_reexport -> string
+val native_source_type_identity : native_source_type_reexport -> string

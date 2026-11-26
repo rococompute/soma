@@ -78,6 +78,10 @@ VERNAC ARGUMENT EXTEND native_signature PRINTED BY { pr_native_signature }
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeReexport CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Reexport" "Source" ident(marker) ":=" reference(source) "As" string(name) "From" string(target) ] ->
+ { Soma_ocaml.native_source_type_reexport marker source name target }
+| [ "OCaml" "Native" "Reexport" "Type" ident(marker) "As" string(name) ":=" native_signature(typ) ] ->
+ { Soma_ocaml.native_source_alias_reexport marker typ name }
 | [ "OCaml" "Native" "Reexport" "Value" ident(name) ":=" reference(source) ] ->
  { Soma_ocaml.native_value_reexport name source }
 | [ "OCaml" "Native" "Reexport" "Algebraic" ident(name) ":=" reference(source) "As" string(target) ] ->

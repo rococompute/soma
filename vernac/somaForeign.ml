@@ -196,6 +196,22 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_source_type_body =
+  | Source_record of native_record_field list
+  | Source_variant of (string * string list) list
+  | Source_alias of string
+
+type native_source_type_reexport = {
+  source_type_namespace : string;
+  source_type_source : string;
+  source_type_name : string;
+  source_type_symbol : string;
+  source_type_target : string;
+  source_type_parameters : string list;
+  source_type_body : native_source_type_body;
+  source_type_order : int;
+}
+
 type ocaml_item =
   | OCamlType of int
   | OCamlValue of string * string option list
@@ -214,6 +230,7 @@ type ocaml_item =
   | OCamlNativeAlgebraicReexport of native_algebraic_reexport
   | OCamlNativeModuleInclude of native_module_alias
   | OCamlNativeValueReexport of native_value_reexport
+  | OCamlNativeSourceTypeReexport of native_source_type_reexport
 
 type ocaml_module = {
   ml_file : string option;
@@ -364,7 +381,26 @@ let native_algebraic_reexport_ml ?(interface=false) info =
   (if interface then "include module type of " else "include ")^witness^"\n"^
   native_algebraic_declarations ~target:info.reexport_target ~exceptions:false info.reexport_group
 
+let native_source_type_reexport_ml info =
+  let params=match info.source_type_parameters with []->""|[p]->p^" "
+    |ps->"("^String.concat ", "ps^") "in
+  "type "^params^info.source_type_name^" = "^
+  (match info.source_type_body with
+   |Source_alias typ->typ^"\n"
+   |Source_record fields->params^info.source_type_target^" = { "^
+      String.concat "; "(List.map(fun f->f.field_name^" : "^f.field_type)fields)^" }\n"
+   |Source_variant []->params^info.source_type_target^" = |\n"
+   |Source_variant cases->params^info.source_type_target^" =\n"^
+      String.concat "\n"(List.map(fun(name,fields)->"| "^name^
+        (if fields=[]then ""else " of "^String.concat " * "(List.map(fun t->"("^t^")")fields)))cases)^"\n")
+
+let native_source_type_identity info =
+  String.concat "\n" ["native-source-type-reexport-v1";info.source_type_namespace;
+    info.source_type_source;info.source_type_symbol;string_of_int info.source_type_order;
+    native_source_type_reexport_ml info]
+
 let rec native_identity = function
+ | OCamlNativeSourceTypeReexport info -> native_source_type_identity info
  | OCamlNativeValueReexport info ->
    String.concat "\n" ["native-value-reexport";info.value_namespace;info.value_name;
      info.value_owner;info.value_module;string_of_int info.value_order;native_identity(OCamlNativeCallback info.value_callback)]
