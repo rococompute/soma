@@ -14,8 +14,9 @@ OCaml Native Reexport Binding run := prepared.
 
 `command_tuple` describes the complete actual tuple, including ignored members.
 The existing checked structural-pattern parser verifies names and nested binary,
-triple, quadruple or quintuple tuple shapes. This declaration accepts only names and tuples;
-record patterns and arbitrary native expressions are rejected. Duplicate public
+triple, quadruple or quintuple tuple shapes. Complete checked record patterns are also supported; see
+[record publications](native-record-publications.md). Arbitrary native
+expressions are rejected. Duplicate public
 names are rejected across both projections and ordinary binding publications.
 
 The input must be a positional unit getter borrowing a native value, checked

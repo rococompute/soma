@@ -655,7 +655,7 @@ let checked_export_pattern ?(on_binding=(fun _ _->())) env sigma typ text =
         native_error "assembly tuple pattern does not match the checked result type";
       List.iter2 check(Array.to_list args)parts
     |Export_record(prefix,fields)->
-      let head,_=application(boundary typ)in
+      let head,parameters=application(boundary typ)in
       let ind=match EConstr.kind sigma head with Ind(ind,_)->ind
         |_->native_error "assembly record pattern needs a checked record result"in
       let structure=try Structures.Structure.find env ind with Not_found->
@@ -666,29 +666,33 @@ let checked_export_pattern ?(on_binding=(fun _ _->())) env sigma typ text =
       if List.sort String.compare fields<>List.sort String.compare expected then
         native_error "assembly record fields must match the complete checked record";
       let mib,mip=Inductive.lookup_mind_specif env ind in
-      let rec strip count env typ=
-        if count=0 then env,typ else
+      let rec instantiate index typ=
+        if index=mib.mind_nparams then typ else
+        if index>=Array.length parameters then native_error "assembly record parameters are missing"else
         match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
-        |Prod(na,domain,rest)->strip(count-1)
-            (EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
+        |Prod(_,_,rest)->instantiate(index+1)(EConstr.Vars.subst1 parameters.(index) rest)
         |_->native_error "unsupported assembly record parameters"in
-      let field_env,constructor=strip mib.mind_nparams env(EConstr.of_constr mip.mind_user_lc.(0))in
-      let rec runtime_fields env typ=function
-        |[]->()
-        |_::rest->match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
-          |Prod(na,domain,codomain)->
+      let constructor=instantiate 0(EConstr.of_constr mip.mind_user_lc.(0))in
+      let rec runtime_fields typ=function
+        |[]->[]
+        |projection::rest->match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+          |Prod(_,domain,codomain)->
             let sort=Retyping.get_sort_of env sigma domain in
             if EConstr.ESorts.is_prop sigma sort || EConstr.ESorts.is_sprop sigma sort || is_sort env sigma domain then
               native_error "erased proof or type fields cannot be assembly record exports";
-            runtime_fields(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)codomain rest
+            if not(EConstr.Vars.noccurn sigma 1 codomain)then
+              native_error "assembly record fields cannot depend on previous values";
+            let name=match projection.Structures.Structure.proj_name with Name id->Id.to_string id|_->assert false in
+            (name,domain)::runtime_fields(EConstr.Vars.subst1 EConstr.mkProp codomain)rest
           |_->native_error "unsupported assembly record constructor"in
-      runtime_fields field_env constructor fields;
+      let types=runtime_fields constructor structure.projections in
       let logical=KerName.to_string(MutInd.canonical(fst ind))in
       let target=match List.find_opt(fun r->r.SomaForeign.record_alias_logical_type=logical)!native_record_aliases with
         |Some r->let parts=String.split_on_char '.' r.record_alias_target in
           String.concat "."(List.rev(List.tl(List.rev parts)))
         |None->native_error "an assembly record pattern needs a declared native record alias"in
-      if prefix<>target then native_error "assembly record qualification differs from its checked owner"
+      if prefix<>target then native_error "assembly record qualification differs from its checked owner";
+      List.iter(fun field->on_binding field(List.assoc field types))fields
   in
   check typ parsed;
   parsed,exports
@@ -2019,8 +2023,6 @@ let native_binding_projection marker source text =
     native_error "a projection needs a checked callback descriptor";
   let fields=ref []in
   let pattern,_=checked_export_pattern ~on_binding:(fun name typ->fields:= !fields@[name,ocaml_type env sigma vars typ])env sigma args.(1)text in
-  let rec tuples=function SomaForeign.Export_record _->native_error "native projections use names/tuples"|Export_tuple xs->List.iter tuples xs|_->()in
-  tuples pattern;
   let namespace=native_namespace()in
   Cmap_env.iter(fun _ binding->
     let names=match binding.item with
