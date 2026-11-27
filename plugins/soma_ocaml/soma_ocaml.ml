@@ -1187,6 +1187,51 @@ let native_public_record selected receiver fields =
     record_public_type=GlobRef.IndRef ind;record_public_fields=fields;
     record_public_symbols=List.map symbol[GlobRef.ConstRef receiver;GlobRef.IndRef ind]})
 
+let native_public_modules = Summary.ref ~name:"soma-native-public-modules" []
+let in_native_public_modules =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public canonical modules"
+    ~cache:(fun info->native_public_modules:=info:: !native_public_modules;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_public_modules:=(fun()-> !native_public_modules)
+let native_public_modules selected exports =
+  let namespace=native_namespace()in
+  let env=Global.env()in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace&&Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "public modules need a transparent Source main")
+    |_->native_error "public modules belong to their Source main"in
+  if List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.modules_public_owner)!native_public_modules then
+    native_error "one Source main may declare public modules only once";
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    if ModPath.to_string(Constant.modpath c)=namespace then
+      match cb.const_body with Declarations.Def body->term body|_->()end in
+  visit owner;
+  let used=ref []in
+  let exports=List.map(fun(kind,name,source)->
+    if kind<>"module"then native_error "public modules accept only Module declarations";
+    if not(is_module_name name&&name.[0]>='A'&&name.[0]<='Z')||String.contains name '.'||String.starts_with ~prefix:"Soma_"name then
+      native_error "a public module needs one nonreserved uppercase identifier";
+    if List.mem name !used then native_error "duplicate public module name";
+    used:=name:: !used;
+    let reference=match Nametab.locate source with GlobRef.ConstRef c when Constants.mem c !seen->c
+      |_->native_error "a public module schema must be a checked dependency of main"in
+    let binding=match Cmap_env.find_opt reference !bindings with Some binding->binding
+      |None->native_error "a public module needs a native owned schema type"in
+    let target=match binding.item with
+      |SomaForeign.OCamlNativeAlgebraic(group,_)->SomaForeign.native_algebraic_module group
+      |SomaForeign.OCamlNativeOwnedRecord record|SomaForeign.OCamlNativeImmutableRecord(record,_)->SomaForeign.native_record_module record
+      |_->native_error "a public module needs a native owned record or algebraic schema"in
+    SomaForeign.{public_module_name=name;public_module_reference=reference;
+      public_module_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef reference));
+      public_module_target=target;public_module_schema=SomaForeign.native_identity binding.item})exports in
+  if not(List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.public_owner)!native_public_assemblies)
+  then native_public_assembly selected [];
+  Lib.add_leaf(in_native_public_modules SomaForeign.{modules_public_owner=owner;modules_public_exports=exports})
+
 let native_public_type_equations selected exports =
   let namespace=native_namespace()in
   let env=Global.env()and sigma=Evd.from_env(Global.env())in

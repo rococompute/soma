@@ -988,6 +988,9 @@ let rec pp_structure_elem table = function
       in
       let def = pp_module_expr table [] m.ml_mod_expr in
       let name = pp_modname table (MPdot (State.get_top_visible_mp table, l)) in
+      (if State.get_phase table=Impl then match !SomaForeign.native_public_extracted_modules with
+       |Some names->SomaForeign.native_public_extracted_modules:=Some(Pp.string_of_ppcmds name::names)
+       |None->());
       hov 1
         (str "module " ++ name ++ typ ++ str " =" ++
          (if is_short m.ml_mod_expr then spc () else fnl ()) ++ def) ++

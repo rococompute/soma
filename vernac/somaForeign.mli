@@ -503,6 +503,21 @@ val public_records : Names.Constant.t -> native_public_record list
 val active_public_records : native_public_record list ref
 val native_public_record_declarations : (Names.GlobRef.t * string * string * string) list ref
 
+type native_public_module = {
+  public_module_name : string;
+  public_module_reference : Names.Constant.t;
+  public_module_symbol : string;
+  public_module_target : string;
+  public_module_schema : string;
+}
+type native_public_modules = {
+  modules_public_owner : Names.Constant.t;
+  modules_public_exports : native_public_module list;
+}
+val native_public_modules : (unit -> native_public_modules list) ref
+val public_modules : Names.Constant.t -> native_public_module list
+val native_public_extracted_modules : string list option ref
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;

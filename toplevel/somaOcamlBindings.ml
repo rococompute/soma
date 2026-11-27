@@ -1095,6 +1095,7 @@ let prepare_native_static_extraction () =
   SomaForeign.native_runtime_references:=
     (if List.exists(fun info->SomaForeign.lexical_scope info.SomaForeign.static_owner<>None &&
         SomaForeign.static_exceptions info.static_owner<>[])(selected_native_static_assemblies())then Some[]else None);
+  SomaForeign.native_public_extracted_modules:=(if selected_native_public_assemblies()=[]then None else Some[]);
   SomaForeign.native_public_type_declarations:=[];
   SomaForeign.native_public_extracted_types:=
     (if selected_native_public_assemblies()=[]then None else Some []);
@@ -1288,10 +1289,22 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         |[(_,_,field,typ)]->field,typ|_->error Pp.(str "public field is absent or ambiguous in the fresh record representation")in
       "\nlet "^public^" = "^name record.record_public_receiver^"."^field^"\n",
       "\nval "^public^" : "^typ^"\n")record.record_public_fields)(SomaForeign.public_records info.public_owner)in
-    let implementation=header^program^String.concat ""(List.map(fun item->
+    let module_prefix=String.concat ""(List.map(fun item->
+      let actual=List.concat_map(fun(m:SomaForeign.ocaml_module)->List.filter_map(fun(reference,_,schema)->
+        if Constant.CanOrd.equal reference item.SomaForeign.public_module_reference then Some schema else None)m.items)modules in
+      (match actual with [schema]when SomaForeign.native_identity schema=item.public_module_schema->()
+       |_->error Pp.(str "public canonical module schema is absent or differs from its checked declaration"));
+      let existing=match !SomaForeign.native_public_extracted_modules with Some names->names
+        |None->error Pp.(str "public modules need the fresh extracted module name table")in
+      if List.mem item.public_module_name existing then error Pp.(str "public module shadows an existing extracted module");
+      let owners=List.map(fun(_,group)->SomaForeign.native_algebraic_module group)(owned_algebraic_groups modules) @
+        List.map(fun(_,record)->SomaForeign.native_record_module record)(owned_records modules)in
+      if not(List.mem item.public_module_target owners)then error Pp.(str "public canonical module owner is absent from the native products");
+      "module "^item.public_module_name^" = "^item.public_module_target^"\n")(SomaForeign.public_modules info.public_owner))in
+    let implementation=header^module_prefix^program^String.concat ""(List.map(fun item->
       "\nlet "^item.SomaForeign.application_name^" = "^name item.application_function^" "^
       String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations^String.concat ""(List.map fst record_fields) in
-    let interface_=header^interface^String.concat ""(List.map(fun item->
+    let interface_=header^module_prefix^interface^String.concat ""(List.map(fun item->
       "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations^String.concat ""(List.map snd record_fields) in
     let source_hash=SomaMerkle.string(read_source(SomaImport.resolve_project_file info.public_source))in
     let layout=SomaMerkle.string(SomaForeign.native_public_assembly_identity info)in

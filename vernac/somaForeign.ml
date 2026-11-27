@@ -867,6 +867,22 @@ let public_records owner = List.filter(fun info->Names.Constant.CanOrd.equal own
 let active_public_records : native_public_record list ref = ref []
 let native_public_record_declarations : (Names.GlobRef.t * string * string * string) list ref = ref []
 
+type native_public_module = {
+  public_module_name : string;
+  public_module_reference : Names.Constant.t;
+  public_module_symbol : string;
+  public_module_target : string;
+  public_module_schema : string;
+}
+type native_public_modules = {
+  modules_public_owner : Names.Constant.t;
+  modules_public_exports : native_public_module list;
+}
+let native_public_modules : (unit -> native_public_modules list) ref = ref(fun()->[])
+let public_modules owner = List.concat_map(fun info->if Names.Constant.CanOrd.equal owner info.modules_public_owner
+  then info.modules_public_exports else [])(!native_public_modules())
+let native_public_extracted_modules : string list option ref = ref None
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;
@@ -886,6 +902,9 @@ let native_public_assembly_identity info =
     List.map(fun item->String.concat " "
       ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
        item.application_symbols))info.public_applications) ^
+  (match public_modules info.public_owner with []->""|modules->
+    "\npublic-canonical-modules-v1\n"^String.concat "\n"(List.map(fun item->
+      String.concat "\n"[item.public_module_name;item.public_module_symbol;item.public_module_target;SomaMerkle.string item.public_module_schema])modules)) ^
   (match public_records info.public_owner with []->""|records->
     "\npublic-record-fields-v1\n"^String.concat "\n"(List.map(fun record->
       String.concat " " record.record_public_symbols^"\n"^
