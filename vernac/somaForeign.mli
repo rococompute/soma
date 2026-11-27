@@ -528,6 +528,16 @@ type native_public_projection = {
 val native_public_projections : (unit -> native_public_projection list) ref
 val public_projections : Names.Constant.t -> native_public_projection list
 
+type native_publication_frame = {
+  frame_owner : Names.Constant.t;
+  frame_scope : string;
+  frame_module : string;
+  frame_operators : (string * string) list;
+  frame_members : (string * string) list;
+}
+val native_publication_frames : (unit -> native_publication_frame list) ref
+val publication_frame : Names.Constant.t -> native_publication_frame option
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;

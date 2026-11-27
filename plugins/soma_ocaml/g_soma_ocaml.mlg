@@ -129,6 +129,17 @@ VERNAC ARGUMENT EXTEND native_public_application
  { name,source,args }
 END
 
+VERNAC ARGUMENT EXTEND native_frame_operator
+ PRINTED BY { fun(name,source)->Pp.(str name++str " := "++Libnames.pr_qualid source) }
+| [ "Operator" string(name) ":=" reference(source) ] -> { name,source }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativePublicationFrame CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Publication" "Frame" reference(owner) "From" reference(marker)
+ "As" string(name) "With" "[" ne_native_frame_operator_list_sep(operators, ";") "]" ] ->
+ { Soma_ocaml.native_publication_frame owner marker name operators }
+END
+
 VERNAC ARGUMENT EXTEND native_public_field
  PRINTED BY { fun(name,source)->Pp.(str name++str " := "++Libnames.pr_qualid source) }
 | [ "Field" string(name) ":=" reference(source) ] -> { name,source }

@@ -1324,6 +1324,27 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations^String.concat ""(List.map fst record_fields)^String.concat ""(List.map fst projections) in
     let interface_=header^module_prefix^interface^String.concat ""(List.map(fun item->
       "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations^String.concat ""(List.map snd record_fields)^String.concat ""(List.map snd projections) in
+    let implementation,interface_=match SomaForeign.publication_frame info.public_owner with
+      |None->implementation,interface_
+      |Some frame->
+        if info.public_applications<>[]||record_fields<>[]||projections<>[]||type_equations<>""||module_prefix<>""then
+          error Pp.(str "publication frames cannot contain other public assembly declarations");
+        let scope=match List.assoc_opt frame.frame_scope(native_value_scopes modules)with
+          |Some members->frame.frame_scope,members|None->error Pp.(str "publication frame scope is absent")in
+        let _,members=scope in
+        let actual=List.map(function Value_entry(c,_,value)->
+          Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)),
+          SomaMerkle.string(SomaForeign.native_identity(SomaForeign.OCamlNativeValueReexport value))
+          |Projection_entry _->error Pp.(str "publication frame scope changed kind"))members in
+        if actual<>frame.frame_members then error Pp.(str "publication frame complete scope differs");
+        let signature name=match List.find_opt(function Value_entry(_,_,value)->value.SomaForeign.value_name=name|_->false)members with
+          |Some(Value_entry(_,m,value))->fst(native_binding ~value:true {m with top=value.value_module}value.value_callback)
+          |_->error Pp.(str "publication operator member is absent")in
+        let body="module "^frame.frame_module^" = struct\n"^native_value_scope_ml scope^"end\n"^
+          String.concat ""(List.map(fun(operator,member)->"let ( "^operator^" ) = "^frame.frame_module^"."^member^"\n")frame.frame_operators)in
+        let signature_="module "^frame.frame_module^" : sig\n"^native_value_scope_ml ~interface:true scope^"end\n"^
+          String.concat ""(List.map(fun(operator,member)->"val ( "^operator^" ) : "^signature member^"\n")frame.frame_operators)in
+        body,signature_ in
     let source_hash=SomaMerkle.string(read_source(SomaImport.resolve_project_file info.public_source))in
     let layout=SomaMerkle.string(SomaForeign.native_public_assembly_identity info)in
     let contract=match List.assoc_opt owner contracts with Some h->h

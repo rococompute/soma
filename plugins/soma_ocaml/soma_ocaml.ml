@@ -1108,6 +1108,61 @@ let native_public_assembly selected applications =
   Lib.add_leaf(in_native_public_assembly SomaForeign.{public_owner=main;public_namespace=namespace;
     public_source=source;public_applications=applications})
 
+let native_publication_frames = Summary.ref ~name:"soma-native-publication-frames" []
+let in_native_publication_frame =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native publication frame"
+    ~cache:(fun info->native_publication_frames:=info:: !native_publication_frames;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_publication_frames:=(fun()-> !native_publication_frames)
+let native_publication_frame selected marker module_name operators =
+  let namespace=native_namespace()in
+  let env=Global.env()in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace&&Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a publication frame needs a transparent Source main")
+    |_->native_error "a publication frame belongs to its Source main"in
+  if List.exists(fun info->info.SomaForeign.public_namespace=namespace)!native_public_assemblies then
+    native_error "a publication frame needs its own assembly declaration";
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    if ModPath.to_string(Constant.modpath c)=namespace then match cb.const_body with Declarations.Def body->term body|_->()end in
+  visit owner;
+  let scope=match Nametab.locate marker with
+    |GlobRef.ConstRef c when Constants.mem c !seen->
+      (match Cmap_env.find_opt c !bindings with Some{item=SomaForeign.OCamlNativeValueReexport info;_}->info.value_namespace
+       |_->native_error "a publication frame needs a checked value publication marker")
+    |_->native_error "a publication frame marker must be a checked dependency of main"in
+  if not(is_module_name module_name&&module_name.[0]>='A'&&module_name.[0]<='Z')||String.contains module_name '.'||String.starts_with ~prefix:"Soma_"module_name then
+    native_error "a publication frame needs one nonreserved uppercase module name";
+  let members=Cmap_env.fold(fun c binding items->match binding.item with
+    |SomaForeign.OCamlNativeValueReexport info when info.value_namespace=scope->
+      (match info.value_callback.operation with SomaForeign.NativeExternalConstant _->()
+       |_->native_error "publication frames require borrowed value aliases");
+      (info.value_order,c,info)::items
+    |SomaForeign.OCamlNativeBindingProjection info when info.projection_namespace=scope->
+      native_error "a borrowed publication frame cannot include projections"
+    |_->items)!bindings[] |> List.sort(fun(a,_,_)(b,_,_)->Int.compare a b)in
+  List.iteri(fun expected(order,_,_)->if order<>expected then native_error "publication frame scope order differs")members;
+  let used=ref []in
+  let operators=List.map(fun(name,reference)->
+    let prefix=if String.starts_with ~prefix:"let"name then 3 else if String.starts_with ~prefix:"and"name then 3 else 0 in
+    if prefix=0||String.length name<=prefix||not(String.for_all(fun c->String.contains "$&*+-/<=>@^|"c)(String.sub name prefix(String.length name-prefix)))then
+      native_error "a publication operator needs a binding-operator identifier";
+    if List.mem name !used then native_error "duplicate publication operator";
+    used:=name:: !used;
+    let c=match Nametab.locate reference with GlobRef.ConstRef c->c|_->native_error "an operator aliases a checked scope member"in
+    let info=match List.find_opt(fun(_,member,_)->Constant.CanOrd.equal member c)members with
+      |Some(_,_,info)->info|None->native_error "an operator must alias this complete publication scope"in
+    name,info.SomaForeign.value_name)operators in
+  native_public_assembly selected [];
+  let members=List.map(fun(_,c,info)->Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c)),
+    SomaMerkle.string(SomaForeign.native_identity(SomaForeign.OCamlNativeValueReexport info)))members in
+  Lib.add_leaf(in_native_publication_frame SomaForeign.{frame_owner=owner;frame_scope=scope;frame_module=module_name;
+    frame_operators=operators;frame_members=members})
+
 let native_public_projections = Summary.ref ~name:"soma-native-public-projections" []
 let in_native_public_projection =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public tuple projection"

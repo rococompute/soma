@@ -893,6 +893,16 @@ type native_public_projection = {
 let native_public_projections : (unit -> native_public_projection list) ref = ref(fun()->[])
 let public_projections owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.projection_public_owner)(!native_public_projections()))
 
+type native_publication_frame = {
+  frame_owner : Names.Constant.t;
+  frame_scope : string;
+  frame_module : string;
+  frame_operators : (string * string) list;
+  frame_members : (string * string) list;
+}
+let native_publication_frames : (unit -> native_publication_frame list) ref = ref(fun()->[])
+let publication_frame owner = List.find_opt(fun info->Names.Constant.CanOrd.equal owner info.frame_owner)(!native_publication_frames())
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;
@@ -912,6 +922,10 @@ let native_public_assembly_identity info =
     List.map(fun item->String.concat " "
       ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
        item.application_symbols))info.public_applications) ^
+  (match publication_frame info.public_owner with None->""|Some frame->
+    "\npublication-frame-v1\n"^String.concat "\n"([frame.frame_scope;frame.frame_module] @
+      List.map(fun(operator,member)->Printf.sprintf "%S %S"operator member)frame.frame_operators @
+      List.map(fun(symbol,digest)->symbol^" "^digest)frame.frame_members)) ^
   (match public_projections info.public_owner with []->""|projections->
     "\npublic-tuple-projections-v1\n"^String.concat "\n"(List.map(fun item->
       String.concat "\n"([item.projection_public_symbol;native_export_identity item.projection_public_pattern] @
