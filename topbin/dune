@@ -36,12 +36,17 @@
 (library
  (name soma_project_build)
  (wrapped false)
- (modules somaProjectBuild)
+ (modules somaProjectBuild somaArtifactUnits)
  (libraries soma-runtime.clib unix))
 
 (test
  (name somaProjectBuildTest)
  (modules somaProjectBuildTest)
+ (libraries soma_project_build soma-runtime.clib unix))
+
+(test
+ (name somaArtifactUnitsTest)
+ (modules somaArtifactUnitsTest)
  (libraries soma_project_build soma-runtime.clib unix))
 
 ; Keep compiler-libs' global modules separate from Rocq's compiler modules.

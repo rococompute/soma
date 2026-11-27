@@ -1,5 +1,5 @@
 (** Declarative, typed project build graphs. No command strings or source text. *)
-type kind = Source_types | Modules | Values | Aliases | Initializers
+type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type part = Artifact of { extract : string; kind : kind; namespace : string }
           | Unit of string
 type action = Extract of { file : string; source_root : string; options : string list;

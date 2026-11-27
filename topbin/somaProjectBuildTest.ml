@@ -55,6 +55,17 @@ let () =
       put (row () ^ row ~order:"1" ~artifact:"second.exports" ()); expect_error select;
       Unix.symlink file (Filename.concat dir "linked.exports");
       put (row ~artifact:"linked.exports" ()); expect_error select;
+      let binding name ordinal = Printf.sprintf "%S %S %S %S %S %S %S %S %d\n"
+          ("exports." ^ name) "exports" "source.definition" (SomaMerkle.file_hash source)
+          "artifact.exports" (SomaMerkle.file_hash file) name "target" ordinal in
+      write (Filename.concat dir "native_value_reexports.manifest")
+        ("soma-native-value-reexports-v1\n" ^ binding "value" 0);
+      let projections=Filename.concat dir "native_binding_projections.manifest" in
+      write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 1);
+      let bindings ()=SomaProjectBuild.artifact ~root:dir ~source_root:dir ~extract:"e" Bindings "exports" in
+      assert ((bindings ()).contents=SomaProjectBuild.read file);
+      write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 0);
+      expect_error bindings;
       let output=Filename.concat dir "public.ml" in
       assert (SomaProjectBuild.atomic output "previous checked output\n");
       let before=(Unix.stat output).Unix.st_mtime in

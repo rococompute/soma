@@ -69,23 +69,33 @@ let artifact ~root ~source_root ~extract kind scope =
   let suffix, header = match kind with
     | Source_types -> "source_type_reexports", "source-type-reexports"
     | Modules -> "module_declarations", "module-declarations"
-    | Values -> "value_reexports", "value-reexports"
+    | Values | Bindings -> "value_reexports", "value-reexports"
     | Aliases -> "module_aliases", "module-aliases"
     | Initializers -> "binding_initializers", "binding-initializers" in
   let manifest = inside root ("native_" ^ suffix ^ ".manifest") in regular manifest;
   let lines = String.split_on_char '\n' (read manifest) in
   let decode line = match kind, fields line with
-    | (Source_types | Values | Aliases), [_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal]
+    | (Source_types | Values | Bindings | Aliases), [_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal]
     | Modules, [_;_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal] ->
       {scope;source;source_hash;filename;digest;ordinal=Some ordinal}
     | Initializers, [scope;source;source_hash;filename;digest] ->
       {scope;source;source_hash;filename;digest;ordinal=None}
     | _ -> fail "invalid row in %s" manifest in
-  let all = match lines with
+  let read_rows header lines = match lines with
     | h::tail when h = "soma-native-" ^ header ^ "-v1" ->
       List.filter (fun s -> s<>"") tail |> List.map decode
     | _ -> fail "unsupported manifest: %s" manifest in
+  let all=read_rows header lines in
+  let all=if kind<>Bindings then all else
+      let projections=inside root "native_binding_projections.manifest" in
+      regular projections;
+      all @ read_rows "binding-projections" (String.split_on_char '\n' (read projections)) in
   let rows = List.filter (fun r -> r.scope=scope) all in
+  let rows=if kind<>Bindings then rows else
+      let position r=match r.ordinal with Some s ->
+          (try int_of_string s with Failure _ -> fail "invalid binding ordinal")
+        | None -> fail "missing binding ordinal" in
+      List.sort (fun a b -> Int.compare (position a) (position b)) rows in
   if rows=[] then fail "%s: no %s artifact for namespace %S" extract (kind_name kind) scope;
   let first=List.hd rows in
   let filename=first.filename and hash=first.digest in
@@ -207,6 +217,8 @@ let help = {|Usage: soma project (plan|build) [--config FILE] [--target NAME ...
 Read [build] in soma.toml (or --config). Plan validates the entire graph.
 Build checks/extracts dependencies, then publishes ordered whole OCaml artifacts.
 No source text, shell commands or partial artifacts are accepted in configuration.
+For an existing proof/origin pipeline, soma project assemble --help describes
+native whole-product publication from a checked input inventory.
 |}
 let run ~compiler args =
   (* Keep the installed symlink: the CLI locates its runtime relative to it. *)

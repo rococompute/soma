@@ -1,4 +1,4 @@
-type kind = Source_types | Modules | Values | Aliases | Initializers
+type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type part = Artifact of { extract : string; kind : kind; namespace : string }
           | Unit of string
 type action = Extract of { file : string; source_root : string; options : string list;
@@ -10,7 +10,7 @@ type t = { directory : string; targets : string list; nodes : node list }
 exception Error of string
 let error fmt = Printf.ksprintf (fun s -> raise (Error s)) fmt
 let kind_name = function Source_types -> "source-types" | Modules -> "modules"
-  | Values -> "values" | Aliases -> "aliases" | Initializers -> "initializers"
+  | Values -> "values" | Bindings -> "bindings" | Aliases -> "aliases" | Initializers -> "initializers"
 let relative_path s =
   s <> "" && Filename.is_relative s && not (String.contains s '\000') &&
   not (String.contains s '\\') &&
@@ -89,7 +89,7 @@ let parse toml = match List.assoc_opt "build" toml with
               end else begin
                 keys where ["extract"; "kind"; "namespace"] p;
                 let kind = match get_string where "kind" p with
-                  | "source-types" -> Source_types | "modules" -> Modules | "values" -> Values
+                  | "source-types" -> Source_types | "modules" -> Modules | "values" -> Values | "bindings" -> Bindings
                   | "aliases" -> Aliases | "initializers" -> Initializers
                   | k -> error "%s: unknown artifact kind %S" where k in
                 let scope = get_string where "namespace" p in
