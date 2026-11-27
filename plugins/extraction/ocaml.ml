@@ -803,6 +803,38 @@ let pp_native_record_view table ~signature reference variables =
     Some(str(SomaForeign.native_source_type_reexport_ml {info.view_declaration with source_type_name=name}))
   |_->CErrors.user_err(str "Ambiguous native record view.")
 
+(* Only native constant syntax can stand alone without its program's names,
+   helper definitions or initialization. Check the actual printer mappings,
+   not merely the logical constructor names. *)
+let rec native_closed_literal expression =
+  if is_native_char expression||is_native_string expression||Option.has_some(native_nat_literal expression)then true else
+  match expression with
+  |MLtuple values->List.for_all native_closed_literal values
+  |MLcons(_,reference,values)->
+    let mappings=["core.bool.true","bool","true",0;"core.bool.false","bool","false",0;
+      "core.unit.tt","unit","()",0;"core.list.nil","list","[]",0;
+      "core.list.cons","list","( :: )",2;"core.option.None","option","None",0;
+      "core.option.Some","option","Some",1;"core.prod.intro","( * )","",2]in
+    List.exists(fun(key,typ,constructor,arity)->
+      Rocqlib.has_ref key&&Rocqlib.check_ref key reference.glob&&List.length values=arity&&
+      (try find_custom reference=constructor&&find_custom(get_ind reference)=typ with Not_found->false))mappings&&
+    List.for_all native_closed_literal values
+  |_->false
+
+let rec native_literal_type = function
+  |Tvar _->true
+  |Tglob(reference,arguments)->
+    let mappings=["core.bool.type","bool",0;"core.unit.type","unit",0;
+      "core.list.type","list",1;"core.option.type","option",1;"core.prod.type","( * )",2;
+      "core.ascii.type","char",0;"core.string.type","string",0;"num.nat.type","int",0]in
+    List.exists(fun(key,target,arity)->Rocqlib.has_ref key&&Rocqlib.check_ref key reference.glob&&
+      List.length arguments=arity&&(try find_custom reference=target with Not_found->false))mappings&&
+    List.for_all native_literal_type arguments
+  |_->false
+
+let literal_declaration_selected reference = List.exists(fun info->
+  GlobRef.CanOrd.equal reference.glob info.SomaForeign.literal_reference)!SomaForeign.active_literal_declarations
+
 let pp_decl table declaration =
   let output=match declaration with
     | Dtype (r,_,_) when is_inline_custom r -> mt ()
@@ -846,7 +878,15 @@ let pp_decl table declaration =
             cut2 () ++ hov 0 ((str "let () = Stdlib.Callback.register \"") ++ alias ++ (str "\" ") ++ name)
           with Not_found -> (* No callback registration specified for qualid. *)
             mt()
-        in pp_val table name t ++ hov 0 (expr_begin ++ name ++ def ++ mt ()) ++ callback_def;
+        in
+        let body=hov 0 (expr_begin ++ name ++ def ++ mt ())in
+        if State.get_phase table=Impl&&literal_declaration_selected r then begin
+          if is_custom r||not(native_closed_literal a&&native_literal_type t)||(try Option.has_some(find_callback r)with Not_found->false)then
+            CErrors.user_err(str "A literal declaration requires closed native constant syntax and self-contained native types, without callbacks or custom values.");
+          SomaForeign.printed_literal_declarations:=(r.glob,false,Pp.string_of_ppcmds name,Pp.string_of_ppcmds body^"\n")::
+            !SomaForeign.printed_literal_declarations
+        end;
+        pp_val table name t ++ body ++ callback_def;
 
     | Dfix (rv,defs,typs) ->
         pp_Dfix table (rv,defs,typs)
@@ -907,7 +947,13 @@ let pp_spec table = function
   | Sval (r,t) ->
       let def = pp_type table false [] t in
       let name = pp_global_name table Term r in
-      hov 2 (str "val " ++ name ++ str " :" ++ spc () ++ def)
+      let body=hov 2 (str "val " ++ name ++ str " :" ++ spc () ++ def)in
+      if literal_declaration_selected r then begin
+        if not(native_literal_type t)then CErrors.user_err(str "A literal declaration needs a self-contained native signature.");
+        SomaForeign.printed_literal_declarations:=(r.glob,true,Pp.string_of_ppcmds name,Pp.string_of_ppcmds body^"\n")::
+          !SomaForeign.printed_literal_declarations
+      end;
+      body
   | Stype (r,vl,ot) ->
       (match pp_native_record_view table ~signature:true r vl with Some view->view|None->
       let name = pp_global_name table Type r in

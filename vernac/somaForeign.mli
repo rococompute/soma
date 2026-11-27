@@ -602,3 +602,16 @@ val active_canonical_includes : native_canonical_include list ref
 val printed_canonical_includes : (Names.GlobRef.t * bool * string) list ref
 val canonical_include_identity : native_canonical_include -> string
 val canonical_includes : Names.Constant.t -> native_canonical_include list
+
+type native_literal_declaration = {
+  literal_owner : Names.Constant.t;
+  literal_namespace : string;
+  literal_source : string;
+  literal_reference : Names.GlobRef.t;
+  literal_symbol : string;
+}
+val native_literal_declarations : (unit -> native_literal_declaration list) ref
+val active_literal_declarations : native_literal_declaration list ref
+val printed_literal_declarations : (Names.GlobRef.t * bool * string * string) list ref
+val literal_declaration_identity : native_literal_declaration -> string
+val literal_declarations : Names.Constant.t -> native_literal_declaration list

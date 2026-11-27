@@ -994,3 +994,18 @@ let canonical_include_identity info = String.concat "\n"
   native_algebraic_module info.include_group;SomaMerkle.string(native_algebraic_ml info.include_group)]
 let canonical_includes owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.include_owner)
  (!native_canonical_includes()))
+
+type native_literal_declaration = {
+  literal_owner : Names.Constant.t;
+  literal_namespace : string;
+  literal_source : string;
+  literal_reference : Names.GlobRef.t;
+  literal_symbol : string;
+}
+let native_literal_declarations : (unit -> native_literal_declaration list) ref = ref(fun()->[])
+let active_literal_declarations : native_literal_declaration list ref = ref []
+let printed_literal_declarations : (Names.GlobRef.t * bool * string * string) list ref = ref []
+let literal_declaration_identity info = String.concat "\n"
+ ["native-literal-declaration-v1";info.literal_namespace;info.literal_symbol]
+let literal_declarations owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.literal_owner)
+ (!native_literal_declarations()))

@@ -199,6 +199,8 @@ VERNAC ARGUMENT EXTEND native_static_application
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeTypeEquation CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Literal" "Declaration" reference(owner) "From" reference(source) ] ->
+ { Soma_ocaml.native_literal_declaration owner source }
 | [ "OCaml" "Native" "Canonical" "Include" reference(owner) "From" reference(source) ] ->
  { Soma_ocaml.native_canonical_include owner source }
 | [ "OCaml" "Native" "Record" "View" reference(owner) "Replace" reference(original) "With" reference(publication) ] ->

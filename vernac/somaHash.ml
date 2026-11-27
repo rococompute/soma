@@ -235,7 +235,8 @@ let foreign_identity c =
   let identities=(match assembly with None->[]|Some identity->[identity]) @
     List.map SomaForeign.extraction_type_equation_identity(SomaForeign.extraction_type_equations c) @
     List.map SomaForeign.extraction_record_view_identity(SomaForeign.extraction_record_views c) @
-    List.map SomaForeign.canonical_include_identity(SomaForeign.canonical_includes c)in
+    List.map SomaForeign.canonical_include_identity(SomaForeign.canonical_includes c) @
+    List.map SomaForeign.literal_declaration_identity(SomaForeign.literal_declarations c)in
   match identities with []->base|_->
     Some(String.concat "\n"((match base with None->[]|Some b->[b])@identities))
 (* a block being hashed, should its own types mention it by name *)

@@ -1342,6 +1342,39 @@ let native_public_modules selected exports =
   then native_public_assembly selected [];
   Lib.add_leaf(in_native_public_modules SomaForeign.{modules_public_owner=owner;modules_public_exports=exports})
 
+let native_literal_declarations = Summary.ref ~name:"soma-native-literal-declarations" []
+let in_native_literal_declaration =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native literal declaration"
+    ~cache:(fun info->native_literal_declarations:=info:: !native_literal_declarations;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_literal_declarations:=(fun()-> !native_literal_declarations)
+let native_literal_declaration selected source =
+  let namespace=native_namespace()in
+  let env=Global.env()in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace&&Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a literal declaration needs a transparent Source main")
+    |_->native_error "a literal declaration belongs to its Source main"in
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    if ModPath.to_string(Constant.modpath c)=namespace then
+      match cb.const_body with Declarations.Def body->term body|_->()end in
+  visit owner;
+  let reference=match Nametab.locate source with
+    |GlobRef.ConstRef c when not(Constant.CanOrd.equal c owner)&&Constants.mem c !seen&&ModPath.to_string(Constant.modpath c)=namespace->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a literal declaration needs a transparent constant")
+    |_->native_error "a literal declaration must be an ordinary dependency in its main's Source"in
+  if List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.literal_owner&&
+    GlobRef.CanOrd.equal info.literal_reference(GlobRef.ConstRef reference))!native_literal_declarations then
+    native_error "duplicate literal declaration";
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_literal_declaration SomaForeign.{literal_owner=owner;literal_namespace=namespace;literal_source=source;
+    literal_reference=GlobRef.ConstRef reference;literal_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef reference))})
+
 let native_canonical_includes = Summary.ref ~name:"soma-native-canonical-includes" []
 let in_native_canonical_include =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native canonical include"

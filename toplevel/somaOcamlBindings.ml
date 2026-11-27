@@ -1071,6 +1071,9 @@ let selected_native_public_assemblies () =
   |_->[]
 
 let prepare_native_static_extraction () =
+  SomaForeign.active_literal_declarations:=(match main_reference()with
+    |GlobRef.ConstRef owner->SomaForeign.literal_declarations owner|_->[]);
+  SomaForeign.printed_literal_declarations:=[];
   SomaForeign.active_canonical_includes:=(match main_reference()with
     |GlobRef.ConstRef owner->SomaForeign.canonical_includes owner|_->[]);
   SomaForeign.printed_canonical_includes:=[];
@@ -1095,6 +1098,7 @@ let prepare_native_static_extraction () =
     [info.SomaForeign.record_public_receiver,false;info.record_public_type,true])!SomaForeign.active_public_records in
   let requests=requests @ List.map(fun info->info.SomaForeign.view_reference,true)!SomaForeign.active_extraction_record_views in
   let requests=requests @ List.map(fun info->info.SomaForeign.include_reference,true)!SomaForeign.active_canonical_includes in
+  let requests=requests @ List.map(fun info->info.SomaForeign.literal_reference,false)!SomaForeign.active_literal_declarations in
   let requests=requests @ List.concat_map(fun info->List.map(fun projection->projection.SomaForeign.projection_public_receiver,false)
     (SomaForeign.public_projections info.SomaForeign.public_owner))(selected_native_public_assemblies())in
   let requests=List.fold_left(fun kept(reference,type_) ->
@@ -1124,7 +1128,10 @@ let capture_native_assembly_contracts ~source =
     List.filter_map(fun info->if info.SomaForeign.static_source=source then
       Some info.static_owner else None)(!SomaForeign.native_static_assemblies()) @
     List.filter_map(fun info->if info.SomaForeign.public_source=source then
-      Some info.public_owner else None)(!SomaForeign.native_public_assemblies())in
+      Some info.public_owner else None)(!SomaForeign.native_public_assemblies()) @
+    List.filter_map(fun info->if info.SomaForeign.literal_source=source then
+      Some info.literal_owner else None)(!SomaForeign.native_literal_declarations())in
+  let own=List.sort_uniq Constant.CanOrd.compare own in
   checked_assembly_contracts:=List.map(fun owner->
     let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef owner))in
     match SomaHash.contract_of(GlobRef.ConstRef owner)with
@@ -1382,6 +1389,28 @@ let write_type_equations ~file ~read_source ~program ~interface =
         (SomaMerkle.string(SomaForeign.extraction_type_equation_identity info)))reuse in
     file "native_type_equations.manifest"("soma-native-type-equations-v1\n"^String.concat ""rows);
     ["native_type_equations.manifest"]
+  end
+
+let write_literal_declarations ~file ~read_source ~contracts ~program ~interface =
+  let declarations= !SomaForeign.active_literal_declarations in
+  if declarations=[]then []else begin
+    let entries=List.map(fun info->
+      let printed signature=List.filter_map(fun(reference,kind,name,body)->
+        if kind=signature&&GlobRef.CanOrd.equal reference info.SomaForeign.literal_reference then Some(name,body)else None)
+        !SomaForeign.printed_literal_declarations |> List.sort_uniq compare in
+      let name,body,signature=match printed false,printed true with [(name,body)],[(other,signature)]when name=other->name,body,signature
+        |_->error Pp.(str "literal declaration is absent, erased, or ambiguous in fresh implementation/interface")in
+      let owner=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.literal_owner))in
+      let contract=match List.assoc_opt owner contracts with Some contract->contract
+        |None->error Pp.(str "literal declaration has no checked Source owner contract")in
+      let filename="soma_literal_"^SomaMerkle.string(owner^":"^info.literal_symbol)^".declaration"in
+      file filename body;file(filename^"-interface")signature;
+      filename,Printf.sprintf "%S %S %S %S %S %S %S %S %S %S %S %S\n"
+        owner info.literal_source(SomaMerkle.string(read_source(SomaImport.resolve_project_file info.literal_source)))
+        info.literal_symbol name filename(SomaMerkle.string body)(SomaMerkle.string signature)
+        (SomaMerkle.string program)(SomaMerkle.string interface)(SomaMerkle.string(SomaForeign.literal_declaration_identity info))contract)declarations in
+    file "native_literal_declarations.manifest"("soma-native-literal-declarations-v1\n"^String.concat ""(List.map snd entries));
+    "native_literal_declarations.manifest"::List.concat_map(fun(filename,_)->[filename;filename^"-interface"])entries
   end
 
 let canonical_include_program ~program ~interface =
@@ -1651,6 +1680,11 @@ let write_files ~file ?c_file ~read_file ~directives modules =
     Printf.sprintf "%S %S %S %S\n" symbol info.include_namespace
       (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.include_source)))
       (SomaForeign.canonical_include_identity info))!SomaForeign.active_canonical_includes in
+  let entries=entries @ List.map(fun info->
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.SomaForeign.literal_owner))in
+    Printf.sprintf "%S %S %S %S\n" symbol info.literal_namespace
+      (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.literal_source)))
+      (SomaForeign.literal_declaration_identity info))!SomaForeign.active_literal_declarations in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
   (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @
