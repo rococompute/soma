@@ -1071,6 +1071,9 @@ let selected_native_public_assemblies () =
   |_->[]
 
 let prepare_native_static_extraction () =
+  SomaForeign.active_extraction_type_equations:=(match main_reference()with
+    |GlobRef.ConstRef owner->SomaForeign.extraction_type_equations owner|_->[]);
+  SomaForeign.printed_extraction_type_equations:=[];
   let requests=List.concat_map(fun info->List.map(fun item->
     item.SomaForeign.static_export_reference,
     (match item.static_export_kind with SomaForeign.Static_type _->true|_->false))
@@ -1294,6 +1297,26 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
     "native_assemblies.manifest"::List.map fst entries
   end
 
+let write_type_equations ~file ~read_source ~program ~interface =
+  let reuse= !SomaForeign.active_extraction_type_equations in
+  if reuse=[]then []else begin
+    let program_hash=SomaMerkle.string program and interface_hash=SomaMerkle.string interface in
+    let rows=List.map(fun info->
+      let printed signature=List.filter_map(fun(reference,kind,name,arity)->
+        if signature=kind&&GlobRef.CanOrd.equal reference info.SomaForeign.reuse_reference then Some(name,arity)else None)
+          !SomaForeign.printed_extraction_type_equations |> List.sort_uniq compare in
+      let name,arity=match printed false,printed true with [a],[b]when a=b->a
+        |_->error Pp.(str "type equation is absent, erased, or differs between fresh implementation/interface")in
+      Printf.sprintf "%S %S %S %S %S %S %S %S %S %S\n"
+        (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.reuse_owner)))
+        info.reuse_source(SomaMerkle.string(read_source(SomaImport.resolve_project_file info.reuse_source)))
+        info.reuse_symbol info.reuse_target name(string_of_int arity)program_hash interface_hash
+        (SomaMerkle.string(SomaForeign.extraction_type_equation_identity info)))reuse in
+    file "native_type_equations.manifest"("soma-native-type-equations-v1\n"^String.concat ""rows);
+    ["native_type_equations.manifest"]
+  end
+
+
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
   let bindings = bindings_filename () in
@@ -1488,6 +1511,12 @@ let write_files ~file ?c_file ~read_file ~directives modules =
       Printf.sprintf "%S %S %S %S\n"symbol info.public_namespace
         (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.public_source)))
         (SomaForeign.native_public_assembly_identity info))(selected_native_public_assemblies())in
+  let reuse= !SomaForeign.active_extraction_type_equations in
+  let entries=entries @ List.map(fun info->
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.SomaForeign.reuse_owner))in
+    Printf.sprintf "%S %S %S %S\n" symbol info.reuse_namespace
+      (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.reuse_source)))
+      (SomaForeign.extraction_type_equation_identity info))reuse in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
   (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @

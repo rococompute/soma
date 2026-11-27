@@ -509,3 +509,18 @@ val native_public_assembly_identity : native_public_assembly -> string
 val native_source_type_names : native_source_type_reexport -> string list
 val native_source_type_reexport_ml : native_source_type_reexport -> string
 val native_source_type_identity : native_source_type_reexport -> string
+
+type native_extraction_type_equation = {
+  reuse_owner : Names.Constant.t;
+  reuse_namespace : string;
+  reuse_source : string;
+  reuse_reference : Names.GlobRef.t;
+  reuse_symbol : string;
+  reuse_target : string;
+  reuse_parameters : int;
+}
+val native_extraction_type_equations : (unit -> native_extraction_type_equation list) ref
+val active_extraction_type_equations : native_extraction_type_equation list ref
+val printed_extraction_type_equations : (Names.GlobRef.t * bool * string * int) list ref
+val extraction_type_equation_identity : native_extraction_type_equation -> string
+val extraction_type_equations : Names.Constant.t -> native_extraction_type_equation list

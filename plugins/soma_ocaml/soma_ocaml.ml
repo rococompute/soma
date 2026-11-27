@@ -112,6 +112,13 @@ let in_native_public_assembly =
     ~subst:None
 let () = SomaForeign.native_public_assemblies := (fun()-> !native_public_assemblies)
 
+let native_extraction_type_equations = Summary.ref ~name:"soma-native-extraction-type-equations" []
+let in_native_extraction_type_equation =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma extraction type equation"
+    ~cache:(fun info->native_extraction_type_equations:=info:: !native_extraction_type_equations;SomaHash.invalidate())
+    ~subst:None
+let ()=SomaForeign.native_extraction_type_equations:=(fun()-> !native_extraction_type_equations)
+
 let native_public_types = Summary.ref ~name:"soma-native-public-types" []
 let in_native_public_types =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public type equations"
@@ -1156,6 +1163,75 @@ let native_public_type_equations selected exports =
   if not(List.exists(fun info->Constant.CanOrd.equal info.SomaForeign.public_owner main)!native_public_assemblies)
   then native_public_assembly selected [];
   Lib.add_leaf(in_native_public_types SomaForeign.{types_owner=main;types_equations=equations})
+
+(* A checked external equation changes no Source term or extracted value.
+   Its native target is checked again by OCaml against the complete declaration. *)
+let native_extraction_type_equation selected source target =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace && Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a type equation needs a transparent Source main")
+    |_->native_error "a type equation belongs to its Source main"in
+  let reference=Nametab.locate source in
+  let ind=match reference with GlobRef.IndRef((m,_)as ind)when ModPath.to_string(MutInd.modpath m)<>namespace->ind
+    |_->native_error "a type equation reuses an imported checked inductive"in
+  let module Refs=Set.Make(GlobRef.CanOrd)in
+  let visited=ref Refs.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit(GlobRef.ConstRef c)
+    |Ind(i,_)->visit(GlobRef.IndRef i)|Construct((i,_),_)->visit(GlobRef.IndRef i)|_->());Constr.iter term t
+  and visit r=if not(Refs.mem r !visited)then begin visited:=Refs.add r !visited;
+    match r with GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+      (match cb.const_body with Declarations.Def body->term body|_->())|_->()end in
+  visit(GlobRef.ConstRef owner);
+  if not(Refs.mem reference !visited)then native_error "a type equation must be a checked dependency of main";
+  let target=native_path target in
+  let parts=String.split_on_char '.'target in
+  (match List.rev parts with label::(_::_ as modules)->
+    ignore(ocaml_name ~definition:"type equation target" label);
+    if not(List.for_all(fun part->is_module_name part&&part.[0]>='A'&&part.[0]<='Z')modules)then
+      native_error "a type equation target needs uppercase module qualifications";
+    if List.hd parts=String.capitalize_ascii namespace then native_error "a type equation cannot refer to its containing module"
+   |_->native_error "a type equation needs a qualified native target");
+  if List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.reuse_owner &&
+    GlobRef.CanOrd.equal reference info.reuse_reference)!native_extraction_type_equations then
+    native_error "duplicate extraction type equation";
+  let mib,mip=Inductive.lookup_mind_specif env ind in
+  if Array.length mib.Declarations.mind_packets<>1 || mip.mind_nrealargs<>0 || mib.mind_finite=Declarations.CoFinite then
+    native_error "type equations need a single unindexed inductive block";
+  let rec parameters count env typ=if count=0 then env,typ else
+    match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+    |Prod(na,domain,rest)when is_sort env sigma domain->
+      (match EConstr.kind sigma(Reductionops.whd_all env sigma domain)with
+       |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->()
+       |_->native_error "type equation parameters must be runtime types");
+      parameters(count-1)(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
+    |_->native_error "type equation parameters must be runtime types"in
+  let runtime_sort env typ=match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+    |Sort sort when not(EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort)->()
+    |_->native_error "type equations need runtime types"in
+  let parameter_env,arity=parameters mib.mind_nparams env(EConstr.of_constr mip.mind_user_arity)in
+  runtime_sort parameter_env arity;
+  let rec fields env typ=match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+    |Prod(na,domain,rest)->
+      let sort=Retyping.get_sort_of env sigma domain in
+      if is_sort env sigma domain||EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
+        native_error "type equations cannot contain erased proof or type payloads";
+      if not(EConstr.Vars.noccurn sigma 1 rest)then native_error "type equation payloads cannot depend on runtime values";
+      let rec mono env t=let t=Reductionops.whd_all env sigma t in
+        (match EConstr.kind sigma t with
+        |Prod(_,domain,_)when is_sort env sigma domain->native_error "type equation fields must be monomorphic"|_->());
+        EConstr.iter_with_full_binders env sigma EConstr.push_rel mono env t in
+      mono env domain;
+      fields(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)rest
+    |_->()in
+  Array.iter(fun constructor->let env,typ=parameters mib.mind_nparams env(EConstr.of_constr constructor)in fields env typ)mip.mind_user_lc;
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_extraction_type_equation SomaForeign.{reuse_owner=owner;reuse_namespace=namespace;
+    reuse_source=source;reuse_reference=reference;reuse_symbol=Libnames.string_of_path(Nametab.path_of_global reference);
+    reuse_target=target;reuse_parameters=mib.mind_nparams})
 
 let native_external_family name parameters path =
   ignore (native_context ());

@@ -174,6 +174,11 @@ VERNAC ARGUMENT EXTEND native_static_application
 | [ "Apply" string(name) ":=" reference(source) "With" "[" reference_list_sep(args, ";") "]" ] -> { name,source,args }
 END
 
+VERNAC COMMAND EXTEND SomaOCamlNativeTypeEquation CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Type" "Equation" reference(owner) "Reuse" reference(source) "As" string(target) ] ->
+ { Soma_ocaml.native_extraction_type_equation owner source target }
+END
+
 VERNAC COMMAND EXTEND SomaOCamlNativeAssembly CLASSIFIED AS SIDEFF
 | [ "OCaml" "Native" "Assembly" reference(source) "As" string(pattern) ] ->
  { Soma_ocaml.native_assembly source pattern }

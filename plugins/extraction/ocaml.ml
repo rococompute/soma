@@ -623,7 +623,18 @@ let pp_equiv table param_list name inst = function
       str " = " ++ pp_parameters param_list ++ str (ren^".") ++ name
 
 
-let pp_one_ind table prefix inst ip_equiv pl name cnames ctyps =
+let pp_reused_equiv table variables name reference fallback =
+  match List.find_opt(fun info->GlobRef.CanOrd.equal reference.glob info.SomaForeign.reuse_reference)
+    !SomaForeign.active_extraction_type_equations with
+  |None->pp_equiv table variables name reference.inst fallback
+  |Some info->
+    if List.length variables<>info.reuse_parameters then CErrors.user_err(str "Type equation parameter erasure differs from its checked Source.");
+    let printed=Pp.string_of_ppcmds name in
+    SomaForeign.printed_extraction_type_equations:=
+      (reference.glob,State.get_phase table<>Impl,printed,List.length variables):: !SomaForeign.printed_extraction_type_equations;
+    str " = "++pp_parameters variables++str info.reuse_target
+
+let pp_one_ind table prefix reference ip_equiv pl name cnames ctyps =
   let pl = rename_tvars keywords pl in
   let pp_constructor i typs =
     (if Int.equal i 0 then mt () else fnl ()) ++
@@ -633,7 +644,7 @@ let pp_one_ind table prefix inst ip_equiv pl name cnames ctyps =
             (fun () -> spc () ++ str "* ") (pp_type table true pl) typs)
   in
   pp_parameters pl ++ str prefix ++ name ++
-  pp_equiv table pl name inst ip_equiv ++ str " =" ++
+  pp_reused_equiv table pl name reference ip_equiv ++ str " =" ++
   if Int.equal (Array.length ctyps) 0 then str " |"
   else fnl () ++ v 0 (prvecti pp_constructor ctyps)
 
@@ -659,7 +670,7 @@ let pp_record table fields ip_equiv packet =
   let l = List.combine fieldnames packet.ip_types.(0) in
   let pl = rename_tvars keywords packet.ip_vars in
   str "type " ++ pp_parameters pl ++ name ++
-  pp_equiv table pl name ind.inst ip_equiv ++ str " = { "++
+  pp_reused_equiv table pl name ind ip_equiv ++ str " = { "++
   hov 0 (prlist_with_sep (fun () -> str ";" ++ spc ())
            (fun (p,t) -> p ++ str " : " ++ pp_type table true pl t) l)
   ++ str " }"
@@ -695,9 +706,8 @@ let pp_ind table co ind =
       if is_custom ip then pp (i+1) kwd
       else if p.ip_logical then pp_logical_ind p ++ pp (i+1) kwd
       else
-        let inst = p.ip_typename_ref.inst in
         kwd ++ (if co then pp_coind p.ip_vars names.(i) else mt ()) ++
-        pp_one_ind table prefix inst ip_equiv p.ip_vars names.(i) cnames.(i) p.ip_types ++
+        pp_one_ind table prefix ip ip_equiv p.ip_vars names.(i) cnames.(i) p.ip_types ++
         pp (i+1) nextkwd
   in
   pp 0 initkwd

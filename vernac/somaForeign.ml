@@ -876,3 +876,21 @@ let native_public_assembly_identity info =
   (match public_type_equations info.public_owner with []->""|equations->
     "\npublic-type-equations-v1\n"^String.concat "\n"(List.map(fun item->
       Printf.sprintf "%S %s %d" item.equation_name item.equation_symbol item.equation_arity)equations))
+
+(* In-place equations affect only the selected client's extracted declaration. *)
+type native_extraction_type_equation = {
+  reuse_owner : Names.Constant.t;
+  reuse_namespace : string;
+  reuse_source : string;
+  reuse_reference : Names.GlobRef.t;
+  reuse_symbol : string;
+  reuse_target : string;
+  reuse_parameters : int;
+}
+let native_extraction_type_equations : (unit -> native_extraction_type_equation list) ref = ref(fun()->[])
+let active_extraction_type_equations : native_extraction_type_equation list ref = ref []
+let printed_extraction_type_equations : (Names.GlobRef.t * bool * string * int) list ref = ref []
+let extraction_type_equation_identity info = String.concat "\n"
+ ["native-extraction-type-equation-v1";info.reuse_namespace;info.reuse_symbol;info.reuse_target;string_of_int info.reuse_parameters]
+let extraction_type_equations owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.reuse_owner)
+ (!native_extraction_type_equations()))
