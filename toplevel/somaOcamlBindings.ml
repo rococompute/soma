@@ -839,6 +839,15 @@ let bindings_ml ?(interface=false) modules =
   let prefix_scopes=match !SomaForeign.native_runtime_references,main_reference()with
     |Some _,GlobRef.ConstRef owner->(match SomaForeign.lexical_environment owner with None->[]|Some info->info.environment_prefix)
     |_->[]in
+  (* Application argument schemas may select additional foreign modules solely
+     for their types. Only extracted runtime references belong in the private
+     lexical binding record; argument values are emitted outside that record. *)
+  let application_scope=match main_reference()with
+    |GlobRef.ConstRef owner->List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.static_owner &&
+      List.exists(fun item->match item.SomaForeign.static_export_kind with
+        SomaForeign.Static_application _->true|_->false)info.static_exports)
+        (!SomaForeign.native_static_assemblies())
+    |_->false in
   let prefix_namespaces=List.map(fun(_,namespace,_)->namespace)prefix_scopes in
   let prefix_modules=List.filter_map(fun(kind,namespace,_)->if kind="modules"then Some namespace else None)prefix_scopes in
   let aliases=String.concat ""(List.map(native_module_scope_bindings ~interface)
@@ -854,7 +863,7 @@ let bindings_ml ?(interface=false) modules =
           | SomaForeign.OCamlNativeBindingProjection _ | SomaForeign.OCamlNativeSourceTypeReexport _ | SomaForeign.OCamlNativeValueReexport _ | SomaForeign.OCamlNativeModuleInclude _ | SomaForeign.OCamlNativeAlgebraicReexport _ | SomaForeign.OCamlNativeModuleAlias _ | SomaForeign.OCamlNativeOpenVariant _ | SomaForeign.OCamlNativeParametricCallable _ | SomaForeign.OCamlNativeParametricVariant _ | SomaForeign.OCamlNativeExternalFamily _ | SomaForeign.OCamlNativeImmutableRecord _ | SomaForeign.OCamlType _ | SomaForeign.OCamlNativeType _ | SomaForeign.OCamlNativeAlgebraic _ | SomaForeign.OCamlNativeOwnedRecord _ | SomaForeign.OCamlNativeOwnedVariant _ | SomaForeign.OCamlNativeCallableType _ -> None
           | SomaForeign.OCamlNativeCallback n ->
             if List.mem n.namespace postlude_namespaces ||
-              (List.mem n.namespace prefix_namespaces && match !SomaForeign.native_runtime_references with None->false|Some refs->
+              ((application_scope||List.mem n.namespace prefix_namespaces) && match !SomaForeign.native_runtime_references with None->false|Some refs->
                 not(List.exists(GlobRef.CanOrd.equal(GlobRef.ConstRef reference))refs))then None
             else Some(native_callback_declaration ~interface ~data_owners ~inline_publications m n)
           | SomaForeign.OCamlValue (ty, labels) ->
@@ -1140,12 +1149,25 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       let _,_,name,arity=match candidates with [entry]->entry
         |_->error Pp.(str "static export is absent or ambiguous in the fresh extraction: "++str item.static_export_symbol)in
       name,arity in
+    let applied item=
+      let name,_=allocated item in
+      let target=info.static_module^"."^name in
+      match item.SomaForeign.static_export_kind with
+      |SomaForeign.Static_application(arguments,_)->
+        let inline_publications=match SomaForeign.lexical_environment info.static_owner with None->[]|Some environment->
+          List.filter_map(fun(kind,namespace,_)->if kind="values"then Some namespace else None)environment.environment_prefix in
+        target^String.concat ""(List.map(fun callback->
+          let m=List.find(fun(m:SomaForeign.ocaml_module)->List.exists(fun(_,_,item)->match item with
+            |SomaForeign.OCamlNativeCallback other->other.namespace=callback.SomaForeign.namespace&&other.name=callback.name|_->false)m.items)modules in
+          let _,value=native_binding ~inline_publications ~value:true m callback in " ("^value^")")arguments)
+      |_->target in
     let exported item=
       let name,arity=allocated item in
       let target=info.static_module^"."^name in
       match item.static_export_kind with
       |SomaForeign.Static_value->"let "^item.static_export_name^" = "^target^"\n"
       |Static_projection _->"let "^item.static_export_name^" = "^target^"\n"
+      |Static_application _->"let "^item.static_export_name^" = "^applied item^"\n"
       |Static_unpack->"module "^item.static_export_name^" = (val "^target^")\n"
       |Static_type expected->
         if arity<>expected then error Pp.(str "static type parameter erasure differs from its checked declaration");
@@ -1193,7 +1215,7 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         |_->None)info.static_exports)in
       let results=List.concat_map(fun item->match item.SomaForeign.static_export_kind with
         |SomaForeign.Static_projection pattern->SomaForeign.native_export_names pattern
-        |_->let name,_=allocated item in [info.static_module^"."^name])info.static_exports in
+        |_->[applied item])info.static_exports in
       let environment=SomaForeign.lexical_environment info.static_owner in
       let module_application(name,path,args)="module "^name^" = "^path^String.concat ""(List.map(fun arg->" ("^arg^")")args)in
       let prefix,body_modules,local_modules=match environment with None->"","",""|Some environment->

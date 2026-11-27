@@ -724,7 +724,7 @@ let native_assembly source text =
   Lib.add_leaf(in_native_assembly SomaForeign.{assembly_owner=owner;assembly_namespace=namespace;
     assembly_source=source;assembly_value=value;assembly_pattern=parsed;assembly_pattern_text=text})
 
-let native_static_assembly selected name exports =
+let native_static_assembly ?(applications=[]) selected name exports =
   let namespace=native_namespace()in
   let env=Global.env()and sigma=Evd.from_env(Global.env())in
   let own_constant reference=match Nametab.locate reference with
@@ -787,6 +787,8 @@ let native_static_assembly selected name exports =
       EConstr.iter_with_full_binders env sigma EConstr.push_rel monomorphic env term in
     monomorphic env signature.(0);
     let arguments=match callback.SomaForeign.operation with
+      |SomaForeign.NativeExternalException path when path=public && callback.arguments=["unit"]&&callback.labels=[None]&&
+          callback.result="Soma_handles.exception_value"->[]
       |SomaForeign.NativeConstructorBuild(path,arity)when path=public &&
           callback.result="Soma_handles.exception_value"->
         if arity=0 then []else callback.arguments
@@ -833,7 +835,8 @@ let native_static_assembly selected name exports =
       |_->assert false in
     let category,names=match kind with SomaForeign.Static_type _->"type",[public]
       |Static_value->"value",[public]|Static_unpack->"module",[public]
-      |Static_projection pattern->"value",SomaForeign.native_export_names pattern in
+      |Static_projection pattern->"value",SomaForeign.native_export_names pattern
+      |Static_application _->assert false in
     List.iter(fun public->
       if List.mem(category,public)!used then native_error "duplicate static public name";
       used:=(category,public):: !used)names;
@@ -841,6 +844,49 @@ let native_static_assembly selected name exports =
       static_export_reference=GlobRef.ConstRef c;
       static_export_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef c))})exports in
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  let applications=List.map(fun(public,function_,inputs)->
+    public_identifier public;
+    if List.mem("value",public)!used then native_error "duplicate static public name";
+    used:=("value",public):: !used;
+    let fn=own_constant function_ in
+    if Constant.CanOrd.equal fn main||not(Constants.mem fn !visited)then native_error "an applied static function must be a dependency of main";
+    let sigma=ref(Evd.from_env env)in
+    let arguments=List.map(fun input->
+      let c=match Nametab.locate input with GlobRef.ConstRef c when Constants.mem c !referenced->c
+        |_->native_error "an applied input must be a checked dependency of main"in
+      let callback=match Cmap_env.find_opt c !bindings with
+        |Some{item=SomaForeign.OCamlNativeCallback info;_}when info.arguments=["unit"]&&info.labels=[None]->info
+        |_->native_error "an applied input needs a positional native unit getter"in
+      (match callback.operation with SomaForeign.NativeExternalConstant _|NativePublishedValue(_,Some _)|NativeProjectedValue(_,_,Some _)|NativePublishedProjection(_,_,Some _)->()
+       |_->native_error "an applied input borrows an already available native value");
+      let typ=EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type in
+      let head,args=EConstr.decompose_app !sigma(Reductionops.whd_betaiotazeta env !sigma typ)in
+      if Array.length args<>2||not(EConstr.isRefX env !sigma(Rocqlib.lib_ref "soma.native.callback")head)then native_error "an applied input must be monomorphic";
+      callback,args.(1))inputs in
+    let rec apply typ=function
+      |[]->typ
+      |(_,actual)::rest as args->match EConstr.kind !sigma(Reductionops.whd_all env !sigma typ)with
+        |Prod(_,domain,result)when is_sort env !sigma domain->
+          let next,parameter=Evarutil.new_evar env !sigma domain in sigma:=next;
+          apply(EConstr.Vars.subst1 parameter result)args
+        |Prod(_,domain,result)->
+          if not(EConstr.Vars.noccurn !sigma 1 result)then native_error "an applied result cannot depend on a runtime value";
+          (try sigma:=Evarconv.unify env !sigma Conversion.CONV domain actual
+           with Pretype_errors.PretypeError _|Evarconv.UnableToUnify _->native_error "applied input differs from the checked function domain");
+          apply(EConstr.Vars.subst1 EConstr.mkProp result)rest
+        |_->native_error "too many inputs for applied static function"in
+    let result=apply(EConstr.of_constr(Environ.lookup_constant fn env).Declarations.const_type)arguments in
+    let rec mono env typ=
+      let head,_=EConstr.decompose_app !sigma typ in
+      let known=match EConstr.kind !sigma head with Const(c,_)->Cmap_env.mem c !bindings|_->false in
+      let typ=if known then typ else Reductionops.whd_all env !sigma typ in
+      (match EConstr.kind !sigma typ with Prod(_,domain,_)when is_sort env !sigma domain->native_error "applied static results must be monomorphic"|_->());
+      EConstr.iter_with_full_binders env !sigma EConstr.push_rel mono env typ in
+    mono env result;
+    let signature=try ocaml_type env !sigma []result with Not_ocaml why->CErrors.user_err(str "OCaml Native applied result: "++why)in
+    SomaForeign.{static_export_kind=Static_application(List.map fst arguments,signature);static_export_name=public;
+      static_export_reference=GlobRef.ConstRef fn;static_export_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef fn))})applications in
+  let exports=exports@applications in
   Lib.add_leaf(in_native_static_assembly SomaForeign.{static_owner=main;static_namespace=namespace;
     static_source=source;static_module=name;static_exports=exports});
   if exceptions<>[]then Lib.add_leaf(in_native_static_exception_scope SomaForeign.{
@@ -856,7 +902,7 @@ let native_lexical_scope selected opens functor_ =
   if SomaForeign.lexical_scope owner<>None then native_error "duplicate lexical assembly scope";
   if SomaForeign.static_postlude owner<>None then native_error "an ordinary static postlude cannot become a lexical scope";
   if List.exists(fun item->match item.SomaForeign.static_export_kind with
-      |SomaForeign.Static_value|SomaForeign.Static_projection _->false|_->true)assembly.static_exports then
+      |SomaForeign.Static_value|SomaForeign.Static_projection _|SomaForeign.Static_application _->false|_->true)assembly.static_exports then
     native_error "a lexical assembly publishes values without escaping types or modules";
   (* A let-module expression is expansive in OCaml. Do not silently weaken
      a polymorphic Source export through the native value restriction. *)
@@ -869,8 +915,9 @@ let native_lexical_scope selected opens functor_ =
       native_error "lexical publication cannot generalize a polymorphic value; keep its static assembly scope"
      |_->());
     EConstr.iter_with_full_binders env sigma EConstr.push_rel monomorphic env typ in
-  List.iter(fun item->match item.SomaForeign.static_export_reference with
-    |GlobRef.ConstRef c->monomorphic env(EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type)
+  List.iter(fun item->match item.SomaForeign.static_export_kind,item.static_export_reference with
+    |SomaForeign.Static_application _,_->()
+    |_,GlobRef.ConstRef c->monomorphic env(EConstr.of_constr(Environ.lookup_constant c env).Declarations.const_type)
     |_->assert false)assembly.static_exports;
   let module_name name =
     if not(is_module_name name&&name.[0]>='A'&&name.[0]<='Z')||String.contains name '.'then

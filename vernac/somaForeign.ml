@@ -752,6 +752,7 @@ let static_exceptions owner =
 
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
   | Static_projection of native_export_pattern
+  | Static_application of native_callback list * string
 type native_static_export = {
   static_export_kind : native_static_export_kind;
   static_export_name : string;
@@ -816,7 +817,9 @@ let native_static_assembly_identity info =
       let kind,name=match item.static_export_kind with Static_value->"value",Printf.sprintf "%S"item.static_export_name
         |Static_type arity->"type "^string_of_int arity,Printf.sprintf "%S"item.static_export_name
         |Static_unpack->"module",Printf.sprintf "%S"item.static_export_name
-        |Static_projection pattern->"projection",native_export_identity pattern in
+        |Static_projection pattern->"projection",native_export_identity pattern
+        |Static_application(arguments,signature)->"application",String.concat "\n"
+          ([Printf.sprintf "%S"item.static_export_name;signature] @ List.map(fun callback->native_identity(OCamlNativeCallback callback))arguments)in
       String.concat " "[kind;name;item.static_export_symbol])info.static_exports) ^
   (match static_exceptions info.static_owner with []->""|exceptions->
     "\nstatic-exceptions-v1\n"^String.concat "\n"(List.map(fun item->

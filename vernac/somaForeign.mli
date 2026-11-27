@@ -425,6 +425,7 @@ val static_exceptions : Names.Constant.t -> native_static_exception list
 
 type native_static_export_kind = Static_value | Static_type of int | Static_unpack
   | Static_projection of native_export_pattern
+  | Static_application of native_callback list * string
 type native_static_export = {
   static_export_kind : native_static_export_kind;
   static_export_name : string;
