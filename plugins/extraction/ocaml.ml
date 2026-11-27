@@ -778,12 +778,23 @@ let pp_ind_brands ~signature table ind =
     ind.ind_packets
   |> Array.to_list |> prlist identity
 
+let pp_native_record_view table ~signature reference variables =
+  match List.filter(fun info->GlobRef.CanOrd.equal reference.glob info.SomaForeign.view_reference)!SomaForeign.active_extraction_record_views with
+  |[]->None
+  |[info]->
+    if variables<>[]then CErrors.user_err(str "A native record view cannot erase type parameters.");
+    let name=Pp.string_of_ppcmds(pp_global_name table Type reference)in
+    SomaForeign.printed_extraction_record_views:=(reference.glob,signature,name):: !SomaForeign.printed_extraction_record_views;
+    Some(str(SomaForeign.native_source_type_reexport_ml {info.view_declaration with source_type_name=name}))
+  |_->CErrors.user_err(str "Ambiguous native record view.")
+
 let pp_decl table declaration =
   let output=match declaration with
     | Dtype (r,_,_) when is_inline_custom r -> mt ()
     | Dterm (r,_,_) when is_inline_custom r -> mt ()
     | Dind i -> pp_mind table i ++ pp_ind_brands ~signature:false table i
     | Dtype (r, l, t) ->
+        (match pp_native_record_view table ~signature:false r l with Some view->view|None->
         let name = pp_global_name table Type r in
         let l = rename_tvars keywords l in
         let ids, def =
@@ -795,7 +806,7 @@ let pp_decl table declaration =
             if t == Taxiom then str " (* AXIOM TO BE REALIZED *)"
             else str " =" ++ spc () ++ pp_type table false l t
         in
-        hov 2 (str "type " ++ ids ++ name ++ def)
+        hov 2 (str "type " ++ ids ++ name ++ def))
     | Dterm (r, a, t) ->
         let def =
           (* If it it is an foreign custom, set the def to ': type =  <quote>foreign_fun_name<quote> '.
@@ -883,6 +894,7 @@ let pp_spec table = function
       let name = pp_global_name table Term r in
       hov 2 (str "val " ++ name ++ str " :" ++ spc () ++ def)
   | Stype (r,vl,ot) ->
+      (match pp_native_record_view table ~signature:true r vl with Some view->view|None->
       let name = pp_global_name table Type r in
       let l = rename_tvars keywords vl in
       let ids, def =
@@ -896,7 +908,7 @@ let pp_spec table = function
             | Some Taxiom -> ids, str " (* AXIOM TO BE REALIZED *)"
             | Some t -> ids, str " =" ++ spc () ++ pp_type table false l t
       in
-      hov 2 (str "type " ++ ids ++ name ++ def)
+      hov 2 (str "type " ++ ids ++ name ++ def))
 
 let rec pp_specif table = function
   | (_,Spec (Sval _ as s)) -> pp_spec table s

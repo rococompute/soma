@@ -930,3 +930,21 @@ let extraction_type_equation_identity info = String.concat "\n"
  ["native-extraction-type-equation-v1";info.reuse_namespace;info.reuse_symbol;info.reuse_target;string_of_int info.reuse_parameters]
 let extraction_type_equations owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.reuse_owner)
  (!native_extraction_type_equations()))
+
+type native_extraction_record_view = {
+  view_owner : Names.Constant.t;
+  view_namespace : string;
+  view_source : string;
+  view_reference : Names.GlobRef.t;
+  view_symbol : string;
+  view_marker : string;
+  view_declaration : native_source_type_reexport;
+}
+let native_extraction_record_views : (unit -> native_extraction_record_view list) ref = ref(fun()->[])
+let active_extraction_record_views : native_extraction_record_view list ref = ref []
+let printed_extraction_record_views : (Names.GlobRef.t * bool * string) list ref = ref []
+let extraction_record_view_identity info = String.concat "\n"
+ ["native-extraction-record-view-v1";info.view_namespace;info.view_symbol;info.view_marker;
+  SomaMerkle.string(native_source_type_identity info.view_declaration)]
+let extraction_record_views owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.view_owner)
+ (!native_extraction_record_views()))

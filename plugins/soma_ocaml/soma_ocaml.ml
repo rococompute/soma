@@ -1232,6 +1232,49 @@ let native_public_modules selected exports =
   then native_public_assembly selected [];
   Lib.add_leaf(in_native_public_modules SomaForeign.{modules_public_owner=owner;modules_public_exports=exports})
 
+let native_extraction_record_views = Summary.ref ~name:"soma-native-extraction-record-views" []
+let in_native_extraction_record_view =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native extraction record view"
+    ~cache:(fun info->native_extraction_record_views:=info:: !native_extraction_record_views;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_extraction_record_views:=(fun()-> !native_extraction_record_views)
+let native_extraction_record_view selected original publication =
+  let namespace=native_namespace()in
+  let env=Global.env()in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace&&Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a record view needs a transparent Source main")
+    |_->native_error "a record view belongs to its Source main"in
+  let reference=match Nametab.locate original with GlobRef.ConstRef c->c
+    |_->native_error "a record view replaces a native external type alias"in
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let visited=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if not(Constants.mem c !visited)then begin
+    visited:=Constants.add c !visited;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    if ModPath.to_string(Constant.modpath c)=namespace then
+      match cb.const_body with Declarations.Def body->term body|_->()end in
+  visit owner;
+  if not(Constants.mem reference !visited)then native_error "a record view alias must be a checked dependency of main";
+  let target=match Cmap_env.find_opt reference !bindings with
+    |Some{item=SomaForeign.OCamlNativeType path;_}->path
+    |_->native_error "a record view needs a monomorphic native external type alias"in
+  let marker=match Nametab.locate publication with GlobRef.ConstRef c->c
+    |_->native_error "a record view needs a checked record publication"in
+  let declaration=match Cmap_env.find_opt marker !bindings with
+    |Some{item=SomaForeign.OCamlNativeSourceTypeReexport info;_}->
+      (match info.source_type_body with SomaForeign.Source_record _ when info.source_type_parameters=[]->info
+       |_->native_error "a record view needs a complete monomorphic record publication")
+    |_->native_error "a record view needs a checked record publication"in
+  if declaration.source_type_target<>target then native_error "a record view's nominal target differs from the original alias";
+  if List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.view_owner&&
+    GlobRef.CanOrd.equal info.view_reference(GlobRef.ConstRef reference))!native_extraction_record_views then
+    native_error "duplicate extraction record view";
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_extraction_record_view SomaForeign.{view_owner=owner;view_namespace=namespace;view_source=source;
+    view_reference=GlobRef.ConstRef reference;view_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef reference));
+    view_marker=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef marker));view_declaration=declaration})
+
 let native_public_type_equations selected exports =
   let namespace=native_namespace()in
   let env=Global.env()and sigma=Evd.from_env(Global.env())in

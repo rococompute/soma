@@ -1071,6 +1071,9 @@ let selected_native_public_assemblies () =
   |_->[]
 
 let prepare_native_static_extraction () =
+  SomaForeign.active_extraction_record_views:=(match main_reference()with
+    |GlobRef.ConstRef owner->SomaForeign.extraction_record_views owner|_->[]);
+  SomaForeign.printed_extraction_record_views:=[];
   SomaForeign.active_public_records:=List.concat_map(fun info->SomaForeign.public_records info.SomaForeign.public_owner)(selected_native_public_assemblies());
   SomaForeign.native_public_record_declarations:=[];
   SomaForeign.active_extraction_type_equations:=(match main_reference()with
@@ -1087,6 +1090,7 @@ let prepare_native_static_extraction () =
       (SomaForeign.public_type_equations info.SomaForeign.public_owner))(selected_native_public_assemblies())in
   let requests=requests @ List.concat_map(fun info->
     [info.SomaForeign.record_public_receiver,false;info.record_public_type,true])!SomaForeign.active_public_records in
+  let requests=requests @ List.map(fun info->info.SomaForeign.view_reference,true)!SomaForeign.active_extraction_record_views in
   let requests=List.fold_left(fun kept(reference,type_) ->
     if List.exists(fun(other,kind)->GlobRef.CanOrd.equal reference other&&type_=kind)kept
     then kept else kept@[reference,type_])[]requests in
@@ -1341,6 +1345,24 @@ let write_type_equations ~file ~read_source ~program ~interface =
     ["native_type_equations.manifest"]
   end
 
+let write_record_views ~file ~read_source ~program ~interface =
+  let views= !SomaForeign.active_extraction_record_views in
+  if views=[]then []else begin
+    let rows=List.map(fun info->
+      let printed signature=List.filter_map(fun(reference,kind,name)->
+        if signature=kind&&GlobRef.CanOrd.equal reference info.SomaForeign.view_reference then Some name else None)
+        !SomaForeign.printed_extraction_record_views |> List.sort_uniq String.compare in
+      let name=match printed false,printed true with [a],[b]when a=b->a
+        |_->error Pp.(str "record view is absent, erased, or differs between fresh implementation/interface")in
+      Printf.sprintf "%S %S %S %S %S %S %S %S %S %S\n"
+        (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.view_owner)))
+        info.view_source(SomaMerkle.string(read_source(SomaImport.resolve_project_file info.view_source)))
+        info.view_symbol info.view_marker info.view_declaration.source_type_target name
+        (SomaMerkle.string program)(SomaMerkle.string interface)(SomaMerkle.string(SomaForeign.extraction_record_view_identity info)))views in
+    file "native_record_views.manifest"("soma-native-record-views-v1\n"^String.concat ""rows);
+    ["native_record_views.manifest"]
+  end
+
 
 let write_files ~file ?c_file ~read_file ~directives modules =
   file "soma_nat.ml" soma_nat_ml;
@@ -1542,6 +1564,11 @@ let write_files ~file ?c_file ~read_file ~directives modules =
     Printf.sprintf "%S %S %S %S\n" symbol info.reuse_namespace
       (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.reuse_source)))
       (SomaForeign.extraction_type_equation_identity info))reuse in
+  let entries=entries @ List.map(fun info->
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.SomaForeign.view_owner))in
+    Printf.sprintf "%S %S %S %S\n" symbol info.view_namespace
+      (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.view_source)))
+      (SomaForeign.extraction_record_view_identity info))!SomaForeign.active_extraction_record_views in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
   (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @

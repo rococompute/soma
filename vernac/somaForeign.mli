@@ -552,3 +552,18 @@ val active_extraction_type_equations : native_extraction_type_equation list ref
 val printed_extraction_type_equations : (Names.GlobRef.t * bool * string * int) list ref
 val extraction_type_equation_identity : native_extraction_type_equation -> string
 val extraction_type_equations : Names.Constant.t -> native_extraction_type_equation list
+
+type native_extraction_record_view = {
+  view_owner : Names.Constant.t;
+  view_namespace : string;
+  view_source : string;
+  view_reference : Names.GlobRef.t;
+  view_symbol : string;
+  view_marker : string;
+  view_declaration : native_source_type_reexport;
+}
+val native_extraction_record_views : (unit -> native_extraction_record_view list) ref
+val active_extraction_record_views : native_extraction_record_view list ref
+val printed_extraction_record_views : (Names.GlobRef.t * bool * string) list ref
+val extraction_record_view_identity : native_extraction_record_view -> string
+val extraction_record_views : Names.Constant.t -> native_extraction_record_view list

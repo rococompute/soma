@@ -233,7 +233,8 @@ let foreign_identity c =
       (List.find_opt(fun info->Names.Constant.CanOrd.equal c info.SomaForeign.public_owner)
         (!SomaForeign.native_public_assemblies()))in
   let identities=(match assembly with None->[]|Some identity->[identity]) @
-    List.map SomaForeign.extraction_type_equation_identity(SomaForeign.extraction_type_equations c)in
+    List.map SomaForeign.extraction_type_equation_identity(SomaForeign.extraction_type_equations c) @
+    List.map SomaForeign.extraction_record_view_identity(SomaForeign.extraction_record_views c)in
   match identities with []->base|_->
     Some(String.concat "\n"((match base with None->[]|Some b->[b])@identities))
 (* a block being hashed, should its own types mention it by name *)
