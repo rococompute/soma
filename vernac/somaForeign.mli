@@ -240,6 +240,18 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_variant_input = {
+  input_namespace : string;
+  input_name : string;
+  input_argument : int;
+  input_parameters : string list;
+  input_domains : string list;
+  input_result : string;
+  input_variant : native_variant;
+}
+val native_variant_inputs : (unit -> native_variant_input list) ref
+val variant_input : string -> string -> native_variant_input option
+
 type native_algebraic_dependencies = {
   dependencies_namespace : string;
   dependencies_group : string;

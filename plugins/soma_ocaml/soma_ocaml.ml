@@ -1910,6 +1910,47 @@ let native_value_reexport ?(binding=false) name source =
     value_namespace=namespace;value_name=label;value_source=file;value_owner=owner_name;value_module=owner_module;
     value_order=order;value_callback=callback})
 
+let native_variant_inputs = Summary.ref ~name:"soma-native-variant-inputs" []
+let in_native_variant_input =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native variant input"
+    ~cache:(fun info->native_variant_inputs:=info:: !native_variant_inputs;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_variant_inputs:=(fun()-> !native_variant_inputs)
+let native_variant_input_reexport name source argument parameters =
+  ignore(native_context());
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let owner=match Nametab.locate source with GlobRef.ConstRef c->c|_->native_error "a variant input needs a native getter"in
+  let callback=match Cmap_env.find_opt owner !bindings with
+    |Some{item=SomaForeign.OCamlNativeCallback info;_}when info.arguments=["unit"]&&info.labels=[None]->info
+    |_->native_error "a variant input needs a monomorphic positional unit getter"in
+  let target=match callback.operation with SomaForeign.NativeExternalConstant path->path
+    |_->native_error "a variant input borrows an existing native function"in
+  List.iter(fun parameter->ignore(ocaml_name ~definition:"variant input parameter" parameter);
+    if not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)parameter)then native_error "a variant input parameter needs a plain identifier";
+    if parameter="_"||parameter=target then native_error "a variant input parameter must be bound without shadowing its target")parameters;
+  if List.length(List.sort_uniq String.compare parameters)<>List.length parameters then native_error "duplicate variant input parameter";
+  let typ=EConstr.of_constr(Environ.lookup_constant owner env).Declarations.const_type in
+  let head,args=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
+  if Array.length args<>2||not(EConstr.isRefX env sigma(Rocqlib.lib_ref "soma.native.callback")head)then
+    native_error "a variant input needs a checked callback descriptor";
+  let rec domains before typ=match EConstr.kind sigma typ with
+    |Prod(na,domain,rest)->
+      if na.Context.binder_name<>Anonymous||is_sort env sigma domain||not(EConstr.Vars.noccurn sigma 1 rest)then
+        native_error "variant inputs need positional, nondependent native function arrows";
+      domains(before@[domain])(EConstr.Vars.subst1 EConstr.mkProp rest)
+    |_->before,typ in
+  let domains,result=domains[]args.(1)in
+  if List.length domains<>List.length parameters||argument<0||argument>=List.length domains then
+    native_error "variant input position/parameters differ from the native function";
+  let variant=match EConstr.kind sigma(List.nth domains argument)with
+    |Const(c,_)->(match Cmap_env.find_opt c !bindings with
+      |Some{item=SomaForeign.OCamlNativeOwnedVariant v;_}->v
+      |_->native_error "a variant input needs a checked closed polymorphic variant domain")
+    |_->native_error "a variant input needs a checked closed polymorphic variant domain"in
+  let input_domains=List.map(ocaml_type env sigma [])domains and input_result=ocaml_type env sigma []result in
+  native_value_reexport ~binding:true name source;
+  Lib.add_leaf(in_native_variant_input SomaForeign.{input_namespace=native_namespace();input_name=Id.to_string name;
+    input_argument=argument;input_parameters=parameters;input_domains;input_result;input_variant=variant})
+
 let native_binding_projection marker source text =
   ignore(native_context());
   let env=Global.env()and sigma=Evd.from_env(Global.env())in

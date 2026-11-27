@@ -78,6 +78,9 @@ VERNAC ARGUMENT EXTEND native_signature PRINTED BY { pr_native_signature }
 END
 
 VERNAC COMMAND EXTEND SomaOCamlNativeReexport CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Reexport" "Variant" "Input" ident(name) ":=" reference(source)
+ "At" natural(argument) "Parameters" "[" ne_string_list_sep(parameters, ";") "]" ] ->
+ { Soma_ocaml.native_variant_input_reexport name source argument parameters }
 | [ "OCaml" "Native" "Reexport" "Exception" ident(marker) ":=" reference(owner) "Constructor" string(constructor) "As" string(name) ] ->
  { Soma_ocaml.native_exception_reexport marker owner constructor name }
 | [ "OCaml" "Native" "Reexport" "Projection" ident(marker) ":=" reference(source) "As" string(pattern) ] ->

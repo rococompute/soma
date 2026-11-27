@@ -224,6 +224,18 @@ type native_value_reexport = {
   value_callback : native_callback;
 }
 
+type native_variant_input = {
+  input_namespace : string;
+  input_name : string;
+  input_argument : int;
+  input_parameters : string list;
+  input_domains : string list;
+  input_result : string;
+  input_variant : native_variant;
+}
+let native_variant_inputs : (unit -> native_variant_input list) ref = ref(fun()->[])
+let variant_input namespace name = List.find_opt(fun info->info.input_namespace=namespace&&info.input_name=name)(!native_variant_inputs())
+
 type native_algebraic_dependencies = {
   dependencies_namespace : string;
   dependencies_group : string;
@@ -475,7 +487,10 @@ let rec native_identity = function
  | OCamlNativeSourceTypeReexport info -> native_source_type_identity info
  | OCamlNativeValueReexport info ->
    String.concat "\n" ["native-value-reexport";info.value_namespace;info.value_name;
-     info.value_owner;info.value_module;string_of_int info.value_order;native_identity(OCamlNativeCallback info.value_callback)]
+     info.value_owner;info.value_module;string_of_int info.value_order;native_identity(OCamlNativeCallback info.value_callback)] ^
+   (match variant_input info.value_namespace info.value_name with None->""|Some input->
+     String.concat "\n"(["";"native-variant-input-v1";string_of_int input.input_argument] @ input.input_parameters @
+       input.input_domains @ [input.input_result;native_variant_identity input.input_variant]))
  | OCamlNativeAlgebraicReexport info ->
    String.concat "\n" ["native-algebraic-reexport";info.reexport_namespace;
      info.reexport_name;info.reexport_owner;info.reexport_target;string_of_int info.reexport_order;

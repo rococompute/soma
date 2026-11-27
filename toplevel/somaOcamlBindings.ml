@@ -755,9 +755,20 @@ let native_value_scope_ml ?(interface=false) ?publication_scope ?(inline_publica
   String.concat ""(List.map(function
    |Value_entry(_,m,info)->
     let typ,body=native_binding ?publication_scope ~inline_publications ~value:true {m with top=info.SomaForeign.value_module} info.SomaForeign.value_callback in
-    if interface then "val "^info.value_name^" : "^typ^"\n"
-    else let vars=type_variables typ in
-      "let "^info.value_name^" : "^(if vars=[]then ""else String.concat " "vars^". ")^typ^" =\n  "^body^"\n"
+    (match SomaForeign.variant_input info.value_namespace info.value_name with
+    |None->if interface then "val "^info.value_name^" : "^typ^"\n"
+      else let vars=type_variables typ in
+        "let "^info.value_name^" : "^(if vars=[]then ""else String.concat " "vars^". ")^typ^" =\n  "^body^"\n"
+    |Some input->
+      let row="[< "^String.concat " | "(List.map(fun c->"`"^c.SomaForeign.case_tag^
+        (match c.case_payload with None->""|Some payload->" of ("^payload^")"))input.input_variant.variant_cases)^" ]"in
+      let selected i=i=input.input_argument in
+      if interface then "val "^info.value_name^" : "^String.concat " -> "
+        (List.mapi(fun i typ->if selected i then row else "("^typ^")")input.input_domains @ [input.input_result])^"\n"
+      else "let "^info.value_name^" "^String.concat " "(List.mapi(fun i parameter->
+        if selected i then "("^parameter^" : "^row^")"else "("^parameter^" : "^List.nth input.input_domains i^")")input.input_parameters)^" : "^input.input_result^" = "^
+        body^" "^String.concat " "(List.mapi(fun i parameter->if selected i then
+          "("^parameter^" :> "^SomaForeign.native_variant_type input.input_variant^")"else parameter)input.input_parameters)^"\n")
    |Projection_entry(_,m,info)->
     if interface then String.concat ""(List.map(fun(name,typ)->"val "^name^" : "^typ^"\n")info.SomaForeign.projection_fields)
     else let typ,body=native_binding ?publication_scope ~inline_publications ~value:true {m with top=info.SomaForeign.projection_module} info.projection_callback in
