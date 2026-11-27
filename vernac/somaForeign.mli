@@ -490,6 +490,19 @@ val native_public_extracted_types : string list option ref
 val native_public_type_declarations : (Names.GlobRef.t * string * string) list ref
 val public_type_equations : Names.Constant.t -> native_public_type_equation list
 
+(* Flat field publications borrow an existing extracted record, without a wrapper. *)
+type native_public_record = {
+  record_public_owner : Names.Constant.t;
+  record_public_receiver : Names.GlobRef.t;
+  record_public_type : Names.GlobRef.t;
+  record_public_fields : (string * int) list;
+  record_public_symbols : string list;
+}
+val native_public_records : (unit -> native_public_record list) ref
+val public_records : Names.Constant.t -> native_public_record list
+val active_public_records : native_public_record list ref
+val native_public_record_declarations : (Names.GlobRef.t * string * string * string) list ref
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;

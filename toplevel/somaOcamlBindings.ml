@@ -1071,6 +1071,8 @@ let selected_native_public_assemblies () =
   |_->[]
 
 let prepare_native_static_extraction () =
+  SomaForeign.active_public_records:=List.concat_map(fun info->SomaForeign.public_records info.SomaForeign.public_owner)(selected_native_public_assemblies());
+  SomaForeign.native_public_record_declarations:=[];
   SomaForeign.active_extraction_type_equations:=(match main_reference()with
     |GlobRef.ConstRef owner->SomaForeign.extraction_type_equations owner|_->[]);
   SomaForeign.printed_extraction_type_equations:=[];
@@ -1083,6 +1085,8 @@ let prepare_native_static_extraction () =
         info.SomaForeign.public_applications)(selected_native_public_assemblies()) @
     List.concat_map(fun info->List.map(fun item->item.SomaForeign.equation_reference,true)
       (SomaForeign.public_type_equations info.SomaForeign.public_owner))(selected_native_public_assemblies())in
+  let requests=requests @ List.concat_map(fun info->
+    [info.SomaForeign.record_public_receiver,false;info.record_public_type,true])!SomaForeign.active_public_records in
   let requests=List.fold_left(fun kept(reference,type_) ->
     if List.exists(fun(other,kind)->GlobRef.CanOrd.equal reference other&&type_=kind)kept
     then kept else kept@[reference,type_])[]requests in
@@ -1276,11 +1280,19 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         |[(_,_,declaration)]->"\n"^declaration^"\n"
         |_->error Pp.(str "public type has no checked representation declaration")
       end)(SomaForeign.public_type_equations info.SomaForeign.public_owner))in
+    let record_fields=List.concat_map(fun record->List.map(fun(public,_)->
+      if List.mem public existing||List.exists(fun item->item.SomaForeign.application_name=public)info.public_applications then
+        error Pp.(str "public field shadows an existing extracted value: "++str public);
+      let field,typ=match List.filter(fun(reference,label,_,_)->GlobRef.CanOrd.equal reference record.SomaForeign.record_public_type&&label=public)
+        !SomaForeign.native_public_record_declarations with
+        |[(_,_,field,typ)]->field,typ|_->error Pp.(str "public field is absent or ambiguous in the fresh record representation")in
+      "\nlet "^public^" = "^name record.record_public_receiver^"."^field^"\n",
+      "\nval "^public^" : "^typ^"\n")record.record_public_fields)(SomaForeign.public_records info.public_owner)in
     let implementation=header^program^String.concat ""(List.map(fun item->
       "\nlet "^item.SomaForeign.application_name^" = "^name item.application_function^" "^
-      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations in
+      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations^String.concat ""(List.map fst record_fields) in
     let interface_=header^interface^String.concat ""(List.map(fun item->
-      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations in
+      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations^String.concat ""(List.map snd record_fields) in
     let source_hash=SomaMerkle.string(read_source(SomaImport.resolve_project_file info.public_source))in
     let layout=SomaMerkle.string(SomaForeign.native_public_assembly_identity info)in
     let contract=match List.assoc_opt owner contracts with Some h->h

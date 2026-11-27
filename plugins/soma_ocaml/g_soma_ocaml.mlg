@@ -129,6 +129,17 @@ VERNAC ARGUMENT EXTEND native_public_application
  { name,source,args }
 END
 
+VERNAC ARGUMENT EXTEND native_public_field
+ PRINTED BY { fun(name,source)->Pp.(str name++str " := "++Libnames.pr_qualid source) }
+| [ "Field" string(name) ":=" reference(source) ] -> { name,source }
+END
+
+VERNAC COMMAND EXTEND SomaOCamlNativePublicRecord CLASSIFIED AS SIDEFF
+| [ "OCaml" "Native" "Public" "Record" reference(owner) "From" reference(receiver)
+ "With" "[" ne_native_public_field_list_sep(fields, ";") "]" ] ->
+ { Soma_ocaml.native_public_record owner receiver fields }
+END
+
 VERNAC ARGUMENT EXTEND native_functor_parameter
  PRINTED BY { fun(name,signature)->Pp.(str name++str " : "++str signature) }
 | [ string(name) ":" string(signature) ] -> { name,signature }

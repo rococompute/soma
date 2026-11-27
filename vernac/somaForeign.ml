@@ -854,6 +854,19 @@ let public_type_equations owner =
   List.concat_map(fun info->if Names.Constant.CanOrd.equal owner info.types_owner
     then info.types_equations else [])(!native_public_types())
 
+(* Flat field publications borrow an existing extracted record, without a wrapper. *)
+type native_public_record = {
+  record_public_owner : Names.Constant.t;
+  record_public_receiver : Names.GlobRef.t;
+  record_public_type : Names.GlobRef.t;
+  record_public_fields : (string * int) list;
+  record_public_symbols : string list;
+}
+let native_public_records : (unit -> native_public_record list) ref = ref(fun()->[])
+let public_records owner = List.filter(fun info->Names.Constant.CanOrd.equal owner info.record_public_owner)(!native_public_records()) |> List.rev
+let active_public_records : native_public_record list ref = ref []
+let native_public_record_declarations : (Names.GlobRef.t * string * string * string) list ref = ref []
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;
@@ -873,6 +886,10 @@ let native_public_assembly_identity info =
     List.map(fun item->String.concat " "
       ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
        item.application_symbols))info.public_applications) ^
+  (match public_records info.public_owner with []->""|records->
+    "\npublic-record-fields-v1\n"^String.concat "\n"(List.map(fun record->
+      String.concat " " record.record_public_symbols^"\n"^
+      String.concat "\n"(List.map(fun(name,index)->Printf.sprintf "%S %d"name index)record.record_public_fields))records)) ^
   (match public_type_equations info.public_owner with []->""|equations->
     "\npublic-type-equations-v1\n"^String.concat "\n"(List.map(fun item->
       Printf.sprintf "%S %s %d" item.equation_name item.equation_symbol item.equation_arity)equations))

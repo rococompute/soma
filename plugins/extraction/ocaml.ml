@@ -844,6 +844,34 @@ let pp_decl table declaration =
           (item.equation_reference,item.equation_name,equation):: !SomaForeign.native_public_type_declarations)
       (SomaForeign.public_type_equations info.SomaForeign.public_owner))(!SomaForeign.native_public_assemblies())
   end;
+  if State.get_phase table=Impl then begin
+    List.iter(fun info->match declaration with
+      |Dind block->
+        (match Array.find_opt(fun packet->GlobRef.CanOrd.equal packet.ip_typename_ref.glob info.SomaForeign.record_public_type)block.ind_packets with
+        |None->()
+        |Some packet->
+          let fields=match block.ind_kind with Record fields when packet.ip_vars=[]->fields
+            |_->CErrors.user_err(str "Public fields require an unerased native record representation.")in
+          let labels=pp_fields table packet.ip_typename_ref fields in
+          let types=packet.ip_types.(0)in
+          if List.length labels<>List.length types then CErrors.user_err(str "Public record field representation differs.");
+          List.iter(fun(public,index)->
+            if index>=List.length fields then CErrors.user_err(str "Public record field was erased.");
+            let field=List.nth fields index in
+            (match field with Some r->
+              (* Every logical field must survive: an erased earlier field
+                 must never shift an exported index to a different member. *)
+              let structure=match info.record_public_type with GlobRef.IndRef ind->Structures.Structure.find(Global.env())ind|_->assert false in
+              let logical=List.nth structure.Structures.Structure.projections index in
+              (match logical.proj_body with Some c when GlobRef.CanOrd.equal r.glob(GlobRef.ConstRef c)->()
+               |_->CErrors.user_err(str "Public record projection differs after extraction."))
+             |None->CErrors.user_err(str "Public record fields need named native labels."));
+            let label=Pp.string_of_ppcmds(List.nth labels index)in
+            let typ=Pp.string_of_ppcmds(pp_type table false [] (List.nth types index))in
+            SomaForeign.native_public_record_declarations:=(info.record_public_type,public,label,typ):: !SomaForeign.native_public_record_declarations)
+            info.record_public_fields)
+      |_->())!SomaForeign.active_public_records
+  end;
   output
 
 let pp_spec table = function

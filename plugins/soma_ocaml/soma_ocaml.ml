@@ -1108,6 +1108,85 @@ let native_public_assembly selected applications =
   Lib.add_leaf(in_native_public_assembly SomaForeign.{public_owner=main;public_namespace=namespace;
     public_source=source;public_applications=applications})
 
+let native_public_records = Summary.ref ~name:"soma-native-public-records" []
+let in_native_public_record =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public record"
+    ~cache:(fun info->native_public_records:=info:: !native_public_records;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_public_records:=(fun()-> !native_public_records)
+let native_public_record selected receiver fields =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let own q=match Nametab.locate q with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "public records need transparent Source definitions")
+    |_->native_error "public records belong to their Source namespace"in
+  let owner=own selected and receiver=own receiver in
+  if Id.to_string(Constant.label owner)<>"main"then native_error "a public record must select main";
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if ModPath.to_string(Constant.modpath c)=namespace&&not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    (match cb.const_body with Declarations.Def body->term body|_->())end in
+  visit owner;
+  if Constant.CanOrd.equal receiver owner||not(Constants.mem receiver !seen)then
+    native_error "a public record receiver must be a dependency of main";
+  let typ=EConstr.of_constr(Environ.lookup_constant receiver env).Declarations.const_type in
+  let head,args=EConstr.decompose_app sigma(Reductionops.whd_betaiotazeta env sigma typ)in
+  let typ=if Array.length args=1&&List.exists(fun name->match ref_of name with
+    |Some r->EConstr.isRefX env sigma r head|None->false)["soma.native.entry";"soma.native.preparation"]then args.(0)else typ in
+  let head,args=EConstr.decompose_app sigma(Reductionops.whd_all env sigma typ)in
+  let ind=match EConstr.kind sigma head with
+    |Ind(ind,_)when Array.length args=0&&ModPath.to_string(MutInd.modpath(fst ind))=namespace->ind
+    |_->native_error "public fields need an unparameterized checked Source record"in
+  let mib,mip=Inductive.lookup_mind_specif env ind in
+  if mib.Declarations.mind_nparams<>0||mip.mind_nrealargs<>0||Array.length mib.mind_packets<>1||
+     Array.length mip.mind_consnames<>1||mib.mind_finite=Declarations.CoFinite then
+    native_error "public fields need an ordinary unindexed runtime record";
+  let structure=try Structures.Structure.find env ind with Not_found->native_error "public fields need a checked record"in
+  let projections=structure.Structures.Structure.projections in
+  let rec runtime_fields env typ projections=match projections with
+    |[]->(match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Prod _|LetIn _->native_error "public record fields differ from their constructor"|_->())
+    |_::rest->match EConstr.kind sigma(Reductionops.whd_all env sigma typ)with
+      |Prod(na,domain,codomain)->
+        let sort=Retyping.get_sort_of env sigma domain in
+        if is_sort env sigma domain||EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
+          native_error "public records cannot contain erased proof or type fields";
+        if not(EConstr.Vars.noccurn sigma 1 codomain)then native_error "public record fields cannot depend on values";
+        let rec mono env t=let t=Reductionops.whd_all env sigma t in
+          (match EConstr.kind sigma t with Prod(_,domain,_)when is_sort env sigma domain->
+            native_error "public record fields must be monomorphic"|_->());
+          EConstr.iter_with_full_binders env sigma EConstr.push_rel mono env t in
+        mono env domain;
+        runtime_fields(EConstr.push_rel(Context.Rel.Declaration.LocalAssum(na,domain))env)codomain rest
+      |_->native_error "unsupported public record constructor"in
+  runtime_fields env(EConstr.of_constr mip.mind_user_lc.(0))projections;
+  let projections=List.map(fun projection->
+    if not projection.Structures.Structure.proj_true then native_error "public fields cannot publish defined record fields";
+    match projection.proj_body with Some c->c|None->native_error "public fields need checked projections")projections in
+  let existing=List.concat_map(fun info->List.map fst info.SomaForeign.record_public_fields)(SomaForeign.public_records owner) @
+    (match List.find_opt(fun info->Constant.CanOrd.equal owner info.SomaForeign.public_owner)!native_public_assemblies with
+     |None->[]|Some info->List.map(fun item->item.SomaForeign.application_name)info.public_applications)in
+  let names=ref existing in
+  let fields=List.map(fun(name,source)->
+    ignore(ocaml_name ~definition:"public field" name);
+    if name="_"||not(String.for_all(function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\''->true|_->false)name)then
+      native_error "a public field needs one native identifier";
+    if List.mem name !names then native_error "duplicate public field name";
+    names:=name:: !names;
+    let c=match Nametab.locate source with GlobRef.ConstRef c->c|_->native_error "a public field needs a checked projection"in
+    let rec index n=function []->native_error "public field projection belongs to a different record"
+      |p::rest->if Constant.CanOrd.equal p c then n else index(n+1)rest in
+    name,index 0 projections)fields in
+  if not(List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.public_owner)!native_public_assemblies)
+  then native_public_assembly selected [];
+  let symbol r=Libnames.string_of_path(Nametab.path_of_global r)in
+  Lib.add_leaf(in_native_public_record SomaForeign.{record_public_owner=owner;record_public_receiver=GlobRef.ConstRef receiver;
+    record_public_type=GlobRef.IndRef ind;record_public_fields=fields;
+    record_public_symbols=List.map symbol[GlobRef.ConstRef receiver;GlobRef.IndRef ind]})
+
 let native_public_type_equations selected exports =
   let namespace=native_namespace()in
   let env=Global.env()and sigma=Evd.from_env(Global.env())in
