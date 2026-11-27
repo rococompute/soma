@@ -599,7 +599,7 @@ let native_module_include name target =
     module_alias_target=target;module_alias_source=source;module_alias_order=order})
 
 (* Source-owned assembly: no expressions, type annotations or code escapes. *)
-let checked_export_pattern ?(on_binding=(fun _ _->())) env sigma typ text =
+let checked_export_pattern ?(on_binding=(fun _ _->())) ?(on_leaf=(fun _->())) env sigma typ text =
   let offset=ref 0 and size=String.length text in
   let fail()=native_error "assembly patterns contain only names, tuples and record field puns" in
   let space()=while !offset<size && List.mem text.[!offset][' ';'\n';'\t';'\r']do incr offset done in
@@ -653,7 +653,7 @@ let checked_export_pattern ?(on_binding=(fun _ _->())) env sigma typ text =
       ["soma.native.entry";"soma.native.preparation";"soma.native.function_group";
        "soma.native.function_knot";"soma.native.callback_group"]then args.(0)else typ in
   let rec check typ=function
-    |SomaForeign.Export_name name->if name<>"_"then on_binding name typ
+    |SomaForeign.Export_name name->on_leaf typ;if name<>"_"then on_binding name typ
     |Export_tuple parts->
       let head,args=application(boundary typ)in
       let arity=if is head "core.prod.type"then 2 else if is head "soma.native.triple"then 3
@@ -1107,6 +1107,61 @@ let native_public_assembly selected applications =
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
   Lib.add_leaf(in_native_public_assembly SomaForeign.{public_owner=main;public_namespace=namespace;
     public_source=source;public_applications=applications})
+
+let native_public_projections = Summary.ref ~name:"soma-native-public-projections" []
+let in_native_public_projection =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native public tuple projection"
+    ~cache:(fun info->native_public_projections:=info:: !native_public_projections;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_public_projections:=(fun()-> !native_public_projections)
+let native_public_projection selected receiver text =
+  let namespace=native_namespace()in
+  let env=Global.env()and sigma=Evd.from_env(Global.env())in
+  let own q=match Nametab.locate q with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "public projections need transparent Source definitions")
+    |_->native_error "public projections belong to their Source namespace"in
+  let owner=own selected and receiver=own receiver in
+  if Id.to_string(Constant.label owner)<>"main"then native_error "a public projection must select main";
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if ModPath.to_string(Constant.modpath c)=namespace&&not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    (match cb.const_body with Declarations.Def body->term body|_->())end in
+  visit owner;
+  if Constant.CanOrd.equal owner receiver||not(Constants.mem receiver !seen)then
+    native_error "a public projection receiver must be a dependency of main";
+  let fields=ref []in
+  let on_binding name typ=
+    let signature=try ocaml_type env sigma [] typ with Not_ocaml why->
+      CErrors.user_err(str "OCaml Native public projection signature: "++why)in
+    fields:= !fields@[name,signature]in
+  let typ=EConstr.of_constr(Environ.lookup_constant receiver env).Declarations.const_type in
+  let on_leaf typ=
+    let sort=Retyping.get_sort_of env sigma typ in
+    if is_sort env sigma typ||EConstr.ESorts.is_prop sigma sort||EConstr.ESorts.is_sprop sigma sort then
+      native_error "public tuple fields cannot erase proofs or types";
+    let rec mono env typ=let typ=Reductionops.whd_all env sigma typ in
+      (match EConstr.kind sigma typ with Prod(_,domain,_)when is_sort env sigma domain->
+        native_error "public tuple fields must be monomorphic"|_->());
+      EConstr.iter_with_full_binders env sigma EConstr.push_rel mono env typ in
+    mono env typ in
+  let pattern,names=checked_export_pattern ~on_binding ~on_leaf env sigma typ text in
+  let rec tuple=function SomaForeign.Export_tuple parts->List.iter tuple parts
+    |Export_name _->()|Export_record _->native_error "public tuple projections do not accept record patterns"in
+  (match pattern with SomaForeign.Export_tuple _->tuple pattern|_->native_error "a public projection needs a tuple pattern");
+  let existing=List.concat_map(fun info->List.map fst info.SomaForeign.projection_public_fields)(SomaForeign.public_projections owner) @
+    List.concat_map(fun info->List.map fst info.SomaForeign.record_public_fields)(SomaForeign.public_records owner) @
+    (match List.find_opt(fun info->Constant.CanOrd.equal owner info.SomaForeign.public_owner)!native_public_assemblies with
+      |None->[]|Some info->List.map(fun item->item.SomaForeign.application_name)info.public_applications)in
+  List.iter(fun name->if List.mem name existing then native_error "duplicate public projection name")names;
+  if not(List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.public_owner)!native_public_assemblies)
+  then native_public_assembly selected [];
+  Lib.add_leaf(in_native_public_projection SomaForeign.{projection_public_owner=owner;
+    projection_public_receiver=GlobRef.ConstRef receiver;
+    projection_public_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef receiver));
+    projection_public_pattern=pattern;projection_public_fields= !fields})
 
 let native_public_records = Summary.ref ~name:"soma-native-public-records" []
 let in_native_public_record =

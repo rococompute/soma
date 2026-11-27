@@ -1091,6 +1091,8 @@ let prepare_native_static_extraction () =
   let requests=requests @ List.concat_map(fun info->
     [info.SomaForeign.record_public_receiver,false;info.record_public_type,true])!SomaForeign.active_public_records in
   let requests=requests @ List.map(fun info->info.SomaForeign.view_reference,true)!SomaForeign.active_extraction_record_views in
+  let requests=requests @ List.concat_map(fun info->List.map(fun projection->projection.SomaForeign.projection_public_receiver,false)
+    (SomaForeign.public_projections info.SomaForeign.public_owner))(selected_native_public_assemblies())in
   let requests=List.fold_left(fun kept(reference,type_) ->
     if List.exists(fun(other,kind)->GlobRef.CanOrd.equal reference other&&type_=kind)kept
     then kept else kept@[reference,type_])[]requests in
@@ -1293,6 +1295,18 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
         |[(_,_,field,typ)]->field,typ|_->error Pp.(str "public field is absent or ambiguous in the fresh record representation")in
       "\nlet "^public^" = "^name record.record_public_receiver^"."^field^"\n",
       "\nval "^public^" : "^typ^"\n")record.record_public_fields)(SomaForeign.public_records info.public_owner)in
+    let rec projection_pattern=function
+      |SomaForeign.Export_name name->name
+      |Export_tuple parts->"("^String.concat ", "(List.map projection_pattern parts)^")"
+      |Export_record _->assert false in
+    let projections=List.map(fun item->
+      List.iter(fun(public,_)->if List.mem public existing ||
+        List.exists(fun application->application.SomaForeign.application_name=public)info.public_applications ||
+        List.exists(fun record->List.mem_assoc public record.SomaForeign.record_public_fields)(SomaForeign.public_records info.public_owner)
+        then error Pp.(str "public projection shadows an existing value: "++str public))item.SomaForeign.projection_public_fields;
+      "\nlet "^projection_pattern item.projection_public_pattern^" = "^name item.projection_public_receiver^"\n",
+      String.concat ""(List.map(fun(public,typ)->"\nval "^public^" : "^typ^"\n")item.projection_public_fields))
+      (SomaForeign.public_projections info.public_owner)in
     let module_prefix=String.concat ""(List.map(fun item->
       let actual=List.concat_map(fun(m:SomaForeign.ocaml_module)->List.filter_map(fun(reference,_,schema)->
         if Constant.CanOrd.equal reference item.SomaForeign.public_module_reference then Some schema else None)m.items)modules in
@@ -1307,9 +1321,9 @@ let write_assemblies ~file ~read_source ~contracts ~program ~interface ~bindings
       "module "^item.public_module_name^" = "^item.public_module_target^"\n")(SomaForeign.public_modules info.public_owner))in
     let implementation=header^module_prefix^program^String.concat ""(List.map(fun item->
       "\nlet "^item.SomaForeign.application_name^" = "^name item.application_function^" "^
-      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations^String.concat ""(List.map fst record_fields) in
+      String.concat " "(List.map name item.application_arguments)^"\n")info.public_applications)^type_equations^String.concat ""(List.map fst record_fields)^String.concat ""(List.map fst projections) in
     let interface_=header^module_prefix^interface^String.concat ""(List.map(fun item->
-      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations^String.concat ""(List.map snd record_fields) in
+      "\nval "^item.SomaForeign.application_name^" : "^item.application_signature^"\n")info.public_applications)^type_equations^String.concat ""(List.map snd record_fields)^String.concat ""(List.map snd projections) in
     let source_hash=SomaMerkle.string(read_source(SomaImport.resolve_project_file info.public_source))in
     let layout=SomaMerkle.string(SomaForeign.native_public_assembly_identity info)in
     let contract=match List.assoc_opt owner contracts with Some h->h

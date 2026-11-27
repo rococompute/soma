@@ -518,6 +518,16 @@ val native_public_modules : (unit -> native_public_modules list) ref
 val public_modules : Names.Constant.t -> native_public_module list
 val native_public_extracted_modules : string list option ref
 
+type native_public_projection = {
+  projection_public_owner : Names.Constant.t;
+  projection_public_receiver : Names.GlobRef.t;
+  projection_public_symbol : string;
+  projection_public_pattern : native_export_pattern;
+  projection_public_fields : (string * string) list;
+}
+val native_public_projections : (unit -> native_public_projection list) ref
+val public_projections : Names.Constant.t -> native_public_projection list
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;

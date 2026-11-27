@@ -883,6 +883,16 @@ let public_modules owner = List.concat_map(fun info->if Names.Constant.CanOrd.eq
   then info.modules_public_exports else [])(!native_public_modules())
 let native_public_extracted_modules : string list option ref = ref None
 
+type native_public_projection = {
+  projection_public_owner : Names.Constant.t;
+  projection_public_receiver : Names.GlobRef.t;
+  projection_public_symbol : string;
+  projection_public_pattern : native_export_pattern;
+  projection_public_fields : (string * string) list;
+}
+let native_public_projections : (unit -> native_public_projection list) ref = ref(fun()->[])
+let public_projections owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.projection_public_owner)(!native_public_projections()))
+
 type native_public_application = {
   application_name : string;
   application_function : Names.GlobRef.t;
@@ -902,6 +912,10 @@ let native_public_assembly_identity info =
     List.map(fun item->String.concat " "
       ([Printf.sprintf "%S"item.application_name;Printf.sprintf "%S"item.application_signature]@
        item.application_symbols))info.public_applications) ^
+  (match public_projections info.public_owner with []->""|projections->
+    "\npublic-tuple-projections-v1\n"^String.concat "\n"(List.map(fun item->
+      String.concat "\n"([item.projection_public_symbol;native_export_identity item.projection_public_pattern] @
+        List.map(fun(name,typ)->Printf.sprintf "%S %S"name typ)item.projection_public_fields))projections)) ^
   (match public_modules info.public_owner with []->""|modules->
     "\npublic-canonical-modules-v1\n"^String.concat "\n"(List.map(fun item->
       String.concat "\n"[item.public_module_name;item.public_module_symbol;item.public_module_target;SomaMerkle.string item.public_module_schema])modules)) ^
