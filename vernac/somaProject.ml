@@ -305,6 +305,7 @@ type t = {
   opam : (string * string) list;
   image : image;
   mirage : mirage option;
+  build : SomaBuildPlan.t option;
 }
 
 let rec find_root dir =
@@ -375,7 +376,8 @@ let load_uncached ?display root =
       if List.mem_assoc k keys then
         error line "%s is a key of [project]: it goes under the line [project], which begins soma.toml:\n\n%s"
           k (example root)
-      else if not (List.mem k ["project"; "dependencies"; "opam"; "image"; "mirage"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+      else if not (List.mem k ["project"; "dependencies"; "opam"; "image"; "mirage"; "build"]) then error line "%s is not something soma.toml says (yet). %s." k known) toml;
+  let build = try SomaBuildPlan.parse toml with SomaBuildPlan.Error s -> error 1 "%s" s in
   let project, pline = match List.assoc_opt "project" toml with
     | Some { SomaToml.value = Table t; line } -> t, line
     | Some { SomaToml.line; value } -> error line "project is %s; it is a table:\n\n%s" (SomaToml.describe value) (example root)
@@ -588,7 +590,7 @@ let load_uncached ?display root =
         devices = array "devices" device;
       }
     | Some { SomaToml.line; _ } -> error line "mirage must be a table: [mirage]" in
-  { root; name; description; version; dependencies; opam; image; mirage }
+  { root; name; description; version; dependencies; opam; image; mirage; build }
 
 let loaded = Hashtbl.create 1
 

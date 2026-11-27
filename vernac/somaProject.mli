@@ -94,6 +94,7 @@ type t = {
   opam : (string * string) list;  (** its [opam] table: opam packages, each at its version *)
   image : image;
   mirage : mirage option;
+  build : SomaBuildPlan.t option;
 }
 
 (** The folder of the nearest soma.toml, from [dir] up *)

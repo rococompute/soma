@@ -31,7 +31,18 @@
  (public_name soma)
  (package soma-runtime)
  (modules soma somaTest)
- (libraries rocqshim soma-runtime.boot soma-runtime.clib findlib unix))
+ (libraries rocqshim soma-runtime.boot soma-runtime.clib soma_project_build findlib unix))
+
+(library
+ (name soma_project_build)
+ (wrapped false)
+ (modules somaProjectBuild)
+ (libraries soma-runtime.clib unix))
+
+(test
+ (name somaProjectBuildTest)
+ (modules somaProjectBuildTest)
+ (libraries soma_project_build soma-runtime.clib unix))
 
 ; Keep compiler-libs' global modules separate from Rocq's compiler modules.
 ; This frontend reads OCaml but emits source checked by the ordinary worker.

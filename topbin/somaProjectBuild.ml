@@ -1,0 +1,231 @@
+open SomaBuildPlan
+let fail fmt = Printf.ksprintf (fun s -> raise (Error s)) fmt
+let read file =
+  let ic = open_in_bin file in
+  Fun.protect ~finally:(fun () -> close_in_noerr ic)
+    (fun () -> really_input_string ic (in_channel_length ic))
+let toml_string s =
+  let b=Buffer.create (String.length s+2) in
+  Buffer.add_char b '"';
+  String.iter (function
+      | '"' -> Buffer.add_string b "\\\"" | '\\' -> Buffer.add_string b "\\\\"
+      | '\n' -> Buffer.add_string b "\\n" | '\r' -> Buffer.add_string b "\\r"
+      | '\t' -> Buffer.add_string b "\\t"
+      | c when Char.code c < 32 || Char.code c = 127 ->
+        Buffer.add_string b (Printf.sprintf "\\u%04x" (Char.code c))
+      | c -> Buffer.add_char b c) s;
+  Buffer.add_char b '"'; Buffer.contents b
+let rec mkdir dir =
+  if Sys.file_exists dir then begin
+    if (Unix.lstat dir).Unix.st_kind <> Unix.S_DIR then fail "not a real directory: %s" dir
+  end else begin mkdir (Filename.dirname dir); Unix.mkdir dir 0o755 end
+(* No path traversal, including through symlinks. Roots themselves are canonical. *)
+let inside root relative =
+  if not (relative_path relative) then fail "invalid artifact path %S" relative;
+  List.fold_left (fun base part ->
+      let p = Filename.concat base part in
+      (try if (Unix.lstat p).Unix.st_kind = Unix.S_LNK then fail "symlink in build path: %s" p
+       with Unix.Unix_error (Unix.ENOENT,_,_) -> ()); p)
+    root (String.split_on_char '/' relative)
+let regular file = if (Unix.lstat file).Unix.st_kind <> Unix.S_REG then fail "not a regular file: %s" file
+let atomic file data =
+  mkdir (Filename.dirname file);
+  let same = Sys.file_exists file && (regular file; read file = data) in
+  if not same then begin
+    let tmp, oc = Filename.open_temp_file ~temp_dir:(Filename.dirname file) ".soma-unit-" ".tmp" in
+    Fun.protect ~finally:(fun () -> close_out_noerr oc; if Sys.file_exists tmp then Sys.remove tmp) (fun () ->
+        output_string oc data; close_out oc; Unix.chmod tmp 0o644; Unix.rename tmp file)
+  end;
+  not same
+let fields line =
+  let len = String.length line in
+  let rec skip i = if i<len && (line.[i]=' ' || line.[i]='\t') then skip (i+1) else i in
+  let rec quoted start i =
+    if i>=len then fail "unterminated manifest string";
+    if line.[i]='\\' then quoted start (i+2)
+    else if line.[i]='"' then
+      (try Scanf.unescaped (String.sub line start (i-start)), i+1
+       with _ -> fail "invalid manifest escape")
+    else quoted start (i+1) in
+  let rec token i j = if j=len || line.[j]=' ' || line.[j]='\t' then String.sub line i (j-i),j else token i (j+1) in
+  let rec loop acc i = let i=skip i in if i=len then List.rev acc else
+      let s,j = if line.[i]='"' then quoted (i+1) (i+1) else token i i in
+      if j<len && line.[j]<>' ' && line.[j]<>'\t' then fail "invalid manifest field separator";
+      loop (s::acc) j in
+  loop [] 0
+type leaf = { identity : string; file : string; hash : string; contents : string }
+type product = { file : string; leaves : leaf list }
+type artifact_row = {
+  scope : string; source : string; source_hash : string;
+  filename : string; digest : string; ordinal : string option;
+}
+let verified root path hash =
+  let file = inside root path in regular file;
+  let contents = read file in
+  if not (SomaMerkle.valid_hash hash) || SomaMerkle.string contents <> hash then
+    fail "content hash differs: %s" file;
+  contents
+let artifact ~root ~source_root ~extract kind scope =
+  let suffix, header = match kind with
+    | Source_types -> "source_type_reexports", "source-type-reexports"
+    | Modules -> "module_declarations", "module-declarations"
+    | Values -> "value_reexports", "value-reexports"
+    | Aliases -> "module_aliases", "module-aliases"
+    | Initializers -> "binding_initializers", "binding-initializers" in
+  let manifest = inside root ("native_" ^ suffix ^ ".manifest") in regular manifest;
+  let lines = String.split_on_char '\n' (read manifest) in
+  let decode line = match kind, fields line with
+    | (Source_types | Values | Aliases), [_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal]
+    | Modules, [_;_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal] ->
+      {scope;source;source_hash;filename;digest;ordinal=Some ordinal}
+    | Initializers, [scope;source;source_hash;filename;digest] ->
+      {scope;source;source_hash;filename;digest;ordinal=None}
+    | _ -> fail "invalid row in %s" manifest in
+  let all = match lines with
+    | h::tail when h = "soma-native-" ^ header ^ "-v1" ->
+      List.filter (fun s -> s<>"") tail |> List.map decode
+    | _ -> fail "unsupported manifest: %s" manifest in
+  let rows = List.filter (fun r -> r.scope=scope) all in
+  if rows=[] then fail "%s: no %s artifact for namespace %S" extract (kind_name kind) scope;
+  let first=List.hd rows in
+  let filename=first.filename and hash=first.digest in
+  List.iteri (fun i row ->
+      if row.filename<>filename || row.digest<>hash then fail "%s: namespace spans multiple artifacts" manifest;
+      Option.iter (fun ordinal -> if ordinal<>string_of_int i then
+          fail "%s: namespace order is incomplete or changed" manifest) row.ordinal;
+      ignore (verified source_root row.source row.source_hash)) rows;
+  (* A namespace selects a complete artifact; it cannot discard other scopes in that file. *)
+  List.iter (fun r ->
+      if r.filename=filename && r.scope<>scope then fail "%s: artifact also contains another namespace" manifest) all;
+  let contents=verified root filename hash in
+  {identity=extract ^ "/" ^ filename; file=filename; hash; contents}
+let subprocess ~root ~env program args =
+  let old=Sys.getcwd () in
+  Fun.protect ~finally:(fun () -> Sys.chdir old) (fun () ->
+      Sys.chdir root;
+      let pid=Unix.create_process_env program (Array.of_list (program::args)) env Unix.stdin Unix.stdout Unix.stderr in
+      let rec wait () = try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR,_,_) -> wait () in
+      match wait () with Unix.WEXITED 0 -> ()
+        | Unix.WEXITED n -> fail "%s failed (exit %d)" program n
+        | _ -> fail "%s interrupted" program)
+let environment root bindings =
+  let replace = ["SOMA_PROJECT_ROOT", root] @
+    (match bindings with None -> [] | Some s -> ["SOMA_OCAML_BINDINGS_MODULE",s]) in
+  let env=Array.to_list (Unix.environment ()) |> List.filter (fun s ->
+      not (List.exists (fun key -> String.starts_with ~prefix:(key ^ "=") s)
+        (["SOMA_BUILD_ROOT"; "SOMA_PROJECT_CACHE"; "SOMA_PROJECT_PREFIX"; "SOMA_IMPORT_STACK"] @ List.map fst replace))) in
+  Array.of_list (List.map (fun (k,v) -> k ^ "=" ^ v) replace @ env)
+let rec remove dir =
+  match (Unix.lstat dir).Unix.st_kind with
+    | Unix.S_DIR -> Array.iter (fun n -> remove (Filename.concat dir n)) (Sys.readdir dir); Unix.rmdir dir
+    | _ -> Sys.remove dir
+    | exception Unix.Unix_error (Unix.ENOENT,_,_) -> ()
+let rec same_tree fresh previous =
+  if not (Sys.file_exists previous) then false else
+  match (Unix.lstat fresh).Unix.st_kind, (Unix.lstat previous).Unix.st_kind with
+  | Unix.S_REG, Unix.S_REG -> read fresh=read previous
+  | Unix.S_DIR, Unix.S_DIR ->
+    (* Dune owns its private cache; compiler-owned files must all match. *)
+    let names dir=Sys.readdir dir |> Array.to_list |> List.filter ((<>) "_build") |> List.sort String.compare in
+    let xs=names fresh in xs=names previous &&
+      List.for_all (fun name -> same_tree (Filename.concat fresh name) (Filename.concat previous name)) xs
+  | _ -> false
+let build ~compiler ~config ~config_hash p targets =
+  let root=Unix.realpath (Filename.dirname config) in
+  let directory=inside root p.directory in mkdir directory;
+  let lock=Unix.openfile (inside directory ".lock") [Unix.O_CREAT;Unix.O_RDWR] 0o600 in
+  Fun.protect ~finally:(fun () -> Unix.close lock) (fun () ->
+      Unix.lockf lock Unix.F_LOCK 0;
+      let config_unchanged () = if SomaMerkle.file_hash config <> config_hash then
+          fail "build configuration changed during execution; rebuild" in
+      config_unchanged ();
+      let sources=Hashtbl.create 16 and products=Hashtbl.create 16 in
+      let stages=ref [] in
+      Fun.protect ~finally:(fun () -> List.iter remove !stages) (fun () ->
+      List.iter (fun n -> match n.action with
+          | Extract e ->
+            let source_root=if e.source_root="." then root else inside root e.source_root |> Unix.realpath in
+            ignore (inside source_root e.file);
+            let native=
+                let parent=inside directory ".extract" in mkdir parent;
+                (* Fresh destination: failure never replaces the previous completed extraction. *)
+                let tmp=Filename.temp_file ~temp_dir:parent (n.name ^ "-") ".stage" in
+                Sys.remove tmp;
+                let extraction_lock=Filename.concat parent
+                    ("." ^ Filename.basename tmp ^ ".soma-ocaml.lock") in
+                stages := tmp :: extraction_lock :: !stages;
+                subprocess ~root:source_root ~env:(environment source_root e.bindings) compiler
+                  (["extract";e.file] @ e.options @ ["-o";tmp]);
+                let final=inside parent n.name in
+                config_unchanged ();
+                (* Readers of project products share this lock. Keep the old completed
+                   extraction until the new compiler invocation has succeeded. *)
+                let previous=tmp ^ ".previous" in
+                stages := previous :: !stages;
+                if same_tree tmp final then remove tmp else begin
+                  if Sys.file_exists final then Unix.rename final previous;
+                  (try Unix.rename tmp final with exn ->
+                      if Sys.file_exists previous then Unix.rename previous final; raise exn);
+                  remove previous
+                end;
+                final in
+            Hashtbl.add sources n.name (native,source_root)
+          | Compose c ->
+            let leaves=List.concat_map (function
+                | Unit u -> (Hashtbl.find products u).leaves
+                | Artifact a ->
+                  let native,source_root=Hashtbl.find sources a.extract in
+                  [artifact ~root:native ~source_root ~extract:a.extract a.kind a.namespace]) c.parts in
+            let seen=Hashtbl.create 16 in
+            List.iter (fun l ->
+                (* Include the physical path so two extraction aliases cannot duplicate initialization. *)
+                let extract=String.sub l.identity 0 (String.index l.identity '/') in
+                let native,_=Hashtbl.find sources extract in
+                let key=Unix.realpath (inside native l.file) in
+                if Hashtbl.mem seen key || Hashtbl.mem seen l.file then
+                  fail "%s: duplicate whole artifact %s" n.name l.identity;
+                Hashtbl.add seen key (); Hashtbl.add seen l.file ()) leaves;
+            let data=String.concat "" (List.map (fun l -> l.contents) leaves) in
+            let file=inside directory c.output in
+            config_unchanged ();
+            let changed=atomic file data in
+            let receipt=Printf.sprintf
+                "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nparts = [%s]\n"
+                (toml_string config_hash) (toml_string c.output) (toml_string (SomaMerkle.string data))
+                (String.concat ",\n" (List.map (fun l -> Printf.sprintf
+                     "{ artifact = %s, sha256 = %s }" (toml_string l.identity) (toml_string l.hash)) leaves)) in
+            ignore (atomic (inside directory (".receipts/" ^ n.name ^ ".toml")) receipt);
+            Hashtbl.add products n.name {file;leaves};
+            Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file
+          | Dune d ->
+            config_unchanged ();
+            let dir=if d.directory="." then root else inside root d.directory in
+            subprocess ~root:dir ~env:(Unix.environment ()) "dune"
+              (["build";"--root";dir;"--profile";"release";"--"] @ d.targets))
+        (order p targets)))
+let help = {|Usage: soma project (plan|build) [--config FILE] [--target NAME ...]
+Read [build] in soma.toml (or --config). Plan validates the entire graph.
+Build checks/extracts dependencies, then publishes ordered whole OCaml artifacts.
+No source text, shell commands or partial artifacts are accepted in configuration.
+|}
+let run ~compiler args =
+  (* Keep the installed symlink: the CLI locates its runtime relative to it. *)
+  let compiler=if Filename.is_relative compiler && String.contains compiler '/'
+    then Filename.concat (Sys.getcwd ()) compiler else compiler in
+  match args with
+  | [] | ["--help"] | ["help"] -> print_string help
+  | command::args when command="plan" || command="build" ->
+    let rec options config targets = function
+      | [] -> config,List.rev targets
+      | "--config"::s::rest -> options s targets rest
+      | "--target"::s::rest -> options config (s::targets) rest
+      | x::_ -> fail "unknown project option %S" x in
+    let config,targets=options "soma.toml" [] args in
+    let config=Unix.realpath config in
+    let config_hash=SomaMerkle.file_hash config in
+    let p=load config in let targets=if targets=[] then p.targets else targets in
+    if SomaMerkle.file_hash config <> config_hash then fail "build configuration changed while loading";
+    let ordered=order p targets in
+    if command="plan" then List.iter (fun n -> Printf.printf "%s: %s\n" n.name (String.concat " " (dependencies n))) ordered
+    else build ~compiler ~config ~config_hash p targets
+  | _ -> fail "%s" help
