@@ -976,3 +976,21 @@ let extraction_record_view_identity info = String.concat "\n"
   SomaMerkle.string(native_source_type_identity info.view_declaration)]
 let extraction_record_views owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.view_owner)
  (!native_extraction_record_views()))
+
+type native_canonical_include = {
+  include_owner : Names.Constant.t;
+  include_namespace : string;
+  include_source : string;
+  include_reference : Names.GlobRef.t;
+  include_symbol : string;
+  include_member : string;
+  include_group : native_algebraic;
+}
+let native_canonical_includes : (unit -> native_canonical_include list) ref = ref(fun()->[])
+let active_canonical_includes : native_canonical_include list ref = ref []
+let printed_canonical_includes : (Names.GlobRef.t * bool * string) list ref = ref []
+let canonical_include_identity info = String.concat "\n"
+ ["native-canonical-include-v1";info.include_namespace;info.include_symbol;info.include_member;
+  native_algebraic_module info.include_group;SomaMerkle.string(native_algebraic_ml info.include_group)]
+let canonical_includes owner = List.rev(List.filter(fun info->Names.Constant.CanOrd.equal owner info.include_owner)
+ (!native_canonical_includes()))

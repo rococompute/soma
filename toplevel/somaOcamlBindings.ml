@@ -1071,6 +1071,9 @@ let selected_native_public_assemblies () =
   |_->[]
 
 let prepare_native_static_extraction () =
+  SomaForeign.active_canonical_includes:=(match main_reference()with
+    |GlobRef.ConstRef owner->SomaForeign.canonical_includes owner|_->[]);
+  SomaForeign.printed_canonical_includes:=[];
   SomaForeign.active_extraction_record_views:=(match main_reference()with
     |GlobRef.ConstRef owner->SomaForeign.extraction_record_views owner|_->[]);
   SomaForeign.printed_extraction_record_views:=[];
@@ -1091,6 +1094,7 @@ let prepare_native_static_extraction () =
   let requests=requests @ List.concat_map(fun info->
     [info.SomaForeign.record_public_receiver,false;info.record_public_type,true])!SomaForeign.active_public_records in
   let requests=requests @ List.map(fun info->info.SomaForeign.view_reference,true)!SomaForeign.active_extraction_record_views in
+  let requests=requests @ List.map(fun info->info.SomaForeign.include_reference,true)!SomaForeign.active_canonical_includes in
   let requests=requests @ List.concat_map(fun info->List.map(fun projection->projection.SomaForeign.projection_public_receiver,false)
     (SomaForeign.public_projections info.SomaForeign.public_owner))(selected_native_public_assemblies())in
   let requests=List.fold_left(fun kept(reference,type_) ->
@@ -1104,7 +1108,7 @@ let prepare_native_static_extraction () =
   SomaForeign.native_public_extracted_modules:=(if selected_native_public_assemblies()=[]then None else Some[]);
   SomaForeign.native_public_type_declarations:=[];
   SomaForeign.native_public_extracted_types:=
-    (if selected_native_public_assemblies()=[]then None else Some []);
+    (if selected_native_public_assemblies()=[] && !SomaForeign.active_canonical_includes=[]then None else Some []);
   SomaForeign.native_public_extracted_values:=
     (if selected_native_public_assemblies()=[]then None else Some []);
   List.map(fun(reference,_)->Libnames.string_of_path(Nametab.path_of_global reference))requests
@@ -1380,6 +1384,44 @@ let write_type_equations ~file ~read_source ~program ~interface =
     ["native_type_equations.manifest"]
   end
 
+let canonical_include_program ~program ~interface =
+  let includes= !SomaForeign.active_canonical_includes in
+  if includes=[]then program,interface else begin
+    let names=match !SomaForeign.native_public_extracted_types with Some names->names
+      |None->error Pp.(str "missing canonical include type inventory")in
+    let published=ref[]in
+    List.iter(fun info->
+      let printed signature=List.filter_map(fun(reference,kind,name)->
+        if signature=kind&&GlobRef.CanOrd.equal reference info.SomaForeign.include_reference then Some name else None)
+        !SomaForeign.printed_canonical_includes |> List.sort_uniq String.compare in
+      (match printed false,printed true with [a],[b]when a=b&&a=info.include_member->()
+       |_->error Pp.(str "canonical include is absent, erased, or differs between fresh implementation/interface"));
+      List.iter(fun(name,_)->
+        let expected=if name=info.include_member then 1 else 0 in
+        if List.mem name !published||List.length(List.filter((=)name)names)<>expected then
+          error Pp.(str "canonical include conflicts with an extracted type: "++str name);
+        published:=name:: !published)info.include_group.algebraic_members)includes;
+    let prefix signature=String.concat ""(List.map(fun info->
+      let target=SomaForeign.native_algebraic_module info.SomaForeign.include_group in
+      (if signature then "include module type of struct include "^target^" end" else "include "^target)^"\n")includes)in
+    prefix false^program,prefix true^interface
+  end
+
+let write_canonical_includes ~file ~read_source ~program ~interface =
+  let includes= !SomaForeign.active_canonical_includes in
+  if includes=[]then []else begin
+    let rows=List.map(fun info->
+      let schema=SomaForeign.native_algebraic_ml info.SomaForeign.include_group in
+      Printf.sprintf "%S %S %S %S %S %S %S %S %S %S\n"
+        (Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.include_owner)))
+        info.include_source(SomaMerkle.string(read_source(SomaImport.resolve_project_file info.include_source)))
+        info.include_symbol info.include_member(SomaForeign.native_algebraic_module info.include_group)
+        (SomaMerkle.string schema)(SomaMerkle.string program)(SomaMerkle.string interface)
+        (SomaMerkle.string(SomaForeign.canonical_include_identity info)))includes in
+    file "native_canonical_includes.manifest"("soma-native-canonical-includes-v1\n"^String.concat ""rows);
+    ["native_canonical_includes.manifest"]
+  end
+
 let write_record_views ~file ~read_source ~program ~interface =
   let views= !SomaForeign.active_extraction_record_views in
   if views=[]then []else begin
@@ -1604,6 +1646,11 @@ let write_files ~file ?c_file ~read_file ~directives modules =
     Printf.sprintf "%S %S %S %S\n" symbol info.view_namespace
       (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.view_source)))
       (SomaForeign.extraction_record_view_identity info))!SomaForeign.active_extraction_record_views in
+  let entries=entries @ List.map(fun info->
+    let symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef info.SomaForeign.include_owner))in
+    Printf.sprintf "%S %S %S %S\n" symbol info.include_namespace
+      (SomaMerkle.string(read_file(SomaImport.resolve_project_file info.include_source)))
+      (SomaForeign.canonical_include_identity info))!SomaForeign.active_canonical_includes in
   file "native_abi.manifest" ("soma-native-abi-v1\n"^String.concat ""(List.sort String.compare entries));
   ["soma_nat.ml"; bindings] @ interfaces @
   (if data_entries=[]then []else "native_static_data.manifest"::List.map(fun(_,_,filename,_)->filename)static_data) @

@@ -778,7 +778,22 @@ let pp_ind_brands ~signature table ind =
     ind.ind_packets
   |> Array.to_list |> prlist identity
 
+let pp_native_canonical_include table ~signature reference variables =
+  match List.filter(fun info->GlobRef.CanOrd.equal reference.glob info.SomaForeign.include_reference)!SomaForeign.active_canonical_includes with
+  |[]->None
+  |[info]->
+    if variables<>[]then CErrors.user_err(str "A canonical include cannot erase type parameters.");
+    let name=Pp.string_of_ppcmds(pp_global_name table Type reference)in
+    if name<>info.include_member then CErrors.user_err(str "A canonical include must preserve its canonical type name.");
+    SomaForeign.printed_canonical_includes:=(reference.glob,signature,name):: !SomaForeign.printed_canonical_includes;
+    (* The complete canonical include is emitted before the whole program.
+       Keeping that order preserves constructor/label visibility as well as
+       the original runtime initialization order. *)
+    Some(mt())
+  |_->CErrors.user_err(str "Ambiguous canonical include.")
+
 let pp_native_record_view table ~signature reference variables =
+  match pp_native_canonical_include table ~signature reference variables with Some view->Some view|None->
   match List.filter(fun info->GlobRef.CanOrd.equal reference.glob info.SomaForeign.view_reference)!SomaForeign.active_extraction_record_views with
   |[]->None
   |[info]->

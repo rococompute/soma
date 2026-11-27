@@ -587,3 +587,18 @@ val active_extraction_record_views : native_extraction_record_view list ref
 val printed_extraction_record_views : (Names.GlobRef.t * bool * string) list ref
 val extraction_record_view_identity : native_extraction_record_view -> string
 val extraction_record_views : Names.Constant.t -> native_extraction_record_view list
+
+type native_canonical_include = {
+  include_owner : Names.Constant.t;
+  include_namespace : string;
+  include_source : string;
+  include_reference : Names.GlobRef.t;
+  include_symbol : string;
+  include_member : string;
+  include_group : native_algebraic;
+}
+val native_canonical_includes : (unit -> native_canonical_include list) ref
+val active_canonical_includes : native_canonical_include list ref
+val printed_canonical_includes : (Names.GlobRef.t * bool * string) list ref
+val canonical_include_identity : native_canonical_include -> string
+val canonical_includes : Names.Constant.t -> native_canonical_include list

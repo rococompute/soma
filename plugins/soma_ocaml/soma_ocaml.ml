@@ -1342,6 +1342,42 @@ let native_public_modules selected exports =
   then native_public_assembly selected [];
   Lib.add_leaf(in_native_public_modules SomaForeign.{modules_public_owner=owner;modules_public_exports=exports})
 
+let native_canonical_includes = Summary.ref ~name:"soma-native-canonical-includes" []
+let in_native_canonical_include =
+  Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native canonical include"
+    ~cache:(fun info->native_canonical_includes:=info:: !native_canonical_includes;SomaHash.invalidate()) ~subst:None
+let ()=SomaForeign.native_canonical_includes:=(fun()-> !native_canonical_includes)
+let native_canonical_include selected source =
+  let namespace=native_namespace()in
+  let env=Global.env()in
+  let owner=match Nametab.locate selected with
+    |GlobRef.ConstRef c when ModPath.to_string(Constant.modpath c)=namespace&&Id.to_string(Constant.label c)="main"->
+      (match(Environ.lookup_constant c env).Declarations.const_body with Declarations.Def _->c
+       |_->native_error "a canonical include needs a transparent Source main")
+    |_->native_error "a canonical include belongs to its Source main"in
+  let module Constants=Set.Make(Constant.CanOrd)in
+  let seen=ref Constants.empty in
+  let rec term t=(match Constr.kind t with Const(c,_)->visit c|_->());Constr.iter term t
+  and visit c=if not(Constants.mem c !seen)then begin
+    seen:=Constants.add c !seen;let cb=Environ.lookup_constant c env in term cb.Declarations.const_type;
+    if ModPath.to_string(Constant.modpath c)=namespace then
+      match cb.const_body with Declarations.Def body->term body|_->()end in
+  visit owner;
+  let reference=match Nametab.locate source with GlobRef.ConstRef c when Constants.mem c !seen->c
+    |_->native_error "a canonical include schema must be a checked dependency of main"in
+  let group,member=match Cmap_env.find_opt reference !bindings with
+    |Some{item=SomaForeign.OCamlNativeAlgebraic(group,member);_}->group,member
+    |_->native_error "a canonical include needs a native algebraic schema type"in
+  if group.SomaForeign.algebraic_exceptions<>[]then
+    native_error "a canonical include requires a type-only schema";
+  if List.exists(fun info->Constant.CanOrd.equal owner info.SomaForeign.include_owner&&
+    SomaForeign.native_algebraic_module info.include_group=SomaForeign.native_algebraic_module group)!native_canonical_includes then
+    native_error "duplicate canonical schema include";
+  let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
+  Lib.add_leaf(in_native_canonical_include SomaForeign.{include_owner=owner;include_namespace=namespace;include_source=source;
+    include_reference=GlobRef.ConstRef reference;include_symbol=Libnames.string_of_path(Nametab.path_of_global(GlobRef.ConstRef reference));
+    include_member=member;include_group=group})
+
 let native_extraction_record_views = Summary.ref ~name:"soma-native-extraction-record-views" []
 let in_native_extraction_record_view =
   Libobject.declare_object @@ Libobject.superglobal_object_nodischarge "Soma native extraction record view"

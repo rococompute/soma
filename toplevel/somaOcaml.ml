@@ -280,7 +280,7 @@ let checked_modules = SomaOcamlBindings.checked_modules
 let record_generated_files ~capture_generated dir made expected =
   let manifest = Filename.concat dir ".soma-ocaml-files" in
   let is_source f = Filename.basename f = f &&
-    (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest";"native_source_type_reexports.manifest";"native_static_data.manifest";"native_binding_initializers.manifest";"native_value_reexports.manifest";"native_binding_projections.manifest";"native_type_equations.manifest";"native_record_views.manifest"] ||
+    (List.mem f ["native_algebraic.manifest";"native_assemblies.manifest";"native_source_type_reexports.manifest";"native_static_data.manifest";"native_binding_initializers.manifest";"native_value_reexports.manifest";"native_binding_projections.manifest";"native_type_equations.manifest";"native_record_views.manifest";"native_canonical_includes.manifest"] ||
      List.exists (Filename.check_suffix f) [".ml"; ".mli"; ".c"; ".h";".assembly";".assembly-interface"] ||
      ((String.starts_with ~prefix:"soma_source_types_" f || String.starts_with ~prefix:"soma_values_" f) && Filename.check_suffix f ".exports")) in
   let hash f =
@@ -346,6 +346,10 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
     file "soma_host.ml" SomaHost.ml;
     file "soma_host_io.c" SomaHost.io_c
   end;
+  let program,interface=SomaOcamlBindings.canonical_include_program
+    ~program:(read_file(Filename.concat dir "prog.ml")) ~interface:(read_file(Filename.concat dir "prog.mli"))in
+  file "prog.ml" program;
+  file "prog.mli" interface;
   let own = SomaOcamlBindings.write_files ~file ~read_file:read_source ~directives modules in
   let assemblies=SomaOcamlBindings.write_assemblies ~file ~read_source ~contracts:assembly_contracts ~modules
     ~program:(read_file(Filename.concat dir "prog.ml"))
@@ -355,10 +359,12 @@ let write_project ?(read_source=read_file) ?(private_extract=false)
     ~program:(read_file(Filename.concat dir "prog.ml")) ~interface:(read_file(Filename.concat dir "prog.mli"))in
   let views=SomaOcamlBindings.write_record_views ~file ~read_source
     ~program:(read_file(Filename.concat dir "prog.ml")) ~interface:(read_file(Filename.concat dir "prog.mli"))in
+  let includes=SomaOcamlBindings.write_canonical_includes ~file ~read_source
+    ~program:(read_file(Filename.concat dir "prog.ml")) ~interface:(read_file(Filename.concat dir "prog.mli"))in
   let made = List.sort_uniq String.compare
       (["prog.ml"; "prog.mli"; "soma_main.ml"; "float64.ml"; "uint63.ml"; "soma_word64.ml"; "soma_nat.ml"; SomaOcamlBindings.bindings_filename(); "native_abi.manifest"; "native_owned.manifest"; "native_variants.manifest"; "native_callables.manifest"]
        @ (if host then ["soma_host.ml"; "soma_host_io.c"] else [])
-       @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own @ assemblies @ equations @ views) in
+       @ (if SomaNative.loaded () then ["soma_effect.ml"; "soma_handles.ml"] else []) @ own @ assemblies @ equations @ views @ includes) in
   let names = List.sort_uniq String.compare (List.map (fun f ->
       String.capitalize_ascii (Filename.remove_extension f)) (List.filter (fun f -> Filename.check_suffix f ".ml") made)) in
   let c = SomaOcamlBindings.c_stub_names own in
