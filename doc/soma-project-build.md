@@ -67,6 +67,9 @@ OCaml. Implementation/signature pairs become one module name. Every unit's
 published bytes are rechecked, and the inventory receipt binds the contributing
 unit receipt hashes. Dune can consume it as `(modules (:include modules.sexp))`.
 Metadata nodes and extractions cannot be passed as units.
+The list must live in a different directory from the consuming Dune stanza,
+for example `build-info/modules.sexp`, to avoid Dune's module-discovery dependency
+cycle. See Dune's [module field documentation](https://dune.readthedocs.io/en/stable/reference/dune/library.html).
 
 `[build] source-only = true` requires `verify = true` on every extraction and
 refuses copied foreign OCaml source modules before extraction publishes files.
