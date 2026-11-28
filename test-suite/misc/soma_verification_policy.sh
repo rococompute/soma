@@ -8,7 +8,9 @@ trap 'rc=$?; if [ "$rc" -ne 0 ]; then cat "$work"/*.log 2>/dev/null || true; fi;
 cd "$work"
 cat >main.soma <<'SOMA'
 From Stdlib Require Import Arith.
+Inductive tree := Node (children : forest) with forest := Nil | Cons (t : tree) (children : forest).
 Definition main (n:nat) := n+0.
+Definition policy_anchor := tt.
 SOMA
 cat >main.exp <<'SOMA'
 Theorem trace : forall n, main n=n+0.
@@ -25,6 +27,7 @@ SOMA
 cp main.soma good.soma.txt
 soma verify "$work/main.soma" -no-soma-prelude >verify.log 2>&1
 soma extract main.soma -no-soma-prelude -o native >extract.log 2>&1
+soma hash main.soma -no-soma-prelude >definitions.hash 2>hash.log
 cmp baseline/prog.ml native/prog.ml
 cmp baseline/prog.mli native/prog.mli
 python3 - <<'PY'
@@ -34,6 +37,10 @@ r=tomllib.loads(Path('native/verification.toml').read_text())
 assert r['module']=='main' and r['property-count']==1 and r['invariant-count']==1
 assert r['trusted']==[] and r['used-assumptions']==[]
 assert r['properties'][0]['name']=='trace' and r['invariants'][0]['name']=='preserves_input'
+reported={fields[2]:fields[:2] for line in Path('definitions.hash').read_text().splitlines() if (fields:=line.split())}
+for row in r['definitions']:
+ assert reported[row['name']]==[row['contract'],row['witness']],row['name']
+assert {'main.tree','main.forest'} <= reported.keys()
 for row in r['properties']+r['invariants']:
  assert len(row['contract'])==len(row['witness'])==64 and row['assumptions']==[]
 for row in r['inputs']:
@@ -55,6 +62,10 @@ reject 'required property main.trace is missing'
 sed 's/Theorem preserves_input /Theorem renamed_invariant /' good.exp.txt >main.exp
 reject 'required invariant main.preserves_input is missing'
 cp good.exp.txt main.exp
+printf 'Reset policy_anchor.\n' >main.exp
+cat good.exp.txt >>main.exp
+reject 'source Verification policy changed while checking expectations'
+cp good.exp.txt main.exp
 printf '\nTheorem unchecked : False. Admitted.\n' >>main.exp
 reject 'untrusted assumptions'
 cp good.exp.txt main.exp
@@ -63,6 +74,12 @@ reject 'untrusted assumptions'
 cp good.exp.txt main.exp
 printf '\nFrom Corelib.Gradual Require Import Gradual.\nDefinition gradual : nat := unk.\n' >>main.exp
 reject 'gradual evidence is not permitted'
+sed 's/Trust ""/Trust "Corelib.Gradual.Gradual.unknown"/' good.soma.txt >main.soma
+reject 'gradual evidence is not permitted'
+cp good.soma.txt main.soma
+cp good.exp.txt main.exp
+printf '\nUnset Guard Checking.\nDefinition unchecked_flags : nat := 0.\n' >>main.exp
+reject 'untrusted assumptions: main.unchecked_flags (no guard check)'
 cp good.exp.txt main.exp
 sed 's/Properties "trace"/Properties "main"/' good.soma.txt >main.soma
 reject 'not a proposition'
@@ -115,6 +132,18 @@ cp native/prog.mli baseline/prog.mli
 sed 's/Properties "valid"/Properties "missing"/' dependency.soma >dependency-next
 mv dependency-next dependency.soma
 reject 'required property dependency.missing is missing'
+# A transitive proof loaded from a statements-only Rocq library cannot be
+# treated as assumption-free merely because its body cannot be inspected.
+cat >External.v <<'SOMA'
+Theorem hidden : False. Proof. exact I. Qed.
+SOMA
+rocq c -q -vos External.v >opaque-library.log 2>&1
+cp External.vos External.vo
+printf 'Require Import External.\n' >main.soma
+cat good.soma.txt >>main.soma
+cp good.exp.txt main.exp
+printf '\nDefinition escaped : False := External.hidden.\n' >>main.exp
+reject 'opaque proof body is unavailable'
 # Successful extraction without a policy must not retain a stale certificate.
 cp plain.soma.txt main.soma
 cp good.exp.txt main.exp

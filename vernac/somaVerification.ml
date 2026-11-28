@@ -43,7 +43,7 @@ let source_object = Libobject.declare_object {
   }
 let seal ~source =
   let owner=DirPath.to_string (Lib.library_dp ()) in
-  Hashtbl.replace sealed owner ();
+  Hashtbl.replace sealed owner (List.find_opt (fun p -> p.owner=owner) !policies);
   Lib.add_leaf (source_object (owner,Filename.check_suffix source ".soma"))
 let receipt ~source = Hashtbl.find_opt receipts (Unix.realpath source)
 let source_inputs source =
@@ -66,6 +66,10 @@ let required source = match Sys.getenv_opt "SOMA_REQUIRE_VERIFICATION" with
   | _ -> false
 let enforce ~source ~output ~interface =
   let owner=DirPath.to_string (Lib.library_dp ()) in
+  let policy=List.find_opt (fun p -> p.owner=owner) !policies in
+  (match Hashtbl.find_opt sealed owner with
+   | Some declared when declared<>policy -> error "source Verification policy changed while checking expectations"
+   | _ -> ());
   if not interface && Sys.getenv_opt "SOMA_REQUIRE_VERIFICATION"=Some "1" then
     List.iter (fun library ->
         match List.assoc_opt library !sources with
@@ -74,7 +78,7 @@ let enforce ~source ~output ~interface =
         | Some true -> error "imported source library %s has no source-owned Verification policy" library
         | None -> error "imported source library %s has no checked source classification; rebuild it" library)
       (SomaHash.checked_libraries ());
-  match List.find_opt (fun p -> p.owner=owner) !policies with
+  match policy with
   | None -> if required source then error "%s has no source-owned Verification policy" source
   | Some p when interface -> () (* The complete proof worker enforces this policy. *)
   | Some p ->

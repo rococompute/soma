@@ -246,10 +246,14 @@ let kn_constant c = KerName.to_string (Constant.canonical c)
 let kn_mind m = KerName.to_string (MutInd.canonical m)
 
 (* the proofs and bodies of libraries are as Assumptions reads them *)
+let require_proof_bodies = ref false
 let opaque_body o =
   match Global.force_proof (Library.indirect_accessor [@ocaml.alert "-deprecated"]) o with
   | c, _ -> Some c
-  | exception e when CErrors.noncritical e -> None
+  | exception e when CErrors.noncritical e ->
+    if !require_proof_bodies then
+      CErrors.user_err Pp.(str "Soma verification: an opaque proof body is unavailable; complete its proof check before verification")
+    else None
 
 let rec term w c =
   let open Constr in
@@ -466,6 +470,9 @@ type checked_definition = {
   assumptions : string list;
 }
 let checked_definitions () =
+  let previous= !require_proof_bodies in
+  require_proof_bodies:=true;
+  Fun.protect ~finally:(fun () -> require_proof_bodies:=previous) (fun () ->
   let libraries=reported_libraries () in
   let selected mp = match root_library mp with
     | Some (d,_) -> List.exists (DirPath.equal d) libraries | None -> false in
@@ -480,7 +487,9 @@ let checked_definitions () =
           let name=match root_library (MutInd.modpath m) with
             | Some (d,subs) -> String.concat "." ((DirPath.to_string d::subs) @ [Id.to_string packet.Declarations.mind_typename])
             | None -> assert false in
-          index+1,row name (GlobRef.IndRef (m,index)) (inductive m)::xs) (0,xs) mb.Declarations.mind_packets |> snd) env xs
+          let i=inductive m and n=string_of_int index in
+          let i={i with contract=hash [i.contract;n];witness=hash [i.witness;n];shape=hash [i.shape;n]} in
+          index+1,row name (GlobRef.IndRef (m,index)) i::xs) (0,xs) mb.Declarations.mind_packets |> snd) env xs)
 
 let report ?(cache=false) () =
   match Sys.getenv_opt "SOMA_HASH" with
