@@ -14,6 +14,11 @@ checks = {
  'native': ('Soma.NativeSpec', ['Native.signed_exact', 'Native.add_refines', 'Native.mul_refines',
     'Native.sub_refines', 'Native.add_guard', 'Native.mul_guard', 'Native.decimal18_fits64',
     'Native.add_overflow_is_not_nat_add', 'Native.decimal18_product_needs_another_bound']),
+ 'native_semantics': ('Soma.NativeSemantics', ['steps_trans', 'steps_bind', 'steps_protect',
+    'invocation_raise_reaches_handler', 'loop_finishes', 'loop_continues', 'loop_terminates',
+    'reference_roundtrip', 'callback_write_then_raise', 'writes_read_back', 'writes_keep_identities',
+    'writes_preserve_other_reads', 'writes_preserve_well_formed', 'allocation_preserves_well_formed',
+    'empty_world_well_formed', 'step_preserves_well_formed', 'steps_preserve_well_formed']),
  'wire': ('Soma.Wire', ['prefix_decodes', 'split_at_walk_append_length', 'frame_roundtrip', 'frame_roundtrip_default']),
  'host': ('Soma.HostSpec', ['SocketWrites.advance_preserves_bytes',
     'SocketWrites.advance_past_end', 'SocketWrites.writes_preserve_bytes']),
@@ -35,7 +40,8 @@ crypto |= {'Uint63Axioms.' + name for name in
      'ltb_spec', 'leb_spec', 'eqb_correct', 'eqb_refl', 'of_to_Z']}
 cast = {'Gradual.unknown', 'Gradual.err', 'Gradual.cast'}
 for group, (module, theorems) in checks.items():
-    allowed = crypto if group == 'crypto' else cast if group == 'cast' else set()
+    allowed = (crypto if group == 'crypto' else cast if group == 'cast'
+               else {'PrimInt63.int'} if group == 'native_semantics' else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')
