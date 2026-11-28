@@ -4,8 +4,10 @@
 `Soma.Native.program`, with `entry_runs` for the actual `Native.Export` boundary.
 It introduces no alternate application syntax, evaluator or global axioms.
 `step` changes a program and its heap by one transition; `steps` is its finite
-reflexive/transitive closure. Returned values and thrown exception objects are
-terminal programs.
+reflexive/transitive closure. `diverges` describes an infinite sequence of
+actual steps coinductively. Returned values and thrown exception objects are
+terminal programs. A guarded proof establishes divergence of an unconditional
+continuing loop, including when its result type has no terminating value.
 
 ## Implemented layer
 
@@ -33,16 +35,19 @@ programs. A client must discharge the relevant native implementation laws;
 an assumed snapshot law does not establish that an actual mutable table
 implements that snapshot.
 
-`loop_terminates` requires a heap/state invariant, finite execution of the actual
+`loop_has_terminating_execution` requires a heap/state invariant, finite execution of the actual
 step program and a decreasing natural measure on each continued state. It adds
 no runtime fuel or input limit. A successful iteration can change the heap.
-The theorem does not assert that arbitrary loops terminate.
+This proves existence of a successful execution (weak normalization), not
+termination of every execution or universal loop correctness. Foreign relations
+can admit more than one outcome; universal theorems must constrain and cover
+all of those transitions.
 
 The checked programs include a generic reference write/read roundtrip and a
 newly allocated callback which writes, throws, and is caught by a handler that
 observes both the new value and the exact original exception. These are
 operational proofs over the actual constructors. The contract-assumption
-fixture checks all 17 exported theorems; only the existing `PrimInt63.int`
+fixture checks all 18 exported theorems; only the existing `PrimInt63.int`
 primitive type is allowed.
 
 ## Scope still open
@@ -60,10 +65,12 @@ Kykeon's full Native-semantics gap or verify the generated runtime.
 
 The sibling Kykeon proof-only `soma/verification_descriptor_scan.soma` client
 uses these rules with the real descriptor `execute_step` and `allocate_fd`
-definitions. It proves termination at the first free candidate following a
-finite busy prefix, under an explicit stable-membership law. Numeric lowest-fd
-claims still require machine-word no-wrap/range reasoning, finite-table bounds
-and a proved connection to the actual fd table.
+definitions. It constructs a successful finite execution returning the first
+free candidate following a finite busy prefix, under an explicit exact
+membership law. Free-boundary preservation is checked separately as an
+invariant. Universal execution correctness/termination and numeric lowest-fd
+claims still need further proofs, machine-word no-wrap/range reasoning,
+finite-table bounds and a proved connection to the actual fd table.
 
 ## Build and checking
 

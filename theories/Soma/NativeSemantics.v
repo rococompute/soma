@@ -114,6 +114,9 @@ Inductive steps {A} : world -> Native.program A -> world -> Native.program A -> 
     step w body middle following -> steps middle following final last ->
     steps w body final last.
 
+CoInductive diverges {A} : world -> Native.program A -> Prop :=
+| Diverges_step w body w' body' : step w body w' body' -> diverges w' body' -> diverges w body.
+
 Definition entry_runs {A} w (code : Native.entry A) w' (answer : result A) : Prop :=
   (match code in Native.entry T return result T -> Prop with Native.Export body => fun result =>
     match result with
@@ -162,9 +165,12 @@ Proof.
   eapply Steps_cons; [apply Step_bind_return|apply Steps_refl].
 Qed.
 
-(** A useful loop rule must prove both preservation and a decreasing measure
-    for the actual step program. This imposes no fuel or runtime input cap. *)
-Theorem loop_terminates S A (body : S -> Native.program (Native.progress S A))
+(** This rule constructs a finite successful execution from finite iteration
+    witnesses and a decreasing measure. It is weak normalization: additional
+    foreign transitions may permit other executions or divergence. Strong
+    normalization/universal loop correctness still needs separate proof.
+    There is no fuel or runtime input cap. *)
+Theorem loop_has_terminating_execution S A (body : S -> Native.program (Native.progress S A))
     (invariant : S -> world -> Prop) (measure : S -> nat) :
   (forall state w, invariant state w ->
     exists w' progress, steps w (body state) w' (Native.Return progress) /\
@@ -185,6 +191,13 @@ Proof.
     destruct (IH next Hless w' Hnext) as [final [value Hdone]].
     exists final, value. eapply steps_trans; [eapply loop_continues; exact Hrun|exact Hdone].
   - exists w', value. now apply loop_finishes.
+Qed.
+
+Theorem spinning_loop_diverges S A w (initial : S) :
+  diverges w (Native.Loop (fun state => Native.Return (@Native.Continue S A state)) initial).
+Proof.
+  cofix IH. eapply Diverges_step; [apply Step_loop|].
+  eapply Diverges_step; [apply Step_bind_return|exact IH].
 Qed.
 
 Theorem reference_roundtrip A w (initial written : A) :
