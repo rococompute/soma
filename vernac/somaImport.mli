@@ -153,3 +153,8 @@ val rocq_source_in_project : string -> bool
 (** The same conservative loaded dependency certification used by affected
     tests, for the root build's producer metadata after proof jobs joined. *)
 val loaded_dependencies_certified : source:string -> bool
+
+(** Checked input fingerprints of the loaded project imports, including
+    declaration files and their companions. Refuses stale/uncertified stamps.
+    This does not inventory external libraries or attest the complete TCB. *)
+val verification_project_inputs : unit -> (string * string) list

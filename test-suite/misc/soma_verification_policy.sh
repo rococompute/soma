@@ -150,3 +150,44 @@ cp good.exp.txt main.exp
 soma extract main.soma -no-soma-prelude -o native >plain.log 2>&1
 test ! -e native/verification.toml
 echo 'PASS: native obligations, static evidence, cached imports, mandatory policy, companion sealing, receipts and unchanged product bytes'
+# Imported project identities must survive crossing a dependency's cache/root.
+mkdir provider consumer
+cat >provider/soma.toml <<'TOML'
+[project]
+name="provider"
+version="0.1.0"
+TOML
+cat >provider/policy.soma <<'SOMA'
+Definition value : nat := 1.
+Verification Properties "valid" Invariants "" Trust "".
+SOMA
+printf 'Theorem valid : value=1. Proof. reflexivity. Qed.\n' >provider/policy.exp
+cat >consumer/soma.toml <<'TOML'
+[project]
+name="consumer"
+version="0.1.0"
+[dependencies]
+"fixture/provider"={path="../provider"}
+TOML
+cat >consumer/main.soma <<'SOMA'
+Import provider.policy.
+Definition main := value.
+Verification Properties "valid" Invariants "" Trust "".
+SOMA
+printf 'Theorem valid : main=value. Proof. reflexivity. Qed.\n' >consumer/main.exp
+(
+ cd consumer
+ SOMA_REQUIRE_VERIFICATION=1 soma extract main.soma -no-soma-prelude -o first >../dependency-first.log 2>&1
+ printf '\n(* changed dependency source *)\n' >>../provider/policy.soma
+ SOMA_REQUIRE_VERIFICATION=1 soma extract main.soma -no-soma-prelude -o second >../dependency-second.log 2>&1
+ cmp first/prog.ml second/prog.ml
+ python3 - <<'PY'
+from pathlib import Path
+import tomllib
+before=tomllib.loads(Path('first/verification.toml').read_text())['project-imports']
+after=tomllib.loads(Path('second/verification.toml').read_text())['project-imports']
+assert any(row['file'].endswith('/provider/policy.soma') for row in before)
+assert before!=after, 'dependency source change disappeared from native verification receipt'
+PY
+)
+echo 'PASS: native receipts bind external project source identities independently of runtime bytes'

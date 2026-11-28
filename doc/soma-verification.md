@@ -53,6 +53,14 @@ The receipt records SHA-256 hashes of source and companion inputs (including
 absent companions), separate property/invariant inventories, kernel contract and
 proof-witness hashes, each proof's assumptions, and the complete used/allowed
 assumption sets. An unsuccessful check cannot publish new native products.
+`project-imports` records the checked input fingerprint of each transitive
+project import, including `.definition` files. These use the import cache's
+identity over source, proof/extension companions, foreign-file inputs and
+implicit folder-rule selection. Stale or uncertified project import stamps are
+rejected. Consequently even an imported-source edit that leaves runtime bytes
+unchanged invalidates existing project publication evidence. Dependencies in
+other selected Soma projects are included; external installed libraries and the
+full runtime TCB still require their own inventory.
 Successful extraction without a policy removes any stale exported verification
 receipt. Receipts record an audit; they are not proofs of the compiler,
 extraction, external implementations or the rest of the runtime's TCB.

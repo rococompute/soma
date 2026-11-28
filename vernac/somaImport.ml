@@ -1270,6 +1270,51 @@ let collect_loaded_dependencies ~source =
 let loaded_dependencies_certified ~source =
   let _, _, complete = collect_loaded_dependencies ~source in complete
 
+(* Bind source provenance even when a source edit leaves the kernel terms and
+   extracted bytes unchanged. The same input fingerprint as the import cache
+   includes companions, foreign files and implicit folder-rule selection. Do
+   not adopt current source bytes if they no longer describe the loaded cache. *)
+let verification_project_inputs () =
+  let p=current () in
+  let source_name file =
+    let file=absolute file and prefix=p.root ^ "/" in
+    if CString.is_prefix prefix file then String.sub file (String.length prefix) (String.length file-String.length prefix)
+    else file in
+  (* Dependency caches live under the build's cache; match the most specific
+     prefix before treating a loaded object as one of the root's libraries. *)
+  let projects=p :: List.map project_of_dependency (dependencies ()) |>
+    List.sort (fun a b -> Int.compare (String.length b.cache_dir) (String.length a.cache_dir)) in
+  let seen=Hashtbl.create 17 and inputs=ref [] in
+  let stale path = CErrors.user_err Pp.(str "Soma verification: imported source inputs changed or are uncertified: " ++
+                                        str path ++ str "; rebuild.") in
+  let rec visit p path src =
+    let key=p.root ^ "/" ^ path in
+    if not (Hashtbl.mem seen key) then begin
+      Hashtbl.add seen key ();
+      let stamp=stamp_of p path in
+      let metadata=if SomaCache.trusted stamp && SomaCache.trusted (vo_of p path)
+        then read_stamp stamp else None in
+      match metadata with
+      | None -> stale path
+      | Some (expected, imports, _, _) ->
+        if expected<>source_hash ~root:p.root ~rules_source:(rule_source_of p path src) src then stale path;
+        inputs := (source_name src,expected) :: !inputs;
+        List.iter (fun (path,_) -> match locate p path with
+            | Some (q,inside,src) -> visit q inside src
+            | None -> stale path) imports
+    end in
+  List.iter (fun (_,file) ->
+      let file=absolute file in
+      match List.find_opt (fun p -> CString.is_prefix (p.cache_dir ^ "/") file) projects with
+      | None -> ()
+      | Some p ->
+        let prefix=p.cache_dir ^ "/" in
+        let path=Filename.remove_extension (String.sub file (String.length prefix) (String.length file-String.length prefix)) in
+        let src=match source_of p.root path with Some src -> src | None -> stale path in
+        visit p path src)
+    (Library.loaded_library_files ());
+  List.sort_uniq compare !inputs
+
 let record_test_dependencies ~source =
   match Sys.getenv_opt "SOMA_TEST_SOURCE", Sys.getenv_opt "SOMA_TEST_DEPENDENCIES" with
   | Some requested, Some output when absolute source = requested ->

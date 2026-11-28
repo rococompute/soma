@@ -123,11 +123,14 @@ let enforce ~source ~output ~interface =
         kind (quote name) (quote d.SomaHash.contract) (quote d.SomaHash.witness) (array d.SomaHash.assumptions)) xs in
     let input_rows=List.map (fun (file,digest) -> Printf.sprintf "[[inputs]]\nfile = %s\nsha256 = %s\n"
         (quote (Filename.basename file)) (quote (Stdlib.Option.value ~default:"absent" digest))) inputs in
+    let import_rows=List.map (fun (file,digest) -> Printf.sprintf
+        "[[project-imports]]\nfile = %s\ninputs-sha256 = %s\n" (quote file) (quote digest))
+        (SomaImport.verification_project_inputs ()) in
     let definitions=List.sort (fun a b -> String.compare a.SomaHash.name b.SomaHash.name) definitions in
     let receipt=Printf.sprintf "format = 1\nmodule = %s\nsource-sha256 = %s\ntrusted = %s\nused-assumptions = %s\nproperty-count = %d\ninvariant-count = %d\n%s"
         (quote owner) (quote (SomaMerkle.file_hash source)) (array p.trusted) (array used)
         (List.length properties) (List.length invariants)
-        (String.concat "\n" (input_rows @ rows "properties" properties @ rows "invariants" invariants @
+        (String.concat "\n" (input_rows @ import_rows @ rows "properties" properties @ rows "invariants" invariants @
                             rows "definitions" (List.map (fun d -> d.SomaHash.name,d) definitions))) in
     Hashtbl.replace receipts (Unix.realpath source) receipt;
     let file=output ^ ".verification.toml" in

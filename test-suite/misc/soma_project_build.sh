@@ -93,6 +93,10 @@ python3 - <<'PY'
 from pathlib import Path
 import hashlib,tomllib
 proof=hashlib.sha256(Path('products/checked.verification.toml').read_bytes()).hexdigest()
+verification=tomllib.loads(Path('products/checked.verification.toml').read_text())
+imports=verification['project-imports']
+assert any(row['file']=='exports.definition' for row in imports)
+assert all(len(row['inputs-sha256'])==64 for row in imports)
 for name in ['public','whole','signature','certificate','forward']:
  receipt=tomllib.loads(Path('products/.receipts/'+name+'.toml').read_text())
  assert receipt['verification']==[{'extract':'source','sha256':proof}]
@@ -155,6 +159,13 @@ if soma project audit --target public >audit-source.log 2>&1; then exit 1; fi
 grep -q 'published receipt differs from fresh checking' audit-source.log
 cmp products/public.ml previous.ml
 cp previous-exp main.exp
+cp exports.definition previous-definition
+printf '\n(* changed imported declaration input *)\n' >>exports.definition
+if soma project audit --target public >audit-declaration.log 2>&1; then exit 1; fi
+grep -q 'published receipt differs from fresh checking' audit-declaration.log
+cmp products/public.ml previous.ml
+cmp products/.receipts/public.toml previous-receipt.toml
+cp previous-definition exports.definition
 test -z "$(find products/.extract -name '*.stage*' -print)"
 # Same unit through two graph edges must not duplicate runtime initialization.
 cp soma.toml previous-config
