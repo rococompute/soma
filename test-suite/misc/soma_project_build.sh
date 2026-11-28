@@ -54,18 +54,22 @@ output="checked.verification.toml"
 [build.unit.forward]
 output="forward.ml"
 parts=[{unit="whole"}]
+[build.module-list.closed]
+output="closed.sexp"
+units=["public"]
 [build.dune.native]
 directory="."
 targets=["check.exe","check.bc"]
-needs=["public","signature","certificate","forward"]
+needs=["closed","signature","certificate","forward"]
 TOML
 cat >dune-project <<'DUNE'
 (lang dune 3.13)
 DUNE
 cat >dune <<'DUNE'
 (rule (target public.ml) (deps products/public.ml) (action (copy %{deps} %{target})))
-(executable (name check) (modules check public) (modes exe byte))
+(executable (name check) (modules check (:include products/closed.sexp)) (modes exe byte))
 DUNE
+printf 'this is deliberately invalid unowned OCaml\n' >rogue.ml
 cat >check.ml <<'ML'
 let () =
   let flag : Public.flag = true in assert flag;
@@ -75,7 +79,7 @@ let () =
   print_endline "PASS: native project graph preserves types, aliases, generic values and identity"
 ML
 soma project plan >plan.log
-printf 'source: \ncertificate: source\nwhole: source\nforward: whole\nprefix: source\npublic: prefix source\nsignature: source\nnative: certificate forward public signature\n' >expected-plan
+printf 'source: \ncertificate: source\nprefix: source\npublic: prefix source\nclosed: public\nwhole: source\nforward: whole\nsignature: source\nnative: certificate closed forward signature\n' >expected-plan
 cmp plan.log expected-plan
 soma project build >build.log 2>&1
 cmp products/.extract/source/prog.ml products/complete.ml
@@ -89,6 +93,9 @@ proof=hashlib.sha256(Path('products/checked.verification.toml').read_bytes()).he
 for name in ['public','whole','signature','certificate','forward']:
  receipt=tomllib.loads(Path('products/.receipts/'+name+'.toml').read_text())
  assert receipt['verification']==[{'extract':'source','sha256':proof}]
+assert Path('products/closed.sexp').read_text()=='("Public")\n'
+closed=tomllib.loads(Path('products/.receipts/closed.toml').read_text())
+assert closed['units']==[{'unit':'public','receipt-sha256':hashlib.sha256(Path('products/.receipts/public.toml').read_bytes()).hexdigest()}]
 PY
 _build/default/check.exe
 _build/default/check.bc
@@ -118,14 +125,18 @@ cat >>soma.toml <<'TOML'
 [build.unit.padded]
 output="padded.ml"
 parts=[{whitespace="\n"},{unit="whole"},{whitespace="\n"}]
+[build.module-list.pair]
+output="pair.sexp"
+units=["whole","signature"]
 TOML
-soma project build --target padded >padded.log 2>&1
+soma project build --target padded --target pair >padded.log 2>&1
 python3 - <<'PY'
 from pathlib import Path
 import tomllib
 assert Path('products/padded.ml').read_bytes()==b'\n'+Path('products/complete.ml').read_bytes()+b'\n'
 r=tomllib.loads(Path('products/.receipts/padded.toml').read_text())
 assert r['parts'][0]==r['parts'][-1]=={'whitespace':'\n'}
+assert Path('products/pair.sexp').read_text()=='("Complete")\n'
 PY
 mv previous-config soma.toml
 # A named input must exist as a complete file in the fresh checked extraction.

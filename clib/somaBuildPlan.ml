@@ -6,9 +6,10 @@ type action = Extract of { file : string; source_root : string; options : string
                            bindings : string option; verify : bool }
             | Publish of { extract : string; file : string; output : string }
             | Compose of { output : string; parts : part list }
+            | Module_list of { output : string; units : string list }
             | Dune of { directory : string; targets : string list }
 type node = { name : string; needs : string list; action : action }
-type t = { directory : string; targets : string list; nodes : node list }
+type t = { directory : string; targets : string list; nodes : node list; source_only : bool }
 exception Error of string
 let error fmt = Printf.ksprintf (fun s -> raise (Error s)) fmt
 let kind_name = function Source_types -> "source-types" | Modules -> "modules"
@@ -43,6 +44,7 @@ let path where s = if not (relative_path s) then error "%s: expected a relative 
 let dependencies n = List.sort_uniq String.compare (n.needs @ match n.action with
     | Extract _ | Dune _ -> []
     | Publish p -> [p.extract]
+    | Module_list m -> m.units
     | Compose c -> List.filter_map (function Artifact a -> Some a.extract | Unit s -> Some s | Whitespace _ -> None) c.parts)
 let order p targets =
   let visiting = Hashtbl.create 16 and done_ = Hashtbl.create 16 in
@@ -61,7 +63,8 @@ let parse toml = match List.assoc_opt "build" toml with
   | None -> None
   | Some e ->
     let b = table "build" e in
-    keys "build" ["directory"; "targets"; "extract"; "publish"; "unit"; "dune"] b;
+    keys "build" ["directory"; "targets"; "extract"; "publish"; "unit"; "module-list"; "dune"; "source-only"] b;
+    let source_only=optional_bool "build" "source-only" b in
     let directory = path "build.directory" (optional_string "build" "directory" b ".soma-build") in
     let parse_group group f = match List.assoc_opt group b with
       | None -> [] | Some e -> table ("build." ^ group) e |> List.map (fun (name, e) ->
@@ -121,6 +124,13 @@ let parse toml = match List.assoc_opt "build" toml with
               end) xs
           | _ -> error "%s.parts must be a nonempty array of tables" where in
         Compose {output; parts}) in
+    let inventories = parse_group "module-list" (fun where t ->
+        keys where ["output"; "units"; "needs"] t;
+        let output=path where (get_string where "output" t) in
+        if not (Filename.check_suffix output ".sexp") then error "%s: output must be a .sexp file" where;
+        let units=optional_strings where "units" t in
+        if units=[] then error "%s: units must be nonempty" where;
+        Module_list {output;units}) in
     let dune = parse_group "dune" (fun where t ->
         keys where ["directory"; "targets"; "needs"] t;
         let directory=optional_string where "directory" t "." in
@@ -129,13 +139,13 @@ let parse toml = match List.assoc_opt "build" toml with
         if targets=[] then error "%s requires nonempty targets" where;
         List.iter (fun s -> ignore (path where s)) targets;
         Dune {directory;targets}) in
-    let nodes = extracts @ publications @ units @ dune in
+    let nodes = extracts @ publications @ units @ inventories @ dune in
     let seen = Hashtbl.create 16 and outputs = Hashtbl.create 16 in
     List.iter (fun n ->
         if Hashtbl.mem seen n.name then error "duplicate build target %S" n.name;
         Hashtbl.add seen n.name ();
         let output=match n.action with Extract _ | Dune _ -> None
-          | Publish p -> Some p.output | Compose c -> Some c.output in
+          | Publish p -> Some p.output | Compose c -> Some c.output | Module_list m -> Some m.output in
         Option.iter (fun output ->
           Hashtbl.iter (fun previous _ ->
               let prefix a b = String.starts_with ~prefix:(a ^ "/") b in
@@ -145,21 +155,26 @@ let parse toml = match List.assoc_opt "build" toml with
             error "reserved build output %S" output;
           Hashtbl.add outputs output ()) output) nodes;
     let targets = optional_strings "build" "targets" b in
-    let targets = if targets = [] then List.map (fun n -> n.name) (publications @ units @ dune) else targets in
-    let p = {directory; targets; nodes} in
+    let targets = if targets = [] then List.map (fun n -> n.name) (publications @ units @ inventories @ dune) else targets in
+    let p = {directory; targets; nodes; source_only} in
+    if source_only then List.iter (fun n -> match n.action with
+        | Extract e when not e.verify -> error "%s: source-only builds require verify=true for every extraction" n.name
+        | _ -> ()) nodes;
     ignore (order p (List.map (fun n -> n.name) nodes));
     ignore (order p targets);
     let extraction name reference = match (List.find (fun n -> n.name=reference) nodes).action with
       | Extract _ -> () | _ -> error "%s: artifact reference %s is not an extraction" name reference in
+    let ocaml_unit name reference = match (List.find (fun n -> n.name=reference) nodes).action with
+      | Compose _ -> ()
+      | Publish p when Filename.check_suffix p.output ".ml" || Filename.check_suffix p.output ".mli" -> ()
+      | _ -> error "%s: unit reference %s is not an OCaml unit" name reference in
     List.iter (fun n -> match n.action with Extract _ | Dune _ -> ()
         | Publish p -> extraction n.name p.extract
+        | Module_list m -> List.iter (ocaml_unit n.name) m.units
         | Compose c ->
         List.iter (function Whitespace _ -> () | Artifact a ->
             extraction n.name a.extract
-          | Unit u -> match (List.find (fun n -> n.name=u) nodes).action with
-            | Compose _ -> ()
-            | Publish p when Filename.check_suffix p.output ".ml" || Filename.check_suffix p.output ".mli" -> ()
-            | _ -> error "%s: unit reference %s is not an OCaml unit" n.name u) c.parts) nodes;
+          | Unit u -> ocaml_unit n.name u) c.parts) nodes;
     Some p
 let load file =
   let ic = open_in_bin file in

@@ -134,10 +134,11 @@ let subprocess ~root ~env program args =
       match wait () with Unix.WEXITED 0 -> ()
         | Unix.WEXITED n -> fail "%s failed (exit %d)" program n
         | _ -> fail "%s interrupted" program)
-let environment root bindings ~verify =
+let environment root bindings ~verify ~source_only =
   let replace = ["SOMA_PROJECT_ROOT", root] @
     (match bindings with None -> [] | Some s -> ["SOMA_OCAML_BINDINGS_MODULE",s]) @
-    (if verify then ["SOMA_REQUIRE_VERIFICATION","1"] else []) in
+    (if verify then ["SOMA_REQUIRE_VERIFICATION","1"] else []) @
+    (if source_only then ["SOMA_SOURCE_ONLY_OCAML","1"] else []) in
   let env=Array.to_list (Unix.environment ()) |> List.filter (fun s ->
       not (List.exists (fun key -> String.starts_with ~prefix:(key ^ "=") s)
         (["SOMA_BUILD_ROOT"; "SOMA_PROJECT_CACHE"; "SOMA_PROJECT_PREFIX"; "SOMA_IMPORT_STACK"] @ List.map fst replace))) in
@@ -209,7 +210,7 @@ let build ~compiler ~config ~config_hash p targets =
                 let extraction_lock=Filename.concat parent
                     ("." ^ Filename.basename tmp ^ ".soma-ocaml.lock") in
                 stages := tmp :: extraction_lock :: !stages;
-                subprocess ~root:source_root ~env:(environment source_root e.bindings ~verify:e.verify) compiler
+                subprocess ~root:source_root ~env:(environment source_root e.bindings ~verify:e.verify ~source_only:p.source_only) compiler
                   (["extract";e.file] @ e.options @ ["-o";tmp]);
                 let final=inside parent n.name in
                 config_unchanged ();
@@ -246,6 +247,30 @@ let build ~compiler ~config ~config_hash p targets =
                   fail "%s: duplicate whole artifact %s" n.name l.identity;
                 Hashtbl.add seen key (); Hashtbl.add seen l.file ()) leaves;
             publish n.name c.output pieces
+          | Module_list m ->
+            let entries=List.map (fun unit ->
+                let p=Hashtbl.find products unit in
+                regular p.file;
+                let contents=String.concat "" (List.map (function Data l -> l.contents | Padding s -> s) p.pieces) in
+                if read p.file<>contents then fail "published unit changed before module inventory: %s" p.file;
+                let module_name=String.capitalize_ascii (Filename.remove_extension (Filename.basename p.file)) in
+                let identifier s = String.length s>0 && (match s.[0] with 'A'..'Z' -> true | _ -> false) &&
+                  String.for_all (function 'A'..'Z'|'a'..'z'|'0'..'9'|'_'|'\'' -> true | _ -> false) s in
+                if not (identifier module_name) then fail "invalid OCaml module filename %s" p.file;
+                let receipt=inside directory (".receipts/" ^ unit ^ ".toml") in regular receipt;
+                module_name,unit,SomaMerkle.file_hash receipt) m.units in
+            let names=List.map (fun (name,_,_) -> name) entries |> List.sort_uniq String.compare in
+            let contents="(" ^ String.concat " " (List.map (Printf.sprintf "%S") names) ^ ")\n" in
+            config_unchanged ();
+            let file=inside directory m.output in
+            let changed=atomic file contents in
+            let receipt=Printf.sprintf
+                "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nunits = [%s]\n"
+                (toml_string config_hash) (toml_string m.output) (toml_string (SomaMerkle.string contents))
+                (String.concat ",\n" (List.map (fun (_,unit,hash) ->
+                     Printf.sprintf "{ unit = %s, receipt-sha256 = %s }" (toml_string unit) (toml_string hash)) entries)) in
+            ignore (atomic (inside directory (".receipts/" ^ n.name ^ ".toml")) receipt);
+            Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file
           | Dune d ->
             config_unchanged ();
             let dir=if d.directory="." then root else inside root d.directory in

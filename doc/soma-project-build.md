@@ -13,6 +13,7 @@ version = "0.1.0"
 [build]
 directory = ".soma-build"
 targets = ["executable"]
+source-only = true
 
 [build.extract.source]
 file = "main.soma"
@@ -32,6 +33,10 @@ parts = [
 extract = "source"
 file = "prog.ml"
 output = "implementation.ml"
+
+[build.module-list.modules]
+output = "modules.sexp"
+units = ["public", "implementation"]
 
 [build.dune.executable]
 directory = "."
@@ -55,6 +60,20 @@ It cannot read arbitrary project files or slice or modify compiler output.
 Its extraction is an implicit dependency. Published `.ml`/`.mli` outputs may
 also be referenced by `{ unit = "NAME" }`; metadata files cannot be inserted
 into OCaml compositions through unit references.
+
+`[build.module-list.NAME]` emits a closed Dune module list from named checked
+unit outputs, without globbing a directory that could contain stale or unowned
+OCaml. Implementation/signature pairs become one module name. Every unit's
+published bytes are rechecked, and the inventory receipt binds the contributing
+unit receipt hashes. Dune can consume it as `(modules (:include modules.sexp))`.
+Metadata nodes and extractions cannot be passed as units.
+
+`[build] source-only = true` requires `verify = true` on every extraction and
+refuses copied foreign OCaml source modules before extraction publishes files.
+Soma-generated bindings/runtime modules, linked library modules and C sources
+remain available. This distinguishes generated OCaml from an extractor merely
+copying a handwritten foreign `.ml` file. It does not verify linked libraries,
+C, extraction or the compiler; those remain part of the TCB.
 Artifact parts implicitly depend on their extraction; `{ unit = "prefix" }`
 depends on another composed unit and consumes its complete contents. Targets
 are extracted once per invocation, even if several units depend on them.

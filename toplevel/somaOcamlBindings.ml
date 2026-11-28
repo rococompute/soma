@@ -967,6 +967,11 @@ let check_owned_module_names entries =
 
 let checked_modules ?(reserved = []) () =
   let modules = used_modules () in
+  if Sys.getenv_opt "SOMA_SOURCE_ONLY_OCAML"=Some "1" then
+    List.iter (fun (m:SomaForeign.ocaml_module) -> match m.ml_file with
+        | Some file when not (Filename.check_suffix file ".c") ->
+          error Pp.(str "source-only build cannot copy OCaml source: " ++ str file)
+        | _ -> ()) modules;
   ignore (main_reference ());
   (* Generated filenames must stay distinct on case-insensitive filesystems,
      and an own module must not shadow a library top used by another binding.
