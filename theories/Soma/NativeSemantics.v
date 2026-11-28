@@ -1,8 +1,8 @@
 (** Small-step semantics over the actual [Native.program] syntax.
 
     This layer covers synchronous control, loops, references, vectors, text
-    buffers and unary callbacks. It is not semantics for every Native
-    constructor: tables, higher-order string mapping, multiargument callbacks,
+    buffers, word/string-key tables and unary callbacks. It is not semantics
+    for every Native constructor: other table-key domains, higher-order string mapping, multiargument callbacks,
     promises/deferred scheduling and physical GC still need their rules.
     In particular an unsupported operation is stuck, never silently pure.
 
@@ -14,7 +14,7 @@
     oracle or erased-value store. Allocation uses abstract fresh identities;
     it does not model native/bytecode physical allocation costs or GC. *)
 From Soma Require Import Native.
-From Soma Require NativeWord.
+From Soma Require NativeWord NativeTable.
 From Corelib Require Import PrimInt63.
 From Stdlib Require Import List Arith.Wf_nat Arith.PeanoNat Strings.String Strings.Ascii ZArith Lia.
 Import ListNotations.
@@ -31,14 +31,16 @@ Inductive cell : Type :=
 | Callback_cell (A B : Type) (id : nat) (body : A -> Native.program B)
 | Array_cell (A : Type) (id : nat) (items : list A)
 | Text_cell (id : nat) (contents : string)
-| Fault_cell (id : nat) (description : fault).
+| Fault_cell (id : nat) (description : fault)
+| Table_cell (K V : Type) (domain : NativeTable.key_domain K) (id : nat) (entries : list (K * V)).
 Arguments Reference_cell {A} id value.
 Arguments Callback_cell {A B} id body.
 Arguments Array_cell {A} id items.
+Arguments Table_cell {K V} domain id entries.
 
 Definition cell_id c := match c with
   | Reference_cell id _ | Callback_cell id _ | Array_cell id _
-  | Text_cell id _ | Fault_cell id _ => id
+  | Text_cell id _ | Fault_cell id _ | Table_cell _ id _ => id
   end.
 Inductive backend := Native_code | Bytecode.
 Record world := Runtime_world { execution_backend : backend; next_id : nat; cells : list cell }.
@@ -103,6 +105,19 @@ Inductive text_updates (id : nat) (text : string) : list cell -> list cell -> Pr
 | Text_updates_here old rest : text_updates id text (Text_cell id old :: rest) (Text_cell id text :: rest)
 | Text_updates_later before rest changed : cell_id before <> id -> text_updates id text rest changed ->
     text_updates id text (before :: rest) (before :: changed).
+
+Inductive table_contents {K V} (id : nat) (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) : list cell -> Prop :=
+| Table_here rest : table_contents id domain entries (Table_cell domain id entries :: rest)
+| Table_later before rest : cell_id before <> id -> table_contents id domain entries rest ->
+    table_contents id domain entries (before :: rest).
+
+Inductive table_updates {K V} (id : nat) (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) : list cell -> list cell -> Prop :=
+| Table_updates_here (old : list (K * V)) rest : table_updates id domain entries
+    (Table_cell domain id old :: rest) (Table_cell domain id entries :: rest)
+| Table_updates_later before rest changed : cell_id before <> id -> table_updates id domain entries rest changed ->
+    table_updates id domain entries (before :: rest) (before :: changed).
 
 Fixpoint replace_nth {A} (index : nat) (value : A) (items : list A) : list A :=
   match index, items with
@@ -271,7 +286,35 @@ Inductive step : forall A : Type, world -> Native.program A -> world -> Native.p
 | Step_string_substring_invalid w text offset count :
     text_fits text -> NativeWord.bounded_slice offset count (String.length text) = None ->
     step w (Native.String_substring text offset count)
-      (with_fault w (Fault_invalid_argument "String.sub / Bytes.sub")) (Native.Throw (fault_handle w)).
+      (with_fault w (Fault_invalid_argument "String.sub / Bytes.sub")) (Native.Throw (fault_handle w))
+(** Capacity is a signed native word. Like Hashtbl.create, a negative hint
+    still creates an empty table. Bucket layout, random seeds, native allocation
+    cost/failure and mutable native string aliases are refinement obligations. *)
+| Step_new_table K V w capacity (domain : NativeTable.key_domain K) :
+    step w (@Native.New_table K V capacity)
+      (allocate w (Table_cell (V:=V) domain (next_id w) []))
+      (Native.Return (Native.Table (next_id w)))
+| Step_table_mem K V w id (domain : NativeTable.key_domain K) entries key :
+    table_contents (V:=V) id domain entries (cells w) ->
+    step w (Native.Table_mem (@Native.Table K V id) key) w
+      (Native.Return (match NativeTable.lookup domain key entries with Some _ => true | None => false end))
+| Step_table_find K V w id (domain : NativeTable.key_domain K) entries key :
+    table_contents (V:=V) id domain entries (cells w) ->
+    step w (Native.Table_find (@Native.Table K V id) key) w
+      (match NativeTable.lookup domain key entries with
+       | Some value => Native.Return value | None => Native.Throw (ExceptionValue 0) end)
+| Step_table_find_opt K V w id (domain : NativeTable.key_domain K) entries key :
+    table_contents (V:=V) id domain entries (cells w) ->
+    step w (Native.Table_find_opt (@Native.Table K V id) key) w
+      (Native.Return (NativeTable.lookup domain key entries))
+| Step_table_replace K V w changed id (domain : NativeTable.key_domain K) entries key value :
+    table_contents (V:=V) id domain entries (cells w) ->
+    table_updates id domain (NativeTable.replace domain key value entries) (cells w) changed ->
+    step w (Native.Table_replace (@Native.Table K V id) key value) (replace_cells w changed) (Native.Return tt)
+| Step_table_remove K V w changed id (domain : NativeTable.key_domain K) entries key :
+    table_contents (V:=V) id domain entries (cells w) ->
+    table_updates id domain (NativeTable.remove domain key entries) (cells w) changed ->
+    step w (Native.Table_remove (@Native.Table K V id) key) (replace_cells w changed) (Native.Return tt).
 
 Inductive steps {A} : world -> Native.program A -> world -> Native.program A -> Prop :=
 | Steps_refl w body : steps w body w body
@@ -281,6 +324,18 @@ Inductive steps {A} : world -> Native.program A -> world -> Native.program A -> 
 
 CoInductive diverges {A} : world -> Native.program A -> Prop :=
 | Diverges_step w body w' body' : step w body w' body' -> diverges w' body' -> diverges w body.
+
+(** This typed view exposes creation's supported key domain without injecting
+    existential type indices or assuming a type-equality decision procedure. *)
+Definition supported_table_creation {A} (body : Native.program A) :=
+  match body with
+  | @Native.New_table K V _ => inhabited (NativeTable.key_domain K)
+  | _ => True
+  end.
+
+Theorem step_requires_supported_table_keys A w (body : Native.program A) final following :
+  step w body final following -> supported_table_creation body.
+Proof. intro Move. destruct Move; cbn [supported_table_creation]; eauto. Qed.
 
 Definition entry_runs {A} w (code : Native.entry A) w' (answer : result A) : Prop :=
   (match code in Native.entry T return result T -> Prop with Native.Export body => fun result =>
@@ -556,6 +611,90 @@ Theorem text_updates_preserve_well_formed id text w changed :
   text_updates id text (cells w) changed -> well_formed w -> well_formed (replace_cells w changed).
 Proof. intro H. apply same_identities_preserve_well_formed. now apply text_updates_keep_identities in H. Qed.
 
+Theorem table_updates_read_back K V id (domain : NativeTable.key_domain K) (entries : list (K * V)) before after :
+  table_updates id domain entries before after -> table_contents id domain entries after.
+Proof. intro H. induction H; constructor; assumption. Qed.
+
+Theorem table_updates_keep_identities K V id (domain : NativeTable.key_domain K) (entries : list (K * V)) before after :
+  table_updates id domain entries before after -> map cell_id before = map cell_id after.
+Proof. intro H. induction H; cbn; congruence. Qed.
+
+Theorem table_updates_preserve_well_formed K V id (domain : NativeTable.key_domain K) (entries : list (K * V)) w changed :
+  table_updates id domain entries (cells w) changed -> well_formed w -> well_formed (replace_cells w changed).
+Proof. intro H. apply same_identities_preserve_well_formed. now apply table_updates_keep_identities in H. Qed.
+
+Theorem table_updates_preserve_other_reads K V A id other (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) (observed : A) before after :
+  table_updates id domain entries before after -> reads other observed before -> reads other observed after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem table_updates_preserve_array_contents K V A id other (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) (items : list A) before after :
+  table_updates id domain entries before after -> array_contents other items before -> array_contents other items after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem table_updates_preserve_text_contents K V id other (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) text before after :
+  table_updates id domain entries before after -> text_contents other text before -> text_contents other text after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem table_updates_preserve_other_tables K V L W id other (domain : NativeTable.key_domain K)
+    (other_domain : NativeTable.key_domain L) (entries : list (K * V)) (observed : list (L * W)) before after :
+  id <> other -> table_updates id domain entries before after ->
+  table_contents other other_domain observed before -> table_contents other other_domain observed after.
+Proof.
+  intros Different Change. induction Change; intro Read; inversion Read; subst.
+  - contradiction.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem writes_preserve_table_contents A K V id other (value : A) (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) before after :
+  writes id value before after -> table_contents other domain entries before -> table_contents other domain entries after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem array_updates_preserve_table_contents A K V id other (items : list A) (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) before after :
+  array_updates id items before after -> table_contents other domain entries before -> table_contents other domain entries after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
+Theorem text_updates_preserve_table_contents K V id other text (domain : NativeTable.key_domain K)
+    (entries : list (K * V)) before after :
+  text_updates id text before after -> table_contents other domain entries before -> table_contents other domain entries after.
+Proof.
+  intros Change. induction Change; intro Read; inversion Read; subst.
+  - constructor; assumption.
+  - constructor.
+  - constructor; [assumption|now apply IHChange].
+Qed.
+
 Definition array_shape c :=
   (cell_id c, match c with Array_cell _ items => Some (List.length items) | _ => None end).
 
@@ -667,6 +806,14 @@ Proof.
   - constructor; [assumption|now apply IHtext_updates].
 Qed.
 
+Theorem table_updates_preserve_storage_bounds K V id (domain : NativeTable.key_domain K) (entries : list (K * V)) w changed :
+  table_updates id domain entries (cells w) changed -> storage_bounds w -> storage_bounds (replace_cells w changed).
+Proof.
+  unfold storage_bounds, replace_cells; cbn. intro H. induction H; intro Hbounds; inversion Hbounds; subst.
+  - constructor; [exact I|assumption].
+  - constructor; [assumption|now apply IHtable_updates].
+Qed.
+
 Lemma allocate_preserves_storage_bounds w c :
   cell_bounds c -> storage_bounds w -> storage_bounds (allocate w c).
 Proof. unfold storage_bounds, allocate; cbn. intros. now constructor. Qed.
@@ -690,7 +837,8 @@ Theorem step_preserves_well_formed A w (body : Native.program A) w' body' :
 Proof.
   intro Hstep. induction Hstep; intro Hwf; try assumption;
     eauto using allocation_preserves_well_formed, writes_preserve_well_formed,
-      array_updates_preserve_well_formed, text_updates_preserve_well_formed, bounds_preserve_well_formed.
+      array_updates_preserve_well_formed, text_updates_preserve_well_formed,
+      table_updates_preserve_well_formed, bounds_preserve_well_formed.
 Qed.
 
 Theorem steps_preserve_well_formed A w (body : Native.program A) w' body' :
@@ -713,7 +861,8 @@ Theorem step_preserves_storage_bounds A w (body : Native.program A) w' body' :
 Proof.
   intro Hstep. induction Hstep; intro Hbounds; try assumption;
     eauto using writes_preserve_storage_bounds, array_updates_preserve_storage_bounds,
-      text_updates_preserve_storage_bounds, allocate_preserves_storage_bounds, bounds_preserve_storage_bounds.
+      text_updates_preserve_storage_bounds, table_updates_preserve_storage_bounds,
+      allocate_preserves_storage_bounds, bounds_preserve_storage_bounds.
   all: apply allocate_preserves_storage_bounds; [|assumption].
   all: cbn [cell_bounds]; auto.
   all: try (split; [apply Nat.lt_0_succ|assumption]).

@@ -290,8 +290,8 @@ Proof.
 Qed.
 End EntryRules.
 
-(** Tables still have no rules in NativeSemantics. Accessibility alone
-    would certify it vacuously; the progress half of total rejects it. *)
+(** Unit-key tables have no domain witness in the current word/string model.
+    Accessibility alone would certify one vacuously; total's progress rejects it. *)
 Theorem unsupported_table_is_not_total
     (foreign : forall T : Type, (unit -> T) -> world -> result T -> world -> Prop)
     (named : forall X Y : Type, String.string -> String.string -> X -> world -> result Y -> world -> Prop)
@@ -300,5 +300,7 @@ Theorem unsupported_table_is_not_total
 Proof.
   apply stuck_without_postcondition_is_not_total.
   - intros [answer [Equal _]]. destruct answer; discriminate.
-  - intros [next following] Move. unfold transition in Move; cbn in Move. inversion Move.
+  - intros [next following] Move. unfold transition in Move; cbn in Move.
+    apply step_requires_supported_table_keys in Move. cbn [supported_table_creation] in Move.
+    destruct Move as [Domain]. exact (NativeTable.unit_keys_unsupported Domain).
 Qed.

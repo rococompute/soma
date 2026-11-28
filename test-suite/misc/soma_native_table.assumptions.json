@@ -1,0 +1,168 @@
+{
+  "NativeTable.key_domain_nontrivial": [
+    "PrimInt63.eqb",
+    "PrimInt63.int"
+  ],
+  "NativeTable.unit_keys_unsupported": [
+    "PrimInt63.eqb",
+    "PrimInt63.int"
+  ],
+  "NativeTable.equal_refl": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.equal_spec": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_correct",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.equal_other": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_correct",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.lookup_replaced": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.replace_incoming_key": [
+    "PrimInt63.eqb",
+    "PrimInt63.int"
+  ],
+  "NativeTable.lookup_replaced_other": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_correct",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.lookup_removed_other": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_correct",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.remove_first_duplicate": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.lookup_removed_duplicate": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTable.lookup_borrows_value": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "Uint63Axioms.eqb_correct",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTableSpec.table_contents_update_exists": [
+    "PrimInt63.int"
+  ],
+  "NativeTableSpec.table_step_is_terminal": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_with_step_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.new_table_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_mem_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_find_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_find_opt_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_replace_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.table_remove_is_total": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ],
+  "NativeTableSpec.replaced_table_reads_original_value": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub",
+    "Uint63Axioms.eqb_refl"
+  ],
+  "NativeTableSpec.missing_table_key_raises_existing_not_found": [
+    "PrimInt63.eqb",
+    "PrimInt63.int",
+    "PrimInt63.land",
+    "PrimInt63.lor",
+    "PrimInt63.lsl",
+    "PrimInt63.lsr",
+    "PrimInt63.ltb",
+    "PrimInt63.sub"
+  ]
+}

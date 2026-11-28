@@ -13,7 +13,7 @@ continuing loop, including when its result type has no terminating value.
 
 The current rules cover `Bind`, `Invoke`, `Loop`, `Protect`, reference
 allocation/read/write, vectors, text buffers, string length/index/slices,
-built-in faults, unary callback allocation/calls and named callbacks.
+word/string-key tables, built-in faults, unary callback allocation/calls and named callbacks.
 Return and throw are terminal. A callback stores its checked program body and
 receives its own newly allocated handle; calling it executes that body, rather
 than treating the whole callback as an opaque result. Bind and exception
@@ -88,8 +88,8 @@ maximal execution to satisfy the postcondition. Its foreign-call rules account
 for **every** permitted return and exception, including the resulting world.
 A negative theorem shows that an allowed false return rejects a true-only
 specification, even if a successful true-returning path also exists. Other
-negative theorems reject a spinning loop and an unsupported table
-operation. Return and throw satisfy total correctness exactly when their
+negative theorems reject a spinning loop and a table with an unsupported key
+domain. Return and throw satisfy total correctness exactly when their
 specified outcome meets the postcondition.
 
 `entry_total` applies the same judgment at the actual `Native.Export` boundary;
@@ -119,7 +119,7 @@ observes both the new value and the exact original exception. These are
 operational proofs over the actual constructors. Further proofs cover vector
 replacement, buffer append/readback, empty-vector identity, fresh faults,
 unchanged array headers, storage bounds, backend preservation and heap frames.
-The contract-assumption fixture checks 51 semantic results and ten checked-index/span
+The contract-assumption fixture checks 63 semantic results and ten checked-index/span
 results. The word interpretation exposes the existing kernel primitives
 `PrimInt63.int`, `sub`, `ltb`, `eqb`, `land`, `lor`, `lsl` and `lsr` to
 `Print Assumptions`; these eight names are explicitly inventoried in the
@@ -158,6 +158,48 @@ OCaml 5.5's full-length `String.sub` returns its original input object. Runtime
 conformance checks retain that behavior, but string identity/GC/allocation
 refinement is not established by these content contracts.
 
+## Owned word/string-key tables
+
+`Soma.NativeTable` gives typed lookup, replacement and removal for native-word
+and immutable Source-string keys, with arbitrary value types. The sequence is
+an abstraction of lookup order among equal keys, rather than bucket or
+iteration order. Replacing an existing binding uses the incoming key/value;
+removal removes the first binding and reveals any older duplicate. Twelve
+results prove readback, other-key preservation, value membership and duplicate
+behavior. Equality uses the existing kernel word equality and string equality.
+The exact per-theorem inventories in `soma_native_table.assumptions.json`
+explicitly include the existing `Uint63Axioms.eqb_refl`/`eqb_correct` where used;
+these are not new axioms or a claim of extraction refinement.
+
+`NativeSemantics` stores these tables as typed heap cells. All six table
+constructors now have rules for these two key domains. Negative capacity hints
+still create empty tables, matching `Hashtbl.create`. Finds return the stored
+value or throw the existing `Not_found` singleton. Updates preserve other
+storage kinds and other table identities; reference, array and text updates
+preserve tables. Well-formedness, bounds and backend preservation cover the new
+steps too, without type equality, casts or erased-value stores.
+
+`Soma.NativeTableSpec` supplies eleven results: typed heap reads yield actual
+update witnesses, each table operation terminates in one step, and all six
+operations satisfy universal totality from concrete owned-cell evidence.
+There is no assumed foreign progress law for these operations. Relational
+execution specifications give replace/find readback and the missing-key fault.
+The totality results use the permissive outcome postcondition `True`; they
+establish progress and termination rather than a stronger universal value
+specification. Functional specifications are supplied separately as stated
+lookup laws and concrete execution witnesses. Unsupported key types remain
+stuck and cannot satisfy totality; the existing unit-key negative theorem is
+retained.
+
+This model does not establish a native table's representation invariant.
+In particular, a native `Bytes.unsafe_to_string` alias can mutate a stored key
+and change its hash bucket without rehashing the table. Its subsequent lookup
+can disagree with immutable Source lookup. The conformance fixture retains a
+counterexample to expose this boundary. Hash/equality refinement, mutation
+exclusion or an appropriate mutable-key model, seed consumption, bucket/GC
+representation, allocation failure and physical lifetime refinement remain
+open. None is discharged by selecting a key-domain witness.
+
 ## Source scanners and checked readonly observations
 
 `Soma.TextScan` implements splitting and byte membership in Source. It walks
@@ -194,7 +236,7 @@ single scrutinee evaluation and exception identity are tested on both backends.
 
 ## Scope still open
 
-Tables, higher-order string mapping, path/word operations, multiargument/pure
+Other table key domains, higher-order string mapping, path/word operations, multiargument/pure
 callbacks, borrowed scopes, promises and deferred scheduling still need rules.
 An unsupported constructor is stuck; it is never silently evaluated by a
 default rule. The current layer cannot establish progress for an arbitrary
@@ -261,3 +303,15 @@ the existing Kykeon large-path allocation threshold is kept separately.
 `test-suite/misc/soma_direct_nat_cases.sh` also verifies unannotated fallback,
 a different integer representation and a custom successor eliminator, so this
 optimization cannot silently override those mappings.
+
+`test-suite/misc/soma_native_table_semantics.sh` checks 120,021 word/string
+observations per backend, including signed-extreme keys/capacities, binary
+strings, randomized seeds and tables containing older duplicate bindings.
+Generic payload/callback aliases, callback exception identity, replacement-key
+retention and natural key release are checked on native and bytecode OCaml.
+Kernel checks cover duplicate lookup, negative-capacity totality and rejection
+of unsupported key domains. The fixture checks exact assumptions for all 23
+new results, verifies Source publication rejects an omitted equality law, and
+requires proofs to reject retained old values, removal of all duplicates and
+accidental deletion of unrelated bindings. The mutable-key counterexample
+above is required to remain observable rather than silently certified.
