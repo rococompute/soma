@@ -122,6 +122,17 @@ An identical completed extraction also retains its files and Dune cache.
 Existing `[dependencies]`/`soma.lock` resolution continues to belong to Soma;
 this graph does not introduce a second package resolver.
 
+`soma project audit` freshly checks and extracts the selected source closure,
+reconstructs the whole products and module inventories, and compares both their
+bytes and receipt contents to the completed publication. It does not trust an
+old Python inventory, an existing extracted program or a receipt's claims as
+evidence of current source checking. Missing/changed products, stale proof
+inputs and modified receipts fail the audit. Temporary extractions are cleaned;
+completed extraction directories, published products and receipts are not
+replaced. Source/import caches and private checking scratch may be refreshed.
+External Dune compilation nodes are skipped: the audit covers graph-owned
+source products and evidence, not a linked executable or final image's TCB.
+
 A per-project lock serializes builders. Extraction runs into a fresh directory;
 a failed compiler invocation leaves the previous completed extraction in place.
 Each unit is validated completely before atomic replacement. A failed later

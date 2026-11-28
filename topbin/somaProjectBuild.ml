@@ -158,9 +158,13 @@ let rec same_tree fresh previous =
     let xs=names fresh in xs=names previous &&
       List.for_all (fun name -> same_tree (Filename.concat fresh name) (Filename.concat previous name)) xs
   | _ -> false
-let build ~compiler ~config ~config_hash p targets =
+let build ?(audit=false) ~compiler ~config ~config_hash p targets =
   let root=Unix.realpath (Filename.dirname config) in
-  let directory=inside root p.directory in mkdir directory;
+  let directory=inside root p.directory in
+  if audit then begin
+    if not (Sys.file_exists directory) || (Unix.lstat directory).Unix.st_kind<>Unix.S_DIR then
+      fail "audit requires a completed build directory: %s" directory
+  end else mkdir directory;
   let lock=Unix.openfile (inside directory ".lock") [Unix.O_CREAT;Unix.O_RDWR] 0o600 in
   Fun.protect ~finally:(fun () -> Unix.close lock) (fun () ->
       Unix.lockf lock Unix.F_LOCK 0;
@@ -168,6 +172,13 @@ let build ~compiler ~config ~config_hash p targets =
           fail "build configuration changed during execution; rebuild" in
       config_unchanged ();
       let sources=Hashtbl.create 16 and products=Hashtbl.create 16 in
+      let publish_or_check kind file contents =
+        if not audit then atomic file contents else begin
+          if not (Sys.file_exists file) then fail "missing published %s: %s" kind file;
+          regular file;
+          if read file<>contents then fail "published %s differs from fresh checking: %s" kind file;
+          false
+        end in
       let publish name output pieces =
         let leaves=List.filter_map (function Data l -> Some l | Padding _ -> None) pieces in
         let extracts=List.map (fun l -> String.sub l.identity 0 (String.index l.identity '/')) leaves
@@ -185,7 +196,7 @@ let build ~compiler ~config ~config_hash p targets =
         let data=String.concat "" (List.map (function Data l -> l.contents | Padding s -> s) pieces) in
         let file=inside directory output in
         config_unchanged ();
-        let changed=atomic file data in
+        let changed=publish_or_check "product" file data in
         let receipt=Printf.sprintf
             "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nparts = [%s]\nverification = [%s]\n"
             (toml_string config_hash) (toml_string output) (toml_string (SomaMerkle.string data))
@@ -193,7 +204,7 @@ let build ~compiler ~config ~config_hash p targets =
                  | Data l -> Printf.sprintf "{ artifact = %s, sha256 = %s }" (toml_string l.identity) (toml_string l.hash)
                  | Padding s -> "{ whitespace = " ^ toml_string s ^ " }") pieces))
             (String.concat ",\n" proofs) in
-        ignore (atomic (inside directory (".receipts/" ^ name ^ ".toml")) receipt);
+        ignore (publish_or_check "receipt" (inside directory (".receipts/" ^ name ^ ".toml")) receipt);
         Hashtbl.add products name {file;pieces};
         Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file in
       let stages=ref [] in
@@ -218,13 +229,13 @@ let build ~compiler ~config ~config_hash p targets =
                    extraction until the new compiler invocation has succeeded. *)
                 let previous=tmp ^ ".previous" in
                 stages := previous :: !stages;
-                if same_tree tmp final then remove tmp else begin
+                if audit then () else if same_tree tmp final then remove tmp else begin
                   if Sys.file_exists final then Unix.rename final previous;
                   (try Unix.rename tmp final with exn ->
                       if Sys.file_exists previous then Unix.rename previous final; raise exn);
                   remove previous
                 end;
-                final in
+                if audit then tmp else final in
             Hashtbl.add sources n.name (native,source_root)
           | Publish p ->
             let native,_=Hashtbl.find sources p.extract in
@@ -263,23 +274,27 @@ let build ~compiler ~config ~config_hash p targets =
             let contents="(" ^ String.concat " " (List.map (Printf.sprintf "%S") names) ^ ")\n" in
             config_unchanged ();
             let file=inside directory m.output in
-            let changed=atomic file contents in
+            let changed=publish_or_check "module inventory" file contents in
             let receipt=Printf.sprintf
                 "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nunits = [%s]\n"
                 (toml_string config_hash) (toml_string m.output) (toml_string (SomaMerkle.string contents))
                 (String.concat ",\n" (List.map (fun (_,unit,hash) ->
                      Printf.sprintf "{ unit = %s, receipt-sha256 = %s }" (toml_string unit) (toml_string hash)) entries)) in
-            ignore (atomic (inside directory (".receipts/" ^ n.name ^ ".toml")) receipt);
+            ignore (publish_or_check "receipt" (inside directory (".receipts/" ^ n.name ^ ".toml")) receipt);
             Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file
           | Dune d ->
             config_unchanged ();
-            let dir=if d.directory="." then root else inside root d.directory in
-            subprocess ~root:dir ~env:(Unix.environment ()) "dune"
-              (["build";"--root";dir;"--profile";"release";"--"] @ d.targets))
+            if not audit then begin
+              let dir=if d.directory="." then root else inside root d.directory in
+              subprocess ~root:dir ~env:(Unix.environment ()) "dune"
+                (["build";"--root";dir;"--profile";"release";"--"] @ d.targets)
+            end)
         (order p targets)))
-let help = {|Usage: soma project (plan|build) [--config FILE] [--target NAME ...]
+let help = {|Usage: soma project (plan|build|audit) [--config FILE] [--target NAME ...]
 Read [build] in soma.toml (or --config). Plan validates the entire graph.
 Build checks/extracts dependencies, then publishes ordered whole OCaml artifacts.
+Audit freshly checks/extracts and compares products, inventories and receipts;
+it replaces no published files and skips external Dune compilation.
 No source text, shell commands or partial artifacts are accepted in configuration.
 For an existing proof/origin pipeline, soma project assemble --help describes
 native whole-product publication from a checked input inventory.
@@ -290,7 +305,7 @@ let run ~compiler args =
     then Filename.concat (Sys.getcwd ()) compiler else compiler in
   match args with
   | [] | ["--help"] | ["help"] -> print_string help
-  | command::args when command="plan" || command="build" ->
+  | command::args when command="plan" || command="build" || command="audit" ->
     let rec options config targets = function
       | [] -> config,List.rev targets
       | "--config"::s::rest -> options s targets rest
@@ -303,5 +318,5 @@ let run ~compiler args =
     if SomaMerkle.file_hash config <> config_hash then fail "build configuration changed while loading";
     let ordered=order p targets in
     if command="plan" then List.iter (fun n -> Printf.printf "%s: %s\n" n.name (String.concat " " (dependencies n))) ordered
-    else build ~compiler ~config ~config_hash p targets
+    else build ~audit:(command="audit") ~compiler ~config ~config_hash p targets
   | _ -> fail "%s" help

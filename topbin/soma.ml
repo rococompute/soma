@@ -71,7 +71,7 @@ Commands:
                               lists them without building. soma test --help has details.
   extract                     Check a program and write it as an OCaml project, with the
                               OCaml modules and libraries it uses, that dune builds.
-  project                    Plan/build dependencies or assemble whole checked units.
+  project                    Plan/build/audit dependencies or assemble whole checked units.
                               soma project --help describes the options.
   mirage-config DIRECTORY     Print config.ml from a project's [mirage] and [image] tables.
   insert PATH                 Translate an OCaml file or directory into checked Soma

@@ -107,6 +107,30 @@ grep -q 'unchanged .*public.ml' repeat.log
 cmp products/public.ml previous.ml
 cmp products/.receipts/public.toml previous-receipt.toml
 test ! products/.extract/source/prog.ml -nt previous-prog.ml
+# Audit recomputes evidence and whole outputs instead of trusting old receipts.
+soma project audit >audit.log 2>&1
+cmp products/public.ml previous.ml
+cmp products/.receipts/public.toml previous-receipt.toml
+test ! products/.extract/source/prog.ml -nt previous-prog.ml
+printf '\n(* tampered publication *)\n' >>products/public.ml
+cp products/public.ml tampered.ml
+if soma project audit >audit-product.log 2>&1; then exit 1; fi
+grep -q 'published product differs from fresh checking' audit-product.log
+cmp products/public.ml tampered.ml
+cp previous.ml products/public.ml
+printf '\n' >>products/.receipts/public.toml
+cp products/.receipts/public.toml tampered-receipt.toml
+if soma project audit >audit-receipt.log 2>&1; then exit 1; fi
+grep -q 'published receipt differs from fresh checking' audit-receipt.log
+cmp products/.receipts/public.toml tampered-receipt.toml
+cp previous-receipt.toml products/.receipts/public.toml
+cp main.exp previous-exp
+printf '\n(* changed proof input *)\n' >>main.exp
+if soma project audit --target public >audit-source.log 2>&1; then exit 1; fi
+grep -q 'published receipt differs from fresh checking' audit-source.log
+cmp products/public.ml previous.ml
+cp previous-exp main.exp
+test -z "$(find products/.extract -name '*.stage*' -print)"
 # Same unit through two graph edges must not duplicate runtime initialization.
 cp soma.toml previous-config
 cat >>soma.toml <<'TOML'
