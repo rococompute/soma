@@ -126,6 +126,28 @@ results. The word interpretation exposes the existing kernel primitives
 fixture. No arithmetic specification axiom from `Uint63Axioms` or
 `Sint63Axioms`, proof-irrelevance axiom or gradual evidence is introduced.
 
+## Owned unary callback allocation
+
+`Soma.NativeAllocation` supplies four compositional results for the actual
+`Native.New_callback` constructor. A typed successor view determines the exact
+fresh callback handle and resulting heap with its stored, self-referential
+body. Allocation is universally total when that actual outcome satisfies the
+postcondition, and totality also requires that postcondition. Its bind rule
+composes the continuation at the actual new handle and heap. No foreign
+progress, body termination, type equality or proof irrelevance is assumed.
+
+Allocation stores the body without executing it. A stored body that would
+spin when called therefore does not make allocation diverge; the rule does
+not certify calling that body. A false postcondition cannot be certified.
+The fixture `soma_native_allocation.sh` checks these boundaries and rejects
+changed contracts that drop the allocated heap cell or pass the wrong handle
+to the continuation. The contract-assumption fixture inventories the four
+results against the existing eight kernel word primitives used by the shared
+semantics, with no new specification axiom or gradual evidence.
+
+These are abstract heap rules. They do not prove physical allocation/GC
+behavior, compiler correctness or arbitrary callback implementation refinement.
+
 ## String primitives and spans
 
 `Soma.NativeText` proves thirteen results, including

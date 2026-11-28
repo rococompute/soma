@@ -117,6 +117,12 @@ checks = {
     'total_entry_has_execution',
     'unsupported_table_is_not_total',
 ]),
+ 'native_allocation': ('Soma.NativeAllocation', [
+    'step_callback_successor',
+    'new_callback_is_total',
+    'new_callback_requires_postcondition',
+    'bind_new_callback_is_total',
+]),
  'native_control': ('Soma.NativeControl', [
     'step_control_successor',
     'total_bind',
@@ -223,7 +229,7 @@ native_word = {'PrimInt63.' + name for name in
     ['int', 'sub', 'ltb', 'eqb', 'land', 'lor', 'lsl', 'lsr']}
 for group, (module, theorems) in checks.items():
     allowed = (crypto if group == 'crypto' else cast if group == 'cast'
-               else native_word if group in {'native_semantics','native_word','native_total','native_control','native_text','text_scan'} else set())
+               else native_word if group in {'native_semantics','native_word','native_total','native_control','native_allocation','native_text','text_scan'} else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')
