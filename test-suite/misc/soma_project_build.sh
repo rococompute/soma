@@ -38,7 +38,10 @@ output="prefix.ml"
 parts=[{extract="source",kind="source-types",namespace="exports"}]
 [build.unit.public]
 output="public.ml"
-parts=[{unit="prefix"},{extract="source",kind="aliases",namespace="exports"},{extract="source",kind="values",namespace="exports"}]
+parts=[{whitespace="\n"},{unit="prefix"},{extract="source",kind="aliases",namespace="exports"},{extract="source",kind="values",namespace="exports"},{whitespace=" \t\n"}]
+[build.source-map.spans]
+output="public.ml.soma-parts.toml"
+unit="public"
 [build.publish.whole]
 extract="source"
 file="prog.ml"
@@ -60,7 +63,7 @@ units=["public"]
 [build.dune.native]
 directory="."
 targets=["check.exe","check.bc"]
-needs=["closed","signature","certificate","forward"]
+needs=["closed","signature","certificate","forward","spans"]
 TOML
 cat >dune-project <<'DUNE'
 (lang dune 3.13)
@@ -79,7 +82,7 @@ let () =
   print_endline "PASS: native project graph preserves types, aliases, generic values and identity"
 ML
 soma project plan >plan.log
-printf 'source: \ncertificate: source\nprefix: source\npublic: prefix source\nclosed: public\nwhole: source\nforward: whole\nsignature: source\nnative: certificate closed forward signature\n' >expected-plan
+printf 'source: \ncertificate: source\nprefix: source\npublic: prefix source\nclosed: public\nwhole: source\nforward: whole\nsignature: source\nspans: public\nnative: certificate closed forward signature spans\n' >expected-plan
 cmp plan.log expected-plan
 soma project build >build.log 2>&1
 cmp products/.extract/source/prog.ml products/complete.ml
@@ -96,6 +99,21 @@ for name in ['public','whole','signature','certificate','forward']:
 assert Path('products/closed.sexp').read_text()=='("Public")\n'
 closed=tomllib.loads(Path('products/.receipts/closed.toml').read_text())
 assert closed['units']==[{'unit':'public','receipt-sha256':hashlib.sha256(Path('products/.receipts/public.toml').read_bytes()).hexdigest()}]
+spans=tomllib.loads(Path('products/public.ml.soma-parts.toml').read_text())
+data=Path('products/public.ml').read_bytes()
+assert spans['output']=='public.ml' and spans['sha256']==hashlib.sha256(data).hexdigest()
+assert spans['unit-receipt-sha256']==hashlib.sha256(Path('products/.receipts/public.toml').read_bytes()).hexdigest()
+cursor=0
+for part in spans['parts']:
+ if 'whitespace' in part:
+  value=part['whitespace'].encode(); assert not value.strip(b' \t\r\n')
+ else:
+  extract,file=part['artifact'].split('/',1)
+  value=Path('products/.extract',extract,file).read_bytes()
+  assert part['size']==len(value) and part['sha256']==hashlib.sha256(value).hexdigest()
+ assert data[cursor:cursor+len(value)]==value
+ cursor+=len(value)
+assert cursor==len(data)
 PY
 _build/default/check.exe
 _build/default/check.bc
@@ -124,6 +142,13 @@ if soma project audit >audit-receipt.log 2>&1; then exit 1; fi
 grep -q 'published receipt differs from fresh checking' audit-receipt.log
 cmp products/.receipts/public.toml tampered-receipt.toml
 cp previous-receipt.toml products/.receipts/public.toml
+cp products/public.ml.soma-parts.toml previous-map.toml
+printf '\n' >>products/public.ml.soma-parts.toml
+cp products/public.ml.soma-parts.toml tampered-map.toml
+if soma project audit --target spans >audit-map.log 2>&1; then exit 1; fi
+grep -q 'published source map differs from fresh checking' audit-map.log
+cmp products/public.ml.soma-parts.toml tampered-map.toml
+cp previous-map.toml products/public.ml.soma-parts.toml
 cp main.exp previous-exp
 printf '\n(* changed proof input *)\n' >>main.exp
 if soma project audit --target public >audit-source.log 2>&1; then exit 1; fi

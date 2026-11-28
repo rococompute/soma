@@ -71,6 +71,21 @@ The list must live in a different directory from the consuming Dune stanza,
 for example `build-info/modules.sexp`, to avoid Dune's module-discovery dependency
 cycle. See Dune's [module field documentation](https://dune.readthedocs.io/en/stable/reference/dune/library.html).
 
+`[build.source-map.NAME]` emits a TOML source map for a checked OCaml `unit`,
+at its configured `output` path (ending in `.toml`). It records the complete
+unit hash, configuration and producer receipt hashes, plus the ordered whole
+compiler artifacts with byte sizes and hashes and the exact ASCII spacing.
+Nested unit compositions are flattened without slicing artifacts. Tools can
+recover source spans without implementing assembly themselves; the source map
+does not grant permission to publish partial artifacts. A fresh project audit
+checks maps as well as products and receipts.
+
+```toml
+[build.source-map.public_spans]
+unit = "public"
+output = "public.ml.soma-parts.toml"
+```
+
 `[build] source-only = true` requires `verify = true` on every extraction and
 refuses copied foreign OCaml source modules before extraction publishes files.
 Soma-generated bindings/runtime modules, linked library modules and C sources

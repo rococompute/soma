@@ -7,6 +7,7 @@ type action = Extract of { file : string; source_root : string; options : string
             | Publish of { extract : string; file : string; output : string }
             | Compose of { output : string; parts : part list }
             | Module_list of { output : string; units : string list }
+            | Source_map of { output : string; unit : string }
             | Dune of { directory : string; targets : string list }
 type node = { name : string; needs : string list; action : action }
 type t = { directory : string; targets : string list; nodes : node list; source_only : bool }
@@ -45,6 +46,7 @@ let dependencies n = List.sort_uniq String.compare (n.needs @ match n.action wit
     | Extract _ | Dune _ -> []
     | Publish p -> [p.extract]
     | Module_list m -> m.units
+    | Source_map m -> [m.unit]
     | Compose c -> List.filter_map (function Artifact a -> Some a.extract | Unit s -> Some s | Whitespace _ -> None) c.parts)
 let order p targets =
   let visiting = Hashtbl.create 16 and done_ = Hashtbl.create 16 in
@@ -63,7 +65,7 @@ let parse toml = match List.assoc_opt "build" toml with
   | None -> None
   | Some e ->
     let b = table "build" e in
-    keys "build" ["directory"; "targets"; "extract"; "publish"; "unit"; "module-list"; "dune"; "source-only"] b;
+    keys "build" ["directory"; "targets"; "extract"; "publish"; "unit"; "module-list"; "source-map"; "dune"; "source-only"] b;
     let source_only=optional_bool "build" "source-only" b in
     let directory = path "build.directory" (optional_string "build" "directory" b ".soma-build") in
     let parse_group group f = match List.assoc_opt group b with
@@ -131,6 +133,11 @@ let parse toml = match List.assoc_opt "build" toml with
         let units=optional_strings where "units" t in
         if units=[] then error "%s: units must be nonempty" where;
         Module_list {output;units}) in
+    let maps = parse_group "source-map" (fun where t ->
+        keys where ["output"; "unit"; "needs"] t;
+        let output=path where (get_string where "output" t) in
+        if not (Filename.check_suffix output ".toml") then error "%s: output must be a .toml file" where;
+        Source_map {output;unit=get_string where "unit" t}) in
     let dune = parse_group "dune" (fun where t ->
         keys where ["directory"; "targets"; "needs"] t;
         let directory=optional_string where "directory" t "." in
@@ -139,13 +146,14 @@ let parse toml = match List.assoc_opt "build" toml with
         if targets=[] then error "%s requires nonempty targets" where;
         List.iter (fun s -> ignore (path where s)) targets;
         Dune {directory;targets}) in
-    let nodes = extracts @ publications @ units @ inventories @ dune in
+    let nodes = extracts @ publications @ units @ inventories @ maps @ dune in
     let seen = Hashtbl.create 16 and outputs = Hashtbl.create 16 in
     List.iter (fun n ->
         if Hashtbl.mem seen n.name then error "duplicate build target %S" n.name;
         Hashtbl.add seen n.name ();
         let output=match n.action with Extract _ | Dune _ -> None
-          | Publish p -> Some p.output | Compose c -> Some c.output | Module_list m -> Some m.output in
+          | Publish p -> Some p.output | Compose c -> Some c.output | Module_list m -> Some m.output
+          | Source_map m -> Some m.output in
         Option.iter (fun output ->
           Hashtbl.iter (fun previous _ ->
               let prefix a b = String.starts_with ~prefix:(a ^ "/") b in
@@ -155,7 +163,7 @@ let parse toml = match List.assoc_opt "build" toml with
             error "reserved build output %S" output;
           Hashtbl.add outputs output ()) output) nodes;
     let targets = optional_strings "build" "targets" b in
-    let targets = if targets = [] then List.map (fun n -> n.name) (publications @ units @ inventories @ dune) else targets in
+    let targets = if targets = [] then List.map (fun n -> n.name) (publications @ units @ inventories @ maps @ dune) else targets in
     let p = {directory; targets; nodes; source_only} in
     if source_only then List.iter (fun n -> match n.action with
         | Extract e when not e.verify -> error "%s: source-only builds require verify=true for every extraction" n.name
@@ -171,6 +179,7 @@ let parse toml = match List.assoc_opt "build" toml with
     List.iter (fun n -> match n.action with Extract _ | Dune _ -> ()
         | Publish p -> extraction n.name p.extract
         | Module_list m -> List.iter (ocaml_unit n.name) m.units
+        | Source_map m -> ocaml_unit n.name m.unit
         | Compose c ->
         List.iter (function Whitespace _ -> () | Artifact a ->
             extraction n.name a.extract

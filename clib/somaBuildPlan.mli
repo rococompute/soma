@@ -8,6 +8,7 @@ type action = Extract of { file : string; source_root : string; options : string
             | Publish of { extract : string; file : string; output : string }
             | Compose of { output : string; parts : part list }
             | Module_list of { output : string; units : string list }
+            | Source_map of { output : string; unit : string }
             | Dune of { directory : string; targets : string list }
 type node = { name : string; needs : string list; action : action }
 type t = { directory : string; targets : string list; nodes : node list; source_only : bool }

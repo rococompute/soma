@@ -259,6 +259,25 @@ let build ?(audit=false) ~compiler ~config ~config_hash p targets =
                   fail "%s: duplicate whole artifact %s" n.name l.identity;
                 Hashtbl.add seen key (); Hashtbl.add seen l.file ()) leaves;
             publish n.name c.output pieces
+          | Source_map m ->
+            let p=Hashtbl.find products m.unit in
+            regular p.file;
+            let contents=String.concat "" (List.map (function Data l -> l.contents | Padding s -> s) p.pieces) in
+            if read p.file<>contents then fail "published unit changed before source map: %s" p.file;
+            let receipt=inside directory (".receipts/" ^ m.unit ^ ".toml") in regular receipt;
+            let map=Printf.sprintf
+                "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nunit-receipt-sha256 = %s\nparts = [%s]\n"
+                (toml_string config_hash) (toml_string (String.sub p.file (String.length directory+1)
+                                                       (String.length p.file-String.length directory-1)))
+                (toml_string (SomaMerkle.string contents)) (toml_string (SomaMerkle.file_hash receipt))
+                (String.concat ",\n" (List.map (function
+                     | Data l -> Printf.sprintf "{ artifact = %s, sha256 = %s, size = %d }"
+                         (toml_string l.identity) (toml_string l.hash) (String.length l.contents)
+                     | Padding s -> "{ whitespace = " ^ toml_string s ^ " }") p.pieces)) in
+            config_unchanged ();
+            let file=inside directory m.output in
+            let changed=publish_or_check "source map" file map in
+            Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file
           | Module_list m ->
             let entries=List.map (fun unit ->
                 let p=Hashtbl.find products unit in

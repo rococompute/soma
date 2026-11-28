@@ -31,6 +31,10 @@ let () =
     "[build.extract.a]\nfile='main.soma'\nverify='yes'\n";
     "[build.publish.a]\nextract='missing'\nfile='prog.ml'\noutput='a.ml'\n";
     "[build.module-list.a]\noutput='modules.sexp'\nunits=['missing']\n";
+    "[build.source-map.a]\noutput='spans.toml'\nunit='missing'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.source-map.b]\noutput='spans.toml'\nunit='a'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='verification.toml'\noutput='b.toml'\n[build.source-map.c]\noutput='spans.toml'\nunit='b'\n";
+    "[build.source-map.a]\noutput='spans.ml'\nunit='missing'\n";
     "[build]\nsource-only=true\n[build.extract.a]\nfile='main.soma'\n";
     "[build.module-list.a]\noutput='modules.ml'\nunits=[]\n";
     "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='verification.toml'\noutput='b.toml'\n[build.module-list.c]\noutput='modules.sexp'\nunits=['b']\n";
