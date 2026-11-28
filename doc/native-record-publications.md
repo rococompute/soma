@@ -11,6 +11,14 @@ OCaml Native Projected Value run_value : string -> promise buffer :=
  members Member "run".
 ```
 
+A record alias preserves the producer's complete type constructor, including
+implicit or mixed explicit/implicit type parameters. For example, an alias of
+`Record storage {Buffer Array : Type} := ...` takes both `Buffer` and `Array`;
+declaring the alias does not instantiate either parameter. Source construction,
+projection and ordinary calls therefore check against the producer's record
+definition before extraction. The emitted native record type still checks the
+provider's complete field layout and types.
+
 This uses the existing structural record pattern, native record alias and
 publication machinery. The full field set must match the original Source
 record; the qualification must match its checked native alias. Constructor type
@@ -44,3 +52,8 @@ initialization allocation, and natural separate-member Weak lifetimes. It also
 checks invalid declarations, artifact provenance, record-order identity
 sensitivity and stale publication cleanup. Existing tuple-projection and record
 assembly fixtures provide compatibility checks.
+
+`test-suite/misc/soma_native_implicit_record_alias.sh` covers implicit, mixed
+and singleton parameters, a closed cross-module call theorem, native/bytecode
+construction and projection, unrelated generic instantiations, exact borrowed
+record/function identity, callback exception identity and natural Weak release.

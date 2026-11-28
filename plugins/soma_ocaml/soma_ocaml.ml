@@ -1972,7 +1972,10 @@ let native_record_alias name source target =
   if List.exists(fun info->info.SomaForeign.record_alias_logical_type=logical_type &&
        info.record_alias_target<>target)!native_record_aliases then
     native_error "one logical record cannot use conflicting native types";
-  let c=native_declare name(CAst.make(Constrexpr.CRef(source,None)))None in
+  (* Preserve the whole checked type constructor. A plain reference inserts
+     the source record's implicit parameters and can collapse a polymorphic
+     alias to Type, while its native descriptor still records those parameters. *)
+  let c=native_declare name(CAst.make(Constrexpr.CAppExpl((source,None),[])))None in
   native_register name c(if params=[]then SomaForeign.OCamlNativeType target else
     SomaForeign.OCamlNativeExternalFamily(params,target));
   let source=match !SomaImport.source_file with Some f->SomaImport.project_file f|None->assert false in
