@@ -1025,6 +1025,9 @@ let prepare ?loc qids =
       match located with
       | Some (q, inside, src) ->
         ensure ?loc q inside src;
+        (* A sibling may have published this library after we cached the
+           directory listing. Ensure completion also makes it visible here. *)
+        System.forget_dir q.cache_dir;
         if not (List.mem_assoc path !imported) then
           imported := (path, vo_of q inside) :: !imported;
         any := true;
