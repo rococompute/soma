@@ -100,6 +100,16 @@ checks = {
     'total_entry_has_execution',
     'unsupported_string_length_is_not_total',
 ]),
+ 'native_control': ('Soma.NativeControl', [
+    'step_control_successor',
+    'total_bind',
+    'total_bind_return',
+    'total_invoke',
+    'total_loop_unroll',
+    'total_loop_step',
+    'total_loop_continue',
+    'total_loop_finish',
+]),
  'wire': ('Soma.Wire', ['prefix_decodes', 'split_at_walk_append_length', 'frame_roundtrip', 'frame_roundtrip_default']),
  'host': ('Soma.HostSpec', ['SocketWrites.advance_preserves_bytes',
     'SocketWrites.advance_past_end', 'SocketWrites.writes_preserve_bytes']),
@@ -125,7 +135,7 @@ native_word = {'PrimInt63.' + name for name in
     ['int', 'sub', 'ltb', 'eqb', 'land', 'lor', 'lsl', 'lsr']}
 for group, (module, theorems) in checks.items():
     allowed = (crypto if group == 'crypto' else cast if group == 'cast'
-               else native_word if group in {'native_semantics','native_word','native_total'} else set())
+               else native_word if group in {'native_semantics','native_word','native_total','native_control'} else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')

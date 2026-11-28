@@ -98,8 +98,17 @@ it both provides an execution and checks the postcondition of every
 
 These 24 audited results provide a universal proof interface; they do not
 supply the concrete invariants, progress and decreasing measures of Kykeon's
-82 production loop sites. The existing descriptor client remains an
-existential execution proof until those stronger obligations are discharged.
+82 production loop sites.
+
+`Soma.NativeControl` provides eight audited compositional results for actual
+sequencing, primitive calls and loop iterations. The sequencing rule accounts
+for all intermediate states and exception outcomes; primitive calls require
+at least one permitted outcome and a contract covering every permitted
+outcome. Loop unfolding is proved to cover every actual successor, and a
+certified iteration can establish the contract of the resumed loop. Typed
+constructor views avoid injecting existential type indices or assuming proof
+irrelevance. The rules introduce no alternate application syntax or runtime
+fuel.
 
 The checked programs include a generic reference write/read roundtrip and a
 newly allocated callback which writes, throws, and is caught by a handler that
@@ -129,16 +138,26 @@ Kykeon's full Native-semantics gap or verify the generated runtime.
 
 The sibling Kykeon proof-only `soma/verification_descriptor_scan.soma` client
 uses these rules with the real descriptor `execute_step` and `allocate_fd`
-definitions. It constructs a successful finite execution returning the first
-free candidate following a finite busy prefix, under an explicit exact
-membership law. Free-boundary preservation is checked separately as an
-invariant. Universal execution correctness/termination and numeric lowest-fd
-claims still need further proofs, machine-word no-wrap/range reasoning,
-finite-table bounds and a proved connection to the actual fd table.
+definitions. Under an explicit exact, total, stable membership law and a
+finite busy prefix ending at a free slot, it now proves universal total
+correctness: every result is that first free candidate in machine-word
+successor order, the world stays unchanged and execution cannot diverge.
+Induction on the finite busy-prefix length supplies the decreasing measure.
+The weaker finite execution witnesses remain separately named. The production
+descriptor module also requires preservation of the first-free boundary under
+its actual busy-slot scan decision; the proof client reuses that module's
+proof-only boundary definitions.
+
+This covers the descriptor scan entry under its premises, not every branch of
+the descriptor executor or the other loop sites. Numeric lowest-fd claims,
+existence of a free slot and the exact snapshot law still need machine-word
+no-wrap/range reasoning, finite-table bounds and a proved connection to the
+actual mutable fd table. No assumed provider contract is presented as an
+implementation refinement proof.
 
 ## Build and checking
 
-The normal native theory-rule generator discovers `NativeSemantics.v` and
+The normal native theory-rule generator discovers these source theories and
 generates its dependencies and both installation layouts. Generated theory
 Dune files remain untracked. Build/install through the ordinary Soma bootstrap,
 then run `test-suite/misc/soma_contract_assumptions.sh` with `BIN` selecting the
