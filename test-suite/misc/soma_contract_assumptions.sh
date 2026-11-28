@@ -74,6 +74,32 @@ checks = {
     'bounded_index_past_end',
     'bounded_index_empty',
 ]),
+ 'native_total': ('Soma.NativeTotal', [
+    'reachable_preserves_invariant',
+    'rank_gives_accessibility',
+    'ranked_total_correctness',
+    'safe_after_step',
+    'total_preserved_by_step',
+    'total_preserved_by_execution',
+    'total_has_successful_or_exceptional_execution',
+    'accessible_excludes_divergence',
+    'total_excludes_divergence',
+    'total_maximal_execution_satisfies',
+    'stuck_without_postcondition_is_not_total',
+    'return_is_total',
+    'throw_is_total',
+    'outcome_injective',
+    'total_outcome_requires_postcondition',
+    'successors_give_total',
+    'spinning_loop_is_not_total',
+    'ranked_execution_length',
+    'total_requires_every_foreign_return',
+    'total_requires_every_foreign_exception',
+    'allowed_false_return_rejects_true_only_spec',
+    'total_entry_runs_satisfy',
+    'total_entry_has_execution',
+    'unsupported_string_length_is_not_total',
+]),
  'wire': ('Soma.Wire', ['prefix_decodes', 'split_at_walk_append_length', 'frame_roundtrip', 'frame_roundtrip_default']),
  'host': ('Soma.HostSpec', ['SocketWrites.advance_preserves_bytes',
     'SocketWrites.advance_past_end', 'SocketWrites.writes_preserve_bytes']),
@@ -99,7 +125,7 @@ native_word = {'PrimInt63.' + name for name in
     ['int', 'sub', 'ltb', 'eqb', 'land', 'lor', 'lsl', 'lsr']}
 for group, (module, theorems) in checks.items():
     allowed = (crypto if group == 'crypto' else cast if group == 'cast'
-               else native_word if group in {'native_semantics','native_word'} else set())
+               else native_word if group in {'native_semantics','native_word','native_total'} else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')

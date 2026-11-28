@@ -66,6 +66,41 @@ termination of every execution or universal loop correctness. Foreign relations
 can admit more than one outcome; universal theorems must constrain and cover
 all of those transitions.
 
+## Universal total correctness
+
+`Soma.NativeTotal` adds `total` over the same `step`/`steps` relations. It
+requires both accessibility of **every** successor and progress or a satisfied
+terminal postcondition at **every** reachable configuration. A program with no
+applicable rule therefore fails the progress obligation; it cannot be certified
+merely because it has no infinite executions.
+
+`ranked_total_correctness` constructs this judgment from a preserved invariant,
+a natural rank decreasing on every actual transition, and progress or a
+satisfied result/exception postcondition throughout the invariant. The rank is
+a mathematical proof measure, not executable fuel. `ranked_execution_length`
+bounds any finite transition sequence by the starting rank. Accessibility can
+also be supplied directly, permitting well-founded relations other than a
+single natural-valued measure.
+
+The judgment is preserved by each actual step, excludes coinductive divergence,
+guarantees a finite result/exception execution and requires every finite
+maximal execution to satisfy the postcondition. Its foreign-call rules account
+for **every** permitted return and exception, including the resulting world.
+A negative theorem shows that an allowed false return rejects a true-only
+specification, even if a successful true-returning path also exists. Other
+negative theorems reject a spinning loop and an unsupported string-length
+operation. Return and throw satisfy total correctness exactly when their
+specified outcome meets the postcondition.
+
+`entry_total` applies the same judgment at the actual `Native.Export` boundary;
+it both provides an execution and checks the postcondition of every
+`entry_runs` result or exception.
+
+These 24 audited results provide a universal proof interface; they do not
+supply the concrete invariants, progress and decreasing measures of Kykeon's
+82 production loop sites. The existing descriptor client remains an
+existential execution proof until those stronger obligations are discharged.
+
 The checked programs include a generic reference write/read roundtrip and a
 newly allocated callback which writes, throws, and is caught by a handler that
 observes both the new value and the exact original exception. These are
