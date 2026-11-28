@@ -39,6 +39,10 @@ let () =
     (Char.chr(Random.State.int state 256))
  done;
  let big=String.make 2000000 'a' in
+ let allocated function_ = Gc.full_major();let before=Gc.allocated_bytes()in
+  ignore(function_());Gc.allocated_bytes()-.before in
+ assert(allocated(fun()->Prog.split '/' big)<4096.);
+ assert(allocated(fun()->Prog.contains big '/')<4096.);
  let start=Sys.time() in check big '/';check big 'a';
  assert(Sys.time()-.start<15.);
  Printf.printf "PASS: %d split/contains cases, binary alphabet, empty fields, full-slice identity and 2 MB scans\n" !count

@@ -306,6 +306,29 @@ let lexical_callback_arity r =
       if Rocqlib.has_ref key && Rocqlib.check_ref key r.glob then Some arity else None)
     [3; 5; 6]
 
+(* Explicit Source scope only: avoid allocating nat eliminator handlers while
+   retaining the actual checked branch bodies. The guards intentionally match
+   the complete standard realization, never a user's custom eliminator. *)
+let direct_nat_case_scope = ref false
+
+let direct_nat_case_annotation r =
+  let key = "soma.native.direct_nat_cases" in
+  Rocqlib.has_ref key && Rocqlib.check_ref key r.glob && is_custom r &&
+  String.equal (find_custom r) "(fun value -> value)"
+
+let standard_native_nat_case branches =
+  let matches key constructor target =
+    Rocqlib.has_ref key && Rocqlib.check_ref key constructor.glob &&
+    String.equal (find_custom constructor) target &&
+    String.equal (find_custom (get_ind constructor)) "int" in
+  try match branches with
+  | [| ([], Pusual zero, _); ([_], Pusual successor, _) |] ->
+      matches "num.nat.O" zero "0" && matches "num.nat.S" successor "Stdlib.Int.succ" &&
+      String.equal (find_custom_match branches)
+        "(fun fO fS n -> if n=0 then fO () else fS (n-1))"
+  | _ -> false
+  with Not_found -> false
+
 let rec pp_expr table par env args =
   let apply st = pp_apply st par args
   and apply2 st = pp_apply2 st par args in
@@ -316,6 +339,11 @@ let rec pp_expr table par env args =
            TODO: we should get rid of this hack (cf. #592) *)
         let id = if Id.equal id dummy_name then Id.of_string "__" else id in
         apply (Id.print id)
+    | MLapp (MLglob r, [body]) when direct_nat_case_annotation r ->
+        let previous = !direct_nat_case_scope in
+        direct_nat_case_scope := true;
+        Fun.protect ~finally:(fun () -> direct_nat_case_scope := previous)
+          (fun () -> pp_expr table par env args body)
     | MLapp (((MLglob r | MLmagic (MLglob r)) as head), [body])
         when Option.has_some (lexical_callback_arity r) ->
         let arity = Option.get (lexical_callback_arity r) in
@@ -408,6 +436,17 @@ let rec pp_expr table par env args =
     | MLtuple l ->
         assert (List.is_empty args);
         pp_boxed_tuple (pp_expr table true env []) l
+    | MLcase (_, t, pv) when !direct_nat_case_scope && standard_native_nat_case pv ->
+        let _, _, zero = pv.(0) in
+        let predecessors, _, successor = pv.(1) in
+        let temporary, _ = push_vars [Id.of_string "native_nat_case"] env in
+        let temporary = Id.print (List.hd temporary) in
+        let names, branch_env = push_vars (List.rev_map id_of_mlid predecessors) env in
+        let branch = pp_letin (Id.print (List.hd names)) (temporary ++ str " - 1")
+          (pp_expr table false branch_env [] successor) in
+        let conditional = str "if " ++ temporary ++ str " = 0 then" ++ spc () ++
+          pp_expr table true env [] zero ++ spc () ++ str "else" ++ spc () ++ branch in
+        apply2 (hv 0 (pp_letin temporary (pp_expr table false env [] t) conditional))
     | MLcase (_, t, pv) when is_custom_match pv ->
         if not (is_regular_match pv) then
           user_err Pp.(str "Cannot mix yet user-given match and general patterns.");

@@ -32,33 +32,33 @@ Fixpoint split_walk (separator : ascii) (text : string) (remaining finish : nat)
     end
   end.
 
-Fixpoint checked_contains_walk (text : string) (needle : ascii) (remaining : nat) :
-    forall cursor, cursor + remaining <= String.length text -> bool :=
-  match remaining as count return forall cursor, cursor + count <= String.length text -> bool with
-  | 0 => fun _ _ => false
-  | S rest => fun cursor Bound =>
+Fixpoint checked_contains_walk (text : string) (needle : ascii) (remaining cursor : nat)
+    (Bound : cursor + remaining <= String.length text) {struct remaining} : bool :=
+  Native.direct_nat_cases ((match remaining as count return cursor + count <= String.length text -> bool with
+  | 0 => fun _ => false
+  | S rest => fun Bound =>
       if Ascii.eqb (@Native.checked_byte text cursor ltac:(lia)) needle then true
       else @checked_contains_walk text needle rest (S cursor) ltac:(lia)
-  end.
+  end) Bound).
 
-Fixpoint checked_split_walk (separator : ascii) (text : string) (remaining : nat) :
-    forall finish, remaining <= finish -> finish <= String.length text -> list string -> list string :=
-  match remaining as count return
-      forall finish, count <= finish -> finish <= String.length text -> list string -> list string with
-  | 0 => fun finish Order Bound after =>
+Fixpoint checked_split_walk (separator : ascii) (text : string) (remaining finish : nat)
+    (Order : remaining <= finish) (Bound : finish <= String.length text)
+    (after : list string) {struct remaining} : list string :=
+  Native.direct_nat_cases ((match remaining as count return count <= finish -> list string with
+  | 0 => fun Order =>
       @Native.checked_substring text 0 finish ltac:(lia) :: after
-  | S index => fun finish Order Bound after =>
+  | S index => fun Order =>
       if Ascii.eqb (@Native.checked_byte text index ltac:(lia)) separator then
         @checked_split_walk separator text index index ltac:(lia) ltac:(lia)
           (@Native.checked_substring text (S index) (finish - S index) ltac:(lia) :: after)
       else @checked_split_walk separator text index finish ltac:(lia) Bound after
-  end.
+  end) Order).
 
 Theorem checked_contains_walk_agrees text needle remaining : forall cursor Bound,
   @checked_contains_walk text needle remaining cursor Bound = contains_walk text needle cursor remaining.
 Proof.
   induction remaining as [|remaining IH]; intros cursor Bound; [reflexivity|].
-  cbn [checked_contains_walk contains_walk]. unfold Native.checked_byte.
+  cbn [checked_contains_walk contains_walk Native.direct_nat_cases]. unfold Native.checked_byte.
   destruct (text_get_defined text (index:=cursor) ltac:(lia)) as [character Read].
   rewrite Read. destruct (Ascii.eqb character needle); [reflexivity|apply IH].
 Qed.
@@ -67,7 +67,7 @@ Theorem checked_split_walk_agrees separator text remaining : forall finish Order
   @checked_split_walk separator text remaining finish Order Bound after = split_walk separator text remaining finish after.
 Proof.
   induction remaining as [|index IH]; intros finish Order Bound after; [reflexivity|].
-  cbn [checked_split_walk split_walk]. unfold Native.checked_byte, Native.checked_substring.
+  cbn [checked_split_walk split_walk Native.direct_nat_cases]. unfold Native.checked_byte, Native.checked_substring.
   destruct (text_get_defined text (index:=index) ltac:(lia)) as [character Read].
   rewrite Read. destruct (Ascii.eqb character separator); apply IH.
 Qed.

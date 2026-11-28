@@ -387,6 +387,14 @@ Definition checked_byte (text : string) (index : nat) (_ : index < String.length
 Definition checked_substring (text : string) (start size : nat)
     (_ : start + size <= String.length text) : string := String.substring start size text.
 
+(** Opt-in extraction annotation, logically the identity. Within this scope
+    standard nat-to-int matches lower directly to conditional branches rather
+    than allocating custom-eliminator handlers. Other/custom mappings retain
+    their ordinary extraction. No application decision is supplied by native
+    code; the checked Source branch bodies remain the executed bodies. *)
+Definition direct_nat_cases {A} (value : A) : A := value.
+Register direct_nat_cases as soma.native.direct_nat_cases.
+
 (** Pure readonly observations preserve native caller expression shapes. The
     ghost size describes the array header, which element updates preserve. *)
 Definition vector_size {A}(items:vector A) : nat :=

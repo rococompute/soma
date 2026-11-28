@@ -182,6 +182,16 @@ The compiler's proof erasure and primitive mappings remain trusted. These
 Source contracts do not certify forged calls from unchecked OCaml, physical
 allocation/GC equivalence, or all possible foreign uses of the erased API.
 
+`Native.direct_nat_cases expression` is an opt-in extraction annotation with
+the logical definition of identity. Under the exact standard nat-to-int
+realization, regular zero/successor cases inside it print as direct branches
+over one saved scrutinee, with a predecessor local in the successor branch.
+The Source bodies remain the executed bodies; no scanner or other application
+decision is supplied by native code. This avoids allocating two eliminator
+closures per byte. Other nat types/eliminators and unannotated expressions
+retain their ordinary extraction. Captures, nested cases, function results,
+single scrutinee evaluation and exception identity are tested on both backends.
+
 ## Scope still open
 
 Tables, higher-order string mapping, path/word operations, multiargument/pure
@@ -246,3 +256,8 @@ backend against Stdlib, all byte separators, empty fields, full/empty-slice
 identity and two-megabyte scans. A native-code inspection rejects fallback
 string deconstruction. Native/bytecode execution, rather than a timing claim
 alone, supplies the conformance evidence.
+Two-megabyte scans without separators/matches must allocate less than 4 KiB;
+the existing Kykeon large-path allocation threshold is kept separately.
+`test-suite/misc/soma_direct_nat_cases.sh` also verifies unannotated fallback,
+a different integer representation and a custom successor eliminator, so this
+optimization cannot silently override those mappings.
