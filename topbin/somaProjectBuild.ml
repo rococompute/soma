@@ -59,6 +59,7 @@ type product = { file : string; pieces : piece list }
 type artifact_row = {
   scope : string; source : string; source_hash : string;
   filename : string; digest : string; ordinal : string option;
+  exported : export option;
 }
 let verified root path hash =
   let file = inside root path in regular file;
@@ -66,22 +67,31 @@ let verified root path hash =
   if not (SomaMerkle.valid_hash hash) || SomaMerkle.string contents <> hash then
     fail "content hash differs: %s" file;
   contents
-let whole_file ~root ~extract file =
-  let path=inside root file in regular path;
-  let contents=if file="verification.toml" then read path else begin
-      let manifest=inside root ".soma-ocaml-files" in regular manifest;
-      let entries=String.split_on_char '\n' (read manifest) |> List.filter ((<>) "") |> List.map (fun line ->
+let compiler_inventory root =
+  let manifest=inside root ".soma-ocaml-files" in regular manifest;
+  let entries=String.split_on_char '\n' (read manifest) |> List.filter ((<>) "") |> List.map (fun line ->
           match String.split_on_char ' ' line with
           | [file;hash] when relative_path file && SomaMerkle.valid_hash hash -> file,hash
           | _ -> fail "invalid compiler product inventory: %s" manifest) in
-      if List.length entries<>List.length (List.sort_uniq String.compare (List.map fst entries)) then
-        fail "duplicate compiler product in %s" manifest;
+  if List.length entries<>List.length (List.sort_uniq String.compare (List.map fst entries)) then
+    fail "duplicate compiler product in %s" manifest;
+  entries
+let whole_file ~root ~extract file =
+  let path=inside root file in regular path;
+  let contents=if file="verification.toml" then read path else begin
+      let entries=compiler_inventory root in
       let hash=match List.assoc_opt file entries with
         | Some hash -> hash | None -> fail "%s is not in the completed compiler product inventory" file in
       verified root file hash
     end in
   {identity=extract ^ "/" ^ file;file;hash=SomaMerkle.string contents;contents}
-let artifact ~root ~source_root ~extract kind scope =
+let rec artifact ?expect ~root ~source_root ~extract kind scope =
+  (* Static initialization publishes the namespace's bindings in one complete
+     file. Its API is recorded by the value/projection manifests, not by the
+     initializer manifest's single whole-file row. Check it without inserting
+     a second copy of those bindings into the receiving compilation unit. *)
+  if kind=Initializers then Option.iter (fun expected ->
+      ignore (artifact ~expect:expected ~root ~source_root ~extract Bindings scope)) expect;
   let suffix, header = match kind with
     | Source_types -> "source_type_reexports", "source-type-reexports"
     | Modules -> "module_declarations", "module-declarations"
@@ -90,22 +100,27 @@ let artifact ~root ~source_root ~extract kind scope =
     | Initializers -> "binding_initializers", "binding-initializers" in
   let manifest_name="native_" ^ suffix ^ ".manifest" in
   let manifest = inside root manifest_name in
-  let lines = String.split_on_char '\n' (whole_file ~root ~extract manifest_name).contents in
   let decode line = match kind, fields line with
-    | (Source_types | Values | Bindings | Aliases), [_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal]
-    | Modules, [_;_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal] ->
-      {scope;source;source_hash;filename;digest;ordinal=Some ordinal}
+    | (Source_types | Values | Bindings | Aliases), [_symbol;scope;source;source_hash;filename;digest;name;target;ordinal]
+    | Modules, [_;_symbol;scope;source;source_hash;filename;digest;name;target;ordinal] ->
+      {scope;source;source_hash;filename;digest;ordinal=Some ordinal;
+       exported=Some {names=String.split_on_char ',' name;target}}
     | Initializers, [scope;source;source_hash;filename;digest] ->
-      {scope;source;source_hash;filename;digest;ordinal=None}
+      {scope;source;source_hash;filename;digest;ordinal=None;exported=None}
     | _ -> fail "invalid row in %s" manifest in
   let read_rows header lines = match lines with
     | h::tail when h = "soma-native-" ^ header ^ "-v1" ->
       List.filter (fun s -> s<>"") tail |> List.map decode
     | _ -> fail "unsupported manifest: %s" manifest in
-  let all=read_rows header lines in
+  let read_manifest name header =
+    (* The compiler omits empty value/projection manifests. Bindings covers
+       their ordered union, including namespaces with only one of the two. *)
+    if kind=Bindings && not (List.mem_assoc name (compiler_inventory root)) &&
+       not (Sys.file_exists (inside root name)) then []
+    else read_rows header (String.split_on_char '\n' (whole_file ~root ~extract name).contents) in
+  let all=read_manifest manifest_name header in
   let all=if kind<>Bindings then all else
-      let projections=whole_file ~root ~extract "native_binding_projections.manifest" in
-      all @ read_rows "binding-projections" (String.split_on_char '\n' projections.contents) in
+      all @ read_manifest "native_binding_projections.manifest" "binding-projections" in
   let rows = List.filter (fun r -> r.scope=scope) all in
   let rows=if kind<>Bindings then rows else
       let position r=match r.ordinal with Some s ->
@@ -113,6 +128,9 @@ let artifact ~root ~source_root ~extract kind scope =
         | None -> fail "missing binding ordinal" in
       List.sort (fun a b -> Int.compare (position a) (position b)) rows in
   if rows=[] then fail "%s: no %s artifact for namespace %S" extract (kind_name kind) scope;
+  (if kind<>Initializers then Option.iter (fun expected ->
+      let actual=List.filter_map (fun row -> row.exported) rows in
+      if actual<>expected then fail "%s: %s export contract differs for namespace %S" extract (kind_name kind) scope) expect);
   let first=List.hd rows in
   let filename=first.filename and hash=first.digest in
   List.iteri (fun i row ->
@@ -247,7 +265,7 @@ let build ?(audit=false) ~compiler ~config ~config_hash p targets =
                 | Whitespace s -> [Padding s]
                 | Artifact a ->
                   let native,source_root=Hashtbl.find sources a.extract in
-                  [Data (artifact ~root:native ~source_root ~extract:a.extract a.kind a.namespace)]) c.parts in
+                  [Data (artifact ?expect:a.expect ~root:native ~source_root ~extract:a.extract a.kind a.namespace)]) c.parts in
             let leaves=List.filter_map (function Data l -> Some l | Padding _ -> None) pieces in
             let seen=Hashtbl.create 16 in
             List.iter (fun l ->

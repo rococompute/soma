@@ -35,10 +35,10 @@ verify=true
 options=["-no-soma-prelude"]
 [build.unit.prefix]
 output="prefix.ml"
-parts=[{extract="source",kind="source-types",namespace="exports"}]
+parts=[{extract="source",kind="source-types",namespace="exports",expect=[{names=["flag"],target=""}]}]
 [build.unit.public]
 output="public.ml"
-parts=[{whitespace="\n"},{unit="prefix"},{extract="source",kind="aliases",namespace="exports"},{extract="source",kind="values",namespace="exports"},{whitespace=" \t\n"}]
+parts=[{whitespace="\n"},{unit="prefix"},{extract="source",kind="aliases",namespace="exports",expect=[{names=["L"],target="Stdlib.List"}]},{extract="source",kind="bindings",namespace="exports",expect=[{names=["id"],target="exports.identity"}]},{whitespace=" \t\n"}]
 [build.source-map.spans]
 output="public.ml.soma-parts.toml"
 unit="public"
@@ -166,6 +166,27 @@ grep -q 'published receipt differs from fresh checking' audit-declaration.log
 cmp products/public.ml previous.ml
 cmp products/.receipts/public.toml previous-receipt.toml
 cp previous-definition exports.definition
+# A valid source edit can still break a consumer's declared publication API.
+for change in type-name alias-target value-name; do
+ cp exports.definition export-before
+ cp main.soma source-before
+ cp main.exp proof-before
+ case "$change" in
+  type-name) sed 's/As "flag"/As "different"/' export-before >exports.definition ;;
+  alias-target) sed 's/Stdlib.List/Stdlib.Array/' export-before >exports.definition ;;
+  value-name)
+   sed 's/Reexport Value id :=/Reexport Value renamed :=/' export-before >exports.definition
+   sed 's/,id)/,renamed)/' source-before >main.soma
+   sed 's/: id=tt/: renamed=tt/' proof-before >main.exp ;;
+ esac
+ if soma project build --target public >"contract-$change.log" 2>&1; then exit 1; fi
+ grep -q 'export contract differs' "contract-$change.log"
+ cmp products/public.ml previous.ml
+ cmp products/.receipts/public.toml previous-receipt.toml
+ cp export-before exports.definition
+ cp source-before main.soma
+ cp proof-before main.exp
+done
 test -z "$(find products/.extract -name '*.stage*' -print)"
 # Same unit through two graph edges must not duplicate runtime initialization.
 cp soma.toml previous-config

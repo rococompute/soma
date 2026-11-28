@@ -23,6 +23,18 @@ let () =
    | {value=SomaToml.String s;_} -> assert (s=special) | _ -> assert false);
   let p=parse graph in
   assert (List.map (fun n -> n.name) (order p p.targets) = ["source";"prefix";"public"]);
+  let contract kind expected = graph ^ Printf.sprintf
+      "[build.unit.checked]\noutput='checked.ml'\nparts=[{extract='source',kind='%s',namespace='exports',expect=%s}]\n"
+      kind expected in
+  ignore (parse (contract "values" "[{names=['id'],target='exports.identity'}]"));
+  ignore (parse (contract "source-types" "[{names=['local'],target=''}]"));
+  List.iter (fun expected -> expect_error (fun () -> parse (contract "values" expected)))
+    ["[]";"true";"[{names=[],target='a'}]";"[{names=['bad;code'],target='a'}]";
+     "[{names=['a','a'],target='a'}]";"[{names=['a'],target='a'},{names=['a'],target='b'}]";
+     "[{names=['a'],target='a',extra=true}]";
+     "[{names=['a']}]";"[{names=['a'],target=1}]";
+     "[{names=['a'],target=\"line\\nname\"}]"];
+  ignore (parse (contract "initializers" "[{names=['a'],target='a'}]"));
   List.iter (fun s -> expect_error (fun () -> parse s)) [
     graph ^ "unknown = true\n";
     "[build]\ntargets=[1]\n";
@@ -66,6 +78,12 @@ let () =
         inventory ["artifact.exports";"native_source_type_reexports.manifest"] in
       let select ()=SomaProjectBuild.artifact ~root:dir ~source_root:dir ~extract:"e" Source_types "exports" in
       put (row ()); assert ((select ()).contents="type t = bool\n");
+      let constrained expected=SomaProjectBuild.artifact ~expect:expected
+          ~root:dir ~source_root:dir ~extract:"e" Source_types "exports" in
+      assert ((constrained [{names=["t"];target="bool"}]).contents="type t = bool\n");
+      List.iter (fun expected -> expect_error (fun () -> constrained expected))
+        [[{names=["different"];target="bool"}]; [{names=["t"];target="int"}];
+         [{names=["t"];target="bool"};{names=["extra"];target="bool"}]];
       write manifest ("soma-native-source-type-reexports-v1\n" ^ row ~scope:"altered" ());
       expect_error select;
       put (row ());
@@ -91,6 +109,29 @@ let () =
       inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_projections.manifest"];
       let bindings ()=SomaProjectBuild.artifact ~root:dir ~source_root:dir ~extract:"e" Bindings "exports" in
       assert ((bindings ()).contents=SomaProjectBuild.read file);
+      let expected=[{names=["value"];target="target"};{names=["projected"];target="target"}] in
+      assert ((SomaProjectBuild.artifact ~expect:expected ~root:dir ~source_root:dir ~extract:"e" Bindings "exports").contents=SomaProjectBuild.read file);
+      expect_error (fun () -> SomaProjectBuild.artifact ~expect:(List.rev expected)
+          ~root:dir ~source_root:dir ~extract:"e" Bindings "exports");
+      write (Filename.concat dir "native_binding_initializers.manifest")
+        (Printf.sprintf "soma-native-binding-initializers-v1\n%S %S %S %S %S\n"
+           "exports" "source.definition" (SomaMerkle.file_hash source) "artifact.exports" (SomaMerkle.file_hash file));
+      inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_projections.manifest";"native_binding_initializers.manifest"];
+      assert ((SomaProjectBuild.artifact ~expect:expected ~root:dir ~source_root:dir ~extract:"e" Initializers "exports").contents=SomaProjectBuild.read file);
+      expect_error (fun () -> SomaProjectBuild.artifact ~expect:(List.rev expected)
+          ~root:dir ~source_root:dir ~extract:"e" Initializers "exports");
+      let value_manifest=Filename.concat dir "native_value_reexports.manifest" in
+      let values=SomaProjectBuild.read value_manifest and projected=SomaProjectBuild.read projections in
+      Sys.remove projections;
+      inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_initializers.manifest"];
+      assert ((SomaProjectBuild.artifact ~expect:[{names=["value"];target="target"}]
+                 ~root:dir ~source_root:dir ~extract:"e" Initializers "exports").contents=SomaProjectBuild.read file);
+      write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 0);
+      Sys.remove value_manifest;
+      inventory ["artifact.exports";"native_binding_projections.manifest";"native_binding_initializers.manifest"];
+      assert ((SomaProjectBuild.artifact ~expect:[{names=["projected"];target="target"}]
+                 ~root:dir ~source_root:dir ~extract:"e" Initializers "exports").contents=SomaProjectBuild.read file);
+      write value_manifest values; write projections projected;
       write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 0);
       expect_error bindings;
       inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_projections.manifest"];

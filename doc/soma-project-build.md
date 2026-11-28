@@ -52,6 +52,31 @@ OCaml unit. There is no new handwritten application OCaml involved in assembly.
 
 ## Nodes and order
 
+An artifact selector may declare an ordered export contract. `names` lists the
+public names introduced by one compiler declaration (including the field order
+of a record or tuple projection); `target` identifies its declared source or
+native target. The native publisher compares these rows with the authenticated
+compiler manifests before publishing that unit:
+
+```toml
+[build.unit.flags]
+output = "flags.ml"
+parts = [
+  { extract = "source", kind = "source-types", namespace = "exports", expect = [{ names = ["flag"], target = "" }] },
+]
+```
+
+Contracts apply to complete namespaces. A changed name, target, projection order
+or row inventory fails the build; the contract cannot select only matching
+members from an artifact. For `bindings`, values and projections are compared
+in their common compiler order. For `initializers`, the same binding inventory
+is checked without inserting a second copy of the published values. The build
+configuration hash binds the contract into product receipts, and fresh audit
+enforces it too. These are structural publication checks; they provide no proof
+of a target's behavior or of cross-module runtime type compatibility.
+An empty target explicitly matches a local type declaration, whose compiler
+manifest has no external target name.
+
 All node names share one namespace. `needs` adds dependencies to any node.
 `[build.publish.NAME]` publishes one complete file from a fresh checked
 extraction, optionally under a different filename. It can publish a complete

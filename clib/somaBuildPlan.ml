@@ -1,5 +1,6 @@
 type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
-type part = Artifact of { extract : string; kind : kind; namespace : string }
+type export = { names : string list; target : string }
+type part = Artifact of { extract : string; kind : kind; namespace : string; expect : export list option }
           | Unit of string
           | Whitespace of string
 type action = Extract of { file : string; source_root : string; options : string list;
@@ -41,6 +42,28 @@ let optional_strings where k t = match List.assoc_opt k t with
 let optional_bool where k t = match List.assoc_opt k t with
   | None -> false | Some {SomaToml.value=Bool b;_} -> b
   | Some e -> error "line %d: %s.%s must be a boolean" e.SomaToml.line where k
+let export_contract where t = match List.assoc_opt "expect" t with
+  | None -> None
+  | Some e ->
+    let exported_name s = String.length s>0 &&
+      (match s.[0] with 'a'..'z'|'A'..'Z'|'_' -> true | _ -> false) &&
+      String.for_all (function 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\'' -> true | _ -> false) s in
+    let exports=match e.SomaToml.value with
+      | Array xs when xs<>[] -> List.map (fun value ->
+          let row=table (where ^ ".expect") {e with value} in
+          keys where ["names";"target"] row;
+          let names=strings where (required where "names" row) in
+          if names=[] || not (List.for_all exported_name names) then
+            error "%s: expected export names must be nonempty OCaml identifiers" where;
+          let target=get_string where "target" row in
+          if String.exists (fun c -> Char.code c<32 || Char.code c=127) target then
+            error "%s: invalid expected export target" where;
+          {names;target}) xs
+      | _ -> error "%s.expect must be a nonempty array of export tables" where in
+    let names=List.concat_map (fun e -> e.names) exports in
+    if List.length names<>List.length (List.sort_uniq String.compare names) then
+      error "%s: duplicate expected export name" where;
+    Some exports
 let path where s = if not (relative_path s) then error "%s: expected a relative path without . or ..: %S" where s; s
 let dependencies n = List.sort_uniq String.compare (n.needs @ match n.action with
     | Extract _ | Dune _ -> []
@@ -115,14 +138,15 @@ let parse toml = match List.assoc_opt "build" toml with
                   error "%s: whitespace cannot contain source text" where;
                 Whitespace padding
               end else begin
-                keys where ["extract"; "kind"; "namespace"] p;
+                keys where ["extract"; "kind"; "namespace"; "expect"] p;
                 let kind = match get_string where "kind" p with
                   | "source-types" -> Source_types | "modules" -> Modules | "values" -> Values | "bindings" -> Bindings
                   | "aliases" -> Aliases | "initializers" -> Initializers
                   | k -> error "%s: unknown artifact kind %S" where k in
                 let scope = get_string where "namespace" p in
                 if not (namespace scope) then error "%s: invalid namespace %S" where scope;
-                Artifact {extract=get_string where "extract" p; kind; namespace=scope}
+                let expect=export_contract where p in
+                Artifact {extract=get_string where "extract" p; kind; namespace=scope;expect}
               end) xs
           | _ -> error "%s.parts must be a nonempty array of tables" where in
         Compose {output; parts}) in
