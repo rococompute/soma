@@ -27,5 +27,13 @@ val contract_of : Names.GlobRef.t -> string option
 (** What it rests on, by kernel name, through proofs *)
 val assumptions_of : Names.GlobRef.t -> string list
 
+type checked_definition = {
+  name : string; reference : Names.GlobRef.t; contract : string; witness : string;
+  assumptions : string list;
+}
+(** Structured kernel evidence, independent of the human-readable hash report. *)
+val checked_definitions : unit -> checked_definition list
+val checked_libraries : unit -> string list
+
 (** Invalidate memoized hashes after a Source-owned native interface annotation. *)
 val invalidate : unit -> unit

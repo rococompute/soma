@@ -55,6 +55,7 @@ let usage = {|Usage:
 Commands:
   check                       Check a program's types and proofs, including its .exp,
                               without extracting or linking its OCaml/Mirage products.
+  verify                      Check with a mandatory source-owned Verification policy.
   build                       Check a program and keep what it is built into, if anything:
                               its MirageOS image, or, with OCaml modules, its executable
                               or its page.
@@ -1751,8 +1752,8 @@ let () =
     child := Some pid;
     pass_signals ();
     exit (exit_code (wait pid))
-  | "check" :: rest when List.exists is_help rest -> print_string check_help
-  | "check" :: rest ->
+  | ("check" | "verify") :: rest when List.exists is_help rest -> print_string check_help
+  | ("check" | "verify" as command) :: rest ->
     let is_verbose a = a = "-v" || a = "--verbose" in
     let verbose = List.exists is_verbose rest in
     let rest = List.filter (fun a -> not (is_verbose a)) rest in
@@ -1764,6 +1765,10 @@ let () =
     begin match rest with
       | [] -> usage_error "soma check: no file given"
       | file :: args ->
+        let () = if command="verify" then
+            let source=program_of file in
+            Unix.putenv "SOMA_REQUIRE_VERIFICATION" (if Filename.is_relative source
+              then Filename.concat (Sys.getcwd ()) source else source) in
         let opts, args = parse_opts args in
         let () = init opts (file :: args) in
         check ~verbose (program_of file) args

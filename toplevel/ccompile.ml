@@ -139,6 +139,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
   let long_f_dot_in, long_f_dot_out =
     ensure_exists_with_prefix ~src:f_in ~tgt:f_out ~tgt_ext:ext_out in
   let beautify = copts.beautify in
+  let () = SomaVerification.begin_source long_f_dot_in in
   let () = if beautify then CLexer.record_comments := true in
   if List.exists (Filename.check_suffix long_f_dot_in) [".soma"; ".definition"; ".ext"] then
     SomaImport.refuse_old_names (Filename.remove_extension long_f_dot_in);
@@ -172,6 +173,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
       let state = load_definition_prologue ~state long_f_dot_in in
       let state = Vernac.load_vernac ~beautify ~check ~state ~source long_f_dot_in in
       let state = load_definition_epilogue ~state long_f_dot_in in
+      let () = SomaVerification.seal ~source:long_f_dot_in in
       let state = load_exp_file ~beautify ~check ~state ldir long_f_dot_in in
       (* Soma: the proofs of what it imports, checked beside it, before what
          reads them (vernac/somaImport.ml) *)
@@ -191,6 +193,7 @@ let compile opts stm_options injections copts ~f_in ~f_out =
          for a compilation of their own (vernac/somaImport.ml) *)
       let interface = SomaImport.is_interface () in
       let () = if not interface then Stm.join ~doc:state.doc in
+      let () = SomaVerification.enforce ~source:long_f_dot_in ~output:long_f_dot_out ~interface in
       let () = if not interface then SomaImport.write_loaded_source_inputs () in
       let () = if mode = BuildVo && not interface &&
                   SomaImport.loaded_dependencies_certified ~source:long_f_dot_in then

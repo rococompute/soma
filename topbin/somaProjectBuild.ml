@@ -118,9 +118,10 @@ let subprocess ~root ~env program args =
       match wait () with Unix.WEXITED 0 -> ()
         | Unix.WEXITED n -> fail "%s failed (exit %d)" program n
         | _ -> fail "%s interrupted" program)
-let environment root bindings =
+let environment root bindings ~verify =
   let replace = ["SOMA_PROJECT_ROOT", root] @
-    (match bindings with None -> [] | Some s -> ["SOMA_OCAML_BINDINGS_MODULE",s]) in
+    (match bindings with None -> [] | Some s -> ["SOMA_OCAML_BINDINGS_MODULE",s]) @
+    (if verify then ["SOMA_REQUIRE_VERIFICATION","1"] else []) in
   let env=Array.to_list (Unix.environment ()) |> List.filter (fun s ->
       not (List.exists (fun key -> String.starts_with ~prefix:(key ^ "=") s)
         (["SOMA_BUILD_ROOT"; "SOMA_PROJECT_CACHE"; "SOMA_PROJECT_PREFIX"; "SOMA_IMPORT_STACK"] @ List.map fst replace))) in
@@ -164,7 +165,7 @@ let build ~compiler ~config ~config_hash p targets =
                 let extraction_lock=Filename.concat parent
                     ("." ^ Filename.basename tmp ^ ".soma-ocaml.lock") in
                 stages := tmp :: extraction_lock :: !stages;
-                subprocess ~root:source_root ~env:(environment source_root e.bindings) compiler
+                subprocess ~root:source_root ~env:(environment source_root e.bindings ~verify:e.verify) compiler
                   (["extract";e.file] @ e.options @ ["-o";tmp]);
                 let final=inside parent n.name in
                 config_unchanged ();

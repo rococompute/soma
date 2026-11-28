@@ -25,6 +25,11 @@ VERNAC ARGUMENT EXTEND macro_body PRINTED BY { Ppconstr.pr_lconstr_expr ~flags:(
 | [ lconstr(c) ] -> { c }
 END
 
+VERNAC COMMAND EXTEND SomaVerification CLASSIFIED AS SIDEFF
+| [ "Verification" "Properties" string(properties) "Invariants" string(invariants) "Trust" string(trusted) ] ->
+  { SomaVerification.declare ~properties ~invariants ~trusted }
+END
+
 VERNAC COMMAND EXTEND SomaMacro CLASSIFIED AS SIDEFF
 | [ "Macro" identref(name) identref(args) ":=" macro_body(body) ] ->
   { SomaMacro.define ?loc:name.CAst.loc ~name ~args body }

@@ -459,6 +459,29 @@ let rec root_library = function
   | ModPath.MPdot (mp, l) ->
     Option.map (fun (d, subs) -> d, subs @ [Id.to_string l]) (root_library mp)
 
+let checked_libraries () = List.map DirPath.to_string (reported_libraries ())
+
+type checked_definition = {
+  name : string; reference : GlobRef.t; contract : string; witness : string;
+  assumptions : string list;
+}
+let checked_definitions () =
+  let libraries=reported_libraries () in
+  let selected mp = match root_library mp with
+    | Some (d,_) -> List.exists (DirPath.equal d) libraries | None -> false in
+  let env=Global.env () in
+  let row name reference (i:info) = {name;reference;contract=i.contract;witness=i.witness;
+    assumptions=List.map fst (SMap.bindings i.assumes)} in
+  let xs=Environ.fold_constants (fun c _ xs ->
+      if selected (Constant.modpath c) then row (kn_constant c) (GlobRef.ConstRef c) (constant c)::xs else xs) env [] in
+  Environ.fold_inductives (fun m mb xs ->
+      if not (selected (MutInd.modpath m)) then xs else
+      Array.fold_left (fun (index,xs) packet ->
+          let name=match root_library (MutInd.modpath m) with
+            | Some (d,subs) -> String.concat "." ((DirPath.to_string d::subs) @ [Id.to_string packet.Declarations.mind_typename])
+            | None -> assert false in
+          index+1,row name (GlobRef.IndRef (m,index)) (inductive m)::xs) (0,xs) mb.Declarations.mind_packets |> snd) env xs
+
 let report ?(cache=false) () =
   match Sys.getenv_opt "SOMA_HASH" with
   | (None | Some "") when not cache -> ()
@@ -486,7 +509,7 @@ let report ?(cache=false) () =
               (name, { i with contract = hash [i.contract; n]; witness = hash [i.witness; n];
                               shape = hash [i.shape; n] }) :: acc
             | None -> acc) (0, acc) mb.mind_packets)) env lines in
-    let line (name, i) =
+    let line (name, (i:info)) =
       let assumes = List.map fst (SMap.bindings i.assumes) in
       (* for soma diff (vernac/somaDiff.ml), a field to each tab *)
       if Sys.getenv_opt "SOMA_HASH_FIELDS" = Some "1" then

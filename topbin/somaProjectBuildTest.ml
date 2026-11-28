@@ -28,6 +28,7 @@ let () =
     "[build]\ntargets=[1]\n";
     "[build]\ndirectory='../escape'\n";
     "[build.extract.a]\nfile='main.soma'\noptions=['-o']\n";
+    "[build.extract.a]\nfile='main.soma'\nverify='yes'\n";
     "[build.extract.a]\nfile='main.soma'\nneeds=['b']\n[build.extract.b]\nfile='b.soma'\nneeds=['a']\n";
     "[build.unit.a]\noutput='a.ml'\nparts=[{unit='missing'}]\n";
     "[build.unit.a]\noutput='.receipts/x.ml'\nparts=[{unit='a'}]\n";

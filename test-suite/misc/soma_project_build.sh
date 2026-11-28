@@ -16,6 +16,7 @@ SOMA
 cat >main.soma <<'SOMA'
 Import exports.
 Definition main := (public_flag,L,id).
+Verification Properties "public_identity_checked" Invariants "" Trust "".
 SOMA
 cat >main.exp <<'SOMA'
 Theorem public_identity_checked : id=tt.
@@ -30,6 +31,7 @@ directory="products"
 targets=["native"]
 [build.extract.source]
 file="main.soma"
+verify=true
 options=["-no-soma-prelude"]
 [build.unit.prefix]
 output="prefix.ml"
@@ -83,6 +85,15 @@ grep -q 'duplicate whole artifact' duplicate.log
 test ! -e products/public-again.ml
 cmp products/public.ml previous.ml
 mv previous-config soma.toml
+# Removing the complete declaration cannot turn a verified graph into a
+# successful unverified extraction, or replace its previous checked products.
+cp main.soma previous-source
+sed '/^Verification /d' previous-source >main.soma
+if soma project build >missing-policy.log 2>&1; then exit 1; fi
+grep -q 'no source-owned Verification policy' missing-policy.log
+cmp products/public.ml previous.ml
+cmp products/.extract/source/prog.ml previous-prog.ml
+mv previous-source main.soma
 # A failed proof recheck cannot publish a changed unit or extraction.
 cp products/.extract/source/prog.ml previous-prog.ml
 printf '\nTheorem impossible : False. Proof. exact I. Qed.\n' >>main.exp

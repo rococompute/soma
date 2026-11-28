@@ -18,6 +18,7 @@ targets = ["executable"]
 file = "main.soma"
 source-root = "."
 bindings = "Soma_bindings"
+verify = true
 
 [build.unit.public]
 output = "public.ml"
@@ -71,6 +72,12 @@ The implementation is statically typed OCaml in Soma, using Soma's existing
 typed TOML parser. It invokes tools with argv, never interpolated shell commands.
 Extraction options are deliberately restricted to `-no-soma-prelude` and
 `--no-module-cache`; locations and bindings have their own typed fields.
+`verify = true` requires a source-owned `Verification` policy for every Soma
+library in that extraction's project dependency closure, including cached
+imports. Foreign `.definition` libraries are checked through their users.
+Missing policies or failed obligations stop extraction before the previous
+completed products are replaced. See [native verification](soma-verification.md)
+for the declaration, static-fragment restriction and receipt format.
 
 Each build runs the ordinary Soma checker/extractor, which owns dependency and
 proof validation. There is deliberately no new extraction-skip cache based on

@@ -2,7 +2,7 @@ type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type part = Artifact of { extract : string; kind : kind; namespace : string }
           | Unit of string
 type action = Extract of { file : string; source_root : string; options : string list;
-                           bindings : string option }
+                           bindings : string option; verify : bool }
             | Compose of { output : string; parts : part list }
             | Dune of { directory : string; targets : string list }
 type node = { name : string; needs : string list; action : action }
@@ -34,6 +34,9 @@ let optional_string where k t default = match List.assoc_opt k t with
   | None -> default | Some e -> string (where ^ "." ^ k) e
 let optional_strings where k t = match List.assoc_opt k t with
   | None -> [] | Some e -> strings (where ^ "." ^ k) e
+let optional_bool where k t = match List.assoc_opt k t with
+  | None -> false | Some {SomaToml.value=Bool b;_} -> b
+  | Some e -> error "line %d: %s.%s must be a boolean" e.SomaToml.line where k
 let path where s = if not (relative_path s) then error "%s: expected a relative path without . or ..: %S" where s; s
 let dependencies n = List.sort_uniq String.compare (n.needs @ match n.action with
     | Extract _ | Dune _ -> []
@@ -65,7 +68,7 @@ let parse toml = match List.assoc_opt "build" toml with
         let action = f where t in
         {name; needs=optional_strings where "needs" t; action}) in
     let extracts = parse_group "extract" (fun where t ->
-        keys where ["file"; "source-root"; "options"; "bindings"; "needs"] t;
+        keys where ["file"; "source-root"; "options"; "bindings"; "needs"; "verify"] t;
         let file = path where (get_string where "file" t) in
         let source_root = optional_string where "source-root" t "." in
         if source_root <> "." then ignore (path where source_root);
@@ -75,7 +78,8 @@ let parse toml = match List.assoc_opt "build" toml with
             error "%s: unsupported extraction option %S" where s) options;
         let bindings = Option.map (string where) (List.assoc_opt "bindings" t) in
         Option.iter (fun s -> if not (identifier s) then error "%s: invalid bindings module" where) bindings;
-        Extract {file; source_root; options; bindings}) in
+        let verify=optional_bool where "verify" t in
+        Extract {file; source_root; options; bindings; verify}) in
     let units = parse_group "unit" (fun where t ->
         keys where ["output"; "parts"; "needs"] t;
         let output = path where (get_string where "output" t) in

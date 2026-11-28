@@ -488,6 +488,7 @@ let opam_file ~source ~project ~packages =
 (* [soma extract FILE -o DIR]: the program's OCaml project, in [dir], to be
    built by dune, with or without Soma *)
 let export_unlocked ~state ~source dir =
+  let verification=SomaVerification.receipt ~source in
   ignore (main_reference ());
   if SomaMirage.requires_mirage () then
     error Pp.(str "a program that requires Sandbox is a MirageOS unikernel, which soma extract does not" ++ spc () ++
@@ -520,6 +521,10 @@ let export_unlocked ~state ~source dir =
   file "dune-project" ("(lang dune 3.0)\n" ^ extract_marker ^ " " ^ Filename.basename source ^ "\n");
   file (package ^ ".opam") (opam_file ~source ~project ~packages);
   file "README.md" (extracted_readme ~source ~package ~packages ~js);
+  (match verification with
+   | Some receipt -> file "verification.toml" receipt
+   | None -> let stale=Filename.concat dir "verification.toml" in
+     if Sys.file_exists stale then Sys.remove stale);
   if js then file "index.html"
       (page_html ~script:"_build/default/soma_main.bc.js" name);
   Feedback.msg_notice Pp.(str "OCaml: extracted " ++ str (Filename.basename source) ++ str " into " ++ str dir ++

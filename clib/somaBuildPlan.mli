@@ -3,7 +3,7 @@ type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type part = Artifact of { extract : string; kind : kind; namespace : string }
           | Unit of string
 type action = Extract of { file : string; source_root : string; options : string list;
-                           bindings : string option }
+                           bindings : string option; verify : bool }
             | Compose of { output : string; parts : part list }
             | Dune of { directory : string; targets : string list }
 type node = { name : string; needs : string list; action : action }
