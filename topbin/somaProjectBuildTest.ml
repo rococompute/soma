@@ -53,12 +53,22 @@ let () =
       let source=Filename.concat dir "source.definition" and file=Filename.concat dir "artifact.exports" in
       write source "checked Source\n"; write file "type t = bool\n";
       let manifest=Filename.concat dir "native_source_type_reexports.manifest" in
+      let inventory names=write (Filename.concat dir ".soma-ocaml-files")
+          (String.concat "" (List.map (fun name -> name ^ " " ^ SomaMerkle.file_hash (Filename.concat dir name) ^ "\n") names)) in
       let row ?(order="0") ?(scope="exports") ?(source_path="source.definition") ?(artifact="artifact.exports") () =
         Printf.sprintf "%S %S %S %S %S %S %S %S %s\n" "exports.t" scope source_path
           (SomaMerkle.file_hash source) artifact (SomaMerkle.file_hash file) "t" "bool" order in
-      let put rows=write manifest ("soma-native-source-type-reexports-v1\n" ^ rows) in
+      let put rows=write manifest ("soma-native-source-type-reexports-v1\n" ^ rows);
+        inventory ["artifact.exports";"native_source_type_reexports.manifest"] in
       let select ()=SomaProjectBuild.artifact ~root:dir ~source_root:dir ~extract:"e" Source_types "exports" in
       put (row ()); assert ((select ()).contents="type t = bool\n");
+      write manifest ("soma-native-source-type-reexports-v1\n" ^ row ~scope:"altered" ());
+      expect_error select;
+      put (row ());
+      write (Filename.concat dir ".soma-ocaml-files")
+        ("native_source_type_reexports.manifest " ^ SomaMerkle.file_hash manifest ^ "\n");
+      expect_error select;
+      put (row ());
       write file "type t = int\n"; expect_error select;
       put (row ()); write source "changed Source\n"; expect_error select;
       put (row ~order:"1" ()); expect_error select;
@@ -74,9 +84,12 @@ let () =
         ("soma-native-value-reexports-v1\n" ^ binding "value" 0);
       let projections=Filename.concat dir "native_binding_projections.manifest" in
       write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 1);
+      inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_projections.manifest"];
       let bindings ()=SomaProjectBuild.artifact ~root:dir ~source_root:dir ~extract:"e" Bindings "exports" in
       assert ((bindings ()).contents=SomaProjectBuild.read file);
       write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 0);
+      expect_error bindings;
+      inventory ["artifact.exports";"native_value_reexports.manifest";"native_binding_projections.manifest"];
       expect_error bindings;
       let output=Filename.concat dir "public.ml" in
       write (Filename.concat dir ".soma-ocaml-files") ("artifact.exports " ^ SomaMerkle.file_hash file ^ "\n");

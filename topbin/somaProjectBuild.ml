@@ -88,8 +88,9 @@ let artifact ~root ~source_root ~extract kind scope =
     | Values | Bindings -> "value_reexports", "value-reexports"
     | Aliases -> "module_aliases", "module-aliases"
     | Initializers -> "binding_initializers", "binding-initializers" in
-  let manifest = inside root ("native_" ^ suffix ^ ".manifest") in regular manifest;
-  let lines = String.split_on_char '\n' (read manifest) in
+  let manifest_name="native_" ^ suffix ^ ".manifest" in
+  let manifest = inside root manifest_name in
+  let lines = String.split_on_char '\n' (whole_file ~root ~extract manifest_name).contents in
   let decode line = match kind, fields line with
     | (Source_types | Values | Bindings | Aliases), [_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal]
     | Modules, [_;_symbol;scope;source;source_hash;filename;digest;_name;_target;ordinal] ->
@@ -103,9 +104,8 @@ let artifact ~root ~source_root ~extract kind scope =
     | _ -> fail "unsupported manifest: %s" manifest in
   let all=read_rows header lines in
   let all=if kind<>Bindings then all else
-      let projections=inside root "native_binding_projections.manifest" in
-      regular projections;
-      all @ read_rows "binding-projections" (String.split_on_char '\n' (read projections)) in
+      let projections=whole_file ~root ~extract "native_binding_projections.manifest" in
+      all @ read_rows "binding-projections" (String.split_on_char '\n' projections.contents) in
   let rows = List.filter (fun r -> r.scope=scope) all in
   let rows=if kind<>Bindings then rows else
       let position r=match r.ordinal with Some s ->
@@ -123,7 +123,8 @@ let artifact ~root ~source_root ~extract kind scope =
   (* A namespace selects a complete artifact; it cannot discard other scopes in that file. *)
   List.iter (fun r ->
       if r.filename=filename && r.scope<>scope then fail "%s: artifact also contains another namespace" manifest) all;
-  let contents=verified root filename hash in
+  let contents=(whole_file ~root ~extract filename).contents in
+  if SomaMerkle.string contents<>hash then fail "content hash differs: %s" filename;
   {identity=extract ^ "/" ^ filename; file=filename; hash; contents}
 let subprocess ~root ~env program args =
   let old=Sys.getcwd () in
