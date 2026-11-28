@@ -39,10 +39,25 @@ parts=[{extract="source",kind="source-types",namespace="exports"}]
 [build.unit.public]
 output="public.ml"
 parts=[{unit="prefix"},{extract="source",kind="aliases",namespace="exports"},{extract="source",kind="values",namespace="exports"}]
+[build.publish.whole]
+extract="source"
+file="prog.ml"
+output="complete.ml"
+[build.publish.signature]
+extract="source"
+file="prog.mli"
+output="complete.mli"
+[build.publish.certificate]
+extract="source"
+file="verification.toml"
+output="checked.verification.toml"
+[build.unit.forward]
+output="forward.ml"
+parts=[{unit="whole"}]
 [build.dune.native]
 directory="."
 targets=["check.exe","check.bc"]
-needs=["public"]
+needs=["public","signature","certificate","forward"]
 TOML
 cat >dune-project <<'DUNE'
 (lang dune 3.13)
@@ -60,9 +75,21 @@ let () =
   print_endline "PASS: native project graph preserves types, aliases, generic values and identity"
 ML
 soma project plan >plan.log
-printf 'source: \nprefix: source\npublic: prefix source\nnative: public\n' >expected-plan
+printf 'source: \ncertificate: source\nwhole: source\nforward: whole\nprefix: source\npublic: prefix source\nsignature: source\nnative: certificate forward public signature\n' >expected-plan
 cmp plan.log expected-plan
 soma project build >build.log 2>&1
+cmp products/.extract/source/prog.ml products/complete.ml
+cmp products/.extract/source/prog.mli products/complete.mli
+cmp products/complete.ml products/forward.ml
+cmp products/.extract/source/verification.toml products/checked.verification.toml
+python3 - <<'PY'
+from pathlib import Path
+import hashlib,tomllib
+proof=hashlib.sha256(Path('products/checked.verification.toml').read_bytes()).hexdigest()
+for name in ['public','whole','signature','certificate','forward']:
+ receipt=tomllib.loads(Path('products/.receipts/'+name+'.toml').read_text())
+ assert receipt['verification']==[{'extract':'source','sha256':proof}]
+PY
 _build/default/check.exe
 _build/default/check.bc
 cp products/public.ml previous.ml
@@ -83,6 +110,34 @@ TOML
 if soma project build --target duplicate >duplicate.log 2>&1; then exit 1; fi
 grep -q 'duplicate whole artifact' duplicate.log
 test ! -e products/public-again.ml
+cmp products/public.ml previous.ml
+mv previous-config soma.toml
+# Preserve only ASCII spacing between complete compiler products.
+cp soma.toml previous-config
+cat >>soma.toml <<'TOML'
+[build.unit.padded]
+output="padded.ml"
+parts=[{whitespace="\n"},{unit="whole"},{whitespace="\n"}]
+TOML
+soma project build --target padded >padded.log 2>&1
+python3 - <<'PY'
+from pathlib import Path
+import tomllib
+assert Path('products/padded.ml').read_bytes()==b'\n'+Path('products/complete.ml').read_bytes()+b'\n'
+r=tomllib.loads(Path('products/.receipts/padded.toml').read_text())
+assert r['parts'][0]==r['parts'][-1]=={'whitespace':'\n'}
+PY
+mv previous-config soma.toml
+# A named input must exist as a complete file in the fresh checked extraction.
+cp soma.toml previous-config
+cat >>soma.toml <<'TOML'
+[build.publish.absent]
+extract="source"
+file="does-not-exist.ml"
+output="absent.ml"
+TOML
+if soma project build --target absent >absent.log 2>&1; then exit 1; fi
+test ! -e products/absent.ml
 cmp products/public.ml previous.ml
 mv previous-config soma.toml
 # Removing the complete declaration cannot turn a verified graph into a

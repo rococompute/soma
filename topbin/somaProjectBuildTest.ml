@@ -29,8 +29,15 @@ let () =
     "[build]\ndirectory='../escape'\n";
     "[build.extract.a]\nfile='main.soma'\noptions=['-o']\n";
     "[build.extract.a]\nfile='main.soma'\nverify='yes'\n";
+    "[build.publish.a]\nextract='missing'\nfile='prog.ml'\noutput='a.ml'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='verification.toml'\noutput='b.ml'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='../escape.ml'\noutput='b.ml'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='prog.ml'\noutput='.extract/b.ml'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='prog.ml'\noutput='b.ml'\n[build.publish.c]\nextract='b'\nfile='prog.ml'\noutput='c.ml'\n";
+    "[build.extract.a]\nfile='main.soma'\n[build.publish.b]\nextract='a'\nfile='prog.ml'\noutput='b.ml'\n[build.publish.c]\nextract='a'\nfile='prog.mli'\noutput='b.ml'\n";
     "[build.extract.a]\nfile='main.soma'\nneeds=['b']\n[build.extract.b]\nfile='b.soma'\nneeds=['a']\n";
     "[build.unit.a]\noutput='a.ml'\nparts=[{unit='missing'}]\n";
+    "[build.unit.a]\noutput='a.ml'\nparts=[{whitespace='let x = 1'}]\n";
     "[build.unit.a]\noutput='.receipts/x.ml'\nparts=[{unit='a'}]\n";
     "[build.extract.a]\nfile='a.soma'\n[build.unit.a]\noutput='a.ml'\nparts=[{unit='a'}]\n";
     "[build.extract.e]\nfile='e.soma'\n[build.unit.a]\noutput='a.ml'\nparts=[{extract='e',kind='values',namespace='e'}]\n[build.unit.b]\noutput='a.ml'\nparts=[{unit='a'}]\n";
@@ -68,6 +75,13 @@ let () =
       write projections ("soma-native-binding-projections-v1\n" ^ binding "projected" 0);
       expect_error bindings;
       let output=Filename.concat dir "public.ml" in
+      write (Filename.concat dir ".soma-ocaml-files") ("artifact.exports " ^ SomaMerkle.file_hash file ^ "\n");
+      let whole ()=SomaProjectBuild.whole_file ~root:dir ~extract:"e" "artifact.exports" in
+      assert ((whole ()).contents=SomaProjectBuild.read file);
+      write file "changed compiler output\n"; expect_error whole;
+      write (Filename.concat dir ".soma-ocaml-files") ""; expect_error whole;
+      expect_error (fun () -> SomaProjectBuild.whole_file ~root:dir ~extract:"e" "../outside");
+      expect_error (fun () -> SomaProjectBuild.whole_file ~root:dir ~extract:"e" "linked.exports");
       assert (SomaProjectBuild.atomic output "previous checked output\n");
       let before=(Unix.stat output).Unix.st_mtime in
       assert (not (SomaProjectBuild.atomic output "previous checked output\n"));

@@ -54,7 +54,8 @@ let fields line =
       loop (s::acc) j in
   loop [] 0
 type leaf = { identity : string; file : string; hash : string; contents : string }
-type product = { file : string; leaves : leaf list }
+type piece = Data of leaf | Padding of string
+type product = { file : string; pieces : piece list }
 type artifact_row = {
   scope : string; source : string; source_hash : string;
   filename : string; digest : string; ordinal : string option;
@@ -65,6 +66,21 @@ let verified root path hash =
   if not (SomaMerkle.valid_hash hash) || SomaMerkle.string contents <> hash then
     fail "content hash differs: %s" file;
   contents
+let whole_file ~root ~extract file =
+  let path=inside root file in regular path;
+  let contents=if file="verification.toml" then read path else begin
+      let manifest=inside root ".soma-ocaml-files" in regular manifest;
+      let entries=String.split_on_char '\n' (read manifest) |> List.filter ((<>) "") |> List.map (fun line ->
+          match String.split_on_char ' ' line with
+          | [file;hash] when relative_path file && SomaMerkle.valid_hash hash -> file,hash
+          | _ -> fail "invalid compiler product inventory: %s" manifest) in
+      if List.length entries<>List.length (List.sort_uniq String.compare (List.map fst entries)) then
+        fail "duplicate compiler product in %s" manifest;
+      let hash=match List.assoc_opt file entries with
+        | Some hash -> hash | None -> fail "%s is not in the completed compiler product inventory" file in
+      verified root file hash
+    end in
+  {identity=extract ^ "/" ^ file;file;hash=SomaMerkle.string contents;contents}
 let artifact ~root ~source_root ~extract kind scope =
   let suffix, header = match kind with
     | Source_types -> "source_type_reexports", "source-type-reexports"
@@ -151,6 +167,34 @@ let build ~compiler ~config ~config_hash p targets =
           fail "build configuration changed during execution; rebuild" in
       config_unchanged ();
       let sources=Hashtbl.create 16 and products=Hashtbl.create 16 in
+      let publish name output pieces =
+        let leaves=List.filter_map (function Data l -> Some l | Padding _ -> None) pieces in
+        let extracts=List.map (fun l -> String.sub l.identity 0 (String.index l.identity '/')) leaves
+          |> List.sort_uniq String.compare in
+        let proofs=List.filter_map (fun extract ->
+            let native,_=Hashtbl.find sources extract in
+            let file=inside native "verification.toml" in
+            if not (Sys.file_exists file) then None else begin regular file;
+              Some (Printf.sprintf "{ extract = %s, sha256 = %s }"
+                      (toml_string extract) (toml_string (SomaMerkle.file_hash file))) end) extracts in
+        List.iter (fun l ->
+            let extract=String.sub l.identity 0 (String.index l.identity '/') in
+            let native,_=Hashtbl.find sources extract in
+            ignore (verified native l.file l.hash)) leaves;
+        let data=String.concat "" (List.map (function Data l -> l.contents | Padding s -> s) pieces) in
+        let file=inside directory output in
+        config_unchanged ();
+        let changed=atomic file data in
+        let receipt=Printf.sprintf
+            "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nparts = [%s]\nverification = [%s]\n"
+            (toml_string config_hash) (toml_string output) (toml_string (SomaMerkle.string data))
+            (String.concat ",\n" (List.map (function
+                 | Data l -> Printf.sprintf "{ artifact = %s, sha256 = %s }" (toml_string l.identity) (toml_string l.hash)
+                 | Padding s -> "{ whitespace = " ^ toml_string s ^ " }") pieces))
+            (String.concat ",\n" proofs) in
+        ignore (atomic (inside directory (".receipts/" ^ name ^ ".toml")) receipt);
+        Hashtbl.add products name {file;pieces};
+        Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file in
       let stages=ref [] in
       Fun.protect ~finally:(fun () -> List.iter remove !stages) (fun () ->
       List.iter (fun n -> match n.action with
@@ -181,12 +225,17 @@ let build ~compiler ~config ~config_hash p targets =
                 end;
                 final in
             Hashtbl.add sources n.name (native,source_root)
+          | Publish p ->
+            let native,_=Hashtbl.find sources p.extract in
+            publish n.name p.output [Data (whole_file ~root:native ~extract:p.extract p.file)]
           | Compose c ->
-            let leaves=List.concat_map (function
-                | Unit u -> (Hashtbl.find products u).leaves
+            let pieces=List.concat_map (function
+                | Unit u -> (Hashtbl.find products u).pieces
+                | Whitespace s -> [Padding s]
                 | Artifact a ->
                   let native,source_root=Hashtbl.find sources a.extract in
-                  [artifact ~root:native ~source_root ~extract:a.extract a.kind a.namespace]) c.parts in
+                  [Data (artifact ~root:native ~source_root ~extract:a.extract a.kind a.namespace)]) c.parts in
+            let leaves=List.filter_map (function Data l -> Some l | Padding _ -> None) pieces in
             let seen=Hashtbl.create 16 in
             List.iter (fun l ->
                 (* Include the physical path so two extraction aliases cannot duplicate initialization. *)
@@ -196,18 +245,7 @@ let build ~compiler ~config ~config_hash p targets =
                 if Hashtbl.mem seen key || Hashtbl.mem seen l.file then
                   fail "%s: duplicate whole artifact %s" n.name l.identity;
                 Hashtbl.add seen key (); Hashtbl.add seen l.file ()) leaves;
-            let data=String.concat "" (List.map (fun l -> l.contents) leaves) in
-            let file=inside directory c.output in
-            config_unchanged ();
-            let changed=atomic file data in
-            let receipt=Printf.sprintf
-                "format = 1\nconfig-sha256 = %s\noutput = %s\nsha256 = %s\nparts = [%s]\n"
-                (toml_string config_hash) (toml_string c.output) (toml_string (SomaMerkle.string data))
-                (String.concat ",\n" (List.map (fun l -> Printf.sprintf
-                     "{ artifact = %s, sha256 = %s }" (toml_string l.identity) (toml_string l.hash)) leaves)) in
-            ignore (atomic (inside directory (".receipts/" ^ n.name ^ ".toml")) receipt);
-            Hashtbl.add products n.name {file;leaves};
-            Printf.printf "%s %s\n%!" (if changed then "built" else "unchanged") file
+            publish n.name c.output pieces
           | Dune d ->
             config_unchanged ();
             let dir=if d.directory="." then root else inside root d.directory in

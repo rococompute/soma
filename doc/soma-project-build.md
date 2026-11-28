@@ -28,6 +28,11 @@ parts = [
   { extract = "source", kind = "values", namespace = "exports" },
 ]
 
+[build.publish.implementation]
+extract = "source"
+file = "prog.ml"
+output = "implementation.ml"
+
 [build.dune.executable]
 directory = "."
 targets = ["main.exe"]
@@ -43,9 +48,18 @@ OCaml unit. There is no new handwritten application OCaml involved in assembly.
 ## Nodes and order
 
 All node names share one namespace. `needs` adds dependencies to any node.
+`[build.publish.NAME]` publishes one complete file from a fresh checked
+extraction, optionally under a different filename. It can publish a complete
+implementation, signature, native assembly, support file or verification receipt.
+It cannot read arbitrary project files or slice or modify compiler output.
+Its extraction is an implicit dependency. Published `.ml`/`.mli` outputs may
+also be referenced by `{ unit = "NAME" }`; metadata files cannot be inserted
+into OCaml compositions through unit references.
 Artifact parts implicitly depend on their extraction; `{ unit = "prefix" }`
 depends on another composed unit and consumes its complete contents. Targets
 are extracted once per invocation, even if several units depend on them.
+`{ whitespace = "\n" }` can preserve ASCII spacing between complete products;
+only spaces, tabs and line endings are accepted, never source text.
 Unknown references, cycles, wrong reference kinds, unknown keys, wrong TOML
 types and conflicting output paths are rejected before executing any node.
 
@@ -94,8 +108,9 @@ a failed compiler invocation leaves the previous completed extraction in place.
 Each unit is validated completely before atomic replacement. A failed later
 node may leave earlier successful nodes updated, as in ordinary build systems;
 publication is per node, not a transaction over the entire graph.
-`.receipts/NAME.toml` records the config hash, ordered whole-artifact hashes and
-output hash. Receipts describe successful publication; they are not trusted as
+`.receipts/NAME.toml` records the config hash, ordered whole-artifact hashes,
+output hash and the contributing extractions' native verification receipt
+hashes, where declared. Receipts describe successful publication; they are not trusted as
 proofs or used to skip checking. Temporary failed extraction directories are
 removed. Completed extraction directories remain available to Dune.
 
