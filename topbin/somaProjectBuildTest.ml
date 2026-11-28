@@ -35,6 +35,15 @@ let () =
      "[{names=['a']}]";"[{names=['a'],target=1}]";
      "[{names=['a'],target=\"line\\nname\"}]"];
   ignore (parse (contract "initializers" "[{names=['a'],target='a'}]"));
+  let abi_config expected=Printf.sprintf
+      "[build.extract.source]\nfile='main.soma'\nabi=%s\n" expected in
+  let digest=String.make 64 'a' in
+  ignore (parse (abi_config ("[{symbol='main.main',sha256='" ^ digest ^ "'}]")));
+  List.iter (fun expected -> expect_error (fun () -> parse (abi_config expected)))
+    ["[]";"true";"[1]";"[{symbol='',sha256='" ^ digest ^ "'}]";
+     "[{symbol='main.main',sha256='bad'}]";"[{symbol='main.main'}]";
+     "[{symbol='main.main',sha256='" ^ digest ^ "',extra=true}]";
+     "[{symbol='main.main',sha256='" ^ digest ^ "'},{symbol='main.main',sha256='" ^ digest ^ "'}]"];
   List.iter (fun s -> expect_error (fun () -> parse s)) [
     graph ^ "unknown = true\n";
     "[build]\ntargets=[1]\n";
@@ -144,6 +153,32 @@ let () =
       write (Filename.concat dir ".soma-ocaml-files") ""; expect_error whole;
       expect_error (fun () -> SomaProjectBuild.whole_file ~root:dir ~extract:"e" "../outside");
       expect_error (fun () -> SomaProjectBuild.whole_file ~root:dir ~extract:"e" "linked.exports");
+      let abi_file=Filename.concat dir "native_abi.manifest" in
+      let abi_row ?(namespace="main") ?(hash=String.make 64 'b') symbol identity =
+        Printf.sprintf "%S %S %S %S\n" symbol namespace hash identity in
+      let abi rows=write abi_file ("soma-native-abi-v1\n" ^ rows);
+        inventory ["native_abi.manifest"] in
+      let inspect ()=SomaProjectBuild.native_abi ~root:dir ~extract:"e" in
+      let first=abi_row "main.main" "one" and second=abi_row "main.main" "two" in
+      abi (second ^ first);
+      let contracts=inspect () in
+      assert (contracts=[{symbol="main.main";sha256=SomaMerkle.string
+          "soma-project-abi-v1\n4:main3:one4:main3:two"}]);
+      let check ()=SomaProjectBuild.check_native_abi ~root:dir ~extract:"e" contracts in
+      check ();
+      abi (first ^ second); assert (inspect ()=contracts);
+      abi (abi_row ~hash:(String.make 64 'c') "main.main" "one" ^ second); check ();
+      abi (abi_row ~hash:"library" "main.main" "one" ^ second); check ();
+      abi first; expect_error check;
+      abi (first ^ abi_row ~namespace:"other" "main.main" "two"); expect_error check;
+      abi (first ^ abi_row "main.main" "changed"); expect_error check;
+      abi ""; expect_error check;
+      abi (first ^ first); expect_error inspect;
+      abi (abi_row ~hash:"bad" "main.main" "one"); expect_error inspect;
+      abi (first ^ second); write abi_file "corrupt cached manifest\n"; expect_error inspect;
+      abi (abi_row ~namespace:"a" "main.main" "bc"); let short=inspect () in
+      abi (abi_row ~namespace:"ab" "main.main" "c"); assert (inspect ()<>short);
+      write (Filename.concat dir ".soma-ocaml-files") ""; expect_error inspect;
       assert (SomaProjectBuild.atomic output "previous checked output\n");
       let before=(Unix.stat output).Unix.st_mtime in
       assert (not (SomaProjectBuild.atomic output "previous checked output\n"));

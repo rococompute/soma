@@ -1,10 +1,11 @@
 type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type export = { names : string list; target : string }
+type abi_contract = { symbol : string; sha256 : string }
 type part = Artifact of { extract : string; kind : kind; namespace : string; expect : export list option }
           | Unit of string
           | Whitespace of string
 type action = Extract of { file : string; source_root : string; options : string list;
-                           bindings : string option; verify : bool }
+                           bindings : string option; verify : bool; abi : abi_contract list }
             | Publish of { extract : string; file : string; output : string }
             | Compose of { output : string; parts : part list }
             | Module_list of { output : string; units : string list }
@@ -65,6 +66,22 @@ let export_contract where t = match List.assoc_opt "expect" t with
       error "%s: duplicate expected export name" where;
     Some exports
 let path where s = if not (relative_path s) then error "%s: expected a relative path without . or ..: %S" where s; s
+let abi_contracts where t = match List.assoc_opt "abi" t with
+  | None -> []
+  | Some e ->
+    let contracts=match e.SomaToml.value with
+      | Array xs when xs<>[] -> List.map (fun value ->
+          let row=table (where ^ ".abi") {e with value} in
+          keys where ["symbol";"sha256"] row;
+          let symbol=get_string where "symbol" row and sha256=get_string where "sha256" row in
+          if not (namespace symbol) then error "%s: invalid ABI contract symbol %S" where symbol;
+          if not (SomaMerkle.valid_hash sha256) then error "%s: invalid ABI contract SHA-256" where;
+          {symbol;sha256}) xs
+      | _ -> error "%s.abi must be a nonempty array of ABI contract tables" where in
+    let names=List.map (fun c -> c.symbol) contracts in
+    if List.length names<>List.length (List.sort_uniq String.compare names) then
+      error "%s: duplicate ABI contract symbol" where;
+    contracts
 let dependencies n = List.sort_uniq String.compare (n.needs @ match n.action with
     | Extract _ | Dune _ -> []
     | Publish p -> [p.extract]
@@ -99,7 +116,7 @@ let parse toml = match List.assoc_opt "build" toml with
         let action = f where t in
         {name; needs=optional_strings where "needs" t; action}) in
     let extracts = parse_group "extract" (fun where t ->
-        keys where ["file"; "source-root"; "options"; "bindings"; "needs"; "verify"] t;
+        keys where ["file"; "source-root"; "options"; "bindings"; "needs"; "verify"; "abi"] t;
         let file = path where (get_string where "file" t) in
         let source_root = optional_string where "source-root" t "." in
         if source_root <> "." then ignore (path where source_root);
@@ -110,7 +127,8 @@ let parse toml = match List.assoc_opt "build" toml with
         let bindings = Option.map (string where) (List.assoc_opt "bindings" t) in
         Option.iter (fun s -> if not (identifier s) then error "%s: invalid bindings module" where) bindings;
         let verify=optional_bool where "verify" t in
-        Extract {file; source_root; options; bindings; verify}) in
+        let abi=abi_contracts where t in
+        Extract {file; source_root; options; bindings; verify; abi}) in
     let publications = parse_group "publish" (fun where t ->
         keys where ["extract"; "file"; "output"; "needs"] t;
         let extract=get_string where "extract" t in

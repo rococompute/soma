@@ -85,6 +85,40 @@ let whole_file ~root ~extract file =
       verified root file hash
     end in
   {identity=extract ^ "/" ^ file;file;hash=SomaMerkle.string contents;contents}
+(* Fingerprint every identity attached to each selected owner. Source byte hashes
+   are deliberately separate: comments and implementation changes need not alter
+   the ABI, while the verification receipt still binds those complete inputs. *)
+let native_abi ~root ~extract =
+  let contents=(whole_file ~root ~extract "native_abi.manifest").contents in
+  let rows=match String.split_on_char '\n' contents with
+    | "soma-native-abi-v1"::rows -> List.filter ((<>) "") rows |> List.map (fun row ->
+        match fields row with
+        | [symbol;namespace;source_hash;identity] when symbol<>"" && namespace<>"" && identity<>"" &&
+                                                     (source_hash="library" || SomaMerkle.valid_hash source_hash) ->
+          symbol,namespace,identity
+        | _ -> fail "%s: invalid native ABI row" extract)
+    | _ -> fail "%s: unsupported native ABI manifest" extract in
+  let sorted=List.sort compare rows in
+  if List.length sorted<>List.length (List.sort_uniq compare sorted) then
+    fail "%s: duplicate native ABI identity" extract;
+  let symbols=List.map (fun (symbol,_,_) -> symbol) sorted |> List.sort_uniq String.compare in
+  List.map (fun symbol ->
+      let identities=List.filter_map (fun (owner,namespace,identity) ->
+          if owner<>symbol then None else Some (namespace,identity)) sorted in
+      let field s=string_of_int (String.length s) ^ ":" ^ s in
+      let body="soma-project-abi-v1\n" ^ String.concat "" (List.map (fun (namespace,identity) ->
+          field namespace ^ field identity) identities) in
+      {symbol;sha256=SomaMerkle.string body}) symbols
+let check_native_abi ~root ~extract contracts =
+  if contracts<>[] then begin
+    let actual=native_abi ~root ~extract in
+    List.iter (fun expected ->
+        match List.find_opt (fun c -> c.symbol=expected.symbol) actual with
+        | None -> fail "%s: missing native ABI contract symbol %S" extract expected.symbol
+        | Some c when c.sha256=expected.sha256 -> ()
+        | Some c -> fail "%s: native ABI contract differs for %S: expected %s, actual %s"
+                      extract expected.symbol expected.sha256 c.sha256) contracts
+  end
 let rec artifact ?expect ~root ~source_root ~extract kind scope =
   (* Static initialization publishes the namespace's bindings in one complete
      file. Its API is recorded by the value/projection manifests, not by the
@@ -242,6 +276,7 @@ let build ?(audit=false) ~compiler ~config ~config_hash p targets =
                 stages := tmp :: extraction_lock :: !stages;
                 subprocess ~root:source_root ~env:(environment source_root e.bindings ~verify:e.verify ~source_only:p.source_only) compiler
                   (["extract";e.file] @ e.options @ ["-o";tmp]);
+                check_native_abi ~root:tmp ~extract:n.name e.abi;
                 let final=inside parent n.name in
                 config_unchanged ();
                 (* Readers of project products share this lock. Keep the old completed
@@ -334,6 +369,8 @@ Build checks/extracts dependencies, then publishes ordered whole OCaml artifacts
 Audit freshly checks/extracts and compares products, inventories and receipts;
 it replaces no published files and skips external Dune compilation.
 No source text, shell commands or partial artifacts are accepted in configuration.
+Use soma project abi --directory DIR to report ABI fingerprints from a completed
+compiler extraction; declarations may bind these with build.extract.NAME.abi.
 For an existing proof/origin pipeline, soma project assemble --help describes
 native whole-product publication from a checked input inventory.
 |}
@@ -343,6 +380,12 @@ let run ~compiler args =
     then Filename.concat (Sys.getcwd ()) compiler else compiler in
   match args with
   | [] | ["--help"] | ["help"] -> print_string help
+  | ["abi";"--directory";directory] ->
+    let root=Unix.realpath directory in
+    let contracts=native_abi ~root ~extract:directory in
+    Printf.printf "format = 1\n";
+    List.iter (fun c -> Printf.printf "\n[[abi]]\nsymbol = %s\nsha256 = %s\n"
+                  (toml_string c.symbol) (toml_string c.sha256)) contracts
   | command::args when command="plan" || command="build" || command="audit" ->
     let rec options config targets = function
       | [] -> config,List.rev targets

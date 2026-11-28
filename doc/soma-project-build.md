@@ -77,6 +77,37 @@ of a target's behavior or of cross-module runtime type compatibility.
 An empty target explicitly matches a local type declaration, whose compiler
 manifest has no external target name.
 
+An extraction may also bind the complete native ABI of selected logical owners:
+
+```toml
+[build.extract.source]
+file = "main.soma"
+verify = true
+abi = [{ symbol = "main.main", sha256 = "<64 lowercase hexadecimal digits>" }]
+```
+
+`soma project abi --directory .soma-build/.extract/source` reports the available
+fingerprints as TOML. It authenticates the ABI manifest against the completed
+compiler product inventory; it is an inspection command, not evidence of fresh
+source verification. Review the native declarations and API before recording a
+fingerprint. Build and audit check it against a **fresh extraction**, before that
+extraction or any dependent product is published. A missing owner, changed tuple
+projection, record/module layout, type equation, publication frame, native
+target or other identity attached to that owner fails the contract. Every
+identity for a contracted symbol participates, including when the compiler
+records several kinds of identity for the same owner. Uncontracted owners are
+unconstrained by this additional API check.
+
+Fingerprint format 1 hashes `soma-project-abi-v1` followed by a newline and the
+sorted `(namespace, identity)` pairs from `native_abi.manifest`, each string
+encoded as its decimal byte length, a colon and its bytes. Duplicate identities
+are invalid. Source byte hashes are excluded from this API fingerprint so that
+comments and implementation edits with the same declared ABI remain possible;
+the native verification receipt still binds the full source/proof inputs.
+The build configuration hash binds expected ABI fingerprints into publication
+receipts. This is an explicit structural compatibility contract, not a type
+checker for foreign links, a semantic specification, or a verified compiler.
+
 All node names share one namespace. `needs` adds dependencies to any node.
 `[build.publish.NAME]` publishes one complete file from a fresh checked
 extraction, optionally under a different filename. It can publish a complete

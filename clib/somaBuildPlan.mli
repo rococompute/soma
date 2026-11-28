@@ -1,11 +1,12 @@
 (** Declarative, typed project build graphs. No command strings or source text. *)
 type kind = Source_types | Modules | Values | Bindings | Aliases | Initializers
 type export = { names : string list; target : string }
+type abi_contract = { symbol : string; sha256 : string }
 type part = Artifact of { extract : string; kind : kind; namespace : string; expect : export list option }
           | Unit of string
           | Whitespace of string
 type action = Extract of { file : string; source_root : string; options : string list;
-                           bindings : string option; verify : bool }
+                           bindings : string option; verify : bool; abi : abi_contract list }
             | Publish of { extract : string; file : string; output : string }
             | Compose of { output : string; parts : part list }
             | Module_list of { output : string; units : string list }
