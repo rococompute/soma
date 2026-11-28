@@ -191,6 +191,11 @@ lookup laws and concrete execution witnesses. Unsupported key types remain
 stuck and cannot satisfy totality; the existing unit-key negative theorem is
 retained.
 
+The rules apply to the actual `Native.Table_*` constructors. Existing
+`.definition` bindings that name `Hashtbl.*` remain foreign calls; they do not
+automatically acquire these contracts. Their typed migration or explicit
+implementation refinement is still required.
+
 This model does not establish a native table's representation invariant.
 In particular, a native `Bytes.unsafe_to_string` alias can mutate a stored key
 and change its hash bucket without rehashing the table. Its subsequent lookup
