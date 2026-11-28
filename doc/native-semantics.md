@@ -100,7 +100,7 @@ These 24 audited results provide a universal proof interface; they do not
 supply the concrete invariants, progress and decreasing measures of Kykeon's
 82 production loop sites.
 
-`Soma.NativeControl` provides eight audited compositional results for actual
+`Soma.NativeControl` provides nine audited compositional results for actual
 sequencing, primitive calls and loop iterations. The sequencing rule accounts
 for all intermediate states and exception outcomes; primitive calls require
 at least one permitted outcome and a contract covering every permitted
@@ -109,6 +109,9 @@ certified iteration can establish the contract of the resumed loop. Typed
 constructor views avoid injecting existential type indices or assuming proof
 irrelevance. The rules introduce no alternate application syntax or runtime
 fuel.
+
+The additional fault rule certifies a direct `Raise_failure`, including the
+fresh exception's identity, payload cell and resulting world.
 
 The checked programs include a generic reference write/read roundtrip and a
 newly allocated callback which writes, throws, and is caught by a handler that
@@ -125,7 +128,7 @@ fixture. No arithmetic specification axiom from `Uint63Axioms` or
 
 ## String primitives and spans
 
-`Soma.NativeText` proves eleven results, including
+`Soma.NativeText` proves thirteen results, including
 universal total correctness for length, signed and natural indexing, slices,
 and each corresponding failure outcome. Valid calls preserve the world and
 return the specified byte contents. Index faults use the backend-specific
@@ -135,6 +138,8 @@ bounds identity; invalid slices allocate a fresh exception with the runtime's
 The supporting content lemmas establish that an in-bounds byte is defined,
 that an accepted slice has exactly its requested length, and that every
 natural cursor up to a representable string's end fits the extraction carrier.
+Checked readonly observations additionally retain their stated byte value and
+slice length under the supplied bounds proofs.
 
 `NativeWord.bounded_slice` checks signs and the whole span in `Z` before
 converting either argument to a logical natural. Five checked results establish
@@ -152,6 +157,30 @@ The model tracks string byte values, not physical string objects. For example,
 OCaml 5.5's full-length `String.sub` returns its original input object. Runtime
 conformance checks retain that behavior, but string identity/GC/allocation
 refinement is not established by these content contracts.
+
+## Source scanners and checked readonly observations
+
+`Soma.TextScan` implements splitting and byte membership in Source. It walks
+native strings by indices, never by building a whole byte list or repeatedly
+copying string tails. The counters descend from the actual input length, with
+no independent fuel/input cap. Seventeen checked results cover occurrence
+equivalence, exact reconstruction by joining, separator-free components,
+nonempty results, preservation of cursor bounds and natural representability.
+Leading, trailing and consecutive empty components are retained.
+
+Runtime walks use `Native.checked_byte` and `checked_substring`, whose Source
+types require bounds proofs. Logical definitions remain ordinary string
+operations. Extraction erases the proofs and calls `String.unsafe_get` or
+`String.sub`; it does not allocate a temporary option per byte or clip valid
+empty/full slices. Both runtime walks are proved equal to the unrestricted
+logical reference walks, without proof irrelevance. Natural counters are
+proved representable whenever the input string is representable. The shared
+extractor already optimizes the underlying logical length/get/substring
+operations; no global extraction mapping was changed.
+
+The compiler's proof erasure and primitive mappings remain trusted. These
+Source contracts do not certify forged calls from unchecked OCaml, physical
+allocation/GC equivalence, or all possible foreign uses of the erased API.
 
 ## Scope still open
 
@@ -211,3 +240,9 @@ also cover shared bounds identity, fresh substring faults and full-slice
 identity relative to the installed Stdlib. The observed signed bounds and byte
 contents become kernel-checked Gallina computation obligations. Python produces
 only those test proofs, never OCaml.
+
+`test-suite/misc/soma_text_scan.sh` checks 103,442 split/contains cases per
+backend against Stdlib, all byte separators, empty fields, full/empty-slice
+identity and two-megabyte scans. A native-code inspection rejects fallback
+string deconstruction. Native/bytecode execution, rather than a timing claim
+alone, supplies the conformance evidence.

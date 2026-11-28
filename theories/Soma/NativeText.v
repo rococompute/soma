@@ -29,6 +29,17 @@ Proof.
   f_equal. apply IH. lia.
 Qed.
 
+Theorem checked_byte_correct text index Bound :
+  String.get index text = Some (@Native.checked_byte text index Bound).
+Proof.
+  unfold Native.checked_byte.
+  destruct (text_get_defined text Bound) as [character Read]. now rewrite Read.
+Qed.
+
+Theorem checked_substring_length text start size Bound :
+  String.length (@Native.checked_substring text start size Bound) = size.
+Proof. now apply text_slice_length. Qed.
+
 Section Text.
 Variable foreign : forall A : Type, (unit -> A) -> world -> result A -> world -> Prop.
 Variable named : forall A B : Type, string -> string -> A -> world -> result B -> world -> Prop.

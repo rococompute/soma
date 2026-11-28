@@ -122,6 +122,8 @@ Extract Constant Soma.Native.loop_values_then =>
 Extract Constant Soma.Native.call_then => "Soma_effect.call_then".
 Extract Constant Soma.Native.tail_invoke => "Soma_effect.tail_invoke".
 Extract Constant Soma.Native.word_length => "String.length".
+Extract Constant Soma.Native.checked_byte => "(fun text index -> String.unsafe_get text index)".
+Extract Constant Soma.Native.checked_substring => "(fun text start size -> String.sub text start size)".
 Extract Constant Soma.Native.vector_size => "Array.length".
 Extract Constant Soma.Native.vector_word_size => "Array.length".
 |soma}

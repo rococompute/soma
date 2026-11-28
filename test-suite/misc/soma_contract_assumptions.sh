@@ -114,11 +114,33 @@ checks = {
     'total_loop_step',
     'total_loop_continue',
     'total_loop_finish',
+    'total_raise_failure',
+]),
+ 'text_scan': ('Soma.TextScan', [
+    'checked_contains_walk_agrees',
+    'checked_split_walk_agrees',
+    'contains_cursors_fit',
+    'split_cursors_fit',
+    'contains_walk_correct',
+    'contains_correct',
+    'contains_false_excludes',
+    'prefix_at_byte',
+    'join_split_head',
+    'split_walk_reassembles',
+    'prefix_whole',
+    'split_reassembles',
+    'slice_excludes',
+    'split_walk_excludes',
+    'split_components_exclude_separator',
+    'split_walk_nonempty',
+    'split_nonempty',
 ]),
  'native_text': ('Soma.NativeText', [
     'text_index_fits_carrier',
     'text_get_defined',
     'text_slice_length',
+    'checked_byte_correct',
+    'checked_substring_length',
     'step_string_successor',
     'string_length_total',
     'string_get_total',
@@ -153,7 +175,7 @@ native_word = {'PrimInt63.' + name for name in
     ['int', 'sub', 'ltb', 'eqb', 'land', 'lor', 'lsl', 'lsr']}
 for group, (module, theorems) in checks.items():
     allowed = (crypto if group == 'crypto' else cast if group == 'cast'
-               else native_word if group in {'native_semantics','native_word','native_total','native_control','native_text'} else set())
+               else native_word if group in {'native_semantics','native_word','native_total','native_control','native_text','text_scan'} else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')

@@ -377,6 +377,16 @@ Definition tail_invoke {A} (primitive:unit->A) : program A := Invoke primitive R
 Definition word_length (text:string) : PrimInt63.int :=
  Soma.Word64.Int63Bits.of_N (BinNat.N.of_nat (String.length text)).
 
+(** Proof-carrying readonly byte/slice observations. Their logical definitions
+    stay ordinary total string operations; native extraction erases the bound
+    proof and calls the exact primitive, avoiding option allocation or clipping
+    that would change valid empty/full-slice identity. Representation bounds of
+    extracted natural counters remain a separate client obligation. *)
+Definition checked_byte (text : string) (index : nat) (_ : index < String.length text) : ascii :=
+  match String.get index text with Some character => character | None => Ascii.zero end.
+Definition checked_substring (text : string) (start size : nat)
+    (_ : start + size <= String.length text) : string := String.substring start size text.
+
 (** Pure readonly observations preserve native caller expression shapes. The
     ghost size describes the array header, which element updates preserve. *)
 Definition vector_size {A}(items:vector A) : nat :=

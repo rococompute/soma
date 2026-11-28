@@ -22,6 +22,8 @@ Definition control_successor {A} w (body : Native.program A) w' (following : Nat
       w' = w /\ last = Native.Bind (body initial) (fun progress => match progress with
         | Native.Continue state => Native.Loop body state
         | Native.Finish value => Native.Return value end)
+  | Native.Raise_failure message => fun last =>
+      w' = with_fault w (Fault_failure message) /\ last = Native.Throw (fault_handle w)
   | _ => fun _ => True
   end) following.
 
@@ -135,5 +137,17 @@ Theorem total_loop_finish S A post w (body : S -> Native.program (Native.progres
 Proof.
   intros Body Post. apply total_loop_unroll. rewrite Body.
   apply total_bind_return, return_is_total. exact Post.
+Qed.
+
+Theorem total_raise_failure A post w message :
+  post (with_fault w (Fault_failure message)) (Raised (fault_handle w)) ->
+  @total foreign named A post (w, Native.Raise_failure message).
+Proof.
+  intro Post. apply successors_give_total.
+  - exists (with_fault w (Fault_failure message), Native.Throw (fault_handle w)).
+    unfold transition; cbn. apply Step_raise_failure.
+  - intros [final following] Move. unfold transition in Move; cbn in Move.
+    apply step_control_successor in Move. cbn [control_successor] in Move.
+    destruct Move as [World Equal]. subst. now apply throw_is_total.
 Qed.
 End Control.
