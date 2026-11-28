@@ -290,13 +290,13 @@ Proof.
 Qed.
 End EntryRules.
 
-(** String_length still has no rule in NativeSemantics. Accessibility alone
+(** Tables still have no rules in NativeSemantics. Accessibility alone
     would certify it vacuously; the progress half of total rejects it. *)
-Theorem unsupported_string_length_is_not_total
+Theorem unsupported_table_is_not_total
     (foreign : forall T : Type, (unit -> T) -> world -> result T -> world -> Prop)
     (named : forall X Y : Type, String.string -> String.string -> X -> world -> result Y -> world -> Prop)
-    post w text :
-  ~ @total foreign named PrimInt63.int post (w, Native.String_length text).
+    post w capacity :
+  ~ @total foreign named (Native.table unit unit) post (w, @Native.New_table unit unit capacity).
 Proof.
   apply stuck_without_postcondition_is_not_total.
   - intros [answer [Equal _]]. destruct answer; discriminate.

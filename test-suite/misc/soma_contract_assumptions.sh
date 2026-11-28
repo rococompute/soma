@@ -73,6 +73,11 @@ checks = {
     'bounded_index_negative',
     'bounded_index_past_end',
     'bounded_index_empty',
+    'bounded_slice_sound',
+    'bounded_slice_complete',
+    'bounded_slice_negative_offset',
+    'bounded_slice_negative_count',
+    'bounded_slice_past_end',
 ]),
  'native_total': ('Soma.NativeTotal', [
     'reachable_preserves_invariant',
@@ -98,7 +103,7 @@ checks = {
     'allowed_false_return_rejects_true_only_spec',
     'total_entry_runs_satisfy',
     'total_entry_has_execution',
-    'unsupported_string_length_is_not_total',
+    'unsupported_table_is_not_total',
 ]),
  'native_control': ('Soma.NativeControl', [
     'step_control_successor',
@@ -109,6 +114,19 @@ checks = {
     'total_loop_step',
     'total_loop_continue',
     'total_loop_finish',
+]),
+ 'native_text': ('Soma.NativeText', [
+    'text_index_fits_carrier',
+    'text_get_defined',
+    'text_slice_length',
+    'step_string_successor',
+    'string_length_total',
+    'string_get_total',
+    'string_get_invalid_total',
+    'string_get_nat_total',
+    'string_get_nat_invalid_total',
+    'string_substring_total',
+    'string_substring_invalid_total',
 ]),
  'wire': ('Soma.Wire', ['prefix_decodes', 'split_at_walk_append_length', 'frame_roundtrip', 'frame_roundtrip_default']),
  'host': ('Soma.HostSpec', ['SocketWrites.advance_preserves_bytes',
@@ -135,7 +153,7 @@ native_word = {'PrimInt63.' + name for name in
     ['int', 'sub', 'ltb', 'eqb', 'land', 'lor', 'lsl', 'lsr']}
 for group, (module, theorems) in checks.items():
     allowed = (crypto if group == 'crypto' else cast if group == 'cast'
-               else native_word if group in {'native_semantics','native_word','native_total','native_control'} else set())
+               else native_word if group in {'native_semantics','native_word','native_total','native_control','native_text'} else set())
     for index, theorem in enumerate(theorems):
         source = Path(f'{group}_{index}.v')
         source.write_text(f'Require Import {module}.\nPrint Assumptions {theorem}.\n')

@@ -2,7 +2,7 @@
 
     This layer covers synchronous control, loops, references, vectors, text
     buffers and unary callbacks. It is not semantics for every Native
-    constructor: tables, strings, multiargument callbacks,
+    constructor: tables, higher-order string mapping, multiargument callbacks,
     promises/deferred scheduling and physical GC still need their rules.
     In particular an unsupported operation is stuck, never silently pure.
 
@@ -248,7 +248,30 @@ Inductive step : forall A : Type, world -> Native.program A -> world -> Native.p
       (with_fault w (Fault_failure "Buffer.add: cannot grow buffer")) (Native.Throw (fault_handle w))
 | Step_text_buffer_contents w id text :
     text_contents id text (cells w) ->
-    step w (Native.Text_buffer_contents (Native.Text_buffer id)) w (Native.Return text).
+    step w (Native.Text_buffer_contents (Native.Text_buffer id)) w (Native.Return text)
+| Step_string_length w text :
+    text_fits text ->
+    step w (Native.String_length text) w (Native.Return (NativeWord.of_nat (String.length text)))
+| Step_string_get w text index position character :
+    text_fits text -> NativeWord.bounded_index index (String.length text) = Some position ->
+    String.get position text = Some character ->
+    step w (Native.String_get text index) w (Native.Return character)
+| Step_string_get_invalid w text index :
+    text_fits text -> NativeWord.bounded_index index (String.length text) = None ->
+    step w (Native.String_get text index) (bounds_world w) (Native.Throw (bounds_value w))
+| Step_string_get_nat w text index character :
+    text_fits text -> NativeWord.nat_fits index -> String.get index text = Some character ->
+    step w (Native.String_get_nat text index) w (Native.Return character)
+| Step_string_get_nat_invalid w text index :
+    text_fits text -> NativeWord.nat_fits index -> String.get index text = None ->
+    step w (Native.String_get_nat text index) (bounds_world w) (Native.Throw (bounds_value w))
+| Step_string_substring w text offset count start size :
+    text_fits text -> NativeWord.bounded_slice offset count (String.length text) = Some (start, size) ->
+    step w (Native.String_substring text offset count) w (Native.Return (String.substring start size text))
+| Step_string_substring_invalid w text offset count :
+    text_fits text -> NativeWord.bounded_slice offset count (String.length text) = None ->
+    step w (Native.String_substring text offset count)
+      (with_fault w (Fault_invalid_argument "String.sub / Bytes.sub")) (Native.Throw (fault_handle w)).
 
 Inductive steps {A} : world -> Native.program A -> world -> Native.program A -> Prop :=
 | Steps_refl w body : steps w body w body

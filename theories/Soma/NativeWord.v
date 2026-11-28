@@ -19,6 +19,16 @@ Definition bounded_index (value : PrimInt63.int) (count : nat) : option nat :=
     failure below these limits is not excluded by representability. *)
 Definition array_limit : Z := (2 ^ 54 - 1)%Z.
 Definition string_limit : Z := (2 ^ 57 - 9)%Z.
+Definition nat_fits (value : nat) := (Z.of_nat value <= 2 ^ 62 - 1)%Z.
+
+(** The sum lives in Z, not in wrapping machine arithmetic. Convert neither
+    argument to unary naturals until both signs and the whole span are checked.
+    For representable strings this is equivalent to OCaml's safe subtraction
+    check [offset > length - count], including the empty slice at the end. *)
+Definition bounded_slice (offset count : PrimInt63.int) (length : nat) : option (nat * nat) :=
+  let start := signed offset in let size := signed count in
+  if (Z.leb 0 start && Z.leb 0 size && Z.leb (start + size) (Z.of_nat length))%bool
+  then Some (Z.to_nat start, Z.to_nat size) else None.
 
 Theorem bounded_index_sound value count position :
   bounded_index value count = Some position ->
@@ -66,4 +76,57 @@ Proof.
   destruct (Z_lt_ge_dec (signed value) 0).
   - now apply bounded_index_negative.
   - apply bounded_index_past_end. lia.
+Qed.
+
+Theorem bounded_slice_sound offset count length start size :
+  bounded_slice offset count length = Some (start, size) ->
+  signed offset = Z.of_nat start /\ signed count = Z.of_nat size /\ start + size <= length.
+Proof.
+  unfold bounded_slice.
+  destruct (Z.leb 0 (signed offset) && Z.leb 0 (signed count) &&
+    Z.leb (signed offset + signed count) (Z.of_nat length))%bool eqn:Guard;
+    intro Equal; [|discriminate].
+  repeat rewrite andb_true_iff in Guard. destruct Guard as [[Start Size] Bound].
+  apply Z.leb_le in Start, Size, Bound. inversion Equal; subst.
+  split; [symmetry; now apply Z2Nat.id|].
+  split; [symmetry; now apply Z2Nat.id|].
+  apply Nat2Z.inj_le. rewrite Nat2Z.inj_add.
+  rewrite !Z2Nat.id by assumption. exact Bound.
+Qed.
+
+Theorem bounded_slice_complete offset count length start size :
+  signed offset = Z.of_nat start -> signed count = Z.of_nat size -> start + size <= length ->
+  bounded_slice offset count length = Some (start, size).
+Proof.
+  intros Start Size Bound. unfold bounded_slice. rewrite Start, Size.
+  assert (Z.leb 0 (Z.of_nat start) = true) as S0 by (apply Z.leb_le; lia).
+  assert (Z.leb 0 (Z.of_nat size) = true) as N0 by (apply Z.leb_le; lia).
+  assert (Z.leb (Z.of_nat start + Z.of_nat size) (Z.of_nat length) = true) as Fits
+    by (apply Z.leb_le; lia).
+  rewrite S0, N0, Fits. cbn. now rewrite !Nat2Z.id.
+Qed.
+
+Theorem bounded_slice_negative_offset offset count length :
+  (signed offset < 0)%Z -> bounded_slice offset count length = None.
+Proof.
+  intro Negative. unfold bounded_slice.
+  assert (Z.leb 0 (signed offset) = false) as Bad by (apply Z.leb_gt; exact Negative).
+  now rewrite Bad.
+Qed.
+
+Theorem bounded_slice_negative_count offset count length :
+  (signed count < 0)%Z -> bounded_slice offset count length = None.
+Proof.
+  intro Negative. unfold bounded_slice.
+  assert (Z.leb 0 (signed count) = false) as Bad by (apply Z.leb_gt; exact Negative).
+  now rewrite Bad, andb_false_r.
+Qed.
+
+Theorem bounded_slice_past_end offset count length :
+  (Z.of_nat length < signed offset + signed count)%Z -> bounded_slice offset count length = None.
+Proof.
+  intro Beyond. unfold bounded_slice.
+  assert (Z.leb (signed offset + signed count) (Z.of_nat length) = false) as Bad
+    by (apply Z.leb_gt; exact Beyond).
+  now rewrite Bad, andb_false_r.
 Qed.

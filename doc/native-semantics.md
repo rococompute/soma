@@ -12,8 +12,8 @@ continuing loop, including when its result type has no terminating value.
 ## Implemented layer
 
 The current rules cover `Bind`, `Invoke`, `Loop`, `Protect`, reference
-allocation/read/write, vectors, text buffers, built-in faults, unary callback
-allocation/calls and named callbacks.
+allocation/read/write, vectors, text buffers, string length/index/slices,
+built-in faults, unary callback allocation/calls and named callbacks.
 Return and throw are terminal. A callback stores its checked program body and
 receives its own newly allocated handle; calling it executes that body, rather
 than treating the whole callback as an opaque result. Bind and exception
@@ -88,7 +88,7 @@ maximal execution to satisfy the postcondition. Its foreign-call rules account
 for **every** permitted return and exception, including the resulting world.
 A negative theorem shows that an allowed false return rejects a true-only
 specification, even if a successful true-returning path also exists. Other
-negative theorems reject a spinning loop and an unsupported string-length
+negative theorems reject a spinning loop and an unsupported table
 operation. Return and throw satisfy total correctness exactly when their
 specified outcome meets the postcondition.
 
@@ -116,16 +116,46 @@ observes both the new value and the exact original exception. These are
 operational proofs over the actual constructors. Further proofs cover vector
 replacement, buffer append/readback, empty-vector identity, fresh faults,
 unchanged array headers, storage bounds, backend preservation and heap frames.
-The contract-assumption fixture checks 51 semantic results and five checked-index
+The contract-assumption fixture checks 51 semantic results and ten checked-index/span
 results. The word interpretation exposes the existing kernel primitives
 `PrimInt63.int`, `sub`, `ltb`, `eqb`, `land`, `lor`, `lsl` and `lsr` to
 `Print Assumptions`; these eight names are explicitly inventoried in the
 fixture. No arithmetic specification axiom from `Uint63Axioms` or
 `Sint63Axioms`, proof-irrelevance axiom or gradual evidence is introduced.
 
+## String primitives and spans
+
+`Soma.NativeText` proves eleven results, including
+universal total correctness for length, signed and natural indexing, slices,
+and each corresponding failure outcome. Valid calls preserve the world and
+return the specified byte contents. Index faults use the backend-specific
+bounds identity; invalid slices allocate a fresh exception with the runtime's
+`String.sub / Bytes.sub` message.
+
+The supporting content lemmas establish that an in-bounds byte is defined,
+that an accepted slice has exactly its requested length, and that every
+natural cursor up to a representable string's end fits the extraction carrier.
+
+`NativeWord.bounded_slice` checks signs and the whole span in `Z` before
+converting either argument to a logical natural. Five checked results establish
+soundness, completeness and rejection of negative or past-end spans. This
+avoids wrapping `offset + count`, including at both signed extremes, and accepts
+the empty slice exactly at the end. It introduces no additional input cap.
+
+String payloads must satisfy the physical string representation bound. Natural
+indices additionally require `NativeWord.nat_fits`, the signed OCaml carrier's
+actual representability bound; otherwise the model supplies no rule. Clients
+must discharge these premises. This does not prove that arbitrary Source
+natural arithmetic refines machine integers beyond their representation range.
+
+The model tracks string byte values, not physical string objects. For example,
+OCaml 5.5's full-length `String.sub` returns its original input object. Runtime
+conformance checks retain that behavior, but string identity/GC/allocation
+refinement is not established by these content contracts.
+
 ## Scope still open
 
-Tables, general string/path/word operations, multiargument/pure
+Tables, higher-order string mapping, path/word operations, multiargument/pure
 callbacks, borrowed scopes, promises and deferred scheduling still need rules.
 An unsupported constructor is stuck; it is never silently evaluated by a
 default rule. The current layer cannot establish progress for an arbitrary
@@ -173,3 +203,11 @@ Gallina computation obligations checked by the kernel. This is conformance
 evidence for those observations, not a proof of compiler/runtime refinement.
 The test's OCaml client is test-only; Python writes proof obligations, never
 production OCaml.
+
+`test-suite/misc/soma_native_text_semantics.sh` extracts the real string entry
+points and checks 1,393 observations per backend: signed extremes, binary
+bytes, natural indices, valid/invalid spans and empty end slices. Runtime checks
+also cover shared bounds identity, fresh substring faults and full-slice
+identity relative to the installed Stdlib. The observed signed bounds and byte
+contents become kernel-checked Gallina computation obligations. Python produces
+only those test proofs, never OCaml.
